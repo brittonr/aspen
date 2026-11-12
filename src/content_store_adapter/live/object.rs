@@ -686,3 +686,91 @@ mod fault_tests {
         assert!(execution.verified_chunks.is_empty());
     }
 }
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use crate::content_store_adapter::ClientConfig;
+    use crate::content_store_adapter::LocalTier;
+
+    fn reference(label: &str) -> String {
+        crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
+    }
+
+    fn profile() -> ContentAdapterProfile {
+        crate::content_store_adapter::profile(
+            "object",
+            reference("profile"),
+            ContentAdapterClass::ObjectStorage,
+            ContentResourceBounds {
+                max_total_bytes: 4096,
+                max_chunk_count: 8,
+                max_chunk_bytes: 4096,
+                max_range_bytes: 4096,
+                max_concurrent_operations: 1,
+                max_queued_bytes: 4096,
+                max_memory_bytes: 4096,
+                max_deadline_ticks: 10,
+                max_retries: 0,
+                max_events: 16,
+                max_status_entries: 8,
+            },
+            vec![reference("evidence")],
+        )
+        .expect("profile")
+    }
+
+    #[tokio::test]
+    #[ignore = "requires MOLTEN_S3_ENDPOINT and MOLTEN_S3_BUCKET"]
+    async fn live_publish_and_fetch_run_the_transition_core() {
+        let endpoint = std::env::var("MOLTEN_S3_ENDPOINT").expect("endpoint");
+        let bucket = std::env::var("MOLTEN_S3_BUCKET").expect("bucket");
+        let chunk_dir = tempfile::tempdir().expect("chunk root");
+        let chunk_root = crate::chunk_store::CapabilityChunkRoot::open(chunk_dir.path()).expect("chunk root");
+        let object = crate::chunk_store::put_bytes_with_root(&chunk_root, "artifact", b"live-object", 4).expect("put");
+        let tier_dir = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(tier_dir.path(), 4096, false).expect("tier");
+        let mut client = CachedClient::connect(
+            ClientConfig {
+                endpoint,
+                region: "us-east-1".to_string(),
+                bucket,
+                access_key: "molten".to_string(),
+                secret_key: "molten".to_string(),
+                session_token: None,
+            },
+            tier,
+        )
+        .expect("client");
+        let profile = profile();
+        let publication = publish_object_chunks(&profile, &chunk_root, &object.manifest_ref, &mut client, "objects")
+            .await
+            .expect("publish");
+        let command = crate::content_store_adapter::command(&profile, crate::content_store_adapter::CommandInput {
+            operation_ref: reference("operation"),
+            operation: ContentOperation::Get,
+            manifest: &publication.manifest,
+            range: None,
+            submitted_tick: 0,
+            deadline_tick: 10,
+            retry_count: 0,
+            cancelled: false,
+            policy_refs: vec![reference("policy")],
+        })
+        .expect("command");
+        let execution = fetch_object_chunks(
+            FetchInput {
+                profile: &profile,
+                publication: &publication,
+                command: &command,
+                generation: 1,
+                retained: None,
+            },
+            &mut client,
+        )
+        .await
+        .expect("fetch");
+        assert_eq!(execution.state.artifact.terminal, ContentTerminal::Verified);
+        assert_eq!(execution.verified_chunks.len(), object.chunk_refs.len());
+    }
+}
