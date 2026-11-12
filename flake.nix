@@ -3260,6 +3260,24 @@
             addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
+            atlas-current =
+              pkgs.runCommand "molten-atlas-current"
+                {
+                  nativeBuildInputs = [
+                    pkgs.python3
+                    nickelPackage
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cp -R $src source
+                  chmod -R u+w source
+                  cd source
+                  nickel export --format json docs/atlas.ncl > "$TMPDIR/atlas.json"
+                  python3 scripts/generate-atlas.py "$TMPDIR/atlas.json" --check
+                  touch "$out"
+                '';
             release-dependency-profile = releaseDependencyProfileCheck;
             # Generated plans must carry the metadata-free `pkgs.fetchgit` identity for every git source.
             git-source-hash-binding =

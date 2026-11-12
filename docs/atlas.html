@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Molten system atlas</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;color:canvastext;background:canvas}
+code{font-size:.9em}details{margin:.75rem 0;padding:.5rem .75rem;border:1px solid color-mix(in srgb,canvastext 20%,transparent);border-radius:.4rem}
+summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid color-mix(in srgb,canvastext 15%,transparent);vertical-align:top}
+</style>
+</head>
+<body>
+<h1>Molten system atlas</h1>
+<p>A bounded map of the current Molten runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.</p>
+<p><em>Generated from <code>docs/atlas.ncl</code> by <code>scripts/generate-atlas.py</code>. Do not edit by hand.</em></p>
+<h2>Chapters</h2>
+<details open>
+<summary>Turn and dataspace runtime</summary>
+<p>Canonical envelopes, pure transitions, effect plans, and replay-visible observations.</p>
+<ul>
+<li><code>runtime</code> — Runtime kernel: Pure transitions and typed effect plans with explicit replay state. (<code>src/runtime/</code>)</li>
+<li><code>dataspaces</code> — Dataspaces: Assertions, retractions, observe patterns, and service dependency facts. (<code>src/dataspace/</code>)</li>
+<li><code>effects</code> — Effect boundary: Capability-rooted adapters perform effects; authority and uncertainty stay explicit. (<code>src/effects/</code>)</li>
+</ul>
+<h3>Messages</h3><ul>
+<li><code>runtime</code> → <code>effects</code>: typed effect request and terminal observation</li>
+<li><code>dataspaces</code> → <code>runtime</code>: assertion or retraction turn plan</li>
+</ul>
+<h3>Questions</h3><ul>
+<li><strong>open</strong> Which runtime transitions are replay-visible for the selected profile? <a href="docs/world-replay-capsules.md">ref</a></li>
+<li><strong>open</strong> How does the selected adapter classify an effect that may have happened? <a href="docs/fabric-port-ownership.md">ref</a></li>
+</ul>
+</details>
+<details open>
+<summary>Storage and world state</summary>
+<p>Prolly maps, Redb durability, content identity, and world commit or restore boundaries.</p>
+<ul>
+<li><code>prolly</code> — Prolly map: History-independent ordered state with a bounded incremental edit path and rebuild fallback. (<code>crates/molten-core/src/prolly_map/</code>)</li>
+<li><code>redb</code> — Redb stores: Capability-rooted durable logs, snapshots, indexes, and partial-state records. (<code>src/chunk_store/</code>)</li>
+<li><code>content-store</code> — Content store adapters: Canonical manifests and verified chunks across local, Redb, Iroh Blobs, and simulation profiles. (<code>src/content_store_adapter/</code>)</li>
+<li><code>world</code> — World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries. (<code>src/world_commit/</code>)</li>
+</ul>
+<h3>Messages</h3><ul>
+<li><code>runtime</code> → <code>content-store</code>: content operation and canonical manifest ref</li>
+<li><code>prolly</code> → <code>redb</code>: immutable block publication and generation check</li>
+<li><code>world</code> → <code>prolly</code>: active-head and reservation publication</li>
+</ul>
+<h3>Questions</h3><ul>
+<li><strong>open</strong> What work does an incremental Prolly edit bound actually avoid? <a href="docs/prolly-semantic-state-map.md">ref</a></li>
+<li><strong>blocked</strong> Which logical restore profile has an admitted runtime adapter today? <a href="docs/world-execution-snapshots.md">ref</a></li>
+</ul>
+</details>
+<details open>
+<summary>Networking and admission</summary>
+<p>Iroh transport sessions, peer identity, bounded frames, and the current loopback-only profile.</p>
+<ul>
+<li><code>transport</code> — Fabric transport: Bounded Iroh sessions, registered protocols, peer evidence, and cleanup. (<code>src/fabric_transport/</code>)</li>
+<li><code>admission</code> — Admission: Peer, membership, principal, trust, capability, resource, and policy observations. (<code>crates/molten-core/src/fabric_transport/</code>)</li>
+</ul>
+<h3>Messages</h3><ul>
+<li><code>transport</code> → <code>admission</code>: authenticated session and bounded frame observation</li>
+<li><code>admission</code> → <code>effects</code>: admitted operation scope, never ambient authority</li>
+</ul>
+<h3>Questions</h3><ul>
+<li><strong>answered</strong> Is a per-source rate limit applied before inbound admission? <a href="docs/inbound-admission-rate-limit-review.md">ref</a></li>
+<li><strong>blocked</strong> Which cross-host transport profile has actual two-host evidence? <a href="docs/fabric-transport-session-runtime.md">ref</a></li>
+</ul>
+</details>
+<h2>Components</h2>
+<table><thead><tr><th>Component</th><th>Role</th><th>Source</th><th>Chapter</th></tr></thead><tbody>
+<tr><td><code>runtime</code></td><td>Runtime kernel: Pure transitions and typed effect plans with explicit replay state.</td><td><code>src/runtime/</code></td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>dataspaces</code></td><td>Dataspaces: Assertions, retractions, observe patterns, and service dependency facts.</td><td><code>src/dataspace/</code></td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>effects</code></td><td>Effect boundary: Capability-rooted adapters perform effects; authority and uncertainty stay explicit.</td><td><code>src/effects/</code></td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>prolly</code></td><td>Prolly map: History-independent ordered state with a bounded incremental edit path and rebuild fallback.</td><td><code>crates/molten-core/src/prolly_map/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>redb</code></td><td>Redb stores: Capability-rooted durable logs, snapshots, indexes, and partial-state records.</td><td><code>src/chunk_store/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>content-store</code></td><td>Content store adapters: Canonical manifests and verified chunks across local, Redb, Iroh Blobs, and simulation profiles.</td><td><code>src/content_store_adapter/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>world</code></td><td>World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries.</td><td><code>src/world_commit/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>transport</code></td><td>Fabric transport: Bounded Iroh sessions, registered protocols, peer evidence, and cleanup.</td><td><code>src/fabric_transport/</code></td><td>Networking and admission</td></tr>
+<tr><td><code>admission</code></td><td>Admission: Peer, membership, principal, trust, capability, resource, and policy observations.</td><td><code>crates/molten-core/src/fabric_transport/</code></td><td>Networking and admission</td></tr>
+</tbody></table>
+<h2>Edges</h2>
+<table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Chapter</th></tr></thead><tbody>
+<tr><td><code>runtime</code></td><td><code>effects</code></td><td>typed effect request and terminal observation</td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>dataspaces</code></td><td><code>runtime</code></td><td>assertion or retraction turn plan</td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>runtime</code></td><td><code>content-store</code></td><td>content operation and canonical manifest ref</td><td>Storage and world state</td></tr>
+<tr><td><code>prolly</code></td><td><code>redb</code></td><td>immutable block publication and generation check</td><td>Storage and world state</td></tr>
+<tr><td><code>world</code></td><td><code>prolly</code></td><td>active-head and reservation publication</td><td>Storage and world state</td></tr>
+<tr><td><code>transport</code></td><td><code>admission</code></td><td>authenticated session and bounded frame observation</td><td>Networking and admission</td></tr>
+<tr><td><code>admission</code></td><td><code>effects</code></td><td>admitted operation scope, never ambient authority</td><td>Networking and admission</td></tr>
+</tbody></table>
+<h2>Open questions</h2>
+<table><thead><tr><th>Status</th><th>Question</th><th>Reference</th></tr></thead><tbody>
+<tr><td>open</td><td>Which runtime transitions are replay-visible for the selected profile?</td><td><a href="docs/world-replay-capsules.md"><code>docs/world-replay-capsules.md</code></a></td></tr>
+<tr><td>open</td><td>How does the selected adapter classify an effect that may have happened?</td><td><a href="docs/fabric-port-ownership.md"><code>docs/fabric-port-ownership.md</code></a></td></tr>
+<tr><td>open</td><td>What work does an incremental Prolly edit bound actually avoid?</td><td><a href="docs/prolly-semantic-state-map.md"><code>docs/prolly-semantic-state-map.md</code></a></td></tr>
+<tr><td>blocked</td><td>Which logical restore profile has an admitted runtime adapter today?</td><td><a href="docs/world-execution-snapshots.md"><code>docs/world-execution-snapshots.md</code></a></td></tr>
+<tr><td>answered</td><td>Is a per-source rate limit applied before inbound admission?</td><td><a href="docs/inbound-admission-rate-limit-review.md"><code>docs/inbound-admission-rate-limit-review.md</code></a></td></tr>
+<tr><td>blocked</td><td>Which cross-host transport profile has actual two-host evidence?</td><td><a href="docs/fabric-transport-session-runtime.md"><code>docs/fabric-transport-session-runtime.md</code></a></td></tr>
+</tbody></table>
+</body>
+</html>
