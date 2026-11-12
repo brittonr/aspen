@@ -5,6 +5,9 @@ mod live_iroh;
 #[cfg(feature = "content-store-object-storage")]
 #[path = "live/s3.rs"]
 mod live_s3;
+#[cfg(feature = "content-store-object-storage")]
+#[path = "live/tier.rs"]
+mod live_tier;
 mod local;
 mod persistence;
 mod simulation;
@@ -16,6 +19,8 @@ pub use integration::*;
 pub use live_iroh::*;
 #[cfg(feature = "content-store-object-storage")]
 pub use live_s3::*;
+#[cfg(feature = "content-store-object-storage")]
+pub use live_tier::*;
 pub use local::*;
 pub use molten_core::content_store_adapter::*;
 pub use persistence::*;
