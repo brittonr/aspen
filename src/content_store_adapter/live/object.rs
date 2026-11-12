@@ -384,3 +384,78 @@ mod tests {
         assert_eq!(execution.events.last().expect("terminal").artifact.terminal, ContentTerminal::Verified);
     }
 }
+
+#[cfg(test)]
+mod publish_tests {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    use super::*;
+    use crate::content_store_adapter::ClientConfig;
+    use crate::content_store_adapter::LocalTier;
+
+    fn reference(label: &str) -> String {
+        crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
+    }
+
+    fn profile() -> ContentAdapterProfile {
+        crate::content_store_adapter::profile(
+            "object",
+            reference("profile"),
+            ContentAdapterClass::ObjectStorage,
+            ContentResourceBounds {
+                max_total_bytes: 1024,
+                max_chunk_count: 8,
+                max_chunk_bytes: 1024,
+                max_range_bytes: 1024,
+                max_concurrent_operations: 1,
+                max_queued_bytes: 1024,
+                max_memory_bytes: 1024,
+                max_deadline_ticks: 10,
+                max_retries: 0,
+                max_events: 16,
+                max_status_entries: 8,
+            },
+            vec![reference("evidence")],
+        )
+        .expect("profile")
+    }
+
+    #[tokio::test]
+    async fn publish_puts_every_verified_chunk() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 2048];
+            let _ = socket.read(&mut buffer).await.expect("read");
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                .await
+                .expect("write");
+        });
+        let chunk_dir = tempfile::tempdir().expect("chunk root");
+        let chunk_root = crate::chunk_store::CapabilityChunkRoot::open(chunk_dir.path()).expect("chunk root");
+        let object = crate::chunk_store::put_bytes_with_root(&chunk_root, "artifact", b"hello", 5).expect("put");
+        let tier_dir = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(tier_dir.path(), 1024, false).expect("tier");
+        let mut client = CachedClient::connect(
+            ClientConfig {
+                endpoint: format!("http://{address}"),
+                region: "us-east-1".to_string(),
+                bucket: "bucket".to_string(),
+                access_key: "access".to_string(),
+                secret_key: "secret".to_string(),
+                session_token: None,
+            },
+            tier,
+        )
+        .expect("client");
+        let publication = publish_object_chunks(&profile(), &chunk_root, &object.manifest_ref, &mut client, "objects")
+            .await
+            .expect("publish");
+        assert_eq!(publication.keys.len(), object.chunk_refs.len());
+        assert!(publication.keys[0].starts_with("objects/"));
+        server.await.expect("server");
+    }
+}
