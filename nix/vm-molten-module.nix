@@ -19,6 +19,10 @@ pkgs.testers.runNixOSTest {
         cores = 2;
         memorySize = 2048;
       };
+      environment.systemPackages = [
+        pkgs.nix
+        pkgs.jq
+      ];
       services.molten = {
         enable = true;
         package = moltenPkg;
@@ -76,11 +80,29 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl stop molten.service")
     machine.succeed("test -s /var/lib/molten/evidence/shutdown.preserves")
 
+    machine.succeed("cp /var/lib/molten/fixture-trust.json /var/lib/molten/good-trust.json")
+
     # An absent operator-selected trust document must fail before startup evidence.
     machine.succeed("rm -f /var/lib/molten/fixture-trust.json")
     machine.succeed("systemctl reset-failed molten.service")
     machine.fail("systemctl start molten.service")
     machine.fail("systemctl is-active --quiet molten.service")
     machine.succeed("journalctl -u molten.service --no-pager | grep -q 'fixture-trust.json'")
+
+    # A stale selection must fail before protected startup effects.
+    machine.succeed("jq '.selection.binding_ref = \"blake3:0000000000000000000000000000000000000000000000000000000000000000\"' /var/lib/molten/good-trust.json > /var/lib/molten/stale.json")
+    machine.succeed("mv /var/lib/molten/stale.json /var/lib/molten/fixture-trust.json")
+    machine.succeed("rm -f /var/lib/molten/evidence/startup.preserves")
+    machine.succeed("systemctl reset-failed molten.service")
+    machine.fail("systemctl start molten.service")
+    machine.fail("test -e /var/lib/molten/evidence/startup.preserves")
+
+    # A wrong signer must fail before protected startup effects.
+    machine.succeed("nix --extra-experimental-features 'nix-command blake3-hashes' key generate-secret --key-name molten-module-wrong > /var/lib/molten/wrong-key")
+    machine.succeed("public=$(nix --extra-experimental-features 'nix-command blake3-hashes' key convert-secret-to-public < /var/lib/molten/wrong-key); jq --arg key \"$public\" '.public_key = $key' /var/lib/molten/good-trust.json > /var/lib/molten/wrong.json")
+    machine.succeed("mv /var/lib/molten/wrong.json /var/lib/molten/fixture-trust.json")
+    machine.succeed("systemctl reset-failed molten.service")
+    machine.fail("systemctl start molten.service")
+    machine.fail("test -e /var/lib/molten/evidence/startup.preserves")
   '';
 }

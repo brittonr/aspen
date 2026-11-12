@@ -74,7 +74,9 @@ one-hour driver timeout is shorter than two measured starts on a small VM. A
 run booted the module, wrote startup evidence, restarted it, wrote shutdown
 evidence, and denied an absent trust file. Its final assertion expected the
 unit to be `failed`, but `Restart=on-failure` leaves it restarting; the test now
-asserts that the unit is not active. The corrected full run was not retained
-because the host Nix store entered an automatic-GC lock. Boot, restart,
-shutdown, absent-trust denial, and the exact package/profile result remain
-required before the module is treated as externally qualified.
+asserts that the unit is not active. The test also now covers a stale source
+selection and a wrong signer, both before startup evidence. The corrected full
+run was not retained because the host Nix store remained unresponsive to
+evaluation. Boot, restart, shutdown, absent/wrong/stale trust denial, and the
+exact package/profile result remain required before the module is treated as
+externally qualified.
