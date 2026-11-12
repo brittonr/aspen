@@ -33,3 +33,7 @@ Accepted requirements live under [`.cairn/specs/`](../.cairn/specs/); active lif
 For pages whose behavioral claims depend on named source, use the
 [source-sensitive page map](source-sensitive-pages.md) during review. It is a
 bounded pointer list, not a second specification registry.
+
+The [open issue triage](open-issue-triage.md) separates implemented issues from
+those blocked on hardware, live qualification, or missing service contracts. It
+is a review record, not a completion claim.
