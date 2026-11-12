@@ -23,16 +23,16 @@ The following issues have concrete changes on `molten`:
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
 
-No-go decisions are recorded for **#2**, **#6**, **#10**, and **#12** in the
-[deferred decision record](deferred-decisions.md). They remain open until their
-reopening triggers are met.
+No-go decisions are recorded for **#2**, **#3**, **#6**, **#10**, and **#12** in
+the [deferred decision record](deferred-decisions.md). They remain open until
+their reopening triggers are met.
 
 ## Remaining issues and blockers
 
 | Issue | Current blocker | Next honest action |
 | --- | --- | --- |
 | #2 | No-go decision recorded: prerequisite query and baseline evidence are absent. | Reopen with a measured query requirement. |
-| #3 | Requires a bbtree dependency decision and a real transient-index benchmark. | Add a benchmark cohort without changing canonical storage. |
+| #3 | No-go decision recorded: published bbtree versions pin an incompatible `vstd` cohort. | Reopen with a compatible bbtree source or an isolated benchmark workspace. |
 | #5 | No pinned TLC/TLA-ts tooling in the flake; external TLA+ results do not prove Molten behavior. | Pin a TLA+ toolchain and add a bounded model plus CI exploration. |
 | #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
 | #8 | Needs an object-storage provider contract, client shape, and a live/recording adapter. | Start with the mock transport from #13 and a bounded provider profile. |

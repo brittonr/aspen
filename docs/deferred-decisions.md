@@ -19,6 +19,22 @@ Reopen when the prerequisite lands and one concrete diagnostic query names its
 workload, bounds, baseline result, and acceptance threshold. Keep the DAG or
 vector-clock baseline authoritative until then.
 
+## #3 bbtree transient-index evaluation
+
+**Decision: keep the current BTreeMap index; no bbtree dependency.**
+
+The published `bbtree` versions inspected (0.1.5 through 0.2.1) pin
+`vstd = "=0.0.0-2026-08-30-0159"`. The workspace's `verified-logic` dependency
+pins `vstd = "=0.0.0-2026-01-25-0057"`. Cargo rejects the two exact pre-release
+versions in one graph, so a benchmark cannot compare bbtree against the current
+planner without a separate workspace, a different Verus cohort, or a patch that
+would change the evaluated source.
+
+Reopen with a bbtree release or pinned revision that is compatible with the
+workspace's verified-logic cohort, or with an isolated benchmark workspace that
+retains the exact source/toolchain evidence. Until then, the canonical edit
+path, profile identity, roots, and storage behavior stay unchanged.
+
 ## #6 Live-frame hashing split
 
 **Decision: keep the current single-step frame path.**
