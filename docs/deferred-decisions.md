@@ -49,6 +49,21 @@ Reopen after runtime reuse or amortization lands and a profile at typical and
 maximum frame sizes names a predeclared threshold. The canonical hash, pending,
 acknowledgement, and uncertain-delivery semantics must remain unchanged.
 
+## #9 TPM2-sealed node identity key
+
+**Decision: no `Tpm2Sealed` class or loader yet.**
+
+`ManagedSecret` does not cover this gap today. It appears in the profile's
+eligible classes and in a redaction fixture, but no loader fronts
+systemd-creds, a TPM, or another secret manager; the only implemented live
+loader is the capability-file adapter. Adding the class without a loader would
+overstate what is available.
+
+The remaining work needs a swtpm-backed PCR-policy seal/unseal test, a typed
+fail-closed denial on an altered PCR state, and rotation between
+`CapabilityFile` and the new class through the existing rotation plan. Reopen
+when that hardware or swtpm rail and the exact backend ref are available.
+
 ## #10 Encrypted discovery provider
 
 **Decision: no provider implementation.**
