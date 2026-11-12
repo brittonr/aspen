@@ -9,7 +9,7 @@ Choose the documentation by the question you need to answer. The two companion c
 | How do I contribute, inspect a workflow, or diagnose a failure? | [Workflow handbook](handbook/README.md): 100 walkthroughs, how-to guides, references, troubleshooting articles, and review checklists. |
 | Why does a subsystem work this way, and where do its guarantees stop? | [Technical companion](technical/README.md): 100 implementation-focused articles on invariants, failure cases, and evidence boundaries. |
 | What is the architecture and ownership model? | [Architecture](architecture.md), [distributed-system fabric](distributed-system-fabric.md), [modularity boundaries](modularity-boundaries.md), and the [system atlas](atlas.md). |
-| What evidence supports a change or operational claim? | [Proof workflow](proof-workflow.md), [distributed testing](distributed-testing.md), [capability qualification report](capability-qualification-report.md), and [production runbooks](production-operator-runbooks.md). |
+| What evidence supports a change or operational claim? | [Proof workflow](proof-workflow.md), [distributed testing](distributed-testing.md), [capability qualification report](capability-qualification-report.md), [dependency advisory audit](dependency-advisory-audit.md), and [production runbooks](production-operator-runbooks.md). |
 
 ## Governing subsystem entry points
 

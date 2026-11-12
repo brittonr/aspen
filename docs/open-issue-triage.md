@@ -20,6 +20,7 @@ The following issues have concrete changes on `molten`:
 - **#25** Molten identity, status, and an executed first workflow.
 - **#4** Nickel-sourced system atlas with Markdown and static HTML twins plus a freshness check.
 - **#22** Read-only capability qualification report joining the evidence matrix with validated receipts.
+- **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 
 ## Remaining issues and blockers
 
@@ -41,7 +42,6 @@ The following issues have concrete changes on `molten`:
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
 | #26 | The supported node commands are bounded (`run`, `run-loop`, `serve`), not a long-running daemon; the existing VM module is fixture-specific. | Add a supported long-running node service command first, then export the module. |
-| #28 | Needs a pinned scanner and advisory snapshot, plus affected-package and expired-exception fixtures. | Add the audit only when the advisory snapshot can be reproduced offline. |
 | #31 | Tracker depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries
