@@ -1135,6 +1135,10 @@
           moltenVmNodeModule = moltenVmNodeModule;
         };
 
+        vmMoltenModule = import ./nix/vm-molten-module.nix {
+          inherit pkgs moltenPkg startupSourceBinding;
+        };
+
         moltenVmNodeModule =
           provisionSourceGate: nodeId:
           { pkgs, ... }:
@@ -4516,6 +4520,16 @@
             program = "${moltenPkg}/bin/molten";
             meta = {
               description = "Run the Molten CLI";
+            };
+          };
+          nixos-vm-molten-module = {
+            type = "app";
+            program = "${pkgs.writeShellScript "molten-module-vm" ''
+              set -euo pipefail
+              exec nix build -L --no-link '${vmMoltenModule.drvPath}'
+            ''}";
+            meta = {
+              description = "Boot the exported Molten NixOS module in a VM (opt-in; not a flake check)";
             };
           };
           nextest-ci = {

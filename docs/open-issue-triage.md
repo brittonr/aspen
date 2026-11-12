@@ -47,7 +47,7 @@ their reopening triggers are met.
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
-| #26 | `nixosModules.molten` and a module-eval check are implemented for the bounded-loop profile; VM boot, restart, shutdown, and absent/wrong trust denial are not run. | Run the module through the NixOS VM rail and retain the exact package/profile result. |
+| #26 | `nixosModules.molten`, a module-eval check, and an opt-in `nixos-vm-molten-module` app are implemented; the VM app was not executed, so boot/restart/shutdown and absent-trust denial are not retained evidence. | Run the opt-in VM app and retain the exact package/profile result. |
 | #31 | Tracker depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries

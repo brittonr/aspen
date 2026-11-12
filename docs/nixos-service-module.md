@@ -61,6 +61,12 @@ fixture signer or synthetic grant is not a supported operator configuration.
 
 `checks.x86_64-linux.molten-module-eval` evaluates the module, the required
 package and trust inputs, the service user, and the generated start and loop
-scripts. It does not boot a VM or prove live node behavior. Boot, restart,
-shutdown, absent or wrong trust denial, and the exact package/profile result
-remain required before the module is treated as externally qualified.
+scripts. It does not boot a VM or prove live node behavior.
+
+The opt-in `apps.x86_64-linux.nixos-vm-molten-module` builds a NixOS VM test
+that boots the module, checks startup, restarts the service, stops it, and
+checks absent-trust failure. It is deliberately not a flake check because its
+cold closure is large. It was not executed in the session that added it, so it
+is a reviewable rail, not retained execution evidence. Boot, restart, shutdown,
+absent or wrong trust denial, and the exact package/profile result remain
+required before the module is treated as externally qualified.
