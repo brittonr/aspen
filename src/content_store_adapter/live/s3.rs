@@ -44,9 +44,16 @@ pub struct Client {
 
 impl Client {
     pub fn connect(config: ClientConfig) -> Result<Self> {
+        Self::connect_with_timeout(config, REQUEST_TIMEOUT)
+    }
+
+    pub fn connect_with_timeout(config: ClientConfig, timeout: Duration) -> Result<Self> {
         validate_config(&config)?;
+        if timeout.is_zero() {
+            return Err(Failure::invalid_harness("s3 request timeout must be nonzero"));
+        }
         let client = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(timeout)
             .build()
             .map_err(|error| Failure::invalid_harness(format!("s3 client: {error}")))?;
         Ok(Self { client, config })

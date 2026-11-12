@@ -539,3 +539,150 @@ mod publish_tests {
         assert!(execution.verified_chunks.is_empty());
     }
 }
+
+#[cfg(test)]
+mod fault_tests {
+    use std::time::Duration;
+
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    use super::*;
+    use crate::content_store_adapter::ClientConfig;
+    use crate::content_store_adapter::LocalTier;
+
+    fn reference(label: &str) -> String {
+        crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
+    }
+
+    fn profile() -> ContentAdapterProfile {
+        crate::content_store_adapter::profile(
+            "object",
+            reference("profile"),
+            ContentAdapterClass::ObjectStorage,
+            ContentResourceBounds {
+                max_total_bytes: 1024,
+                max_chunk_count: 8,
+                max_chunk_bytes: 1024,
+                max_range_bytes: 1024,
+                max_concurrent_operations: 1,
+                max_queued_bytes: 1024,
+                max_memory_bytes: 1024,
+                max_deadline_ticks: 10,
+                max_retries: 0,
+                max_events: 16,
+                max_status_entries: 8,
+            },
+            vec![reference("evidence")],
+        )
+        .expect("profile")
+    }
+
+    async fn fetch_with(
+        response: &'static [u8],
+        delay: Option<Duration>,
+        timeout: Option<Duration>,
+    ) -> ObjectExecution {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 2048];
+            let _ = socket.read(&mut buffer).await.expect("read");
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
+            let _ = socket.write_all(response).await;
+        });
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
+        let config = ClientConfig {
+            endpoint: format!("http://{address}"),
+            region: "us-east-1".to_string(),
+            bucket: "bucket".to_string(),
+            access_key: "access".to_string(),
+            secret_key: "secret".to_string(),
+            session_token: None,
+        };
+        let mut client = match timeout {
+            Some(timeout) => CachedClient::connect_with_timeout(config, tier, timeout),
+            None => CachedClient::connect(config, tier),
+        }
+        .expect("client");
+        let profile = profile();
+        let chunk_ref = crate::chunk_store::hash_chunk(b"hello", 5);
+        let manifest = ContentManifestDescriptor {
+            manifest_ref: reference("manifest"),
+            total_length: 5,
+            chunker: "fixed_v1".to_string(),
+            chunk_size: 5,
+            metadata_ref: reference("metadata"),
+            policy_refs: vec![reference("policy")],
+            evidence_refs: vec![reference("evidence")],
+            chunks: vec![ContentChunkDescriptor {
+                chunk_ref: chunk_ref.clone(),
+                length: 5,
+                position: 0,
+                transform: "identity".to_string(),
+            }],
+        };
+        let command = crate::content_store_adapter::command(&profile, crate::content_store_adapter::CommandInput {
+            operation_ref: reference("operation"),
+            operation: ContentOperation::Get,
+            manifest: &manifest,
+            range: None,
+            submitted_tick: 0,
+            deadline_tick: 10,
+            retry_count: 0,
+            cancelled: false,
+            policy_refs: vec![reference("policy")],
+        })
+        .expect("command");
+        let publication = ObjectPublication {
+            manifest,
+            keys: vec![format!(
+                "objects/{}",
+                crate::preserves_rail::content_ref_from_bytes(b"hello").trim_start_matches("blake3:")
+            )],
+            backend_hint_ref: reference("backend"),
+        };
+        fetch_object_chunks(
+            FetchInput {
+                profile: &profile,
+                publication: &publication,
+                command: &command,
+                generation: 1,
+                retained: None,
+            },
+            &mut client,
+        )
+        .await
+        .expect("fetch")
+    }
+
+    #[tokio::test]
+    async fn disconnect_fails_without_verified_payload() {
+        let execution = fetch_with(b"", None, None).await;
+        assert_eq!(execution.state.artifact.terminal, ContentTerminal::Failed);
+        assert!(execution.verified_chunks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn truncation_fails_without_verified_payload() {
+        let execution = fetch_with(
+            b"HTTP/1.1 200 OK\r\ncontent-length: 10\r\nconnection: close\r\n\r\nhi",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(execution.state.artifact.terminal, ContentTerminal::Failed);
+        assert!(execution.verified_chunks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn timeout_fails_without_verified_payload() {
+        let execution = fetch_with(b"", Some(Duration::from_millis(200)), Some(Duration::from_millis(50))).await;
+        assert_eq!(execution.state.artifact.terminal, ContentTerminal::Failed);
+        assert!(execution.verified_chunks.is_empty());
+    }
+}

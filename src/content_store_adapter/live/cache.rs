@@ -25,6 +25,10 @@ impl CachedClient {
         Ok(Self { remote: Client::connect(config)?, tier })
     }
 
+    pub fn connect_with_timeout(config: ClientConfig, tier: LocalTier, timeout: std::time::Duration) -> Result<Self> {
+        Ok(Self { remote: Client::connect_with_timeout(config, timeout)?, tier })
+    }
+
     pub async fn put(&mut self, key: &str, bytes: &[u8]) -> Result<CachedObjectObservation> {
         let object_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
         let remote = self.remote.put(key, bytes).await?;
