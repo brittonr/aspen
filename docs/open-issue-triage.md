@@ -24,6 +24,7 @@ The following issues have concrete changes on `molten`:
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
 - **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage` and a Nickel profile stub with explicit capabilities; live S3 client and NVMe tier remain unimplemented.
 - **#5 (partial)** Bounded TLA+ fast-path model with a TLC flake check; TLA-ts is not integrated.
+- **#31 (tracker)** The [external pilot tracker](external-pilot-tracker.md) records the selected-workflow dependencies and distribution checklist; it does not qualify a pilot.
 
 No-go decisions are recorded for **#2**, **#3**, **#6**, **#9**, **#10**, and **#12** in
 the [deferred decision record](deferred-decisions.md). They remain open until
@@ -48,7 +49,7 @@ their reopening triggers are met.
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
 | #26 | `nixosModules.molten`, a module-eval check, and an opt-in `nixos-vm-molten-module` app are implemented; the VM app was not executed, so boot/restart/shutdown and absent-trust denial are not retained evidence. | Run the opt-in VM app and retain the exact package/profile result. |
-| #31 | Tracker depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
+| #31 | Tracker added at `docs/external-pilot-tracker.md`; depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries
 
