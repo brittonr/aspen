@@ -44,5 +44,6 @@ tlc -metadir /tmp/tlc-fastpath -config verification/tla/ConsensusFastPath.cfg \
 The flake check is `checks.x86_64-linux.consensus-fastpath-tla` and uses
 TLA+ 1.7.4 / TLC 2.19.
 
-TLA-ts is not integrated in this repository yet; the check is TLC-only. A
-TLA-ts parser check should be added when a pinned package is available.
+TLA-ts 0.0.10 is vendored under `verification/tla-ts/` and parsed by the
+`consensus-fastpath-tla-ts` flake check. The TLC run and the TLA-ts parse
+check are independent; neither proves model correctness.

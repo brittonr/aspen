@@ -25,6 +25,7 @@ the current source. Current declared families are:
 | `vendor/uhlc` | EPL-2.0 OR Apache-2.0 |
 | `vendor/nickel-lang-core-0.16.1` | MIT; resolved from the crates.io version record for checksum `51647f09e6e385c140226867c62292f23c31241ee2b4986f3f71a40d48e88a60` |
 | `vendor/nostr` (`nostr` 0.44.2) | MIT; resolved from the crates.io version record for checksum `3aa5e3b6a278ed061835fe1ee293b71641e6bf8b401cfe4e1834bbf4ef0a34e1` |
+| `verification/tla-ts/tla-ts-0.0.10.tgz`, unchanged npm publication `tla-ts@0.0.10` with SHA-256 `cf962f00ab297186f919e32c8f5cf28f6e78f1e92703b9a3d8f02044a487c84a` | MIT; upstream `LICENSE` is retained inside the tarball |
 
 Complete common texts are provided under `THIRD_PARTY_LICENSES/`. Copyright notices and license headers in upstream files must be preserved.
 

@@ -3310,6 +3310,21 @@
                   mkdir -p "$TMPDIR/tlc"
                   tlc -metadir "$TMPDIR/tlc" -config ConsensusFastPath.cfg ConsensusFastPath.tla > "$out"
                 '';
+            consensus-fastpath-tla-ts =
+              pkgs.runCommand "molten-consensus-fastpath-tla-ts"
+                {
+                  nativeBuildInputs = [ pkgs.nodejs ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cp -R $src source
+                  chmod -R u+w source
+                  tar -xzf source/verification/tla-ts/tla-ts-0.0.10.tgz -C "$TMPDIR"
+                  node source/verification/tla-ts/check.mjs \
+                    source/verification/tla/ConsensusFastPath.tla "$TMPDIR" > "$out"
+                  grep -q 'tla-ts parsed module ConsensusFastPath' "$out"
+                '';
             atlas-current =
               pkgs.runCommand "molten-atlas-current"
                 {
