@@ -21,6 +21,7 @@ The following issues have concrete changes on `molten`:
 - **#4** Nickel-sourced system atlas with Markdown and static HTML twins plus a freshness check.
 - **#22** Read-only capability qualification report joining the evidence matrix with validated receipts.
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
+- **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
 
 ## Remaining issues and blockers
 
@@ -33,7 +34,6 @@ The following issues have concrete changes on `molten`:
 | #8 | Needs an object-storage provider contract, client shape, and a live/recording adapter. | Start with the mock transport from #13 and a bounded provider profile. |
 | #9 | Requires TPM2 hardware and a sealed-key backend; the current host has no qualified TPM path. | Implement the pure key-backend contract first, then a hardware rail. |
 | #10 | Design consideration, not an accepted requirement. | Record a decision only after the discovery threat model is agreed. |
-| #11 | Evaluation only; no measured release-policy explanation need. | Compare against the existing deterministic diagnostics first. |
 | #12 | Deferred; no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
 | #15 | Requires two real hosts, actual authenticated peer binding, and a Kiln consumer cohort. | Qualify one direct-LAN stream profile and retain loopback evidence separately. |
 | #17 | Needs current authority/policy/head/intent composition; the public command still denies by design. | Compose the existing promotion service over concrete current-facts adapters. |

@@ -56,7 +56,16 @@ fn run() -> Result<(), String> {
     let diagnostics = report
         .diagnostics
         .iter()
-        .map(|diagnostic| format!("{:?}: {}: {}", diagnostic.code, diagnostic.subject, diagnostic.message))
+        .map(|diagnostic| {
+            format!(
+                "{:?}: {}: {} [rule={} facts={}]",
+                diagnostic.code,
+                diagnostic.subject,
+                diagnostic.message,
+                diagnostic.rule_id,
+                diagnostic.supporting_facts.join(",")
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     Err(format!("decision=deny report_blake3={report_blake3}\n{diagnostics}"))

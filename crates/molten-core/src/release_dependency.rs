@@ -211,6 +211,10 @@ pub struct ReleaseDependencyDiagnostic {
     pub code: DiagnosticCode,
     pub subject: String,
     pub message: String,
+    /// Stable explanation rule identity. It does not change admission behavior.
+    pub rule_id: String,
+    /// Bounded fact references that support the explanation, never new authority.
+    pub supporting_facts: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -488,15 +492,27 @@ fn compare_required(
     observed: Option<&str>,
     diagnostics: &mut Vec<ReleaseDependencyDiagnostic>,
 ) {
+    let observed_fact = observed.map_or_else(|| "missing".to_string(), str::to_owned);
+    let facts = vec![
+        format!("expectation:{subject}:{field}={expected}"),
+        format!("observation:{subject}:{field}={observed_fact}"),
+    ];
     match observed {
         Some(actual) if actual == expected => {}
-        Some(actual) => push_diagnostic(
+        Some(actual) => push_diagnostic_with_support(
             diagnostics,
             code,
             subject,
             format!("{field} mismatch: expected {expected}, observed {actual}"),
+            facts,
         ),
-        None => push_diagnostic(diagnostics, code, subject, format!("{field} is missing; expected {expected}")),
+        None => push_diagnostic_with_support(
+            diagnostics,
+            code,
+            subject,
+            format!("{field} is missing; expected {expected}"),
+            facts,
+        ),
     }
 }
 
@@ -601,11 +617,15 @@ fn validate_archive_receipts(input: &ReleaseDependencyInput, diagnostics: &mut V
     for receipt in &input.archive_receipts {
         validate_archive_expectation(receipt, diagnostics);
         let Some(observation) = observations.get(receipt.id.as_str()) else {
-            push_diagnostic(
+            push_diagnostic_with_support(
                 diagnostics,
                 DiagnosticCode::MissingArchiveReceipt,
                 &receipt.id,
                 "archive receipt observation is missing",
+                vec![
+                    format!("expectation:archive:{}:status={}", receipt.id, receipt.status),
+                    format!("observation:archive:{}=missing", receipt.id),
+                ],
             );
             continue;
         };
@@ -618,11 +638,15 @@ fn validate_archive_receipts(input: &ReleaseDependencyInput, diagnostics: &mut V
             diagnostics,
         );
         if !observation.archive_present {
-            push_diagnostic(
+            push_diagnostic_with_support(
                 diagnostics,
                 DiagnosticCode::MissingArchiveReceipt,
                 &receipt.id,
                 format!("archive path is missing: {}", receipt.archive_path),
+                vec![
+                    format!("expectation:archive:{}:path={}", receipt.id, receipt.archive_path),
+                    format!("observation:archive:{}:archive_present=false", receipt.id),
+                ],
             );
         }
         validate_evidence_files(receipt, observation, diagnostics);
@@ -766,11 +790,45 @@ fn push_diagnostic(
     subject: impl Into<String>,
     message: impl Into<String>,
 ) {
+    push_diagnostic_with_support(diagnostics, code, subject, message, Vec::new());
+}
+
+fn push_diagnostic_with_support(
+    diagnostics: &mut Vec<ReleaseDependencyDiagnostic>,
+    code: DiagnosticCode,
+    subject: impl Into<String>,
+    message: impl Into<String>,
+    supporting_facts: Vec<String>,
+) {
     diagnostics.push(ReleaseDependencyDiagnostic {
         code,
         subject: subject.into(),
         message: message.into(),
+        rule_id: diagnostic_rule_id(code).to_string(),
+        supporting_facts,
     });
+}
+
+fn diagnostic_rule_id(code: DiagnosticCode) -> &'static str {
+    match code {
+        DiagnosticCode::BoundExceeded => "release-dependency/bound-exceeded",
+        DiagnosticCode::DuplicateDependency => "release-dependency/duplicate-dependency",
+        DiagnosticCode::DuplicatePackageIdentity => "release-dependency/duplicate-package-identity",
+        DiagnosticCode::FloatingRevision => "release-dependency/floating-revision",
+        DiagnosticCode::FloatingVersion => "release-dependency/floating-version",
+        DiagnosticCode::InvalidArchiveReceipt => "release-dependency/invalid-archive-receipt",
+        DiagnosticCode::InvalidDistributionProfile => "release-dependency/invalid-distribution-profile",
+        DiagnosticCode::InvalidSourceRow => "release-dependency/invalid-source-row",
+        DiagnosticCode::LockDrift => "release-dependency/lock-drift",
+        DiagnosticCode::ManifestDrift => "release-dependency/manifest-drift",
+        DiagnosticCode::MissingArchiveReceipt => "release-dependency/missing-archive-receipt",
+        DiagnosticCode::MissingDistributionArtifact => "release-dependency/missing-distribution-artifact",
+        DiagnosticCode::MissingSourceRow => "release-dependency/missing-source-row",
+        DiagnosticCode::NixDrift => "release-dependency/nix-drift",
+        DiagnosticCode::NonCanonicalValence => "release-dependency/non-canonical-valence",
+        DiagnosticCode::PlaneDrift => "release-dependency/plane-drift",
+        DiagnosticCode::UnprofiledGitDependency => "release-dependency/unprofiled-git-dependency",
+    }
 }
 
 fn canonical_report_material(input: &ReleaseDependencyInput, diagnostics: &[ReleaseDependencyDiagnostic]) -> String {
@@ -1113,7 +1171,14 @@ mod tests {
 
         assert!(!report.is_valid());
         assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::FloatingRevision));
-        assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::LockDrift));
+        let drift = report
+            .diagnostics
+            .iter()
+            .find(|item| item.code == DiagnosticCode::LockDrift)
+            .expect("lock drift diagnostic");
+        assert_eq!(drift.rule_id, "release-dependency/lock-drift");
+        assert!(drift.supporting_facts.iter().any(|fact| fact.contains("expectation:")));
+        assert!(drift.supporting_facts.iter().any(|fact| fact.contains("observation:")));
         assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::NixDrift));
     }
 
@@ -1154,7 +1219,13 @@ mod tests {
         let report = validate_release_dependencies(&input);
 
         assert!(!report.is_valid());
-        assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::MissingArchiveReceipt));
+        let missing = report
+            .diagnostics
+            .iter()
+            .find(|item| item.code == DiagnosticCode::MissingArchiveReceipt)
+            .expect("missing archive diagnostic");
+        assert_eq!(missing.rule_id, "release-dependency/missing-archive-receipt");
+        assert!(missing.supporting_facts.iter().any(|fact| fact.contains("archive_present=false")));
         assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::InvalidArchiveReceipt));
         assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::MissingDistributionArtifact));
         assert!(report.diagnostics.iter().any(|item| item.code == DiagnosticCode::InvalidDistributionProfile));
