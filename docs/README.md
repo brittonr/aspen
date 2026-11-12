@@ -16,6 +16,7 @@ Choose the documentation by the question you need to answer. The two companion c
 These links are a starting map, not a replacement inventory of requirements.
 
 - **Authority and effects:** [nominal references](nominal-authority-references.md), [fabric port ownership](fabric-port-ownership.md), [node-state filesystem authority](node-state-filesystem-authority.md), and [effect profiles](effect-manifest-profiles.md).
+- **Deployment:** [NixOS service module](nixos-service-module.md).
 - **Execution:** [system extensions](system-extension-runtime.md), [native extension host](native-system-extension-host.md), [Wasm components](wasm-component-runtime.md), and [bounded execution](fabric-execution.md).
 - **Distributed mechanisms:** [transport sessions](fabric-transport-session-runtime.md), [inbound admission rate-limit review](inbound-admission-rate-limit-review.md), [membership and placement](fabric-membership-placement.md), [cryptographic identity](fabric-cryptographic-identity.md), and [time and scheduling](fabric-time-scheduler-runtime.md).
 - **Data movement:** [content stores](content-store-adapter.md), [DAG sync](dag-sync.md), [content replication](content-replication.md), and [coordination delivery](coordination-delivery.md).

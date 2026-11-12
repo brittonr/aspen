@@ -1232,6 +1232,10 @@
           };
       in
       {
+        nixosModules = {
+          molten = import ./nix/modules/molten.nix;
+        };
+
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
@@ -3260,6 +3264,34 @@
             addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
+            molten-module-eval =
+              let
+                moduleEval = (nixpkgs.lib.nixosSystem {
+                  system = system;
+                  modules = [
+                    (import ./nix/modules/molten.nix)
+                    {
+                      services.molten = {
+                        enable = true;
+                        package = moltenPkg;
+                        nodeId = "node:module-eval";
+                        sourceTrustFile = "/run/molten/source-gate-trust.json";
+                      };
+                      system.stateVersion = "24.11";
+                    }
+                  ];
+                }).config;
+              in
+              pkgs.runCommand "molten-module-eval"
+                {
+                  nativeBuildInputs = [ pkgs.coreutils ];
+                }
+                ''
+                  test -n ${pkgs.lib.escapeShellArg moduleEval.systemd.services.molten.serviceConfig.ExecStart}
+                  test "${toString moduleEval.services.molten.maxTicks}" = "3600"
+                  test "${moduleEval.systemd.services.molten.serviceConfig.User}" = "molten"
+                  touch "$out"
+                '';
             atlas-current =
               pkgs.runCommand "molten-atlas-current"
                 {
