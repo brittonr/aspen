@@ -199,6 +199,31 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires MOLTEN_S3_ENDPOINT and MOLTEN_S3_BUCKET"]
+    async fn live_endpoint_roundtrip() {
+        let endpoint = std::env::var("MOLTEN_S3_ENDPOINT").expect("endpoint");
+        let bucket = std::env::var("MOLTEN_S3_BUCKET").expect("bucket");
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 4096, false).expect("tier");
+        let mut client = CachedClient::connect(
+            ClientConfig {
+                endpoint,
+                region: "us-east-1".to_string(),
+                bucket,
+                access_key: "molten".to_string(),
+                secret_key: "molten".to_string(),
+                session_token: None,
+            },
+            tier,
+        )
+        .expect("client");
+        let observation = client.put("objects/live-roundtrip", b"live").await.expect("put");
+        assert_eq!(observation.bytes, 4);
+        let expected = crate::preserves_rail::content_ref_from_bytes(b"live");
+        assert_eq!(client.get("objects/live-roundtrip", &expected).await.expect("get"), b"live");
+    }
+
+    #[tokio::test]
     async fn latency_summary_separates_local_and_remote_reads() {
         let temporary = tempfile::tempdir().expect("tier");
         let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
