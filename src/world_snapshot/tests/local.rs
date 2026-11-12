@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ed25519_dalek::SigningKey;
 use molten_core::world_commit::SnapshotCohortRef;
 use molten_core::world_commit::SnapshotProfileRef;
@@ -122,6 +124,21 @@ fn local_logical_restore_materializes_and_activates_a_verified_bundle() {
     ))
     .expect("receipt");
     assert!(storage.try_exists(&receipt).expect("exists"));
+
+    for kind in [
+        SnapshotComponentKind::DurableState,
+        SnapshotComponentKind::History,
+        SnapshotComponentKind::Tasks,
+        SnapshotComponentKind::Scheduler,
+        SnapshotComponentKind::Time,
+        SnapshotComponentKind::Entropy,
+        SnapshotComponentKind::Effects,
+    ] {
+        let path = RelativePath::parse(&format!("world-snapshot/restored/{}/state.bin", kind.as_str()))
+            .expect("restored path");
+        assert_eq!(storage.read(&path, 64).expect("restored bytes"), kind.as_str().as_bytes());
+    }
+    replay_after_restart(temporary.path(), signer.verifying_key(), &descriptor, &outcome.receipt.artifact_ref);
 }
 
 #[test]
@@ -189,5 +206,36 @@ fn local_logical_restore_denies_tampered_bundle_and_untrusted_admission() {
             receipts: &mut receipts,
         })
         .is_err()
+    );
+}
+
+fn replay_after_restart(
+    path: &Path,
+    signer: ed25519_dalek::VerifyingKey,
+    descriptor: &SnapshotDescriptor,
+    expected_receipt_ref: &str,
+) {
+    let storage = DirectoryRoot::open(path).expect("root").namespace(NamespaceKind::Storage).expect("storage");
+
+    // A fresh process reopens the state root and reactivates the same verified
+    // bundle without replaying any unresolved external effect.
+    let mut materialization = LocalLogicalSnapshot::open(path, signer).expect("adapter");
+    let mut admission = LocalLogicalSnapshot::open(path, signer).expect("adapter");
+    let mut handles = LocalLogicalSnapshot::open(path, signer).expect("adapter");
+    let mut runtime = LocalLogicalSnapshot::open(path, signer).expect("adapter");
+    let mut receipts = LocalLogicalSnapshot::open(path, signer).expect("adapter");
+    let replay = restore_logical_snapshot(descriptor, &descriptor.cohort, LogicalSnapshotPorts {
+        materialization: &mut materialization,
+        admission: &mut admission,
+        handles: &mut handles,
+        runtime: &mut runtime,
+        receipts: &mut receipts,
+    })
+    .expect("restart restore");
+    assert_eq!(replay.receipt.artifact_ref, expected_receipt_ref);
+    assert!(
+        !storage
+            .try_exists(&RelativePath::parse("world-snapshot/effects").expect("effects"))
+            .expect("exists")
     );
 }

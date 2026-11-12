@@ -102,10 +102,12 @@ local handle directory, requires a signed current-admission document at
 `<state-root>/storage/world-snapshot/admission.json`, and activates last. It
 publishes observations and the canonical receipt content-addressed.
 
-This is one concrete logical adapter for a declared file-tree bundle. It does
-not restore Molten's typed Redb stores, replay a live runtime, or prove
-component semantics. Opaque and VM restore still deny because no admitted
-ChaosControl runtime adapter is present.
+This is one concrete logical adapter for a declared file-tree bundle. Tests
+cover verified materialization, tamper/untrusted-admission denial, canonical
+readback after reopening the state root, and idempotent reactivation with the
+same receipt. It does not restore Molten's typed Redb stores, replay a live
+runtime, or prove component semantics. Opaque and VM restore still deny because
+no admitted ChaosControl runtime adapter is present.
 
 ## Canonical records
 
