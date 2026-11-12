@@ -49,7 +49,7 @@ their reopening triggers are met.
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
-| #26 | The opt-in VM run reached startup, restart, shutdown, and absent-trust denial; the final assertion expected `failed` while `Restart=on-failure` leaves the unit restarting. The corrected full run is blocked by a host Nix auto-GC lock; repeated `nix eval` probes time out. | Rerun the corrected opt-in VM app when the Nix store is idle and retain the exact package/profile result. |
+| #26 | The opt-in VM run reached startup, restart, shutdown, and absent-trust denial; the final assertion expected `failed` while `Restart=on-failure` leaves the unit restarting. The corrected full run is blocked by a host Nix auto-GC lock; repeated `nix eval` probes time out, including a 30-minute uncached/ cached attempt. | Rerun the corrected opt-in VM app when the Nix store is idle and retain the exact package/profile result. |
 | #31 | Tracker added at `docs/external-pilot-tracker.md`; depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries
