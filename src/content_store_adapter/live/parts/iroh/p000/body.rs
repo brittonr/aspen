@@ -193,7 +193,7 @@ pub async fn fetch_stream(input: StreamGetInput<'_>) -> crate::error::Result<Rem
         let verified = match verify_located_chunk(&client, input, locator, &state).await? {
             Ok(verified) => verified,
             Err((failure, chunk_ref)) => {
-                state = classify_content_failure(profile, &state, failure, ContentFailureContext::default())
+                state = classify_content_failure(profile, &state, failure, UNACKNOWLEDGED_PUT)
                     .map_err(transition_error)?;
                 events.push(terminal_event(profile, command, &publication.manifest, &state, chunk_ref)?);
                 client.close().await;

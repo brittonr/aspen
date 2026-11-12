@@ -24,14 +24,14 @@ A backend success callback, QUIC connection, Iroh blob hash, or Redb row never m
 
 Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `Scope`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
 
-Terminal classes distinguish accepted, streaming, verified, durable, cancelled, retryable, failed, uncertain, and denied. Corruption, truncation, reordering, unexpected chunks, stale tickets, unsupported transforms, root escape, overload, permission denial, timeout, disconnect, and adapter failure remain distinct. Disconnect or timeout after possible progress is uncertain, never normalized to success or definite absence.
+Terminal classes distinguish accepted, streaming, verified, durable, cancelled, retryable, failed, uncertain, and denied. Corruption, truncation, reordering, unexpected chunks, stale tickets, unsupported transforms, root escape, local overload, provider throttle, permission denial, timeout, disconnect, and adapter failure remain distinct. Provider throttle is retryable and is not local capacity overload. A get disconnect after verified progress, and a put disconnect after the remote acknowledged any part of the put, are uncertain; an unacknowledged put disconnect remains retryable. Uncertain outcomes are never normalized to success or definite absence, and retrying them requires an explicit idempotency or no-clobber policy.
 
 ## Adapter profiles
 
 - **Capability local** streams verified chunks through `ChunkStoreRoot` and uses existing canonical manifests and receipts.
 - **Redb indexed** projects bounded availability and missing counts from the existing index without exposing the database handle.
 - **Iroh Blobs** starts an actual `iroh_blobs::BlobsProtocol` router under an admitted persisted transport key and streams BAO leaves over Iroh with a hard per-chunk bound. The client re-verifies Molten chunk identity after transport.
-- **Deterministic simulation** runs the same command and transition core and models corruption, truncation, cancellation, disconnect, capacity, latency, restart, and resume.
+- **Deterministic simulation** runs the same command and transition core for get and put. The get path models corruption, truncation, cancellation, disconnect, capacity, latency, restart, and resume. The put path models provider throttle, torn put with possible remote acceptance, and multipart abort; failure arms never return a durable terminal or verified payloads.
 
 The older `chunk_store::publish_iroh_blobs` / `fetch_iroh_blobs` compatibility helpers copy through a capability-rooted local blob directory. They are retained for compatibility and are **not** evidence of live Iroh transport. New live claims require `publish_chunks` plus `execute_stream_get` receipts or test evidence.
 

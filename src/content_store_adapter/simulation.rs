@@ -10,7 +10,17 @@ pub enum Fault {
     DisconnectAt(usize),
     CapacityExceeded,
     LatencyTicks(u64),
+    ProviderThrottleAt(usize),
+    TornPutAt(usize),
+    MultipartAbortAt(usize),
 }
+
+pub(super) const UNACKNOWLEDGED_PUT: ContentFailureContext = ContentFailureContext {
+    remote_put_acknowledged: false,
+};
+pub(super) const ACKNOWLEDGED_PUT: ContentFailureContext = ContentFailureContext {
+    remote_put_acknowledged: true,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelExecution {
@@ -58,13 +68,9 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             break;
         }
         if fault == Some(Fault::DisconnectAt(descriptor.position)) {
-            state = classify_content_failure(
-                profile,
-                &state,
-                ContentFailure::TransportDisconnected,
-                ContentFailureContext::default(),
-            )
-            .map_err(transition_error)?;
+            state =
+                classify_content_failure(profile, &state, ContentFailure::TransportDisconnected, UNACKNOWLEDGED_PUT)
+                    .map_err(transition_error)?;
             events.push(terminal_stream_event(input, &state, None, state.failure)?);
             break;
         }
@@ -92,8 +98,8 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             }
             Err(issues) => {
                 let failure = failure_from_issues(&issues);
-                state = classify_content_failure(profile, &state, failure, ContentFailureContext::default())
-                    .map_err(transition_error)?;
+                state =
+                    classify_content_failure(profile, &state, failure, UNACKNOWLEDGED_PUT).map_err(transition_error)?;
                 events.push(terminal_stream_event(input, &state, Some(descriptor.chunk_ref.clone()), Some(failure))?);
                 break;
             }
@@ -109,7 +115,7 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
 
 /// Admits the simulation and begins its partial state, or finishes early for an overload or a
 /// latency fault past the command deadline.
-fn begin_simulated_state(
+pub(super) fn begin_simulated_state(
     input: SimulatedStreamInput<'_>,
 ) -> crate::error::Result<std::ops::ControlFlow<ModelExecution, ContentPartialState>> {
     let SimulatedStreamInput {
@@ -137,9 +143,8 @@ fn begin_simulated_state(
         crate::error::Failure::invalid_harness(format!("simulation partial state denied: {issues:?}"))
     })?;
     if fault == Some(Fault::CapacityExceeded) {
-        let state =
-            classify_content_failure(profile, &state, ContentFailure::Overload, ContentFailureContext::default())
-                .map_err(transition_error)?;
+        let state = classify_content_failure(profile, &state, ContentFailure::Overload, UNACKNOWLEDGED_PUT)
+            .map_err(transition_error)?;
         return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
     }
     if let Some(Fault::LatencyTicks(latency)) = fault {
@@ -148,9 +153,8 @@ fn begin_simulated_state(
             .checked_add(latency)
             .ok_or_else(|| crate::error::Failure::invalid_harness("simulation latency overflow"))?;
         if completion_tick > command.deadline_tick {
-            let state =
-                classify_content_failure(profile, &state, ContentFailure::Timeout, ContentFailureContext::default())
-                    .map_err(transition_error)?;
+            let state = classify_content_failure(profile, &state, ContentFailure::Timeout, UNACKNOWLEDGED_PUT)
+                .map_err(transition_error)?;
             return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
         }
     }
@@ -159,7 +163,7 @@ fn begin_simulated_state(
 
 /// The terminal event after a cancellation, disconnect, or failed chunk, carrying no observed
 /// bytes.
-fn terminal_stream_event(
+pub(super) fn terminal_stream_event(
     input: SimulatedStreamInput<'_>,
     state: &ContentPartialState,
     chunk_ref: Option<String>,
@@ -181,7 +185,7 @@ fn terminal_stream_event(
 
 /// The scripted chunk bytes and their observation, with the configured corruption or truncation
 /// fault applied.
-fn simulated_chunk_observation<'a>(
+pub(super) fn simulated_chunk_observation<'a>(
     input: SimulatedStreamInput<'a>,
     descriptor: &ContentChunkDescriptor,
     state: &ContentPartialState,
@@ -244,7 +248,7 @@ fn terminal_execution(
     })
 }
 
-fn failure_from_issues(issues: &[ContentIssue]) -> ContentFailure {
+pub(super) fn failure_from_issues(issues: &[ContentIssue]) -> ContentFailure {
     if issues.iter().any(|issue| matches!(issue, ContentIssue::CorruptChunk(_))) {
         ContentFailure::CorruptChunk
     } else if issues.iter().any(|issue| matches!(issue, ContentIssue::TruncatedChunk(_))) {
@@ -262,7 +266,7 @@ fn terminal_sequence(state: &ContentPartialState) -> crate::error::Result<u64> {
         .ok_or_else(|| crate::error::Failure::invalid_harness("terminal simulation state lacks event sequence"))
 }
 
-fn transition_error(issue: ContentIssue) -> crate::error::Failure {
+pub(super) fn transition_error(issue: ContentIssue) -> crate::error::Failure {
     crate::error::Failure::invalid_harness(format!("simulation transition denied: {issue:?}"))
 }
 
