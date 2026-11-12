@@ -458,4 +458,84 @@ mod publish_tests {
         assert!(publication.keys[0].starts_with("objects/"));
         server.await.expect("server");
     }
+
+    #[tokio::test]
+    async fn corrupt_remote_chunk_fails_without_verified_payload() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 2048];
+            let _ = socket.read(&mut buffer).await.expect("read");
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nwrong")
+                .await
+                .expect("write");
+        });
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
+        let mut client = CachedClient::connect(
+            ClientConfig {
+                endpoint: format!("http://{address}"),
+                region: "us-east-1".to_string(),
+                bucket: "bucket".to_string(),
+                access_key: "access".to_string(),
+                secret_key: "secret".to_string(),
+                session_token: None,
+            },
+            tier,
+        )
+        .expect("client");
+        let profile = profile();
+        let chunk_ref = crate::chunk_store::hash_chunk(b"hello", 5);
+        let manifest = ContentManifestDescriptor {
+            manifest_ref: reference("manifest"),
+            total_length: 5,
+            chunker: "fixed_v1".to_string(),
+            chunk_size: 5,
+            metadata_ref: reference("metadata"),
+            policy_refs: vec![reference("policy")],
+            evidence_refs: vec![reference("evidence")],
+            chunks: vec![ContentChunkDescriptor {
+                chunk_ref: chunk_ref.clone(),
+                length: 5,
+                position: 0,
+                transform: "identity".to_string(),
+            }],
+        };
+        let command = crate::content_store_adapter::command(&profile, crate::content_store_adapter::CommandInput {
+            operation_ref: reference("operation"),
+            operation: ContentOperation::Get,
+            manifest: &manifest,
+            range: None,
+            submitted_tick: 0,
+            deadline_tick: 10,
+            retry_count: 0,
+            cancelled: false,
+            policy_refs: vec![reference("policy")],
+        })
+        .expect("command");
+        let publication = ObjectPublication {
+            manifest,
+            keys: vec![format!(
+                "objects/{}",
+                crate::preserves_rail::content_ref_from_bytes(b"hello").trim_start_matches("blake3:")
+            )],
+            backend_hint_ref: reference("backend"),
+        };
+        let execution = fetch_object_chunks(
+            FetchInput {
+                profile: &profile,
+                publication: &publication,
+                command: &command,
+                generation: 1,
+                retained: None,
+            },
+            &mut client,
+        )
+        .await
+        .expect("fetch");
+        assert_eq!(execution.state.artifact.terminal, ContentTerminal::Failed);
+        assert!(execution.verified_chunks.is_empty());
+    }
 }
