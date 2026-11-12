@@ -1,6 +1,6 @@
 # Open issue triage
 
-Reviewed at `dae9d492e`. This page records why the remaining public issues are
+Reviewed at `c952c28c4`. This page records why the remaining public issues are
 not silently claimed as implemented. It is a review aid, not a second
 specification or a release checklist.
 
