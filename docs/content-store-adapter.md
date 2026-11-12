@@ -39,3 +39,15 @@ The older `chunk_store::publish_iroh_blobs` / `fetch_iroh_blobs` compatibility h
 ## Protection and authority
 
 Backend tags and protection handles are effects subordinate to canonical retention. Protection never grants retention authority; a pin never grants read/reveal authority; unprotect never grants deletion authority. Read requires a separate read-authority ref. Deletion requires canonical retention policy, no active canonical pin, and a separate deletion gate. Availability does not grant import, provenance, confidentiality, installation, execution, or deletion authority.
+
+## Object-storage parity
+
+Retained runs against SeaweedFS 4.53 and the mock endpoint:
+
+| Case | Mock | Live SeaweedFS |
+|---|---|---|
+| Put/Get through the object shell | Verified | Verified |
+| Corrupt remote chunk | Failed, 0 verified chunks | Failed, 0 verified chunks |
+
+These are bounded observations, not a latency or durability claim. The live arm
+is an ignored test gated by `MOLTEN_S3_ENDPOINT` and `MOLTEN_S3_BUCKET`.
