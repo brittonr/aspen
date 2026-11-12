@@ -18,8 +18,8 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
-artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
+artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
+artifact-binding-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 blake3 = "=1.8.5"
 cap-std = "=3.4.5"
 data-encoding = "=2.11.0"
@@ -35,7 +35,7 @@ executable-extent-conformance = { path = "vendor/executable-extent/crates/execut
 executable-extent-core = { path = "vendor/executable-extent/crates/executable-extent-core" }
 executable-extent-linux = { path = "vendor/executable-extent/crates/executable-extent-linux" }
 
-[patch."ssh://git@github.com/OnixResearch/onix-artifact.git"]
+[patch."https://github.com/OnixResearch/onix-artifact.git"]
 artifact-auth-core = { path = "vendor/artifact/crates/artifact-auth-core" }
 artifact-binding-core = { path = "vendor/artifact/crates/artifact-binding-core" }
 

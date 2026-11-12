@@ -1,16 +1,456 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/.cargo-target/aspen-wasmtime-49-20261031",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
   "roots": [
-    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "f7547d972e4cd6aee9831a681fbd4ce6b5d45a968a465a73a23421b2b9869ffa",
-  "inputsHash": "514ef512df78338bd53be749cc9b2f3a7cd270f0812719edf066bdf90663b474",
+  "cargoLockHash": "14a7441deb53fbc2c3292230c5d7c0b86df1fe31b5db510b785027af7eb869b8",
+  "inputsHash": "29622945ecb87a1611a7767bdb89c0571cf0b96e1f47ca1158f441f13e9a653e",
   "crates": {
+    "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
+      "crateName": "basalt",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/basalt.git",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
+        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
+          "externCrateName": "base64"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#bounded-http@0.1.0",
+          "externCrateName": "bounded_http"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iddqd@0.4.5",
+          "externCrateName": "iddqd"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jsonwebtoken@11.0.0",
+          "externCrateName": "jsonwebtoken"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
+          "externCrateName": "replay_ledger_core"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
+          "externCrateName": "revocation_view_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#secretspec@0.17.0",
+          "externCrateName": "secretspec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
+          "externCrateName": "snafu"
+        },
+        {
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan@0.1.0",
+          "externCrateName": "ucan"
+        },
+        {
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0",
+          "externCrateName": "ucan_core"
+        },
+        {
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-nostr@0.1.0",
+          "externCrateName": "ucan_nostr"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Hardened UCAN contract boundaries for Nickel and Steel policy backends.",
+      "homepage": "https://github.com/OnixResearch/basalt#readme",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/basalt"
+    },
+    "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0": {
+      "crateName": "ucan-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/basalt.git",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
+        "subDir": "vendor/ucan/crates/ucan-core",
+        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
+      },
+      "features": [
+        "peer-auth",
+        "verification-cache"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hmac@0.12.1",
+          "externCrateName": "hmac"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0",
+          "externCrateName": "zeroize"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "No-std UCAN capability and request-admission core.",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/OnixResearch/ucan"
+    },
+    "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-nostr@0.1.0": {
+      "crateName": "ucan-nostr",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/basalt.git",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
+        "subDir": "vendor/ucan/crates/ucan-nostr",
+        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#k256@0.13.4",
+          "externCrateName": "k256"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Optional bounded Nostr key-control verification adapter for UCAN consumers.",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/ucan"
+    },
+    "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan@0.1.0": {
+      "crateName": "ucan",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/basalt.git",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
+        "subDir": "vendor/ucan",
+        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
+          "externCrateName": "base64"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+          "externCrateName": "ed25519_dalek"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
+          "externCrateName": "replay_ledger_core"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
+          "externCrateName": "revocation_view_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
+          "externCrateName": "snafu"
+        },
+        {
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0",
+          "externCrateName": "ucan_core"
+        },
+        {
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#verified-logic@0.2.0",
+          "externCrateName": "verified_logic"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0",
+          "externCrateName": "zeroize"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "UCAN token and authority primitives with explicit consumer-owned boundaries.",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/ucan"
+    },
+    "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#verified-logic@0.2.0": {
+      "crateName": "verified-logic",
+      "version": "0.2.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/basalt.git",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
+        "subDir": "vendor/ucan/vendor/verified-logic",
+        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.104",
+          "externCrateName": "anyhow"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bs58@0.5.1",
+          "externCrateName": "bs58"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+          "externCrateName": "ed25519_dalek"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@2.6.3",
+          "externCrateName": "redb"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
+          "externCrateName": "regex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#vstd@0.0.0-2026-01-25-0057",
+          "externCrateName": "vstd"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
+      "homepage": "https://github.com/OnixResearch/trellis",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/OnixResearch/trellis"
+    },
+    "git+https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
+      "crateName": "kamacite-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/kamacite.git",
+        "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+        "subDir": "crates/kamacite-core",
+        "sha256": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "externCrateName": "preserves"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/kamacite"
+    },
+    "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": {
+      "crateName": "artifact-auth-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/onix-artifact.git",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
+        "subDir": "crates/artifact-auth-core",
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
+      },
+      "features": [
+        "default",
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/onix-artifact"
+    },
+    "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0": {
+      "crateName": "artifact-binding-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/OnixResearch/onix-artifact.git",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
+        "subDir": "crates/artifact-binding-core",
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure versioned binding, resolution, reachability, and retirement mechanics",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/onix-artifact"
+    },
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
       "version": "0.1.0",
@@ -350,447 +790,7 @@
       "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
       "license": "AGPL-3.0-or-later"
     },
-    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
-      "crateName": "basalt",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
-        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
-          "externCrateName": "base64"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#bounded-http@0.1.0",
-          "externCrateName": "bounded_http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iddqd@0.4.5",
-          "externCrateName": "iddqd"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jsonwebtoken@11.0.0",
-          "externCrateName": "jsonwebtoken"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
-          "externCrateName": "replay_ledger_core"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
-          "externCrateName": "revocation_view_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#secretspec@0.17.0",
-          "externCrateName": "secretspec"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
-          "externCrateName": "snafu"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan@0.1.0",
-          "externCrateName": "ucan"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0",
-          "externCrateName": "ucan_core"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-nostr@0.1.0",
-          "externCrateName": "ucan_nostr"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Hardened UCAN contract boundaries for Nickel and Steel policy backends.",
-      "homepage": "https://github.com/OnixResearch/basalt#readme",
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/OnixResearch/basalt"
-    },
-    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0": {
-      "crateName": "ucan-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
-        "subDir": "vendor/ucan/crates/ucan-core",
-        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
-      },
-      "features": [
-        "peer-auth",
-        "verification-cache"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hmac@0.12.1",
-          "externCrateName": "hmac"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
-          "externCrateName": "sha2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0",
-          "externCrateName": "zeroize"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "No-std UCAN capability and request-admission core.",
-      "license": "MPL-2.0",
-      "repository": "https://github.com/OnixResearch/ucan"
-    },
-    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-nostr@0.1.0": {
-      "crateName": "ucan-nostr",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
-        "subDir": "vendor/ucan/crates/ucan-nostr",
-        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#k256@0.13.4",
-          "externCrateName": "k256"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
-          "externCrateName": "sha2"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Optional bounded Nostr key-control verification adapter for UCAN consumers.",
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/OnixResearch/ucan"
-    },
-    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan@0.1.0": {
-      "crateName": "ucan",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
-        "subDir": "vendor/ucan",
-        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
-          "externCrateName": "base64"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
-          "externCrateName": "ed25519_dalek"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
-          "externCrateName": "replay_ledger_core"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
-          "externCrateName": "revocation_view_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
-          "externCrateName": "sha2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
-          "externCrateName": "snafu"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#ucan-core@0.1.0",
-          "externCrateName": "ucan_core"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#verified-logic@0.2.0",
-          "externCrateName": "verified_logic"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0",
-          "externCrateName": "zeroize"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "UCAN token and authority primitives with explicit consumer-owned boundaries.",
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/OnixResearch/ucan"
-    },
-    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#verified-logic@0.2.0": {
-      "crateName": "verified-logic",
-      "version": "0.2.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
-        "subDir": "vendor/ucan/vendor/verified-logic",
-        "sha256": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg="
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.104",
-          "externCrateName": "anyhow"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bs58@0.5.1",
-          "externCrateName": "bs58"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
-          "externCrateName": "ed25519_dalek"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@2.6.3",
-          "externCrateName": "redb"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
-          "externCrateName": "regex"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#vstd@0.0.0-2026-01-25-0057",
-          "externCrateName": "vstd"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
-      "homepage": "https://github.com/OnixResearch/trellis",
-      "license": "MPL-2.0",
-      "repository": "https://github.com/OnixResearch/trellis"
-    },
-    "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
-      "crateName": "kamacite-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/kamacite.git",
-        "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
-        "subDir": "crates/kamacite-core",
-        "sha256": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc="
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
-          "externCrateName": "preserves"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/OnixResearch/kamacite"
-    },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": {
-      "crateName": "artifact-auth-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
-        "subDir": "crates/artifact-auth-core",
-        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
-      },
-      "features": [
-        "default",
-        "serde"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/OnixResearch/onix-artifact"
-    },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0": {
-      "crateName": "artifact-binding-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
-        "subDir": "crates/artifact-binding-core",
-        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
-      },
-      "features": [],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Pure versioned binding, resolution, reachability, and retirement mechanics",
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/OnixResearch/onix-artifact"
-    },
-    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -802,15 +802,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0",
           "externCrateName": "artifact_binding_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0",
           "externCrateName": "basalt"
         },
         {
@@ -826,7 +826,7 @@
           "externCrateName": "content_identity_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
           "externCrateName": "kamacite_core"
         },
         {
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

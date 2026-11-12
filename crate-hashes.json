@@ -1,6 +1,13 @@
 {
   "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
   "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=",
+  "https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
+  "https://github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
+  "https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
+  "https://github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
+  "https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
+  "https://github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
+  "https://github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8=",
   "https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
   "https://github.com/bytecodealliance/wrpc?rev=aa01409ed38bf7a978570ff567c4475376925df6#wrpc-introspect@0.7.0": "sha256-OtWXmMwjfzB95FFZ2volg6GNJf8UbTsCAO0cs9Yqb7U=",
   "https://github.com/gattaca-com/flux?rev=2a1916465ae6649aebef3758233cfea98e5d33db#flux-communication@0.1.3": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
@@ -16,12 +23,5 @@
   "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-cap@0.1.0": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=",
   "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e#vm-cohort-core@0.1.0": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
   "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#executable-extent-conformance@0.1.0": "sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4=",
-  "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#hardened-wasmtime-runtime@0.1.0": "sha256-iqYCLS7IKFhLI/VkCctQBruJ/HKgv6gWpROhQBSy3p4=",
-  "ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
-  "ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
-  "ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
-  "ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
-  "ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
-  "ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
-  "ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8="
+  "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#hardened-wasmtime-runtime@0.1.0": "sha256-iqYCLS7IKFhLI/VkCctQBruJ/HKgv6gWpROhQBSy3p4="
 }

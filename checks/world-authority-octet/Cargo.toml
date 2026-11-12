@@ -17,10 +17,10 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.1.0" }
+basalt = { git = "https://github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.1.0" }
 blake3 = "=1.8.5"
 
-[patch."ssh://git@github.com/OnixResearch/basalt.git"]
+[patch."https://github.com/OnixResearch/basalt.git"]
 basalt = { path = "vendor/basalt" }
 
 [lints.rust]

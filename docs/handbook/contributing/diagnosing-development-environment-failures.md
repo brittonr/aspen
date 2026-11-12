@@ -18,7 +18,7 @@ Classify the earliest failing boundary before changing the checkout. A fetch fai
 
 **Symptom:** compilation never begins because a Git source cannot be obtained.
 
-**Discriminating evidence:** the root and core manifests contain exact Git revisions, including SSH and other reviewed transports. [.cargo/config.toml](../../../.cargo/config.toml) enables CLI Git fetching. Distinguish authentication/access failure, transport support, and missing revision from a Rust error. Do not publish secrets while retaining diagnostics.
+**Discriminating evidence:** the root and core manifests contain exact Git revisions over public HTTPS, plus explicit Radicle transports for private sources. [.cargo/config.toml](../../../.cargo/config.toml) enables CLI Git fetching. Distinguish authentication/access failure, transport support, and missing revision from a Rust error. Do not publish secrets while retaining diagnostics.
 
 **Safe next action:** verify access to the exact approved source through the environment owner. If an explicit local sibling substitution is used for development, label the result accordingly. The [governing policy](../../reproducible-dependencies.md) says local Nix overrides do not replace reviewed release identities.
 

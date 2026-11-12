@@ -26,8 +26,8 @@ const CONFIG_LINT_FILES: &[(&str, bool)] = &[
     ("README.md", true),
     ("docs/proof-workflow.md", true),
 ];
-const CARGO_SOURCE_PREFIX: &str = "git+ssh://git@github.com/OnixResearch/";
-const NIX_SOURCE_PREFIX: &str = "ssh://git@github.com/OnixResearch/";
+const CARGO_SOURCE_PREFIX: &str = "git+https://github.com/OnixResearch/";
+const NIX_SOURCE_PREFIX: &str = "https://github.com/OnixResearch/";
 const SOURCE_REVISION_SEPARATOR: char = '#';
 const GIT_SUFFIX: &str = ".git";
 const TOML_QUOTE: char = '"';

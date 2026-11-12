@@ -18,8 +18,8 @@ use kamacite_core::SemanticOperationCompatibility;
 
 pub const ARTIFACT_BINDING_REVISION: &str = "5f3962d7471d1547e044f57daeda72f56621fd52";
 pub const KAMACITE_SEMANTIC_REVISION: &str = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
-pub const ARTIFACT_BINDING_SOURCE: &str = "ssh://git@github.com/OnixResearch/onix-artifact.git";
-pub const KAMACITE_SEMANTIC_SOURCE: &str = "ssh://git@github.com/OnixResearch/kamacite.git";
+pub const ARTIFACT_BINDING_SOURCE: &str = "https://github.com/OnixResearch/onix-artifact.git";
+pub const KAMACITE_SEMANTIC_SOURCE: &str = "https://github.com/OnixResearch/kamacite.git";
 pub const IDENTIFIER_MAXIMUM_BYTES: usize = 256;
 pub const SNAPSHOT_BINDING_LIMIT: usize = 1_024;
 pub const ROOT_LIMIT: usize = 4_096;

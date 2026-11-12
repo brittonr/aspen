@@ -246,7 +246,7 @@ checksum = "41e7ba0ded1ee3730fe4445fbdf4754756b2edd86617f19507c89d3b71383277"
 [[package]]
 name = "artifact-auth-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
+source = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
  "blake3",
  "serde",
@@ -255,7 +255,7 @@ dependencies = [
 [[package]]
 name = "artifact-auth-ed25519"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
+source = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
  "artifact-auth-core",
  "blake3",
@@ -265,7 +265,7 @@ dependencies = [
 [[package]]
 name = "artifact-binding-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
+source = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 
 [[package]]
 name = "ascii-canvas"
@@ -450,7 +450,7 @@ dependencies = [
 [[package]]
 name = "basalt"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
+source = "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -753,7 +753,7 @@ checksum = "2e93abca9e28e0a1b9877922aacb20576e05d4679ffa78c3d6dc22a26a216659"
 [[package]]
 name = "cairn-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b"
+source = "git+https://github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b"
 dependencies = [
  "blake3",
  "preserves 4.996.0",
@@ -1667,7 +1667,7 @@ dependencies = [
 [[package]]
 name = "crunch-wasm-component-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
+source = "git+https://github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
 dependencies = [
  "blake3",
  "serde",
@@ -4329,7 +4329,7 @@ dependencies = [
 [[package]]
 name = "kamacite-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4abe543724d8fc0ac4b362187caf2e27622"
+source = "git+https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4abe543724d8fc0ac4b362187caf2e27622"
 dependencies = [
  "blake3",
  "preserves 5.0.0-rc.7",
@@ -4648,7 +4648,7 @@ dependencies = [
 [[package]]
 name = "mantle-wasm-consumer-verifier"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
+source = "git+https://github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
 dependencies = [
  "blake3",
  "bounded-tree-cap",
@@ -6640,7 +6640,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 [[package]]
 name = "release-channel-index"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#fa389e19d5c9bd84cd75df914cc5418c70d92bfb"
+source = "git+https://github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#fa389e19d5c9bd84cd75df914cc5418c70d92bfb"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "fs2",
@@ -6653,7 +6653,7 @@ dependencies = [
 [[package]]
 name = "release-channel-witness"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#fa389e19d5c9bd84cd75df914cc5418c70d92bfb"
+source = "git+https://github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#fa389e19d5c9bd84cd75df914cc5418c70d92bfb"
 dependencies = [
  "fs2",
  "libc",
@@ -8492,7 +8492,7 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 [[package]]
 name = "ucan"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
+source = "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -8511,7 +8511,7 @@ dependencies = [
 [[package]]
 name = "ucan-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
+source = "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
 dependencies = [
  "blake3",
  "hmac",
@@ -8522,7 +8522,7 @@ dependencies = [
 [[package]]
 name = "ucan-nostr"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
+source = "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
 dependencies = [
  "blake3",
  "k256",
@@ -8639,7 +8639,7 @@ dependencies = [
 [[package]]
 name = "valence-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#9201074343cd9da0ffaf6ec9db690af5b445d663"
+source = "git+https://github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#9201074343cd9da0ffaf6ec9db690af5b445d663"
 dependencies = [
  "artifact-auth-core",
  "artifact-auth-ed25519",
@@ -8701,7 +8701,7 @@ dependencies = [
 [[package]]
 name = "verified-logic"
 version = "0.2.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
+source = "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4f585f837323c049e4a25f7b94c903038"
 dependencies = [
  "anyhow",
  "blake3",

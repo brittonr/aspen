@@ -4,7 +4,10 @@ Molten release dependency identity is authored in the typed Nickel profile at
 [`config/release-dependencies/profile.ncl`](../config/release-dependencies/profile.ncl).
 The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
-transport policy. The Artifact packages use one exact SSH Git pin and one non-flake Nix input.
+transport policy. Public GitHub dependencies use immutable HTTPS pins so a fresh
+checkout builds without GitHub SSH credentials. The Artifact packages use one
+exact HTTPS Git pin and one non-flake Nix input. Private Radicle sources remain
+explicit and require the documented public seed or a local Radicle profile.
 Bounded Exec uses its canonical read-only HTTPS source at revision
 `29dac88ecded94457572db3fdfaaaab95fa91525` and one matching non-flake input.
 Other OnixResearch Cargo sources retain their reviewed pins and immutable

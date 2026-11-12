@@ -124,7 +124,7 @@ fn write_config_lint_root(dir: &std::path::Path, drift: bool) -> CliResult<()> {
     std::fs::write(
         dir.join("flake.nix"),
         format!(
-            "localGitSources = {{\n  \"ssh://git@github.com/OnixResearch/basalt.git#{nix_revision}\" = basalt-src;\n}};\n"
+            "localGitSources = {{\n  \"https://github.com/OnixResearch/basalt.git#{nix_revision}\" = basalt-src;\n}};\n"
         ),
     )?;
     std::fs::write(dir.join("rust-toolchain.toml"), toolchain)?;
@@ -133,7 +133,7 @@ fn write_config_lint_root(dir: &std::path::Path, drift: bool) -> CliResult<()> {
     std::fs::write(
         dir.join("Cargo.lock"),
         format!(
-            "[[package]]\nname = \"basalt\"\nsource = \"git+ssh://git@github.com/OnixResearch/basalt.git#{cargo_revision}\"\n"
+            "[[package]]\nname = \"basalt\"\nsource = \"git+https://github.com/OnixResearch/basalt.git#{cargo_revision}\"\n"
         ),
     )?;
     Ok(())

@@ -722,7 +722,7 @@ nix build .#checks.x86_64-linux.nixos-vm-multinode
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-When running the VM check from a sibling checkout workspace, pass explicit local sibling overrides so unit2nix receives cleaned checkout trees instead of falling back to SSH fetches:
+When running the VM check from a sibling checkout workspace, pass explicit local sibling overrides so unit2nix receives cleaned checkout trees instead of falling back to remote fetches:
 
 ```sh
 nix build .#checks.x86_64-linux.nixos-vm-multinode -L \
@@ -740,7 +740,7 @@ Release bundle commands can be run manually against a realized check output: `mo
 
 Operator receipt readback is available for local dogfood ledgers: `molten receipts list --ledger STATE/ledger`, `molten receipts show REF --ledger STATE/ledger`, `molten receipts validate REF --ledger STATE/ledger`, and `molten receipts export REF --ledger STATE/ledger --out receipt.preserves`. The commands read canonical Preserves artifacts from the content-addressed ledger, validate supported dogfood/operator receipt kinds, render only non-normative summaries by default, and keep logs auxiliary rather than primary evidence.
 
-For revision-pinned OnixResearch Git dependencies, the flake uses reviewed immutable source inputs. Authentication and binding use one unified Artifact input. Other dependencies retain their accepted transports. Sibling checkouts can be substituted only through explicit development-time `--override-input` paths. The substitution filters generated and VCS-heavy directories such as `target/` and `.git/` before unit2nix sees the source. Release validation compares Cargo manifest, lockfile, Nix, release-policy, and generated-plan identities and rejects local paths as release evidence. See [`docs/reproducible-dependencies.md`](docs/reproducible-dependencies.md). Latest limited-pilot nextest output: `/nix/store/d50qlba4am1pb4f59l71djjg1bl6adhi-molten-nextest`.
+For revision-pinned OnixResearch Git dependencies, the flake uses reviewed immutable HTTPS source inputs. Authentication and binding use one unified Artifact input. The default source graph requires no GitHub SSH credentials; private Radicle sources remain explicit public-seed or local-profile prerequisites. Sibling checkouts can be substituted only through explicit development-time `--override-input` paths. The substitution filters generated and VCS-heavy directories such as `target/` and `.git/` before unit2nix sees the source. Release validation compares Cargo manifest, lockfile, Nix, release-policy, and generated-plan identities and rejects local paths as release evidence. See [`docs/reproducible-dependencies.md`](docs/reproducible-dependencies.md). Latest limited-pilot nextest output: `/nix/store/d50qlba4am1pb4f59l71djjg1bl6adhi-molten-nextest`.
 
 The Molten `0.1.0` limited-pilot candidate is commit `a4f111690b6962f04d9320fd93d09c7dd1ad2fd0`. Its source reference is `blake3:80e3ceb18784504c7573191fce72e121d0789613c6c5f7bdcecbdd9ae0e4cdb7`.
 

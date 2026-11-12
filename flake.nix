@@ -23,7 +23,7 @@
     };
     # r[impl molten.onixpkgs_kache.source]
     onixpkgs = {
-      url = "git+ssh://git@github.com/OnixResearch/onixpkgs.git?rev=56a93169f4ace2394dc4c474c6d28911c24c35e7";
+      url = "github:OnixResearch/onixpkgs/56a93169f4ace2394dc4c474c6d28911c24c35e7";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     basalt-src = {
@@ -47,7 +47,7 @@
       flake = false;
     };
     artifact-src = {
-      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
+      url = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
       flake = false;
     };
     choregraph-src = {
@@ -90,7 +90,12 @@
       url = "github:OnixResearch/octet/4367300e10740ecc99ba4b2171ace561b4787327";
       flake = false;
     };
-    octet-toolchain.url = "github:OnixResearch/octet?rev=3f7abb641ee604f54629da415bc7686f89662065";
+    octet-toolchain = {
+      url = "github:OnixResearch/octet?rev=3f7abb641ee604f54629da415bc7686f89662065";
+      inputs.cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
+      inputs.cairn.inputs.artifact.url = "github:OnixResearch/onix-artifact/e41340bec587b6d049b5cc518ec7db925dde84be";
+      inputs.valence.url = "github:OnixResearch/valence/7546a78b4eeef8686c6837e187aa12420f4f03bb";
+    };
     # The frozen verifier pilot replays its original cohort, not the current lint provider.
     verified-node-replication-octet.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
     valence-src = {
@@ -114,7 +119,7 @@
       flake = false;
     };
     release-channel-src = {
-      url = "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb";
+      url = "git+https://github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb";
       flake = false;
     };
     spacewasm-src = {
@@ -203,7 +208,7 @@
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
         artifactRevision = "5f3962d7471d1547e044f57daeda72f56621fd52";
-        artifactRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
+        artifactRepository = "https://github.com/OnixResearch/onix-artifact.git";
         rootCargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactRootDependencies = rootCargoManifest.dependencies;
         artifactRootDevelopmentDependencies = rootCargoManifest.dev-dependencies;
@@ -337,7 +342,7 @@
             "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";
           hardened-wasmtime-src;
         mantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df";
-        mantleWasmVerifierRepository = "ssh://git@github.com/OnixResearch/mantle.git";
+        mantleWasmVerifierRepository = "https://github.com/OnixResearch/mantle.git";
         mantleWasmVerifierDependency = artifactRootDependencies.mantle-wasm-consumer-verifier;
         mantleWasmVerifierExpectedLockSource = "git+${mantleWasmVerifierRepository}?rev=${mantleWasmVerifierRevision}#${mantleWasmVerifierRevision}";
         mantleWasmVerifierLockPackages = builtins.filter (
@@ -499,7 +504,7 @@
           ) "Molten Mantle producer Nix source identity drifted";
           mantle-executable-extent-src;
         kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
-        kamaciteRepository = "ssh://git@github.com/OnixResearch/kamacite.git";
+        kamaciteRepository = "https://github.com/OnixResearch/kamacite.git";
         kamaciteCargoDependencies = [
           artifactRootDependencies.kamacite-core
           moltenCoreDependencies.kamacite-core
@@ -596,13 +601,13 @@
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
-          "ssh://git@github.com/OnixResearch/basalt.git#89675cd4f585f837323c049e4a25f7b94c903038" =
+          "https://github.com/OnixResearch/basalt.git#89675cd4f585f837323c049e4a25f7b94c903038" =
             maybeCleanLocalGitSource basalt-src;
-          "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
+          "https://github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
             maybeCleanLocalGitSource cairn-src;
-          "ssh://git@github.com/OnixResearch/valence.git#9201074343cd9da0ffaf6ec9db690af5b445d663" =
+          "https://github.com/OnixResearch/valence.git#9201074343cd9da0ffaf6ec9db690af5b445d663" =
             maybeCleanLocalGitSource valence-src;
-          "ssh://git@github.com/OnixResearch/release-channel.git#fa389e19d5c9bd84cd75df914cc5418c70d92bfb" =
+          "https://github.com/OnixResearch/release-channel.git#fa389e19d5c9bd84cd75df914cc5418c70d92bfb" =
             maybeCleanLocalGitSource release-channel-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
             maybeCleanLocalGitSource hegel-src;
@@ -3323,7 +3328,7 @@
                   expected_migration_hash="$(tr -d '\n' < evidence/source/artifact-workspace-migration-v1.blake3)"
                   test "$migration_hash" = "$expected_migration_hash"
 
-                  source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
+                  source_url='https://github.com/OnixResearch/onix-artifact.git'
                   source_rev='5f3962d7471d1547e044f57daeda72f56621fd52'
                   source_nar_hash='sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY='
                   jq -e \
@@ -3341,7 +3346,7 @@
                   nickel export --format json config/release-dependencies/profile.ncl > "$TMPDIR/release-profile.json"
                   expected_profile_rows=3
                   test "$(jq --arg url "$source_url" --arg rev "$source_rev" \
-                    '[.dependencies[] | select(.package_name == "artifact-auth-core" or .package_name == "artifact-auth-ed25519" or .package_name == "artifact-binding-core") | select(.source_coordinate == $url and .immutable_revision == $rev and .nix_input == "artifact-src" and .transport_policy == "ssh-pinned-nix-archive")] | length' \
+                    '[.dependencies[] | select(.package_name == "artifact-auth-core" or .package_name == "artifact-auth-ed25519" or .package_name == "artifact-binding-core") | select(.source_coordinate == $url and .immutable_revision == $rev and .nix_input == "artifact-src" and .transport_policy == "https")] | length' \
                     "$TMPDIR/release-profile.json")" = "$expected_profile_rows"
 
                   expected_default_packages=3

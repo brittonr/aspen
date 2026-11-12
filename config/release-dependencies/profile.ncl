@@ -23,11 +23,11 @@ let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w
 let HardenedWasmtimeRevision = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
 let MantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df" in
-let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
+let MantleWasmVerifierSource = "https://github.com/OnixResearch/mantle.git" in
 let DurableAuthorityRevision = "a0de79303f3f45c18a34fff535b690a85cb3cf59" in
 let DurableAuthoritySource = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git" in
 let ReleaseChannelRevision = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb" in
-let ReleaseChannelSource = "ssh://git@github.com/OnixResearch/release-channel.git" in
+let ReleaseChannelSource = "https://github.com/OnixResearch/release-channel.git" in
 let SpaceWasmRevision = "e24cf09355a90497148eb5029fdb8e3400bd63e3" in
 let WrpcRevision = "aa01409ed38bf7a978570ff567c4475376925df6" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
@@ -81,7 +81,7 @@ in
       source_coordinate = ReleaseChannelSource,
       immutable_revision = ReleaseChannelRevision,
       nix_input = "release-channel-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -92,7 +92,7 @@ in
       source_coordinate = ReleaseChannelSource,
       immutable_revision = ReleaseChannelRevision,
       nix_input = "release-channel-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -158,7 +158,7 @@ in
       source_coordinate = MantleWasmVerifierSource,
       immutable_revision = MantleWasmVerifierRevision,
       nix_input = "mantle-wasm-verifier-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -166,10 +166,10 @@ in
       package_name = "artifact-auth-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      source_coordinate = "https://github.com/OnixResearch/onix-artifact.git",
       immutable_revision = ArtifactRevision,
       nix_input = "artifact-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -177,10 +177,10 @@ in
       package_name = "artifact-auth-ed25519",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      source_coordinate = "https://github.com/OnixResearch/onix-artifact.git",
       immutable_revision = ArtifactRevision,
       nix_input = "artifact-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -188,10 +188,10 @@ in
       package_name = "artifact-binding-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      source_coordinate = "https://github.com/OnixResearch/onix-artifact.git",
       immutable_revision = ArtifactRevision,
       nix_input = "artifact-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -287,10 +287,10 @@ in
       package_name = "kamacite-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/kamacite.git",
+      source_coordinate = "https://github.com/OnixResearch/kamacite.git",
       immutable_revision = KamaciteRevision,
       nix_input = "kamacite-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -298,10 +298,10 @@ in
       package_name = "basalt",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/basalt.git",
+      source_coordinate = "https://github.com/OnixResearch/basalt.git",
       immutable_revision = "89675cd4f585f837323c049e4a25f7b94c903038",
       nix_input = "basalt-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -309,10 +309,10 @@ in
       package_name = "cairn-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/cairn.git",
+      source_coordinate = "https://github.com/OnixResearch/cairn.git",
       immutable_revision = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
       nix_input = "cairn-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -320,10 +320,10 @@ in
       package_name = "valence-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/valence.git",
+      source_coordinate = "https://github.com/OnixResearch/valence.git",
       immutable_revision = ValenceRevision,
       nix_input = "valence-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -331,10 +331,10 @@ in
       package_name = "verified-logic",
       package_version = "0.2.0",
       source_kind = "git",
-      source_coordinate = "ssh://git@github.com/OnixResearch/basalt.git",
+      source_coordinate = "https://github.com/OnixResearch/basalt.git",
       immutable_revision = "89675cd4f585f837323c049e4a25f7b94c903038",
       nix_input = "basalt-src",
-      transport_policy = "ssh-pinned-nix-archive",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -440,7 +440,7 @@ in
     },
   ],
   canonical_valence = {
-    source_coordinate = "ssh://git@github.com/OnixResearch/valence.git",
+    source_coordinate = "https://github.com/OnixResearch/valence.git",
     immutable_revision = ValenceRevision,
   },
   archive_receipts = [
