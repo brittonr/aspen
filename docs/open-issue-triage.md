@@ -46,7 +46,7 @@ their reopening triggers are met.
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
 | #15 | Requires two real hosts, actual authenticated peer binding, and a Kiln consumer cohort. | Qualify one direct-LAN stream profile and retain loopback evidence separately. |
-| #17 | `promote`, `retry-plan`, `deny`, and `abandon` compose signed authority, store, and canonical receipts. Effect dispatch remains separate/unavailable; CLI execution of the mutation path has no retained end-to-end fixture. | Add an end-to-end CLI fixture and keep dispatch separate. |
+| #17 | `promote`, `retry-plan`, `deny`, and `abandon` compose signed authority, store, and canonical receipts. A retained CLI fixture exercises promote through head seeding, signed inputs, head/reservation commit, and receipt publication. Effect dispatch remains separate; stale/revoked CLI denials are not retained. | Add CLI denial fixtures and keep dispatch separate. |
 | #18 | Local logical file-tree adapter and CLI restore are implemented; it restores declared bundle trees, not Molten's typed node stores or a live runtime. Opaque/VM restore still deny. | Bind the adapter to the typed node-store roots and retain one end-to-end restore fixture. |
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
