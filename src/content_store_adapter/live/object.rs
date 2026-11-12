@@ -863,3 +863,109 @@ mod live_fault_tests {
         assert!(execution.verified_chunks.is_empty());
     }
 }
+
+/// Explicit retention protections for remote object chunks. Canonical retention
+/// remains the authority; this guard only prevents a shell delete from acting on
+/// a chunk the caller marked protected.
+#[derive(Debug, Default)]
+pub struct Retention {
+    protected: std::collections::BTreeSet<String>,
+}
+
+impl Retention {
+    pub fn protect(&mut self, chunk_ref: &str) {
+        self.protected.insert(chunk_ref.to_string());
+    }
+
+    pub fn unprotect(&mut self, chunk_ref: &str) {
+        self.protected.remove(chunk_ref);
+    }
+
+    pub fn is_protected(&self, chunk_ref: &str) -> bool {
+        self.protected.contains(chunk_ref)
+    }
+}
+
+pub async fn delete_chunk(
+    client: &mut CachedClient,
+    retention: &Retention,
+    key: &str,
+    chunk_ref: &str,
+) -> crate::error::Result<()> {
+    if retention.is_protected(chunk_ref) {
+        return Err(crate::error::Failure::invalid_harness("object-storage delete denied by retention"));
+    }
+    let object_ref = object_ref_from_key(key)?;
+    client.delete(key, &object_ref).await
+}
+
+fn object_ref_from_key(key: &str) -> crate::error::Result<String> {
+    let hex = key.rsplit('/').next().unwrap_or_default();
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return Err(crate::error::Failure::invalid_harness("object-storage key does not name a canonical object"));
+    }
+    Ok(format!("blake3:{hex}"))
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    use super::*;
+    use crate::content_store_adapter::ClientConfig;
+    use crate::content_store_adapter::LocalTier;
+
+    fn config(endpoint: String) -> ClientConfig {
+        ClientConfig {
+            endpoint,
+            region: "us-east-1".to_string(),
+            bucket: "bucket".to_string(),
+            access_key: "access".to_string(),
+            secret_key: "secret".to_string(),
+            session_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_delete_makes_no_remote_request() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
+        let mut client = CachedClient::connect(config(format!("http://{address}")), tier).expect("client");
+        let raw = crate::preserves_rail::content_ref_from_bytes(b"hello");
+        let key = format!("objects/{}", raw.trim_start_matches("blake3:"));
+        let mut retention = Retention::default();
+        retention.protect("chunk-ref");
+        assert!(delete_chunk(&mut client, &retention, &key, "chunk-ref").await.is_err());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), listener.accept()).await.is_err(),
+            "protected delete must not connect"
+        );
+    }
+
+    #[tokio::test]
+    async fn unprotected_delete_removes_remote_and_local_copy() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 2048];
+            let _ = socket.read(&mut buffer).await.expect("read");
+            socket
+                .write_all(b"HTTP/1.1 204 No Content\r\nconnection: close\r\n\r\n")
+                .await
+                .expect("write");
+        });
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
+        let mut client = CachedClient::connect(config(format!("http://{address}")), tier).expect("client");
+        let raw = crate::preserves_rail::content_ref_from_bytes(b"hello");
+        let key = format!("objects/{}", raw.trim_start_matches("blake3:"));
+        client.cache_verified(b"hello").expect("cache");
+        assert!(client.contains(&raw).expect("tier"));
+        delete_chunk(&mut client, &Retention::default(), &key, "chunk-ref").await.expect("delete");
+        assert!(!client.contains(&raw).expect("tier"));
+    }
+}

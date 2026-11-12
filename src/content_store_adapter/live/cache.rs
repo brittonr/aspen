@@ -123,8 +123,17 @@ impl CachedClient {
         Ok(bytes)
     }
 
+    pub async fn delete(&mut self, key: &str, expected_ref: &str) -> Result<()> {
+        self.remote.delete(key).await?;
+        self.tier.remove(expected_ref)
+    }
+
     pub async fn get_raw(&self, key: &str) -> Result<Vec<u8>> {
         self.remote.get(key).await
+    }
+
+    pub fn contains(&self, object_ref: &str) -> Result<bool> {
+        Ok(self.tier.get(object_ref)?.is_some())
     }
 
     pub fn cache_verified(&mut self, bytes: &[u8]) -> Result<TierPut> {

@@ -95,6 +95,19 @@ impl LocalTier {
         Ok(TierPut::Cached(length))
     }
 
+    pub fn remove(&mut self, object_ref: &str) -> Result<()> {
+        let path = self.entry_path(object_ref)?;
+        let length = std::fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
+        match std::fs::remove_file(&path) {
+            Ok(()) => {
+                self.used_bytes = self.used_bytes.saturating_sub(length);
+                Ok(())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(Failure::from(error)),
+        }
+    }
+
     fn entry_path(&self, object_ref: &str) -> Result<PathBuf> {
         let hex = object_ref
             .strip_prefix("blake3:")

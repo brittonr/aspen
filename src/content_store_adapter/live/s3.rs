@@ -103,6 +103,17 @@ impl Client {
         Ok(bytes.to_vec())
     }
 
+    pub async fn delete(&self, key: &str) -> Result<()> {
+        validate_key(key)?;
+        let request = self.signed(reqwest::Method::DELETE, key, b"")?;
+        let response = self
+            .client
+            .execute(request)
+            .await
+            .map_err(|error| Failure::invalid_harness(format!("s3 delete: {error}")))?;
+        require_success(response.status(), "delete").await
+    }
+
     pub async fn head(&self, key: &str) -> Result<Option<u64>> {
         validate_key(key)?;
         let request = self.signed(reqwest::Method::HEAD, key, b"")?;

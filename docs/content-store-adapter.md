@@ -49,5 +49,5 @@ Retained runs against SeaweedFS 4.53 and the mock endpoint:
 | Put/Get through the object shell | Verified | Verified |
 | Corrupt remote chunk | Failed, 0 verified chunks | Failed, 0 verified chunks |
 
-These are bounded observations, not a latency or durability claim. The live arm
+Remote deletes are guarded by an explicit retention set: a protected chunk is denied before any network request, and an unprotected delete removes both the remote object and the local cached copy. Canonical retention remains the authority. These are bounded observations, not a latency or durability claim. The live arm
 is an ignored test gated by `MOLTEN_S3_ENDPOINT` and `MOLTEN_S3_BUCKET`.
