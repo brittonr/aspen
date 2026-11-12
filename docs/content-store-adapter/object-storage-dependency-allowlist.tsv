@@ -1,0 +1,5 @@
+# crate	version	role
+reqwest	0.13.4	thin HTTP client for the optional object-storage feature
+sha2	0.10.9	SigV4 payload and canonical-request hashing
+hmac	0.12.1	SigV4 signing-key derivation and request signature
+time	0.3.47	bounded request timestamps
