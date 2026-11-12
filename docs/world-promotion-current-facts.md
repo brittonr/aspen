@@ -70,7 +70,24 @@ molten world-promotion promote \
   --trusted-signer <64 hex characters>
 ```
 
-The command publishes its canonical receipt under
+Retry planning rebuilds the immutable original plan from the request document,
+checks it against the stored reservation plan, and requires the selected
+attempt to be uncertain:
+
+```sh
+molten world-promotion retry-plan \
+  --state-root target/node \
+  --request promotion.json \
+  --reservation-ref <ref> \
+  --attempt-ref <ref> \
+  --next-attempt-ref <ref> \
+  --acknowledge-duplicate-risk
+```
+
+The command emits a bound retry plan; it does not dispatch. Deny and abandon
+still deny until their current operator-authority composition lands.
+
+The promote command publishes its canonical receipt under
 `<state-root>/world-promotion/receipts/<blake3>.preserves`. Promotion commits the
 active head and reservation set atomically; effect dispatch remains a separate
 admitted step. Retry planning, deny, and abandon still deny until their current

@@ -26,6 +26,8 @@ use serde::Deserialize;
 
 #[path = "worldpromotion/execute.rs"]
 mod execute;
+#[path = "worldpromotion/retry.rs"]
+mod retry;
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum WorldPromotionCommand {
@@ -54,6 +56,8 @@ pub(crate) enum WorldPromotionCommand {
     RetryPlan {
         #[arg(long)]
         state_root: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
         #[arg(long)]
         reservation_ref: String,
         #[arg(long)]
@@ -122,11 +126,19 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
         WorldPromotionCommand::OutboxInspect { state_root } => inspect_outbox(&state_root),
         WorldPromotionCommand::RetryPlan {
             state_root,
+            request,
             reservation_ref,
             attempt_ref,
             next_attempt_ref,
             acknowledge_duplicate_risk,
-        } => retry_plan(&state_root, &reservation_ref, &attempt_ref, &next_attempt_ref, acknowledge_duplicate_risk),
+        } => retry::retry_plan(retry::RetryPlanArguments {
+            state_root: &state_root,
+            request_path: &request,
+            reservation_ref: &reservation_ref,
+            attempt_ref: &attempt_ref,
+            next_attempt_ref: &next_attempt_ref,
+            is_acknowledged: acknowledge_duplicate_risk,
+        }),
         WorldPromotionCommand::Reconcile { state_root } => reconcile(&state_root),
         WorldPromotionCommand::Deny {
             state_root,
@@ -168,31 +180,6 @@ fn inspect_outbox(state_root: &Path) -> Result<()> {
     }
     println!("dispatch_authorized=false");
     Ok(())
-}
-
-fn retry_plan(
-    state_root: &Path,
-    reservation_ref: &str,
-    attempt_ref: &str,
-    next_attempt_ref: &str,
-    is_acknowledged: bool,
-) -> Result<()> {
-    let store = open_store(state_root)?;
-    let reservation_ref = WorldReleaseReservationRef::new(reservation_ref.to_string()).map_err(reference_error)?;
-    let attempt_ref = WorldReleaseAttemptRef::new(attempt_ref.to_string()).map_err(reference_error)?;
-    let _next_attempt_ref = WorldReleaseAttemptRef::new(next_attempt_ref.to_string()).map_err(reference_error)?;
-    let reservation = store
-        .read_reservation(&reservation_ref)?
-        .ok_or_else(|| Failure::invalid_harness("reservation not found"))?;
-    let attempt = store.read_attempt(&attempt_ref)?.ok_or_else(|| Failure::invalid_harness("attempt not found"))?;
-    println!("reservation_ref={}", reservation.reservation_ref);
-    println!("attempt_state={}", attempt.state.as_str());
-    println!("duplicate_risk_acknowledged={is_acknowledged}");
-    println!("decision=denied");
-    println!("issue=current-plan-and-authority-adapters-unavailable");
-    Err(Failure::invalid_harness(
-        "standalone retry planning requires the current immutable promotion plan and authority adapters",
-    ))
 }
 
 fn reconcile(state_root: &Path) -> Result<()> {
@@ -278,7 +265,7 @@ pub(super) fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> 
     LocalWorldPromotionStore::open(&storage)
 }
 
-fn reference_error(error: WorldPromotionReferenceError) -> Failure {
+pub(super) fn reference_error(error: WorldPromotionReferenceError) -> Failure {
     Failure::invalid_harness(format!("invalid world promotion reference: {error:?}"))
 }
 

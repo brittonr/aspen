@@ -25,7 +25,7 @@ The following issues have concrete changes on `molten`:
 - **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage` and a Nickel profile stub with explicit capabilities; live S3 client and NVMe tier remain unimplemented.
 - **#5 (partial)** Bounded TLA+ fast-path model with a TLC flake check; TLA-ts is not integrated.
 - **#31 (tracker)** The [external pilot tracker](external-pilot-tracker.md) records the selected-workflow dependencies and distribution checklist; it does not qualify a pilot.
-- **#17 (partial)** Signed authority/closure, observed head, transaction store, and canonical receipts composed into `world-promotion promote`; retry/deny/abandon and effect dispatch remain unavailable.
+- **#17 (partial)** Signed authority/closure, observed head, transaction store, canonical receipts, and retry planning composed into `world-promotion`; deny, abandon, and effect dispatch remain unavailable.
 - **#26 (partial)** The opt-in VM run booted, started, restarted, stopped, and denied an absent trust file; the final assertion was corrected for the module's restart policy, but the corrected full run was blocked by a host Nix auto-GC lock.
 - **#18 (partial)** A local logical file-tree adapter now verifies bundle component identities, signed current admission, handles, restore ordering, activation, and receipts through `world-snapshot restore`; typed node-store restoration and opaque/VM runtime admission remain unavailable.
 
@@ -46,7 +46,7 @@ their reopening triggers are met.
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
 | #15 | Requires two real hosts, actual authenticated peer binding, and a Kiln consumer cohort. | Qualify one direct-LAN stream profile and retain loopback evidence separately. |
-| #17 | Public `promote` now composes signed authority/closure, observed head, transaction store, and canonical receipts; retry/deny/abandon and effect dispatch remain separate/unavailable. | Compose current operator authority for retry, deny, and abandon; keep dispatch separate. |
+| #17 | `promote` composes signed authority/closure, observed head, transaction store, and canonical receipts; `retry-plan` rebuilds the original plan and requires duplicate-risk acknowledgement. Deny, abandon, and effect dispatch remain unavailable. | Compose current operator authority for deny and abandon; keep dispatch separate. |
 | #18 | Local logical file-tree adapter and CLI restore are implemented; it restores declared bundle trees, not Molten's typed node stores or a live runtime. Opaque/VM restore still deny. | Bind the adapter to the typed node-store roots and retain one end-to-end restore fixture. |
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
