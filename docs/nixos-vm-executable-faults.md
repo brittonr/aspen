@@ -17,7 +17,7 @@ Executable VM fault checks exercise bounded platform faults inside the NixOS tes
 
 `molten test nixos-vm fault-receipt` creates a `nixos-vm-fault-receipt-v1` artifact that binds the descriptor ref, host-support status, pre-fault refs, injection refs, child workflow refs, post-fault refs, replay status, diagnostics, diagnostic log refs, and caveats.
 
-`molten test nixos-vm fault-validate` parses descriptors and receipts against the topology. It denies log-only pass claims, wrong topology, missing injection or child refs, unavailable pass claims, unsupported host pass claims, and missing diagnostic evidence for denial receipts.
+`molten test nixos-vm fault-validate` parses descriptors and receipts against the topology. It denies log-only pass claims, wrong topology, missing injection or child refs, unavailable pass claims, unsupported host pass claims, and missing diagnostic evidence for denial receipts. A receipt that claims `denial-observed-before-mutation` must also carry child evidence from the denied operation; a handwritten injection marker or log alone cannot establish an observed denial.
 
 The pure support-matrix model emits `nixos-vm-fault-support-matrix-v1` with each fault kind, required capability, target, command profile, expected outcome, host-support status, preflight refs, injection refs, child workflow refs, post-fault refs, diagnostics, and caveats. Reviewers should read this compact table before treating a VM fault check as executable evidence.
 
@@ -28,6 +28,8 @@ Host support is explicit: `supported`, `unavailable`, or `denied`. Missing KVM, 
 ## Fault classes
 
 Supported descriptor kinds include network delay/drop/partition/rejoin, asymmetric latency, crash/restart, duplicate send after restart, receipt write/readback, missing artifact, permission-denied state root, bounded disk pressure, unsupported host feature, tampered fault receipt, wrong topology, and log-only pass negative fixtures.
+
+The current signed VM rail classifies `permission-denied-state-root` as `unavailable`: it does not yet execute a protected write under a denied principal and observe the failure. The receipt records that reason explicitly instead of claiming `denial-observed-before-mutation`. Running the real scenario, with an independently inspected pre/post state and the executing identity, remains required before the storage-denial case is treated as executed evidence.
 
 ## Operator inspection
 

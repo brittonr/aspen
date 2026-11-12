@@ -62,6 +62,13 @@ fn fault_diagnostics(
             receipt.decision != "pass" && receipt.diagnostics.is_empty(),
             "vm-fault-deny-missing-diagnostic",
         )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "deny"
+                && receipt.replay_status == "denial-observed-before-mutation"
+                && receipt.child_refs.is_empty(),
+            "vm-fault-observed-denial-missing-child-evidence",
+        )?;
         push_if(&mut diagnostics, receipt.log_refs.is_empty(), "vm-fault-missing-log-ref")?;
         push_if(&mut diagnostics, receipt.replay_status.trim().is_empty(), "vm-fault-missing-replay-status")?;
         push_if(&mut diagnostics, receipt.caveats.is_empty(), "vm-fault-missing-caveats")?;

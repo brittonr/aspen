@@ -153,6 +153,7 @@ pkgs.testers.runNixOSTest {
       --config-out "$evidence/sender-node-config.preserves" \
       --identity-receipt-out "$evidence/sender-identity.preserves" \
       > "$evidence/sender-init.txt"
+    cp /var/lib/molten/source-gate-trust.json "$root/source-gate-trust.json"
     molten node run \
       --state-root "$root" \
       --startup-out "$evidence/sender-startup.preserves" \
@@ -669,15 +670,14 @@ pkgs.testers.runNixOSTest {
       --log /var/lib/molten/vm-evidence/run-loop.txt \
       --caveat 'restart evidence demonstrates bounded idempotent recovery only' \
       --out "$vm_fault_dir/restart.receipt.preserves"
-    printf '<vm-fault-injection "permission-denied-state-root-denial">\n' > "$vm_fault_dir/storage-denial.preserves"
-    printf '%s\n' 'permission denied before mutation fixture' > "$vm_fault_dir/storage-denial.log"
+    printf '%s\n' 'permission-denied state-root scenario was not executed' > "$vm_fault_dir/storage-denial.log"
     molten test nixos-vm fault-descriptor \
       --fault-id permission-denied-state-root \
       --topology /var/lib/molten/vm-evidence/topology.preserves \
       --target-node node_b \
       --fault-kind permission-denied-state-root \
       --command-profile filesystem-state-root \
-      --expected-outcome deny-before-side-effects \
+      --expected-outcome unavailable \
       --duration-millis "$fault_duration_millis" \
       --trigger state-root-write-preflight \
       --preflight /var/lib/molten/vm-evidence/node-b-evidence.preserves \
@@ -685,15 +685,14 @@ pkgs.testers.runNixOSTest {
       --out "$vm_fault_dir/storage.descriptor.preserves"
     molten test nixos-vm fault-receipt \
       --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
-      --decision deny \
-      --host-support supported \
+      --decision unavailable \
+      --host-support unavailable \
       --pre-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-      --injection "$vm_fault_dir/storage-denial.preserves" \
       --post-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-      --replay-status denial-observed-before-mutation \
-      --diagnostic 'permission denied before mutation' \
+      --replay-status unavailable-permission-denied-state-root \
+      --diagnostic 'permission-denied state-root scenario not executed; no observed storage denial' \
       --log "$vm_fault_dir/storage-denial.log" \
-      --caveat 'deny receipt is authoritative; logs are diagnostic only' \
+      --caveat 'unavailable storage fault evidence cannot satisfy an observed-denial claim' \
       --out "$vm_fault_dir/storage.receipt.preserves"
     molten test nixos-vm fault-validate \
       --topology /var/lib/molten/vm-evidence/topology.preserves \

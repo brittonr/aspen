@@ -180,13 +180,17 @@
         let topology = topology();
         let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
         let restart = fault_descriptor(&topology_ref, "duplicate-send-after-restart", "idempotent-recovery", NODE_A);
-        let storage =
-            fault_descriptor(&topology_ref, "permission-denied-state-root", "deny-before-side-effects", NODE_B);
+        let storage = fault_descriptor(&topology_ref, "permission-denied-state-root", "unavailable", NODE_B);
         let restart_ref = crate::preserves_rail::canonical_hash(&restart).expect("restart ref");
         let storage_ref = crate::preserves_rail::canonical_hash(&storage).expect("storage ref");
         let restart_receipt = fault_receipt(&restart_ref, "pass", "supported", &[local_ref("duplicate-replay")], &[]);
-        let storage_receipt =
-            fault_receipt(&storage_ref, "deny", "supported", &[], &["permission denied before mutation".to_string()]);
+        let storage_receipt = fault_receipt(
+            &storage_ref,
+            "unavailable",
+            "unavailable",
+            &[],
+            &["permission-denied state-root scenario not executed".to_string()],
+        );
 
         let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceInput {
             topology_value: &topology,
@@ -197,4 +201,43 @@
 
         assert_eq!(validation.decision, "pass");
         assert!(validation.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn vm_fault_observed_denial_requires_executed_child_evidence() {
+        // r[verify molten.testing.nixos_vm_fault_injection.storage_state_faults]
+        let topology = topology();
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let descriptor =
+            fault_descriptor(&topology_ref, "permission-denied-state-root", "deny-before-side-effects", NODE_B);
+        let descriptor_ref = crate::preserves_rail::canonical_hash(&descriptor).expect("descriptor ref");
+        let receipt = crate::nixos_vm::vm_fault_receipt_value(&crate::nixos_vm::NixosVmFaultReceiptInput {
+            decision: "deny",
+            descriptor_ref: &descriptor_ref,
+            host_support: "supported",
+            pre_fault_refs: &[local_ref("pre-state")],
+            injection_refs: &[local_ref("handwritten-injection")],
+            child_refs: &[],
+            post_fault_refs: &[local_ref("post-state")],
+            replay_status: "denial-observed-before-mutation",
+            diagnostics: &["permission denied before mutation".to_string()],
+            log_refs: &[local_ref("fault-log")],
+            caveats: &["fault receipts do not grant authority".to_string()],
+        })
+        .expect("fault receipt");
+
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceInput {
+            topology_value: &topology,
+            descriptor_values: &[descriptor],
+            receipt_values: &[receipt],
+        })
+        .expect("fault validation");
+
+        assert_eq!(validation.decision, "deny");
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "vm-fault-observed-denial-missing-child-evidence")
+        );
     }
