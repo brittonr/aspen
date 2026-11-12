@@ -12,6 +12,7 @@ const CONTAINS_RULE: &str = "contains";
 const FORBID_RULE: &str = "forbid";
 const FORBID_ANY_RULE: &str = "forbid-any";
 const WORKSPACE_PACKAGE_SET_RULE: &str = "workspace-package-set";
+const NOTICE_REVISION_RULE: &str = "notice-revision";
 const PACKAGE_SECTION: &str = "[package]";
 const WORKSPACE_PACKAGE_SECTION: &str = "[workspace.package]";
 const LICENSE_KEY: &str = "license";
@@ -24,6 +25,7 @@ enum RuleKind {
     Forbid,
     ForbidAny,
     WorkspacePackageSet,
+    NoticeRevision,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,6 +43,7 @@ fn parse_rule_kind(value: &str) -> Result<RuleKind, String> {
         FORBID_RULE => Ok(RuleKind::Forbid),
         FORBID_ANY_RULE => Ok(RuleKind::ForbidAny),
         WORKSPACE_PACKAGE_SET_RULE => Ok(RuleKind::WorkspacePackageSet),
+        NOTICE_REVISION_RULE => Ok(RuleKind::NoticeRevision),
         _ => Err(format!("unknown rule kind: {value}")),
     }
 }
@@ -160,6 +163,27 @@ fn validate_contains(contents: &str, marker: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn dependency_revision(manifest: &str, dependency: &str) -> Result<String, String> {
+    let prefix = format!("{dependency} =");
+    for raw_line in manifest.lines() {
+        let line = raw_line.trim();
+        let Some(rest) = line.strip_prefix(&prefix) else {
+            continue;
+        };
+        let Some((_, after_rev)) = rest.split_once("rev = \"") else {
+            continue;
+        };
+        let Some((revision, _)) = after_rev.split_once('"') else {
+            return Err(format!("dependency {dependency} has an unterminated rev"));
+        };
+        if revision.is_empty() {
+            return Err(format!("dependency {dependency} has an empty rev"));
+        }
+        return Ok(revision.to_owned());
+    }
+    Err(format!("dependency {dependency} is missing from the workspace manifest"))
+}
+
 fn validate_forbid(contents: &str, marker: &str) -> Result<(), String> {
     if contents.contains(marker) {
         return Err(format!("forbidden dependency or marker is present: {marker}"));
@@ -201,6 +225,10 @@ fn run_self_tests() {
     assert!(validate_artifact(None, "Mozilla").is_err());
     assert!(validate_contains("package = MPL-2.0", "MPL-2.0").is_ok());
     assert!(validate_contains("package = MPL-2.0", "AGPL-3.0-or-later").is_err());
+    let manifest = "hardened = { git = \"https://example.invalid/hardened.git\", rev = \"abc123\" }\n";
+    assert_eq!(dependency_revision(manifest, "hardened").expect("revision"), "abc123");
+    assert!(dependency_revision(manifest, "missing").is_err());
+    assert!(dependency_revision("hardened = { rev = \"unterminated }\n", "hardened").is_err());
     assert!(validate_forbid("dependencies = []", "host-controller").is_ok());
     assert!(validate_forbid("host-controller = true", "host-controller").is_err());
     assert!(validate_forbid_any("dependencies = []", "host-a,host-b").is_ok());
@@ -271,6 +299,12 @@ fn check_rule(root: &Path, workspace_manifest: &str, rule: &Rule) -> Result<(), 
                 .map_err(|error| format!("{}: {error}", rule.path.display()))
         }
         RuleKind::WorkspacePackageSet => Ok(()),
+        RuleKind::NoticeRevision => {
+            let contents = read_required(&path)?;
+            let revision = dependency_revision(workspace_manifest, &rule.value)?;
+            validate_contains(&contents, &revision)
+                .map_err(|error| format!("{}: {error} for {}", rule.path.display(), rule.value))
+        }
     }
 }
 

@@ -29,3 +29,7 @@ Explanatory prose, source inspection, fixture observations, live observations, a
 Some articles identify unresolved differences between governing prose and inspected code. Read them as scoped review findings, not reproduced bug reports or newly approved exceptions. Consult the exact implementation and accepted requirements before relying on a disputed guarantee. The [technical companion's discrepancy pointers](technical/README.md#reading-source-discrepancies) collect several examples.
 
 Accepted requirements live under [`.cairn/specs/`](../.cairn/specs/); active lifecycle work lives under [`.cairn/changes/`](../.cairn/changes/). Neither companion collection changes those requirements or supplies lifecycle approval.
+
+For pages whose behavioral claims depend on named source, use the
+[source-sensitive page map](source-sensitive-pages.md) during review. It is a
+bounded pointer list, not a second specification registry.

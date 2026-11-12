@@ -2,13 +2,16 @@
 
 The root `LICENSE` applies only to repository-owned Molten source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
 
-The sparse `vendor/` directory records upstream `Cargo.toml.orig` material rather than changing its license. Current declared families are:
+Historical sparse `vendor/` snapshots record upstream `Cargo.toml.orig` material
+rather than changing its license. They are not tracked in the current Git tree;
+retain them only as historical local evidence and do not imply they ship with
+the current source. Current declared families are:
 
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
 | Cargo packages `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding-core` from `OnixResearch/onix-artifact` revision `5f3962d7471d1547e044f57daeda72f56621fd52`, shared with Valence's authentication dependencies | AGPL-3.0-or-later; prior MIT OR Apache-2.0 grants remain effective for previously granted material |
-| Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx` revision `cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` | MIT |
-| Cargo packages `mantle-wasm-consumer-verifier` and `crunch-wasm-component-core` from `OnixResearch/mantle` revision `cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0` | AGPL-3.0-or-later |
+| Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx` revision `57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e` | MIT |
+| Cargo packages `mantle-wasm-consumer-verifier` and `crunch-wasm-component-core` from `OnixResearch/mantle` revision `dd2bebab894688d07e7a29c75c1437f4ecc120df` | AGPL-3.0-or-later |
 | `tests/fixtures/wasm-component-runtime/kamacite-mantle-hello-bundle.json`, copied unchanged from `crates/mantle-wasm-consumer-verifier/tests/fixtures/` at Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` | AGPL-3.0-or-later |
 | `tests/fixtures/wasm-component-runtime/producer-tree-handoff/`, unchanged required publication members and bundle from the actual Mantle pipeline at revision `c99556e5c91dfd13fcc261dc451f471359d47c38`; extracted from retained `producer-snapshot.zip` (BLAKE3 `c701aa6901f614842cb2ec33d7a9b631e31f6471703bc82ee1d1ea9fce7bc7ed`) in `.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/`; unrelated reports omitted, original bytes/logical paths/digests unchanged | AGPL-3.0-or-later |
 | Cargo packages `bounded-tree-core` and `bounded-tree-cap` from `https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` revision `250f3b25d0933c2fa106aa82d1cc17a496716f06`, transitively selected by Mantle's source-closure verifier | AGPL-3.0-or-later |

@@ -18,11 +18,11 @@ Values influence exact encoded size but are not independent boundary entropy. Th
 
 History independence is thus a property of the whole canonical construction, including grouping and root metadata. It is not established merely by sorting the leaves or hashing each value independently.
 
-## Rebuild-first editing and sharing
+## Incremental editing, fallback, and sharing
 
-[plan_edits](../../../crates/molten-core/src/prolly_map/operations.rs) validates the complete supplied snapshot, copies its entries into an ordered map, applies the admitted edits in order, and invokes the canonical builder on the resulting entries. Insert-on-existing, update-on-missing, and delete-on-missing are errors; edit sequences are not silently normalized into arbitrary upserts.
+[plan_edits](../../../crates/molten-core/src/prolly_map/operations.rs) validates the complete supplied snapshot, copies its entries into an ordered map, applies the admitted edits in order, and produces the canonical tree. The default path is incremental: it reuses prior leaves before the first changed entry, rechunks from the start of the leaf that holds it, and stops reusing the unchanged suffix once a newly built leaf boundary lands on a prior leaf start. An explicit rechunk work bound limits one edit batch; reaching it falls back to the full rebuild. `plan_edits_reference` retains the rebuild-first path as the oracle. Insert-on-existing, update-on-missing, and delete-on-missing are errors; edit sequences are not silently normalized into arbitrary upserts.
 
-The plan compares prior closure identities with new block identities. Only blocks absent from the prior closure are staged, while equal blocks remain shared. This is immutable block reuse after rebuilding, not a path-local update algorithm. It is important to separate computational work from persistent writes: avoiding a block rewrite does not imply avoiding traversal, validation, allocation, or reconstruction.
+The plan compares prior closure identities with new block identities. Only blocks absent from the prior closure are staged, while equal blocks remain shared. This is immutable block reuse, not a path-local update protocol. It is important to separate computational work from persistent writes: avoiding a block rewrite does not imply avoiding traversal, validation, allocation, or reconstruction, and the incremental path does not by itself establish a performance improvement.
 
 ## Worked reasoning: different histories, one final map
 

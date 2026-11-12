@@ -85,9 +85,9 @@ The standard profile uses these bounds:
 
 ## History independence
 
-The pilot uses a rebuild-first edit mechanism. It applies admitted edits to a complete supplied snapshot, sorts the resulting map, and rebuilds the canonical tree.
+The default edit plan is incremental. It validates the complete supplied snapshot, applies the admitted edits to the ordered entry sequence, reuses prior leaves before the first changed entry, rechunks the affected leaf region under an explicit work bound, and falls back to a full rebuild when that bound is reached. `plan_edits_reference` retains the rebuild-first path as the oracle. Both paths produce the same canonical root.
 
-This mechanism is weaker than a path-local update algorithm, but it is easier to audit. Equal canonical maps always rebuild to the same root.
+The bound limits rechunked entries for one edit batch; it does not turn the plan into a path-local update protocol. Internal levels are rebuilt over the complete leaf level by the same construction as the full rebuild, so the root remains the rebuild root. Equal canonical maps always produce the same root.
 
 The edit plan stages only blocks that are not in the prior closure. Unchanged blocks keep their identities and remain shared.
 

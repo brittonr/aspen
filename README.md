@@ -1,8 +1,62 @@
 # molten
 
-Rust project scaffolded with a Nix flake.
+Molten is a workload-neutral, policy-gated distributed-systems fabric built
+around a canonical Preserves envelope spine. It is intended for operators and
+integrators who need deterministic playback, explicit authority, bounded
+effects, and evidence that stays separate from runtime success. Pure primitives
+own deterministic laws and plans; capability-rooted adapters perform effects;
+optional manifest-installed extensions own distributed-service semantics.
 
-Includes Rust dependencies for Steel Scheme (`steel-core`), iroh (`iroh`, `iroh-blobs`, `iroh-docs`, `iroh-gossip`), Syndicate (`syndicate`), Preserves (`preserves`, `preserves-schema`), Nickel (`nickel-lang`), Wasmtime and WASI/component tooling (`wasmtime`, `wasmtime-wasi`, `wit-bindgen`, `wasmparser`), Redb (`redb`), Blake3 (`blake3`), Snafu (`snafu`), Serde (`serde`), Tracing (`tracing`), Clap (`clap`), and revision-pinned OnixResearch Git dependencies for Basalt (`basalt`), Cairn (`cairn-core` as `cairn`), standalone Valence (`valence-core` as `valence`), and Trellis (`verified-logic` as `trellis`). Dev dependencies include Hegel (`hegeltest`, imported as `hegel`) for property-based testing. The Nix dev shell also exposes the `steel`, `nickel`, and `wasmtime` CLIs.
+This repository's mainline is `molten`. The legacy Aspen `main` branch remains a
+separate clean-room requirements and conformance reference. The `v0.1.0` tag
+records the frozen August limited internal pilot; it is not a current external
+release or a production-readiness claim. The current tree has no
+production-supported profile, no qualified cross-host workflow, and no
+supported `nixosModules.molten` operator module yet.
+
+Start with [Security](SECURITY.md) and [Contributing](CONTRIBUTING.md), then use
+the [documentation map](docs/README.md) for governing documents and the
+[workflow handbook](docs/handbook/README.md) for task-oriented guidance. The
+shortest local workflow is the executable system-extension fixture. It runs
+initialization, readiness, request, checkpoint, retryable failure, restart,
+drain, and shutdown callbacks under the reviewed `sandboxed-component` profile
+and writes canonical lifecycle, callback, and status evidence.
+
+```sh
+nix develop
+rm -rf target/first-workflow
+cargo run -- system-extension run-fixture \
+  --profile sandboxed-component \
+  --out target/first-workflow/system-extension
+cargo run -- system-extension show \
+  --status target/first-workflow/system-extension/status.preserves
+rm -rf target/first-workflow
+```
+
+Observed from this checkout on 2026-11-12 with a warm Cargo target: the fixture
+completed in about nine seconds and reported `system-extension fixture ok
+profile=sandboxed-component`. A cold dependency build and the Nix-built binary
+were not measured. The fixture proves callback execution, host-contract
+conformance, and receipt production only. It does not prove consensus,
+durability, protocol compatibility, extension semantic correctness, cross-host
+transport, or production readiness.
+
+The cluster lifecycle path is separately exercised through
+`cluster init --node ...` and `cluster start`, and requires an exact selected
+source-trust document in every node state root. That provisioning is tracked by
+the open source-trust issue and is not part of this first workflow.
+
+The dependency inventory includes Steel Scheme (`steel-core`), iroh (`iroh`,
+`iroh-blobs`, `iroh-docs`, `iroh-gossip`), Syndicate (`syndicate`), Preserves
+(`preserves`, `preserves-schema`), Nickel (`nickel-lang`), Wasmtime and
+WASI/component tooling (`wasmtime`, `wasmtime-wasi`, `wit-bindgen`,
+`wasmparser`), Redb (`redb`), Blake3 (`blake3`), Snafu (`snafu`), Serde
+(`serde`), Tracing (`tracing`), Clap (`clap`), and revision-pinned OnixResearch
+Git dependencies for Basalt (`basalt`), Cairn (`cairn-core` as `cairn`),
+standalone Valence (`valence-core` as `valence`), and Trellis
+(`verified-logic` as `trellis`). Dev dependencies include Hegel (`hegeltest`,
+imported as `hegel`) for property-based testing. The Nix dev shell also exposes
+the `steel`, `nickel`, and `…
 
 ## Architecture direction
 
@@ -894,13 +948,37 @@ nix flake check
 nix build .#checks.x86_64-linux.verified-node-replication-pilot --no-link -L
 ```
 
+## Public release checklist
+
+A new external candidate is not ready until the following are true for the exact
+source revision and dependency closure under review:
+
+- [ ] A fresh checkout builds through the public HTTPS source graph without SSH
+  credentials or sibling overrides, and the release dependency profile check
+  passes against exact Nix source inputs.
+- [ ] The selected NixOS or local deployment path has a positive executed
+  workflow; negative startup-denial checks remain evidence of denial, not
+  positive startup.
+- [ ] VM fault receipts distinguish executed observations from unavailable or
+  unexecuted fixtures; caller-authored logs cannot qualify an observed denial.
+- [ ] Cross-host claims are backed by actual authenticated peer evidence for the
+  selected profile; loopback evidence is labelled as loopback.
+- [ ] Capability qualification distinguishes implementation status from recorded
+  execution evidence for the exact profile and environment.
+- [ ] Third-party notices match the selected dependency revisions, and the
+  dependency and license audit records its advisory snapshot and dispositions.
+- [ ] [SECURITY.md](SECURITY.md) names a verified private reporting channel and
+  [CONTRIBUTING.md](CONTRIBUTING.md) matches the current no-PR integration route.
+- [ ] Release notes, source acquisition or archive, checksums, supported
+  commands, and retained evidence are reviewed before a new tag is published.
+
 ## License
 
 Repository-owned source—including cores, contracts, schemas, fixtures, templates, documentation, and policy—is licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE). Third-party dependencies, vendored manifest snapshots, generated material containing upstream code, and external references retain their original terms; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 Earlier permissive grants remain valid, including for byte-identical content previously received under those grants. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Licensing metadata is distribution evidence only: it does not establish contributor authority, legal compliance, runtime correctness, or release eligibility. AGPL is an accepted project distribution choice; the typed distribution profile records project-required notices and source-export evidence, is not legal advice, and does not prove compliance in every jurisdiction.
 
-The focused [license policy](license-policy.tsv) covers every current workspace package exactly once, including `molten-node-host`; [the boundary checker](tools/check-license-boundary.rs) rejects missing package rules before checking license expressions and notice artifacts. This does not make private or authenticated dependency sources anonymously obtainable.
+The focused [license policy](license-policy.tsv) covers every current workspace package exactly once, including `molten-node-host`; [the boundary checker](tools/check-license-boundary.rs) rejects missing package rules before checking license expressions and notice artifacts, and its `notice-revision` rules compare current third-party notice rows with the revisions selected in `Cargo.toml`. This does not make a private Radicle source obtainable without its documented public seed or a local Radicle profile.
 
 ## References
 
