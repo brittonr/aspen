@@ -11,6 +11,9 @@ mod live_tier;
 #[cfg(feature = "content-store-object-storage")]
 #[path = "live/cache.rs"]
 mod live_cache;
+#[cfg(feature = "content-store-object-storage")]
+#[path = "live/object.rs"]
+mod live_object;
 mod local;
 mod persistence;
 mod simulation;
@@ -26,6 +29,8 @@ pub use live_s3::*;
 pub use live_tier::*;
 #[cfg(feature = "content-store-object-storage")]
 pub use live_cache::*;
+#[cfg(feature = "content-store-object-storage")]
+pub use live_object::*;
 pub use local::*;
 pub use molten_core::content_store_adapter::*;
 pub use persistence::*;

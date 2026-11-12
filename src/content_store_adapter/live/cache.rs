@@ -55,6 +55,15 @@ impl CachedClient {
         Ok(bytes)
     }
 
+    pub async fn get_raw(&self, key: &str) -> Result<Vec<u8>> {
+        self.remote.get(key).await
+    }
+
+    pub fn cache_verified(&mut self, bytes: &[u8]) -> Result<TierPut> {
+        let object_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
+        self.tier.put(&object_ref, bytes)
+    }
+
     pub async fn head(&self, key: &str) -> Result<Option<u64>> {
         self.remote.head(key).await
     }
