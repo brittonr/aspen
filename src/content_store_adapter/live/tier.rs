@@ -154,6 +154,15 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "requires MOLTEN_NVME_ROOT on a non-rotational device"]
+    fn tier_accepts_a_non_rotational_backing_device() {
+        let root = std::env::var("MOLTEN_NVME_ROOT").expect("nvme root");
+        let temporary = tempfile::tempdir_in(root).expect("temporary tier");
+        let tier = LocalTier::open(temporary.path(), 1024, true).expect("nvme tier");
+        assert_eq!(tier.max_bytes, 1024);
+    }
+
+    #[test]
     fn tier_respects_capacity_and_rejects_corruption() {
         let temporary = tempfile::tempdir().expect("temporary root");
         let mut tier = LocalTier::open(temporary.path(), 16, false).expect("tier");
