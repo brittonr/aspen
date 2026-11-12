@@ -4840,6 +4840,7 @@ dependencies = [
  "hardened-wasmtime-runtime",
  "hardened-wasmtime-shell",
  "hegeltest",
+ "hex",
  "iroh",
  "iroh-blobs",
  "iroh-docs",

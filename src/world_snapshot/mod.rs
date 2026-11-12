@@ -8,6 +8,8 @@
 )]
 
 mod chaoscontrol;
+mod local;
+mod localtree;
 mod ports;
 mod records;
 mod service;
@@ -15,6 +17,7 @@ mod service;
 mod vm;
 
 pub use chaoscontrol::*;
+pub use local::*;
 pub use ports::*;
 pub use records::*;
 pub use service::*;

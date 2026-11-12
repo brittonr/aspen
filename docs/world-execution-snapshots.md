@@ -83,7 +83,29 @@ The current closed profiles reject synchronization claims. Future mixed-profile 
 
 `molten world-snapshot inspect`, `compatibility`, `restore-plan`, and `clone-plan` read or write canonical bounded artifacts.
 
-`molten world-snapshot restore` has no ambient runtime adapter. It writes a canonical denial receipt and fails until an admitted shell supplies the restore capability.
+`molten world-snapshot restore` composes the local logical file-tree adapter:
+
+```sh
+molten world-snapshot restore \
+  --descriptor descriptor.preserves \
+  --destination cohort-descriptor.preserves \
+  --state-root target/node \
+  --trusted-signer <64 hex characters> \
+  --receipt-out receipt.preserves
+```
+
+The adapter reads component trees from
+`<state-root>/storage/world-snapshot/bundle/<component-kind>/`, verifies each
+tree against the descriptor identity, restores it under
+`<state-root>/storage/world-snapshot/restored/<component-kind>/`, recreates a
+local handle directory, requires a signed current-admission document at
+`<state-root>/storage/world-snapshot/admission.json`, and activates last. It
+publishes observations and the canonical receipt content-addressed.
+
+This is one concrete logical adapter for a declared file-tree bundle. It does
+not restore Molten's typed Redb stores, replay a live runtime, or prove
+component semantics. Opaque and VM restore still deny because no admitted
+ChaosControl runtime adapter is present.
 
 ## Canonical records
 

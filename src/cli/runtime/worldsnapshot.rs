@@ -14,22 +14,19 @@ use molten::error::Failure;
 use molten::error::Result;
 use molten::world_snapshot::canonical_snapshot_clone_plan;
 use molten::world_snapshot::canonical_snapshot_compatibility;
-use molten::world_snapshot::canonical_snapshot_receipt;
 use molten::world_snapshot::parse_canonical_snapshot_descriptor;
+use molten::world_snapshot::restore_logical_snapshot;
 use molten_core::world_snapshot::CloneChild;
 use molten_core::world_snapshot::ClonePlanRequest;
 use molten_core::world_snapshot::CompatibilityVerdict;
 use molten_core::world_snapshot::MAX_CLONE_CHILDREN;
 use molten_core::world_snapshot::OverlayIdentity;
-use molten_core::world_snapshot::SNAPSHOT_NON_CLAIMS;
+use molten_core::world_snapshot::SnapshotClass;
 use molten_core::world_snapshot::SnapshotDescriptor;
-use molten_core::world_snapshot::SnapshotReceipt;
-use molten_core::world_snapshot::SnapshotReceiptDecision;
 use molten_core::world_snapshot::plan_restore;
 use molten_core::world_snapshot::validate_snapshot;
 
 const OVERLAY_DOMAIN: &str = "onixresearch.molten.world-snapshot.operator-overlay.v1";
-const ADAPTER_REQUIRED_ISSUE: &str = "operator-runtime-adapter-required";
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum WorldSnapshotCommand {
@@ -67,6 +64,10 @@ pub(crate) enum WorldSnapshotCommand {
         #[arg(long)]
         destination: PathBuf,
         #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long)]
+        trusted_signer: String,
+        #[arg(long)]
         receipt_out: PathBuf,
     },
 }
@@ -92,8 +93,10 @@ pub(crate) fn run_world_snapshot_command(command: WorldSnapshotCommand) -> Resul
         WorldSnapshotCommand::Restore {
             descriptor,
             destination,
+            state_root,
+            trusted_signer,
             receipt_out,
-        } => denied_restore(&descriptor, &destination, &receipt_out),
+        } => restore(&descriptor, &destination, &state_root, &trusted_signer, &receipt_out),
     }
 }
 
@@ -159,26 +162,44 @@ fn clone_plan(source: &Path, children: u32, out: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn denied_restore(source: &Path, destination: &Path, receipt_out: &Path) -> Result<()> {
+fn restore(
+    source: &Path,
+    destination: &Path,
+    state_root: &Path,
+    trusted_signer: &str,
+    receipt_out: &Path,
+) -> Result<()> {
     let (descriptor, canonical_descriptor) = load_descriptor(source)?;
     let (target, _) = load_descriptor(destination)?;
-    let compatibility = validate_snapshot(&descriptor, &target.cohort);
-    let canonical_compatibility = canonical_snapshot_compatibility(&compatibility)?;
-    let receipt = SnapshotReceipt {
-        decision: SnapshotReceiptDecision::Denied,
-        descriptor_ref: canonical_descriptor.artifact_ref,
-        compatibility_ref: canonical_compatibility.artifact_ref,
-        restore_plan_ref: None,
-        clone_plan_ref: None,
-        current_admission_ref: None,
-        issues: vec![ADAPTER_REQUIRED_ISSUE.to_string()],
-        non_claims: SNAPSHOT_NON_CLAIMS.iter().map(ToString::to_string).collect(),
-    };
-    let canonical = canonical_snapshot_receipt(&receipt)?;
-    std::fs::write(receipt_out, canonical.bytes).map_err(Failure::from)?;
-    println!("decision=denied");
-    println!("receipt_ref={}", canonical.artifact_ref);
-    Err(Failure::invalid_harness("world snapshot restore requires an admitted runtime adapter"))
+    if descriptor.class != SnapshotClass::Logical {
+        return Err(Failure::invalid_harness("local restore supports only logical snapshot descriptors"));
+    }
+    let signer_bytes = hex::decode(trusted_signer)
+        .map_err(|_| Failure::invalid_harness("trusted signer must be 64 hex characters"))?;
+    let signer_bytes: [u8; 32] = signer_bytes
+        .try_into()
+        .map_err(|_| Failure::invalid_harness("trusted signer must be 64 hex characters"))?;
+    let signer = ed25519_dalek::VerifyingKey::from_bytes(&signer_bytes)
+        .map_err(|error| Failure::invalid_harness(format!("trusted signer: {error}")))?;
+    let mut materialization = molten::world_snapshot::LocalLogicalSnapshot::open(state_root, signer)?;
+    let mut admission = molten::world_snapshot::LocalLogicalSnapshot::open(state_root, signer)?;
+    let mut handles = molten::world_snapshot::LocalLogicalSnapshot::open(state_root, signer)?;
+    let mut runtime = molten::world_snapshot::LocalLogicalSnapshot::open(state_root, signer)?;
+    let mut receipts = molten::world_snapshot::LocalLogicalSnapshot::open(state_root, signer)?;
+    let outcome =
+        restore_logical_snapshot(&descriptor, &target.cohort, molten::world_snapshot::LogicalSnapshotPorts {
+            materialization: &mut materialization,
+            admission: &mut admission,
+            handles: &mut handles,
+            runtime: &mut runtime,
+            receipts: &mut receipts,
+        })?;
+    std::fs::write(receipt_out, &outcome.receipt.bytes).map_err(Failure::from)?;
+    println!("decision=restored");
+    println!("descriptor_ref={}", canonical_descriptor.artifact_ref);
+    println!("receipt_ref={}", outcome.receipt.artifact_ref);
+    println!("observation_count={}", outcome.observations.len());
+    Ok(())
 }
 
 fn load_descriptor(path: &Path) -> Result<(SnapshotDescriptor, molten::world_snapshot::CanonicalSnapshotArtifact)> {
