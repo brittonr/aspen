@@ -37,4 +37,6 @@ bounded pointer list, not a second specification registry.
 
 The [open issue triage](open-issue-triage.md) separates implemented issues from
 those blocked on hardware, live qualification, or missing service contracts. It
-is a review record, not a completion claim.
+is a review record, not a completion claim. The
+[deferred decision record](deferred-decisions.md) records explicit no-go
+decisions and their reopening triggers.

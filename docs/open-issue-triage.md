@@ -23,18 +23,22 @@ The following issues have concrete changes on `molten`:
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
 
+No-go decisions are recorded for **#2**, **#6**, **#10**, and **#12** in the
+[deferred decision record](deferred-decisions.md). They remain open until their
+reopening triggers are met.
+
 ## Remaining issues and blockers
 
 | Issue | Current blocker | Next honest action |
 | --- | --- | --- |
-| #2 | Deferred; no measured causal-trace query need. | Reopen only with a measured query requirement. |
+| #2 | No-go decision recorded: prerequisite query and baseline evidence are absent. | Reopen with a measured query requirement. |
 | #3 | Requires a bbtree dependency decision and a real transient-index benchmark. | Add a benchmark cohort without changing canonical storage. |
 | #5 | No pinned TLC/TLA-ts tooling in the flake; external TLA+ results do not prove Molten behavior. | Pin a TLA+ toolchain and add a bounded model plus CI exploration. |
-| #6 | Deferred live-frame hashing profile; no measurement. | Profile only after a measured need or a frame-path change. |
+| #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
 | #8 | Needs an object-storage provider contract, client shape, and a live/recording adapter. | Start with the mock transport from #13 and a bounded provider profile. |
 | #9 | Requires TPM2 hardware and a sealed-key backend; the current host has no qualified TPM path. | Implement the pure key-backend contract first, then a hardware rail. |
-| #10 | Design consideration, not an accepted requirement. | Record a decision only after the discovery threat model is agreed. |
-| #12 | Deferred; no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
+| #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
+| #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
 | #15 | Requires two real hosts, actual authenticated peer binding, and a Kiln consumer cohort. | Qualify one direct-LAN stream profile and retain loopback evidence separately. |
 | #17 | Needs current authority/policy/head/intent composition; the public command still denies by design. | Compose the existing promotion service over concrete current-facts adapters. |
 | #18 | Needs an admitted logical runtime adapter; the current denial is deliberate. | Implement one concrete restore adapter and keep opaque/VM restore denied. |
