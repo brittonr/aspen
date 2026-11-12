@@ -5,9 +5,10 @@ local promotion transaction. It reads the actual branch head from the promotion
 store and verifies operator-supplied authority and intent-closure files before
 the transaction validator sees them. Caller-provided booleans are not authority.
 
-This is an adapter, not the public `world-promotion promote` composition. The
-operator command still denies until the adapter, transaction store, receipt
-port, and effect admission are composed.
+The adapter is composed into `world-promotion promote` with the local
+transaction store and a content-addressed receipt store. The request document's
+`authority_admitted` and `intent_closure_complete` fields are planning inputs
+only; the signed files replace them before planning and transaction validation.
 
 ## Authority grant
 
@@ -57,6 +58,23 @@ refs and identity fields.
 branch from `LocalWorldPromotionStore`, and returns
 `WorldPromotionTransactionFacts`. The transaction validator still rechecks the
 head under the write transaction, so a race after observation remains stale.
+
+## Command
+
+```sh
+molten world-promotion promote \
+  --state-root target/node \
+  --request promotion.json \
+  --authority authority.json \
+  --closure closure.json \
+  --trusted-signer <64 hex characters>
+```
+
+The command publishes its canonical receipt under
+`<state-root>/world-promotion/receipts/<blake3>.preserves`. Promotion commits the
+active head and reservation set atomically; effect dispatch remains a separate
+admitted step. Retry planning, deny, and abandon still deny until their current
+operator-authority composition lands.
 
 ## Non-claims
 

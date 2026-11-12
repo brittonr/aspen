@@ -24,6 +24,9 @@ use molten_node_host::node_state::DirectoryRoot;
 use molten_node_host::node_state::NamespaceKind;
 use serde::Deserialize;
 
+#[path = "worldpromotion/execute.rs"]
+mod execute;
+
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum WorldPromotionCommand {
     Plan {
@@ -37,6 +40,12 @@ pub(crate) enum WorldPromotionCommand {
         state_root: PathBuf,
         #[arg(long)]
         request: PathBuf,
+        #[arg(long)]
+        authority: PathBuf,
+        #[arg(long)]
+        closure: PathBuf,
+        #[arg(long)]
+        trusted_signer: String,
     },
     OutboxInspect {
         #[arg(long)]
@@ -103,7 +112,13 @@ struct IntentDocument {
 pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Result<()> {
     match command {
         WorldPromotionCommand::Plan { request, out } => plan(&request, &out),
-        WorldPromotionCommand::Promote { state_root, request } => unavailable_promote(&state_root, &request),
+        WorldPromotionCommand::Promote {
+            state_root,
+            request,
+            authority,
+            closure,
+            trusted_signer,
+        } => execute::promote(&state_root, &request, &authority, &closure, &trusted_signer),
         WorldPromotionCommand::OutboxInspect { state_root } => inspect_outbox(&state_root),
         WorldPromotionCommand::RetryPlan {
             state_root,
@@ -142,19 +157,6 @@ fn plan(request_path: &Path, out: &Path) -> Result<()> {
     println!("external_effects_completed=false");
     println!("plan_out={}", out.display());
     Ok(())
-}
-
-fn unavailable_promote(state_root: &Path, request_path: &Path) -> Result<()> {
-    let _store = open_store(state_root)?;
-    let request = read_request(request_path)?;
-    let plan = plan_world_promotion(&request)
-        .map_err(|issues| Failure::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
-    println!("plan_ref={}", plan.plan_ref);
-    println!("decision=denied");
-    println!("issue=current-authority-adapter-unavailable");
-    Err(Failure::invalid_harness(
-        "standalone promotion is disabled until current authority and intent-closure adapters are composed",
-    ))
 }
 
 fn inspect_outbox(state_root: &Path) -> Result<()> {
@@ -225,7 +227,7 @@ fn unavailable_mutation(state_root: &Path, action: &str, reference: &str) -> Res
     ))
 }
 
-fn read_request(path: &Path) -> Result<WorldPromotionRequest> {
+pub(super) fn read_request(path: &Path) -> Result<WorldPromotionRequest> {
     let document: PromotionDocument = serde_json::from_slice(&std::fs::read(path)?)
         .map_err(|error| Failure::invalid_harness(format!("parse promotion request: {error}")))?;
     let policy_ref = WorldHeadPolicyRef::new(document.policy_ref).map_err(head_reference_error)?;
@@ -270,7 +272,7 @@ fn parse_release_class(value: &str) -> Result<WorldIntentReleaseClass> {
     }
 }
 
-fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> {
+pub(super) fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> {
     let root = DirectoryRoot::open_existing(state_root)?;
     let storage = root.namespace(NamespaceKind::Storage)?;
     LocalWorldPromotionStore::open(&storage)
