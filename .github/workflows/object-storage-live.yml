@@ -58,6 +58,8 @@ jobs:
           done
           rad node logs || true
           exit 1
+      - name: Rewrite GitHub SSH to HTTPS
+        run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - name: Client roundtrip
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
         env:
