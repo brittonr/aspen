@@ -12,41 +12,47 @@ on:
 jobs:
   live-s3:
     runs-on: ubuntu-latest
-    services:
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: molten
-          MINIO_ROOT_PASSWORD: molten-secret
-        ports:
-          - 9000:9000
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for MinIO
+      - name: Install SeaweedFS 4.53
         run: |
+          curl -fsSL -o "$RUNNER_TEMP/weed.tgz" \
+            https://github.com/seaweedfs/seaweedfs/releases/download/4.53/linux_amd64.tar.gz
+          mkdir -p "$RUNNER_TEMP/weed"
+          tar -xzf "$RUNNER_TEMP/weed.tgz" -C "$RUNNER_TEMP/weed"
+      - name: Start S3 endpoint
+        run: |
+          mkdir -p "$RUNNER_TEMP/weed/data"
+          nohup "$RUNNER_TEMP/weed/weed" server \
+            -dir="$RUNNER_TEMP/weed/data" -s3 -s3.port=28433 \
+            -master.port=29351 -master.port.grpc=39352 \
+            -volume.port=28481 -volume.port.grpc=38482 \
+            -filer -filer.port=28891 -filer.port.grpc=38892 \
+            -ip=127.0.0.1 -ip.bind=127.0.0.1 -master.telemetry=false \
+            > "$RUNNER_TEMP/weed.log" 2>&1 &
           for attempt in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; then
+            if curl -s -o /dev/null http://127.0.0.1:28433/; then
               exit 0
             fi
             sleep 1
           done
+          cat "$RUNNER_TEMP/weed.log"
           exit 1
       - name: Create bucket
-        run: |
-          docker run --rm --network host             -e MC_HOST_local=http://molten:molten-secret@127.0.0.1:9000             minio/mc:latest mb --ignore-existing local/molten-live
+        run: curl -fsS -X PUT http://127.0.0.1:28433/molten-live
       - uses: DeterminateSystems/nix-installer-action@v19
       - name: Client roundtrip
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
         env:
-          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:28433
           MOLTEN_S3_BUCKET: molten-live
       - name: Object shell Put/Get
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_object::live_tests::live_publish_and_fetch_run_the_transition_core -- --ignored
         env:
-          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:28433
           MOLTEN_S3_BUCKET: molten-live
       - name: Live corrupt-fault parity
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_object::live_fault_tests::live_corrupt_remote_chunk_fails_without_verified_payload -- --ignored
         env:
-          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:28433
           MOLTEN_S3_BUCKET: molten-live
