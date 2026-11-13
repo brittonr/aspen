@@ -60,6 +60,11 @@ jobs:
           exit 1
       - name: Rewrite GitHub SSH to HTTPS
         run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+      - name: Fetch the executable-extent cohort
+        env:
+          RAD_PASSPHRASE: ci-radicle
+        run: |
+          rad clone rad:z37R1bP1kHcELs89RNbQRaqbCVKxB --seed z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx --timeout 5min "$RUNNER_TEMP/executable-extent"
       - name: Client roundtrip
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
         env:
