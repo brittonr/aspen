@@ -40,6 +40,12 @@ jobs:
           exit 1
       - name: Create bucket
         run: curl -fsS -X PUT http://127.0.0.1:28433/molten-live
+      - name: Install radicle CLI
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/radicle-cli.tgz" \
+            https://github.com/radicle-dev/radicle-cli/releases/download/v0.6.1/radicle-cli-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf "$RUNNER_TEMP/radicle-cli.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/radicle-cli-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
       - name: Rewrite GitHub SSH to HTTPS
         run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - uses: DeterminateSystems/nix-installer-action@v19
