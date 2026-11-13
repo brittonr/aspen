@@ -42,8 +42,10 @@ jobs:
         run: curl -fsS -X PUT http://127.0.0.1:28433/molten-live
       - uses: DeterminateSystems/nix-installer-action@v19
       - name: Install and start radicle node
+        env:
+          NIXPKGS_ALLOW_INSECURE: "1"
         run: |
-          nix profile install nixpkgs#radicle-node
+          nix profile install --impure nixpkgs#radicle-node
           echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.nix-profile/bin:$PATH"
           printf 'ci-radicle\n' | rad auth --alias ci --stdin
