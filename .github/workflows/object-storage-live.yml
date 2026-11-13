@@ -40,6 +40,8 @@ jobs:
           exit 1
       - name: Create bucket
         run: curl -fsS -X PUT http://127.0.0.1:28433/molten-live
+      - name: Rewrite GitHub SSH to HTTPS
+        run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - uses: DeterminateSystems/nix-installer-action@v19
       - name: Client roundtrip
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
