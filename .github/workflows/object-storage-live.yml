@@ -64,7 +64,8 @@ jobs:
         env:
           RAD_PASSPHRASE: ci-radicle
         run: |
-          rad clone rad:z37R1bP1kHcELs89RNbQRaqbCVKxB --timeout 5min "$RUNNER_TEMP/executable-extent"
+          rad node connect z6MkgCm6Cizoyzf8jg61pophzT1fJs87sd51cJNATRtatUZK@seed.jaryk.xyz:8776 --timeout 30s
+          rad clone rad:z37R1bP1kHcELs89RNbQRaqbCVKxB --seed z6MkgCm6Cizoyzf8jg61pophzT1fJs87sd51cJNATRtatUZK --timeout 5min "$RUNNER_TEMP/executable-extent"
       - name: Client roundtrip
         run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
         env:
