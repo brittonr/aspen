@@ -29,11 +29,13 @@ use crate::error::Result;
 
 const HANDLE_DOMAIN: &str = "onixresearch.molten.world-snapshot.local-handle.v1";
 const ADMISSION_SCHEMA: &str = "molten.local-snapshot-admission.v1";
+const DESTINATION_DOMAIN: &str = "onixresearch.molten.world-snapshot.local-destination.v1";
 
 /// Content-addressed file-tree bundle and restore target under one node storage namespace.
 pub struct LocalLogicalSnapshot {
     storage: Scope,
     trusted_signer: ed25519_dalek::VerifyingKey,
+    destination_ref: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,7 @@ struct SignedAdmission {
     profile_ref: String,
     cohort_ref: String,
     generation: u64,
+    destination_ref: String,
     signature: String,
 }
 
@@ -54,10 +57,16 @@ impl LocalLogicalSnapshot {
     }
 
     pub fn from_root(root: DirectoryRoot, trusted_signer: ed25519_dalek::VerifyingKey) -> Result<Self> {
+        let destination_ref = destination_identity(&root)?;
         Ok(Self {
             storage: root.namespace(NamespaceKind::Storage)?,
             trusted_signer,
+            destination_ref,
         })
+    }
+
+    pub fn destination_ref(&self) -> &str {
+        &self.destination_ref
     }
 
     /// Identifies one component's bundle tree. Bytes live under
@@ -79,6 +88,7 @@ impl LocalLogicalSnapshot {
         let signed: SignedAdmission = serde_json::from_slice(&bytes)
             .map_err(|error| Failure::invalid_harness(format!("local snapshot admission: {error}")))?;
         if signed.schema != ADMISSION_SCHEMA
+            || signed.destination_ref != self.destination_ref
             || signed.descriptor_ref != descriptor_ref
             || signed.profile_ref != descriptor.profile_ref.as_str()
             || signed.cohort_ref != descriptor.cohort.cohort_ref.as_str()
@@ -207,6 +217,21 @@ impl SnapshotReceiptPort for LocalLogicalSnapshot {
     }
 }
 
+fn destination_identity(root: &DirectoryRoot) -> Result<String> {
+    let mut hasher = blake3::Hasher::new_derive_key(DESTINATION_DOMAIN);
+    for path in ["config.preserves", "identity.preserves"] {
+        let path = RelativePath::parse(path)?;
+        if root.try_exists(&path)? {
+            let bytes = root.read(&path, 1_048_576)?;
+            hasher.update(&(bytes.len() as u64).to_le_bytes());
+            hasher.update(&bytes);
+        } else {
+            hasher.update(&0_u64.to_le_bytes());
+        }
+    }
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
+}
+
 fn parent(path: &RelativePath) -> Result<RelativePath> {
     match path.display().rsplit_once('/') {
         Some((parent, _)) => RelativePath::parse(parent),
@@ -215,35 +240,39 @@ fn parent(path: &RelativePath) -> Result<RelativePath> {
 }
 
 /// Signs one operator admission grant for a local snapshot descriptor.
-pub fn sign_local_admission(
-    signer: &ed25519_dalek::SigningKey,
-    descriptor_ref: &str,
-    profile_ref: &str,
-    cohort_ref: &str,
-    generation: u64,
-) -> Result<Vec<u8>> {
+pub struct LocalAdmissionInput<'a> {
+    pub signer: &'a ed25519_dalek::SigningKey,
+    pub descriptor_ref: &'a str,
+    pub profile_ref: &'a str,
+    pub cohort_ref: &'a str,
+    pub generation: u64,
+    pub destination_ref: &'a str,
+}
+
+pub fn sign_local_admission(input: LocalAdmissionInput<'_>) -> Result<Vec<u8>> {
     use ed25519_dalek::Signer;
     let mut fields = SignedAdmission {
         schema: ADMISSION_SCHEMA.to_string(),
         admission_ref: String::new(),
-        descriptor_ref: descriptor_ref.to_string(),
-        profile_ref: profile_ref.to_string(),
-        cohort_ref: cohort_ref.to_string(),
-        generation,
+        descriptor_ref: input.descriptor_ref.to_string(),
+        profile_ref: input.profile_ref.to_string(),
+        cohort_ref: input.cohort_ref.to_string(),
+        generation: input.generation,
+        destination_ref: input.destination_ref.to_string(),
         signature: String::new(),
     };
     let message = admission_message(&fields);
     fields.admission_ref = format!("blake3:{}", blake3::hash(&message).to_hex());
     let mut signed_message = message;
     signed_message.extend_from_slice(fields.admission_ref.as_bytes());
-    fields.signature = hex::encode(signer.sign(&signed_message).to_bytes());
+    fields.signature = hex::encode(input.signer.sign(&signed_message).to_bytes());
     serde_json::to_vec(&fields).map_err(|error| Failure::invalid_harness(format!("local snapshot admission: {error}")))
 }
 
 fn admission_message(fields: &SignedAdmission) -> Vec<u8> {
     format!(
-        "{ADMISSION_SCHEMA}\n{}\n{}\n{}\n{}",
-        fields.descriptor_ref, fields.profile_ref, fields.cohort_ref, fields.generation
+        "{ADMISSION_SCHEMA}\n{}\n{}\n{}\n{}\n{}",
+        fields.descriptor_ref, fields.profile_ref, fields.cohort_ref, fields.generation, fields.destination_ref
     )
     .into_bytes()
 }

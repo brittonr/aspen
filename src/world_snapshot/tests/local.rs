@@ -84,13 +84,14 @@ fn local_logical_restore_materializes_and_activates_a_verified_bundle() {
     let descriptor_ref = canonical_snapshot_descriptor(&descriptor).expect("descriptor").artifact_ref;
     write_admission(
         &root,
-        &sign_local_admission(
-            &signer,
-            &descriptor_ref,
-            descriptor.profile_ref.as_str(),
-            descriptor.cohort.cohort_ref.as_str(),
-            1,
-        )
+        &sign_local_admission(LocalAdmissionInput {
+            signer: &signer,
+            descriptor_ref: &descriptor_ref,
+            profile_ref: descriptor.profile_ref.as_str(),
+            cohort_ref: descriptor.cohort.cohort_ref.as_str(),
+            generation: 1,
+            destination_ref: adapter.destination_ref(),
+        })
         .expect("admission"),
     );
 
@@ -155,13 +156,14 @@ fn local_logical_restore_denies_tampered_bundle_and_untrusted_admission() {
         .expect("tamper");
     write_admission(
         &root,
-        &sign_local_admission(
-            &signer,
-            &descriptor_ref,
-            descriptor.profile_ref.as_str(),
-            descriptor.cohort.cohort_ref.as_str(),
-            1,
-        )
+        &sign_local_admission(LocalAdmissionInput {
+            signer: &signer,
+            descriptor_ref: &descriptor_ref,
+            profile_ref: descriptor.profile_ref.as_str(),
+            cohort_ref: descriptor.cohort.cohort_ref.as_str(),
+            generation: 1,
+            destination_ref: adapter.destination_ref(),
+        })
         .expect("admission"),
     );
     let mut materialization = LocalLogicalSnapshot::open(temporary.path(), signer.verifying_key()).expect("adapter");
@@ -183,13 +185,14 @@ fn local_logical_restore_denies_tampered_bundle_and_untrusted_admission() {
     let wrong = SigningKey::from_bytes(&[9_u8; 32]);
     write_admission(
         &root,
-        &sign_local_admission(
-            &wrong,
-            &descriptor_ref,
-            descriptor.profile_ref.as_str(),
-            descriptor.cohort.cohort_ref.as_str(),
-            2,
-        )
+        &sign_local_admission(LocalAdmissionInput {
+            signer: &wrong,
+            descriptor_ref: &descriptor_ref,
+            profile_ref: descriptor.profile_ref.as_str(),
+            cohort_ref: descriptor.cohort.cohort_ref.as_str(),
+            generation: 2,
+            destination_ref: adapter.destination_ref(),
+        })
         .expect("admission"),
     );
     let mut materialization = LocalLogicalSnapshot::open(temporary.path(), signer.verifying_key()).expect("adapter");

@@ -45,7 +45,7 @@ their reopening triggers are met.
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
 | #15 | Requires two real hosts, actual authenticated peer binding, and a Kiln consumer cohort. | Qualify one direct-LAN stream profile and retain loopback evidence separately. |
-| #18 | Local logical file-tree adapter and CLI restore are implemented with restart/readback and idempotent reactivation tests; it restores declared bundle trees, not Molten's typed node stores or a live runtime. Opaque/VM restore still deny. | Bind the adapter to the typed node-store roots and observe the actual destination cohort. |
+| #18 | Local logical file-tree adapter and CLI restore are implemented with restart/readback, idempotent reactivation, and destination-root-bound admission. It restores declared bundle trees, not Molten's typed node stores or a live runtime. Opaque/VM restore still deny. | Bind the adapter to the typed node-store roots and the actual destination cohort facts. |
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
