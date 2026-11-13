@@ -979,7 +979,7 @@ dependencies = [
 [[package]]
 name = "choregraph-history"
 version = "0.1.0"
-source = "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
+source = "git+https://github.com/OnixResearch/choregraph.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
 dependencies = [
  "blake3",
 ]
