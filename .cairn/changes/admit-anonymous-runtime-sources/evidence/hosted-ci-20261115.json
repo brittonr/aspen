@@ -43,6 +43,45 @@
         "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb",
         "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
       ]
+    },
+    {
+      "source_commit": "4055bab940178c300c66b635cd00f2cda0188cf3",
+      "run_id": 43695373650,
+      "url": "https://github.com/brittonr/aspen/actions/runs/43695373650",
+      "workflow": "Object storage live",
+      "conclusion": "failure",
+      "tool_scoped_shell_initialized": true,
+      "dependency_guard_passed": true,
+      "rust_tests_started": false,
+      "failed_phase": "cold Cargo source resolution before first test",
+      "observed_dependency": "vm-cohort-core",
+      "observed_source": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e",
+      "observed_error": "git: 'remote-rad' is not a git command",
+      "artifact": {
+        "id": 14153483702,
+        "node_id": "MDg6QXJ0aWZhY3QxNDE1MzQ4MzcwMg==",
+        "name": "object-storage-4055bab940178c300c66b635cd00f2cda0188cf3-43695373650",
+        "size_in_bytes": 3751,
+        "url": "https://api.github.com/repos/brittonr/aspen/actions/artifacts/14153483702",
+        "archive_download_url": "https://api.github.com/repos/brittonr/aspen/actions/artifacts/14153483702/zip",
+        "expired": false,
+        "digest": "sha256:8ef51f88bd2b1f9adfa11bd881698359257876e611062f1a8d9b6c4f61a1260b",
+        "created_at": "2026-11-15T08:39:33Z",
+        "updated_at": "2026-11-15T08:39:33Z",
+        "expires_at": "2027-02-13T08:37:22Z",
+        "workflow_run": {
+          "id": 43695373650,
+          "repository_id": 816931615,
+          "head_repository_id": 816931615,
+          "head_branch": "molten",
+          "head_sha": "4055bab940178c300c66b635cd00f2cda0188cf3"
+        }
+      },
+      "retained_members": [
+        "_temp/object-storage/weed.log"
+      ],
+      "canonical_conformance_receipts_present": false,
+      "public_source_followup": "anonymous-vm-source-20261115.json"
     }
   ],
   "producer": {
@@ -55,11 +94,14 @@
   "retained_log_normalization": "Node stripVTControlCharacters; rendered diagnostic logs, not canonical conformance or authority receipts",
   "retained_log_blake3": [
     "9dfbdddb04e81ce0940cdf3689a668878065c019f536de385967d6c4fb83c913  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43693265859-failure.log",
-    "6c5c5893a7e825db5995f3070881c085f938add8c5549709365012952a47531c  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43693265823-failure.log"
+    "6c5c5893a7e825db5995f3070881c085f938add8c5549709365012952a47531c  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43693265823-failure.log",
+    "180ce4d09cadf74a8f04c3009e1713fef43c3082d7ec2ec491c1d44f7cb8f8d4  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43695373650-failure.log",
+    "a2eda56a29b31db352fbf7f76c46e391c22c2b4cd12100644e300672baaf1b4e  .cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-vm-source-20261115.json"
   ],
   "non_claims": [
     "No hosted conformance test ran in the failed storage job.",
     "The artifact upload is not conformance success.",
     "A scoped storage shell does not qualify the default development shell, full public build, optional sources or release."
-  ]
+  ],
+  "follow_up_source_commit": "4055bab940178c300c66b635cd00f2cda0188cf3"
 }

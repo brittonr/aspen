@@ -1,0 +1,38 @@
+{
+  "observed_after_source_commit": "4055bab940178c300c66b635cd00f2cda0188cf3",
+  "requested_revision": "31f1696ba9391bfda8577a58af84f72361d5573e",
+  "expected_nar": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
+  "declared_rid": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3",
+  "catalog_github_url": null,
+  "credential_context": "fresh task HOME, no inherited credential variables, no system/global Git configuration, no helper/header and no SSH command",
+  "init": {
+    "argv": [
+      "init",
+      "--bare",
+      "source.git"
+    ],
+    "code": 0,
+    "stdout": "Initialized empty Git repository in /dev/shm/aspen-open-issues-20261113/target/source-gate-20261113/anonymous-vm-source.Dqiwxm/source.git/\n",
+    "stderr": "hint: Using 'master' as the name for the initial branch. This default branch name\nhint: will change to \"main\" in Git 3.0. To configure the initial branch name\nhint: to use in all of your new repositories, which will suppress this warning,\nhint: call:\nhint:\nhint: \tgit config --global init.defaultBranch <name>\nhint:\nhint: Names commonly chosen instead of 'master' are 'main', 'trunk' and\nhint: 'development'. The just-created branch can be renamed via this command:\nhint:\nhint: \tgit branch -m <name>\nhint:\nhint: Disable this message with \"git config set advice.defaultBranchName false\"\n"
+  },
+  "fetch": {
+    "argv": [
+      "--git-dir=source.git",
+      "fetch",
+      "--no-tags",
+      "--depth=1",
+      "https://seed.radicle.garden/z2QJLUqyAZnnHPiZQ1BFjLsX9ush3.git",
+      "31f1696ba9391bfda8577a58af84f72361d5573e"
+    ],
+    "code": 128,
+    "stdout": "",
+    "stderr": "fatal: unable to access 'https://seed.radicle.garden/z2QJLUqyAZnnHPiZQ1BFjLsX9ush3.git/': The requested URL returned error: 500\n",
+    "error": "Command failed: git -c credential.helper= -c http.extraHeader= --git-dir=source.git fetch --no-tags --depth=1 https://seed.radicle.garden/z2QJLUqyAZnnHPiZQ1BFjLsX9ush3.git 31f1696ba9391bfda8577a58af84f72361d5573e\nfatal: unable to access 'https://seed.radicle.garden/z2QJLUqyAZnnHPiZQ1BFjLsX9ush3.git/': The requested URL returned error: 500\n"
+  },
+  "outcome": "unavailable: recorded seed returned HTTP 500",
+  "non_claims": [
+    "No source bytes acquired or NAR verified.",
+    "No revision, provider publication, private cache or sibling substitution was used.",
+    "Optional Cargo dependency metadata was required before the first test in the hosted storage invocation."
+  ]
+}

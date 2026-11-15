@@ -15,7 +15,7 @@ original candidate; current candidate checks must be reported separately.
 | #5 | Both bounded TLC/TLA-ts and real Quint/Rust guard-mutation campaigns passed; [retained evidence](consensus-fastpath-tla.md#integration-and-evidence-status). | Finite-model/API conformance does not prove live consensus, arbitrary workloads or release eligibility. |
 | #6 | No publication-rule mechanism without a concrete consumer; [deferred decision](deferred-decisions.md). | Reopen on a named bounded rule/workload and a measurable baseline. |
 | #7 | Explicit direct-profile receive admission and same-host expensive-handler controls passed with the repaired stream suite; [review](inbound-admission-rate-limit-review.md). | Native pre-TLS buffers remain outside the application receive budget; this is not a general Internet-facing service claim. |
-| #8 | 32 object-feature controls, actual local S3/cache roundtrips and the actual NVMe-path capacity/reopen control passed; [content stores](content-store-adapter.md). | These are bounded local observations, not cloud-provider, physical-power-loss or machine-loss qualification. |
+| #8 | 32 object-feature controls, actual local S3/cache roundtrips and the actual NVMe-path capacity/reopen control passed; [content stores](content-store-adapter.md). | Hosted conformance is blocked on the exact VM source during cold Cargo resolution. Local results do not satisfy hosted CI, cloud-provider, physical-power-loss or machine-loss qualification. |
 | #9 | The corrected pinned swtpm harness passed the real seal/load, both rotation, consumer-file secrecy and changed-PCR denial controls. | The Nix harness consumed a Cargo-built test executable; it does not qualify a physical TPM, encrypt emulator state or switch node defaults. |
 | #10 | No hint discovery protocol without disclosure/bootstrap policy; [deferred decision](deferred-decisions.md). | Hints must remain non-authoritative; agree the explicit threat model and publication scope first. |
 | #11 | Keep structured Rust predicates rather than an unmeasured explanation/rule engine; [deferred decision](deferred-decisions.md). | Reopen with a concrete bounded diagnostic consumer and baseline. |
@@ -30,7 +30,7 @@ original candidate; current candidate checks must be reported separately.
 | #20 | Cross-host actor owner-loss/return and contradictory-handoff qualification composes #19, #15 and current control-plane ownership. | Actual A→B→A workload hosts, admitted quorum, independent effect observer and persisted ambiguous-effect/reconciliation evidence are unavailable; a summary or local sequential fixture cannot qualify them. |
 | #21 | No Golem comparison without a matched workload/deployment contract. | An exact admitted adapter, target/cohort and comparable failure/recovery measurements are missing. |
 | #22 | [Capability qualification](capability-qualification-report.md) validates exact build/profile execution artifacts separately from implementation coverage. | Run the selected executable family; harness simulation cannot qualify live Raft, durability or cross-host behavior. |
-| #23 | All 21 required default/development Git cohorts and 76 of 78 fixed Nix source cohorts were acquired anonymously; both dependency/source-binding Nix checks passed. | The exact optional VM Cohort and Mantle extent-producer sources remain unavailable. Acquisition is not a clean full public Nix build or optional-feature qualification. |
+| #23 | The selected unit graph's 21 Git cohorts and 76/78 fixed Nix source cohorts were acquired anonymously; both dependency/source-binding Nix checks passed. | Cold hosted Cargo also resolves optional VM Cohort before tests; its direct public seed still returns HTTP 500. Default Octet has a separate SSH source, and the Mantle extent producer remains unavailable. No clean full public build is claimed. |
 | #24 | An unobserved storage-denial case remains explicitly unavailable; child-evidence validation forbids promoting it to an observed denial. | Actual protected operation and matching canonical child receipt are required before claiming the denial occurred. |
 | #25 | Aspen public identity, repository description and supported local workflow agree; the verbatim isolated-target workflow completed in 3m34.165s and retained 68 evidence entries. | The pinned shell used existing source caches and explicit debug-info settings; this is not a cold anonymous bootstrap, signed node startup or cross-host qualification. |
 | #26 | Operator NixOS module and opt-in VM surface retain startup/source/profile checks. | Run the actual corrected module/VM package; evaluation alone does not prove a boot or service. |
@@ -104,6 +104,12 @@ The successful rail excludes incompatible architectures and does not establish
 a cold public bootstrap, signed positive startup, two-host, guest-campaign or
 release qualification. Those issue-level boundaries remain explicit above.
 
+
+### Hosted source-resolution outcomes (2026-11-15)
+
+The [first storage run](https://github.com/brittonr/aspen/actions/runs/43693265859) failed before conformance on a pinned Octet CLI's internal SSH dependency. The [tool-scoped repair run](https://github.com/brittonr/aspen/actions/runs/43695373650) initialized the unchanged compiler and passed the dependency guard, then Cargo attempted optional VM Cohort before the first Rust test. Its missing Radicle helper is not evidence that the source is public: a separate fresh credential-free fetch from the recorded seed returned HTTP 500, and the catalog advertises no GitHub route.
+
+Both actual artifacts contain endpoint diagnostics only, not canonical conformance receipts. [Retained hosted observations and logs](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261115.json) bind the exact source commits. The source-admission task for every required default source is reopened; full public-build and hosted-storage acceptance remain blocked without changing revisions, supplying hidden credentials, weakening tests or treating local caches as fresh-run evidence.
 
 ## Evidence rules
 

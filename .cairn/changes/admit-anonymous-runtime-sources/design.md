@@ -40,6 +40,8 @@ The storage job does not execute Octet. Add an explicit `object-storage-ci` shel
 
 A passing actual hosted run and its uploaded canonical receipts qualify only this storage profile. They do not satisfy the default development shell, full-flake, cold-cache or optional-source acceptance criteria. Preserve the failed runs and keep the source-admission change active while the producer-owned default-tool route and unavailable VM Cohort/Mantle sources remain unresolved.
 
+The repaired hosted run `43695373650` initialized that shell and passed its guard, then cold Cargo resolution attempted optional VM Cohort `31f1696ba9391bfda8577a58af84f72361d5573e` before running any Rust test. A fresh anonymous direct fetch from the recorded public seed returned HTTP 500. Optional feature selection is therefore not a source-availability boundary for this Cargo invocation. Reopen all-required-default-acquisition acceptance; do not remove the dependency, substitute another revision, prefill a private cache, or describe the endpoint-log-only artifact as conformance.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.
