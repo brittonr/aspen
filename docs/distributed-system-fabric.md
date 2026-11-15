@@ -1,8 +1,10 @@
-# Distributed-system fabric boundary
+# Aspen distributed-system fabric boundary
+
+<a id="distributed-system-fabric-boundary"></a>
 
 r[impl molten.fabric_boundary.fabric_identity] r[impl molten.fabric_boundary.mechanism_semantics_separation] r[impl molten.fabric_boundary.extension_tiers] r[impl molten.fabric_boundary.port_registry] r[impl molten.fabric_boundary.evidence_granularity] r[impl molten.fabric_boundary.reference_system_exit_criteria] r[impl molten.fabric_boundary.non_claims]
 
-Molten is a workload-neutral distributed-systems fabric. It supplies canonical communication, lifecycle, authority, resources, execution, durability, transport, scheduling, supervision, policy, simulation, and evidence mechanisms. A database, replicated log, queue, scheduler, object store, federation service, or workflow engine remains a system extension or workload; none defines global Molten semantics.
+Aspen is a workload-neutral distributed-systems fabric. It supplies canonical communication, lifecycle, authority, resources, execution, durability, transport, scheduling, supervision, policy, simulation, and evidence mechanisms. A database, replicated log, queue, scheduler, object store, federation service, or workflow engine remains a system extension or workload; none defines global Aspen semantics.
 
 ## Ownership law
 
@@ -17,7 +19,7 @@ A useful test for a primitive is: **can its decisions be tested from in-memory f
 
 ## Extension tiers
 
-Molten distinguishes three tiers:
+Aspen distinguishes three tiers:
 
 1. A **sandboxed plugin** receives only declared plugin hostcalls. An operation string that looks like storage, networking, timers, membership, placement, or consistency does not grant those powers.
 2. A **system extension** is an optional supervised service. Activation requires a canonical system-extension manifest, passing policy and provenance evidence, exact fabric-port bindings, resource grants, and lifecycle admission.
@@ -66,7 +68,7 @@ The pure profile validator requires:
 
 ## Reference-system exit criteria
 
-The reference systems are conformance witnesses, not Molten product identities.
+The reference systems are conformance witnesses, not Aspen product identities.
 
 | Reference system | Common fabric mechanisms | Extension-owned semantics |
 | --- | --- | --- |
@@ -78,7 +80,7 @@ A matrix fails if a common capability is missing, a workload semantic is assigne
 
 ## Consensus boundary
 
-Molten does not require one global coordination mechanism. Normal actor traffic, blob transfer, DAG exchange, federation, and unrelated service state do not pass through a mandatory consensus engine. A consistency service is selected through explicit ports and remains an optional system extension.
+Aspen does not require one global coordination mechanism. Normal actor traffic, blob transfer, DAG exchange, federation, and unrelated service state do not pass through a mandatory consensus engine. A consistency service is selected through explicit ports and remains an optional system extension.
 
 OpenRaft is not selected, adapted, or used. Native deterministic transition laws and any Trellis-backed proof or conformance support remain independent of transport, storage, time, entropy, leadership, and implementation-specific DTOs. A future consensus extension must pass its own reviewed Cairn change and cannot transfer local proof claims to whole-system correctness.
 
@@ -90,7 +92,7 @@ Adapters may implement ports with Iroh, Redb, capability-rooted filesystems, log
 
 ## Project licensing boundary
 
-Repository-owned Molten source is licensed under `AGPL-3.0-or-later`; see the root `LICENSE`. Third-party dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references retain their original terms and notices; see `THIRD_PARTY_LICENSES.md`.
+Repository-owned Aspen source is licensed under `AGPL-3.0-or-later`; see the root `LICENSE`. Third-party dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references retain their original terms and notices; see `THIRD_PARTY_LICENSES.md`.
 
 Earlier permissive grants remain valid. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Compatibility remains driven by requirements, protocols, independently authored fixtures, and conformance tests. Reading an external implementation does not transfer its correctness, security, authority, or proof claims.
 

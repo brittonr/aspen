@@ -1,8 +1,10 @@
-# Security policy
+# Aspen security policy
+
+<a id="security-policy"></a>
 
 ## Support boundary
 
-Molten has no production-supported release at present. The current branch is
+Aspen has no production-supported release at present. The current branch is
 `molten`; the `v0.1.0` tag records the August limited internal pilot, not a
 general-purpose security or production qualification.
 
@@ -37,7 +39,7 @@ repository, use its private advisory form. Otherwise request a private
 reporting channel from the repository owner before sending technical details.
 No response-time, fix-time, or backport commitment is currently offered.
 
-Include the exact Molten source revision, dependency revision, host and kernel
+Include the exact Aspen source revision, dependency revision, host and kernel
 versions, affected command or profile, a minimal reviewed reproducer, observed
 impact, and relevant artifact identities. Keep sensitive artifacts private.
 

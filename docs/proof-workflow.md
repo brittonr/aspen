@@ -1,6 +1,8 @@
-# Molten proof workflow
+# Aspen proof workflow
 
-Molten proof-affecting changes use canonical receipts as normative evidence and rendered summaries only as review aids. This page records the proof checklist, receipt-backed traceability path, layered proof boundaries, deny-path matrix, and readback workflow.
+<a id="molten-proof-workflow"></a>
+
+Aspen proof-affecting changes use canonical receipts as normative evidence and rendered summaries only as review aids. This page records the proof checklist, receipt-backed traceability path, layered proof boundaries, deny-path matrix, and readback workflow.
 
 ## Proof checklist for Cairn changes
 
@@ -73,7 +75,7 @@ REMOVED requirements, rename labels, proposals, tasks, archives, and unrelated M
 do not admit pending identities. Unknown references still deny normal and baseline-write
 execution, and active declarations cannot hide new or stale accepted debt.
 
-Run the existing repository rail from the Molten checkout:
+Run the existing repository rail from the Aspen checkout:
 
 ```sh
 nix build .#checks.x86_64-linux.inherited-tracey-debt --no-update-lock-file --no-link -L
@@ -83,7 +85,7 @@ Pending resolution proves only that a proposed identity exists in the admitted s
 scope. It proves neither marker truth, accepted coverage, package validity, runtime
 behavior, lifecycle eligibility, nor release readiness. Native Cairn structural
 validation, reviewed behavioral acceptance, and all-task/passing-gate sync/archive
-requirements remain mandatory. Molten lifecycle/traceability maintainers own this
+requirements remain mandatory. Aspen lifecycle/traceability maintainers own this
 boundary; a passing source identity check must never close an unfinished package.
 
 ## Testing hardening receipts

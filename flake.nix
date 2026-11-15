@@ -1,5 +1,5 @@
 {
-  description = "molten — Rust project";
+  description = "Aspen: a Rust runtime for distributed systems with explicit authority, bounded effects, and deterministic replay";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
@@ -1160,7 +1160,7 @@
               pkgs.iputils
             ] ++ lib.optionals provisionSourceGate [ startupSourceBinding ];
             systemd.services.molten-node = {
-              description = "Molten node VM integration service";
+              description = "Aspen node VM integration service";
               wantedBy = [ "multi-user.target" ];
               after = [ "network-online.target" ];
               wants = [ "network-online.target" ];
@@ -4527,14 +4527,14 @@
             type = "app";
             program = "${moltenPkg}/bin/molten";
             meta = {
-              description = "Run the Molten CLI";
+              description = "Run the Aspen development CLI (molten)";
             };
           };
           molten = {
             type = "app";
             program = "${moltenPkg}/bin/molten";
             meta = {
-              description = "Run the Molten CLI";
+              description = "Run the Aspen development CLI (molten)";
             };
           };
           nixos-vm-molten-module = {
@@ -4544,14 +4544,14 @@
               exec nix build -L --no-link '${vmMoltenModule.drvPath}'
             ''}";
             meta = {
-              description = "Boot the exported Molten NixOS module in a VM (opt-in; not a flake check)";
+              description = "Boot the exported Aspen NixOS module in a VM (opt-in; not a flake check)";
             };
           };
           nextest-ci = {
             type = "app";
             program = "${nextestCi}/bin/molten-nextest-ci";
             meta = {
-              description = "Run Molten's cargo-nextest CI profile";
+              description = "Run Aspen's cargo-nextest CI profile";
             };
           };
         };

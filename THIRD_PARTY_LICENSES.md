@@ -1,6 +1,6 @@
 # Third-party licensing
 
-The root `LICENSE` applies only to repository-owned Molten source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
+The root `LICENSE` applies only to repository-owned Aspen source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
 
 Historical sparse `vendor/` snapshots record upstream `Cargo.toml.orig` material
 rather than changing its license. They are not tracked in the current Git tree;

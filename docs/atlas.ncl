@@ -1,7 +1,7 @@
 {
   schema = "molten-system-atlas.v1",
-  title = "Molten system atlas",
-  summary = "A bounded map of the current Molten runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.",
+  title = "Aspen system atlas",
+  summary = "A bounded map of the current Aspen runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.",
   chapters = [
     {
       id = "turn-runtime",
@@ -139,37 +139,37 @@
       id = "q-replay",
       text = "Which runtime transitions are replay-visible for the selected profile?",
       status = "open",
-      link = "docs/world-replay-capsules.md",
+      link = "world-replay-capsules.md",
     },
     {
       id = "q-effect-uncertainty",
       text = "How does the selected adapter classify an effect that may have happened?",
       status = "open",
-      link = "docs/fabric-port-ownership.md",
+      link = "fabric-port-ownership.md",
     },
     {
       id = "q-prolly-work",
       text = "What work does an incremental Prolly edit bound actually avoid?",
       status = "open",
-      link = "docs/prolly-semantic-state-map.md",
+      link = "prolly-semantic-state-map.md",
     },
     {
       id = "q-restore",
       text = "Which logical restore profile has an admitted runtime adapter today?",
       status = "blocked",
-      link = "docs/world-execution-snapshots.md",
+      link = "world-execution-snapshots.md",
     },
     {
       id = "q-rate-limit",
       text = "Is a per-source rate limit applied before inbound admission?",
       status = "answered",
-      link = "docs/inbound-admission-rate-limit-review.md",
+      link = "inbound-admission-rate-limit-review.md",
     },
     {
       id = "q-cross-host",
       text = "Which cross-host transport profile has actual two-host evidence?",
       status = "blocked",
-      link = "docs/fabric-transport-session-runtime.md",
+      link = "fabric-transport-session-runtime.md",
     },
   ],
 }
