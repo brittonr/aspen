@@ -1,9 +1,12 @@
-# Contributing to Molten
+# Contributing to Aspen
 
 Read the [contributor handbook](docs/handbook/README.md) and the repository
 [agent and workflow notes](AGENTS.md) before changing behavior. The
 [documentation map](docs/README.md) distinguishes governing documents from the
 source-linked handbook and technical companion.
+
+Aspen is the public project name. Molten is its internal codename; the current
+`molten` branch, crates, executable and canonical schema names remain unchanged.
 
 ## Workflow
 

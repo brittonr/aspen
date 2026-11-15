@@ -80,7 +80,8 @@ pub async fn rpc(
         let (mut send, mut recv) = guard.0.open_bi().await.map_err(|_| Error::Unknown)?;
         send_frame(&mut send, &bytes).await?;
         let bytes = receive_frame(&mut recv).await?;
-        codec::unframe::<Reply>(REPLY_SCHEMA, &bytes).map_err(crate::invalid)
+        let reply = codec::unframe::<Reply>(REPLY_SCHEMA, &bytes).map_err(crate::invalid)?;
+        Ok(reply)
     })
     .await
     .map_err(|_| Error::Unknown)??;
@@ -101,6 +102,8 @@ pub async fn rpc(
 pub trait RequestHandler: Send + Sync {
     fn permits(&self, peer: Id) -> bool;
     async fn handle(&self, peer: Id, request: Request) -> Reply;
+    /// Transport peer closure after reply publication; not proof of client projection persistence.
+    fn reply_closed(&self, _reply: &Reply) {}
 }
 /// Bounded one-request-per-connection ingress. Peer admission precedes framing
 /// and parsing. The key allowlist is configured separately from connectivity.
@@ -122,7 +125,7 @@ pub async fn serve(
                 let handler=handler.clone();
                 tasks.spawn(async move {
                     let _permit=permit;
-                    let result=tokio::time::timeout(deadline,async {
+                    let _=tokio::time::timeout(deadline,async {
                         let connection=incoming.await.map_err(|_|Error::Unavailable)?;
                         let peer=Id(*connection.remote_id().as_bytes());
                         if !handler.permits(peer){connection.close(1u32.into(),b"denied");return Err(Error::Denied);}
@@ -131,11 +134,16 @@ pub async fn serve(
                         let raw=receive_frame(&mut recv).await?;
                         let request=codec::unframe::<Request>(REQUEST_SCHEMA,&raw).map_err(crate::invalid)?;
                         let reply=handler.handle(peer,request).await;
-                        send_frame(&mut send,&codec::frame(REPLY_SCHEMA,&reply).map_err(crate::invalid)?).await?;
+                        let mut frame=codec::frame(REPLY_SCHEMA,&reply).map_err(crate::invalid)?;
+                        if matches!(&reply,Reply::ProgressSnapshot(_)|Reply::ProgressPage(_)) && frame.len()>MAX_PROGRESS_REPLY_BYTES {
+                            frame=codec::frame(REPLY_SCHEMA,&error_reply(Error::Bound)).map_err(crate::invalid)?;
+                        }
+                        send_frame(&mut send,&frame).await?;
                         // Do not close before the caller can acknowledge receipt.
-                        guard.0.closed().await;Ok::<(),Error>(())
+                        guard.0.closed().await;
+                        handler.reply_closed(&reply);
+                        Ok::<(),Error>(())
                     }).await;
-                    let _=result; // Per-request failure never fabricates semantic success.
                 });
             }
         }

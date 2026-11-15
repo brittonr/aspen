@@ -217,6 +217,7 @@ pub fn run_job_dag_value(value: &IoValue, options: &JobRunOptions<'_>) -> Result
 }
 
 pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> {
+    validate_selected_current(dag)?;
     let request = request_for_dag(dag, options.output_request.as_ref())?;
     ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job run nodes")?;
     ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job run edges")?;
@@ -247,6 +248,7 @@ fn run_job_dag_with_capabilities(
     dag: &JobDag,
     options: &CapabilityJobRunOptions<'_>,
 ) -> Result<JobRun> {
+    validate_selected_current(dag)?;
     let request = request_for_dag(dag, None)?;
     ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job run nodes")?;
     ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job run edges")?;

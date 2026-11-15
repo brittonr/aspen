@@ -1,5 +1,5 @@
 #[derive(Debug, clap::Parser)]
-#[command(name = "molten", version, about = "Molten runtime prototype")]
+#[command(name = "molten", version, about = "Aspen runtime (internal codename: Molten)")]
 pub(super) struct Cli {
     #[command(subcommand)]
     pub(super) command: Option<Top>,
@@ -24,9 +24,17 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_receipts::ReceiptsCommand,
     },
+    Evidence {
+        #[command(subcommand)]
+        command: Evidence,
+    },
     Node {
         #[command(subcommand)]
         command: crate::cli_node::Command,
+    },
+    AddressableActor {
+        #[command(subcommand)]
+        command: molten::addressable_actor::command::Subcommand,
     },
     Reliability {
         #[command(subcommand)]
@@ -97,6 +105,18 @@ pub(super) enum Top {
     WorldPromotion {
         #[command(subcommand)]
         command: crate::cli_world_promotion::WorldPromotionCommand,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub(crate) enum Evidence {
+    Qualify {
+        #[arg(long)]
+        source_root: std::path::PathBuf,
+        #[arg(long)]
+        scenario: String,
+        #[arg(long)]
+        out: std::path::PathBuf,
     },
 }
 

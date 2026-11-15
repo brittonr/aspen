@@ -34,6 +34,7 @@ pub fn profile(
             ContentCapability::Import,
             ContentCapability::Export,
             ContentCapability::Protection,
+            ContentCapability::DurableCompletion,
         ],
         ContentAdapterClass::DeterministicSimulation => vec![
             ContentCapability::StreamingPut,

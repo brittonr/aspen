@@ -1,0 +1,67 @@
+{
+  "original_location": "/dev/shm/aspen-fastpath-model-evidence-20261113-complete-jre",
+  "retained_files": [
+    {
+      "name": "ConsensusFastPath.cfg",
+      "blake3": "606103db97eae92b1cf26b1c1682da44135683801641b1303ae62a41d2a70cd5"
+    },
+    {
+      "name": "ConsensusFastPath.tla",
+      "blake3": "fbf9f90d8f580a7cc21bdfd12c3640ad893c5254fbe141730b55e0739095f0ce"
+    },
+    {
+      "name": "ConsensusFastPathMissingPromise.cfg",
+      "blake3": "0231c36995869eedb2a8dfd6e906c6949ad93c3a3481e59eaa5fe73cd8447657"
+    },
+    {
+      "name": "baseline-tlc.json",
+      "blake3": "2286dd217e353edd042018854ad1545a7082df6d4c08d1a520036dc0c7d9c237"
+    },
+    {
+      "name": "baseline-tlc.stdout",
+      "blake3": "fae82fa02331610ccfbeb2efad00ece9563ef00ddccc1f690bd77687cc333b93"
+    },
+    {
+      "name": "baseline-tlc.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "baseline-tla-ts.json",
+      "blake3": "e239a06460f88318812aecbcae77839c7c3a282c4e2e33f3216c2370e8fabb0e"
+    },
+    {
+      "name": "baseline-tla-ts.stdout",
+      "blake3": "6dbe047b9a1e1f2b829c0b7f383f77290b8b1ec5cc4cc437420f719f5289557e"
+    },
+    {
+      "name": "baseline-tla-ts.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "missing-promise-tlc.json",
+      "blake3": "b672bdf803e31af4268962e949fb84ed61ea3043cdf85556dc8234ff15720453"
+    },
+    {
+      "name": "missing-promise-tlc.stdout",
+      "blake3": "a5ff0f5a88642880c20f78e8d73b438fd0b1a8b81ecb3302fdc74239e07e653e"
+    },
+    {
+      "name": "missing-promise-tlc.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "missing-promise-tla-ts.json",
+      "blake3": "fb96cfb4608009fb6181edd5cc50fea9e237b23d2e9909256d3b1670dd2d5da1"
+    },
+    {
+      "name": "missing-promise-tla-ts.stdout",
+      "blake3": "0442b5bb64180e230e351170e56507ab5b3906e7d679df5d3cc82c7a6a2f005e"
+    },
+    {
+      "name": "missing-promise-tla-ts.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    }
+  ],
+  "scope": "Actual stdout/stderr/verdicts and source/config copies from the completed campaign; TLC internal state-store scratch is not retained or claimed. Original campaign JSON remains at ../tlc-tla-ts-2026-11-13.json.",
+  "rerun": false
+}

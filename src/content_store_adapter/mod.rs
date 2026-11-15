@@ -1,19 +1,19 @@
 mod canonical;
 mod integration;
+#[cfg(feature = "content-store-object-storage")]
+#[path = "live/cache.rs"]
+mod live_cache;
 #[path = "live/iroh.rs"]
 mod live_iroh;
+#[cfg(feature = "content-store-object-storage")]
+#[path = "live/object.rs"]
+mod live_object;
 #[cfg(feature = "content-store-object-storage")]
 #[path = "live/s3.rs"]
 mod live_s3;
 #[cfg(feature = "content-store-object-storage")]
 #[path = "live/tier.rs"]
 mod live_tier;
-#[cfg(feature = "content-store-object-storage")]
-#[path = "live/cache.rs"]
-mod live_cache;
-#[cfg(feature = "content-store-object-storage")]
-#[path = "live/object.rs"]
-mod live_object;
 mod local;
 mod persistence;
 mod simulation;
@@ -22,15 +22,15 @@ mod write;
 
 pub use canonical::*;
 pub use integration::*;
+#[cfg(feature = "content-store-object-storage")]
+pub use live_cache::*;
 pub use live_iroh::*;
+#[cfg(feature = "content-store-object-storage")]
+pub use live_object::*;
 #[cfg(feature = "content-store-object-storage")]
 pub use live_s3::*;
 #[cfg(feature = "content-store-object-storage")]
 pub use live_tier::*;
-#[cfg(feature = "content-store-object-storage")]
-pub use live_cache::*;
-#[cfg(feature = "content-store-object-storage")]
-pub use live_object::*;
 pub use local::*;
 pub use molten_core::content_store_adapter::*;
 pub use persistence::*;

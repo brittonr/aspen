@@ -1,0 +1,17 @@
+{
+  "schema": "molten.sample-pgo.raw-review.v1",
+  "pairs": 30,
+  "measured_invocations": 240,
+  "paths": [
+    "success",
+    "denied",
+    "exhausted",
+    "error"
+  ],
+  "all_paired_exit_classes_match": true,
+  "all_paired_artifact_blake3_match": true,
+  "no_measured_timeout": true,
+  "decision": "revise",
+  "policy_unchanged": true,
+  "profile_enabled": false
+}

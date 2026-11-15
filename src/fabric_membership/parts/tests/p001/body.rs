@@ -55,7 +55,7 @@ fn assignment_shell_records_intent_before_effect_and_surfaces_uncertainty() {
     let assignment = acknowledged_assignment();
     let activate = command(&assignment, AssignmentCommandKind::Activate, "activate");
     let authority = authority_snapshot(&assignment);
-    let mut persistence = InMemoryAssignmentPersistence::default();
+    let mut persistence = initialized_memory();
     let mut lifecycle = RecordingLifecycle::default();
     let committed = execute_assignment_command(&mut persistence, &mut lifecycle, &assignment, &activate, &authority)
         .expect("valid transition");
@@ -71,7 +71,7 @@ fn assignment_shell_records_intent_before_effect_and_surfaces_uncertainty() {
 
     let mut stale_authority = authority;
     stale_authority.enforced_assignment_epoch = ASSIGNMENT_EPOCH + 1;
-    let mut untouched_persistence = InMemoryAssignmentPersistence::default();
+    let mut untouched_persistence = crate::fabric_membership::persistence::InMemory::default();
     let mut untouched_lifecycle = RecordingLifecycle::default();
     let stale = execute_assignment_command(
         &mut untouched_persistence,
@@ -97,7 +97,7 @@ fn assert_failed_shell_steps_are_uncertain(
         fail_activate: true,
         ..RecordingLifecycle::default()
     };
-    let mut uncertain_persistence = InMemoryAssignmentPersistence::default();
+    let mut uncertain_persistence = initialized_memory();
     let uncertain = execute_assignment_command(
         &mut uncertain_persistence,
         &mut uncertain_lifecycle,
@@ -114,10 +114,8 @@ fn assert_failed_shell_steps_are_uncertain(
     assert!(uncertain.intent_ref.is_some());
     assert!(uncertain_persistence.commits.is_empty());
 
-    let mut commit_failure = InMemoryAssignmentPersistence {
-        fail_commit: true,
-        ..InMemoryAssignmentPersistence::default()
-    };
+    let mut commit_failure = initialized_memory();
+    commit_failure.fail_commit = true;
     let mut successful_effect = RecordingLifecycle::default();
     let uncertain_commit =
         execute_assignment_command(&mut commit_failure, &mut successful_effect, assignment, activate, authority)
@@ -133,7 +131,7 @@ fn assert_failed_shell_steps_are_uncertain(
         malformed_activate_ref: true,
         ..RecordingLifecycle::default()
     };
-    let mut no_commit = InMemoryAssignmentPersistence::default();
+    let mut no_commit = initialized_memory();
     let malformed = execute_assignment_command(&mut no_commit, &mut malformed_effect, assignment, activate, authority)
         .expect("valid transition with malformed effect evidence");
     let AssignmentExecutionOutcome::Uncertain(malformed) = malformed else {

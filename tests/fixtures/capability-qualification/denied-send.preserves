@@ -1,0 +1,8 @@
+<harness-suite-v1 "molten.harness.suite.v1" "qualification-denied-send" 7
+  <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+  <actor-registry-v1 "molten.harness.actor-registry.v1" [
+    <actor "consumer" "native">
+    <actor "producer" "native">
+  ]>
+  <capabilities-v1 "molten.harness.capabilities.v1" []>
+  [<send "producer" "consumer" "hello">]>

@@ -1661,7 +1661,6 @@ specification	source_area	class	requirement_id
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.policy_composition
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.policy_composition.capability_denies
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.policy_composition.policy_denies
-.cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.request_binding
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.request_binding.send
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.request_binding.tampered
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.capability_context.ucan_negative_fixtures

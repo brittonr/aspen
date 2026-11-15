@@ -1,7 +1,7 @@
 {
   schema = "molten-system-atlas.v1",
-  title = "Molten system atlas",
-  summary = "A bounded map of the current Molten runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.",
+  title = "Aspen system atlas",
+  summary = "A bounded map of Aspen's runtime, storage, networking and evidence boundaries. Molten remains the internal codename and schema namespace. This map does not replace governing documents or execution qualification.",
   chapters = [
     {
       id = "turn-runtime",
@@ -20,9 +20,16 @@
     {
       id = "networking",
       title = "Networking and admission",
-      summary = "Iroh transport sessions, peer identity, bounded frames, and the current loopback-only profile.",
+      summary = "Iroh session admission and bounded loopback or explicit direct-LAN adapters; actual cross-host qualification remains separate.",
       components = [ "transport", "admission" ],
       questions = [ "q-rate-limit", "q-cross-host" ],
+    },
+    {
+      id = "evidence",
+      title = "Evidence and qualification",
+      summary = "Implementation coverage, exact execution artifacts and diagnostic reports remain distinct from authority or release admission.",
+      components = [ "qualification" ],
+      questions = [ "q-qualification" ],
     },
   ],
   components = [
@@ -37,7 +44,7 @@
       id = "dataspaces",
       label = "Dataspaces",
       summary = "Assertions, retractions, observe patterns, and service dependency facts.",
-      source = "src/dataspace/",
+      source = "src/runtime/dataspace/",
       chapter = "turn-runtime",
     },
     {
@@ -58,13 +65,13 @@
       id = "redb",
       label = "Redb stores",
       summary = "Capability-rooted durable logs, snapshots, indexes, and partial-state records.",
-      source = "src/chunk_store/",
+      source = "src/chunk/store.rs",
       chapter = "storage",
     },
     {
       id = "content-store",
       label = "Content store adapters",
-      summary = "Canonical manifests and verified chunks across local, Redb, Iroh Blobs, and simulation profiles.",
+      summary = "Canonical manifests and verified chunks across local, Redb, Iroh, optional object-storage and simulation profiles.",
       source = "src/content_store_adapter/",
       chapter = "storage",
     },
@@ -88,6 +95,13 @@
       summary = "Peer, membership, principal, trust, capability, resource, and policy observations.",
       source = "crates/molten-core/src/fabric_transport/",
       chapter = "networking",
+    },
+    {
+      id = "qualification",
+      label = "Capability qualification",
+      summary = "Read-only, exact-build artifact validation; incomplete or simulation evidence cannot qualify live durability or cross-host behavior.",
+      source = "tools/capability-report.rs",
+      chapter = "evidence",
     },
   ],
   edges = [
@@ -133,6 +147,12 @@
       message = "admitted operation scope, never ambient authority",
       chapter = "networking",
     },
+    {
+      from = "runtime",
+      to = "qualification",
+      message = "canonical profile-scoped execution observations, never ambient authority",
+      chapter = "evidence",
+    },
   ],
   questions = [
     {
@@ -155,7 +175,7 @@
     },
     {
       id = "q-restore",
-      text = "Which logical restore profile has an admitted runtime adapter today?",
+      text = "Which logical restore profile has exact current-admission and restart qualification?",
       status = "blocked",
       link = "docs/world-execution-snapshots.md",
     },
@@ -170,6 +190,12 @@
       text = "Which cross-host transport profile has actual two-host evidence?",
       status = "blocked",
       link = "docs/fabric-transport-session-runtime.md",
+    },
+    {
+      id = "q-qualification",
+      text = "Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges.",
+      status = "open",
+      link = "docs/capability-qualification-report.md",
     },
   ],
 }

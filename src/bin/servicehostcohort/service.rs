@@ -38,8 +38,20 @@ impl<'a> Context<'a> {
             molten::preserves_rail::string(&grant_ref),
             molten::preserves_rail::string("source-selection-and-authorship-only-runtime-tests-still-required"),
         ])?;
-        let state_v1_ref = state_schema(source, "molten.fixture.native.state.v1")?;
-        let state_v2_ref = state_schema(source, "molten.fixture.native.state.v2")?;
+        let (state_v1_ref, state_v2_ref) = if source.profile == super::Profile::Counter {
+            let reference = super::source::record(&source.root, "declared-counter-state-schema-v1", vec![
+                molten::preserves_rail::string(super::counter::STATE_SCHEMA),
+                molten::preserves_rail::string(&source.callback_ref),
+                molten::preserves_rail::string("canonical-keyed-counter-value-and-completed-logical-requests"),
+                molten::preserves_rail::string("declaration-not-runtime-checkpoint-evidence"),
+            ])?;
+            (reference.clone(), reference)
+        } else {
+            (
+                state_schema(source, "molten.fixture.native.state.v1")?,
+                state_schema(source, "molten.fixture.native.state.v2")?,
+            )
+        };
         Ok(Self {
             source,
             profiles,
@@ -59,10 +71,45 @@ pub(super) fn build(
     successor: bool,
 ) -> molten::error::Result<molten::node_service_host::codec::ExtensionInput> {
     let manifest = manifest::build(context, member, group, successor);
-    let tier = manifest::tier();
     let descriptors = vec![manifest::descriptor(
         &context.source.validation.selected_output_validation_ref,
     )];
+    build_selected(context, manifest, manifest::tier(), descriptors, successor)
+}
+
+pub(super) fn build_counter(
+    context: &Context<'_>,
+    member: &str,
+    group: &molten::system_extension::RecoveryGroupDeclaration,
+    descriptors: Vec<molten::fabric::FabricPortDescriptor>,
+    delivery_policy_ref: &str,
+) -> molten::error::Result<molten::node_service_host::codec::ExtensionInput> {
+    let mut manifest = manifest::build(context, member, group, false);
+    manifest.extension_id = super::counter::EXTENSION_ID.to_string();
+    manifest.state_schema = super::counter::STATE_SCHEMA.to_string();
+    manifest.compatible_state_schemas = vec![manifest.state_schema.clone()];
+    manifest.required_ports = descriptors.iter().map(super::counter::requirement).collect();
+    manifest.policy_refs.push(delivery_policy_ref.to_string());
+    manifest.resources.max_timers = 128;
+    manifest.resources.max_queued_events = 128;
+    manifest.resources.max_effect_requests = 1;
+    let mut tier = manifest::tier();
+    for authority in descriptors.iter().flat_map(|descriptor| &descriptor.authority_requirements) {
+        if !tier.requested_authorities.contains(authority) {
+            tier.requested_authorities.push(*authority);
+        }
+    }
+    build_selected(context, manifest, tier, descriptors, false)
+}
+
+fn build_selected(
+    context: &Context<'_>,
+    manifest: molten::system_extension::SystemExtensionManifestInput,
+    tier: molten::fabric::ExtensionTierRequest,
+    descriptors: Vec<molten::fabric::FabricPortDescriptor>,
+    successor: bool,
+) -> molten::error::Result<molten::node_service_host::codec::ExtensionInput> {
+    let member = manifest.service_id.clone();
     let admitted_tier = molten::fabric::canonical_extension_tier_admission(&tier)?;
     let admitted = molten::system_extension::admit_manifest(&manifest, &descriptors, &admitted_tier, &[
         molten::system_extension::ExecutionProfile::NativeProcess,
@@ -96,7 +143,7 @@ pub(super) fn build(
         .map_err(|issues| super::invalid(format!("authored native executable denied: {issues:?}")))?;
     let cache_namespace = format!("callback-values/{member}");
     let execution = execution::build(context, &admitted, &executable, &cache_namespace)?;
-    let (durability_profile, namespace) = durability::build(context, member)?;
+    let (durability_profile, namespace) = durability::build(context, &member)?;
     Ok(molten::node_service_host::codec::ExtensionInput {
         manifest,
         tier,

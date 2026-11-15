@@ -19,7 +19,9 @@ fn run_stages(
             )));
         }
         let node = find_job_node(&dag.nodes, node_id)?;
-        let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
+        let inputs = if dag.version == SELECTED_SEQUENCE_PROFILE {
+            gather_selected_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?
+        } else { gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)? };
         let stage = run_stage_with_cache(dag, request, node, &inputs, options)?;
         let receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
         if let Some(ledger_root) = options.ledger_root {
@@ -74,7 +76,9 @@ fn run_stages_with_capabilities(
             )));
         }
         let node = find_job_node(&dag.nodes, node_id)?;
-        let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
+        let inputs = if dag.version == SELECTED_SEQUENCE_PROFILE {
+            gather_selected_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?
+        } else { gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)? };
         let stage = execute_stage_with_capabilities(dag, request, node, &inputs, options)?;
         let receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
         ensure_count_at_most(stage.output_refs.len(), MAX_JOB_REFS, "job stage output refs")?;

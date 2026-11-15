@@ -60,7 +60,15 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Test { command }) => run_test_command(command),
         Some(command::Top::Dogfood { command }) => crate::cli_dogfood::run_dogfood_command(command),
         Some(command::Top::Receipts { command }) => crate::cli_receipts::run_receipts_command(command),
+        Some(command::Top::Evidence { command }) => match command {
+            command::Evidence::Qualify {
+                source_root,
+                scenario,
+                out,
+            } => crate::cli_qualification::run(source_root, scenario, out),
+        },
         Some(command::Top::Node { command }) => crate::cli_node::run(command),
+        Some(command::Top::AddressableActor { command }) => molten::addressable_actor::command::run(command),
         Some(command::Top::Reliability { command }) => crate::cli_reliability::run(command),
         Some(command::Top::Federation { command }) => crate::cli_federation::run(command),
         #[cfg(feature = "spacewasm-pilot")]

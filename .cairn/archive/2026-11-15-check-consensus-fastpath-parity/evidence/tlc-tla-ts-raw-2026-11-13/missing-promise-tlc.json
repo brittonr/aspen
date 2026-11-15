@@ -1,0 +1,11 @@
+{
+  "tool": "TLC 2.19 / TLA+ 1.7.4",
+  "status": "invariant-violation",
+  "generatedStates": 1736,
+  "distinctStates": 667,
+  "queuedStates": 424,
+  "violation": {
+    "name": "NoMissingPromise",
+    "traceLength": 6
+  }
+}

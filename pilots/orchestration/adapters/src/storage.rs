@@ -22,16 +22,25 @@ const SNAPSHOTS: TableDefinition<&str, &[u8]> = TableDefinition::new("orchestrat
 const BLOBS: TableDefinition<&str, &[u8]> = TableDefinition::new("orchestrator.content.v1");
 const COUNTERS: TableDefinition<&str, u64> = TableDefinition::new("orchestrator.content-counts.v1");
 
+mod progress;
+
 /// The Database owns the capability-opened file and its exclusive process lock.
 /// Every adapter for one process shares this Arc, never reopens by ambient path.
 pub struct Disk {
     db: Arc<Database>,
+    fault: crate::ProcessFault,
 }
 impl Disk {
     pub fn open(root: &CapabilityRoot) -> Result<Arc<Self>, Error> {
+        Self::open_with_fault(root, crate::ProcessFault::default())
+    }
+    pub fn open_with_fault(root: &CapabilityRoot, fault: crate::ProcessFault) -> Result<Arc<Self>, Error> {
         let file = root.file("orchestration.redb", true)?;
         let db = Database::builder().set_cache_size(16 * 1024 * 1024).create_file(file).map_err(crate::invalid)?;
-        let this = Arc::new(Self { db: Arc::new(db) });
+        let this = Arc::new(Self {
+            db: Arc::new(db),
+            fault,
+        });
         let mut tx = this.db.begin_write().map_err(crate::invalid)?;
         tx.set_durability(Durability::Immediate).map_err(crate::invalid)?;
         {
@@ -86,12 +95,22 @@ impl Disk {
             .ok_or(Error::Invalid("missing reconstruction projection".into()))?;
         codec::decode(schema, a.value(), b.value()).map_err(crate::invalid)
     }
-    fn cas<T: Serialize>(&self, schema: &str, expected: &T, next: &T) -> Result<Commit, Error> {
+    fn cas<T: Serialize>(
+        &self,
+        schema: &str,
+        expected: &T,
+        next: &T,
+        controller: Option<(&State, &State)>,
+    ) -> Result<Commit, Error> {
+        if (schema == "controller-state.v1") != controller.is_some() {
+            return Err(Error::Invalid("controller progress transaction owner mismatch".into()));
+        }
         let old = codec::encode(schema, expected).map_err(crate::invalid)?;
         let new = codec::encode(schema, next).map_err(crate::invalid)?;
         let projection_key = format!("{schema}.projection");
         let mut tx = self.db.begin_write().map_err(crate::invalid)?;
         tx.set_durability(Durability::Immediate).map_err(crate::invalid)?;
+        let mut publishes_output = false;
         {
             let mut table = tx.open_table(SNAPSHOTS).map_err(crate::invalid)?;
             let matches = {
@@ -103,15 +122,21 @@ impl Disk {
             if !matches {
                 return Ok(Commit::Conflict);
             }
+            if let Some((previous, state)) = controller {
+                publishes_output = self.stage_progress(&tx, &mut table, previous, state, old.id, new.id)?;
+            }
             table.insert(schema, new.canonical.as_slice()).map_err(crate::invalid)?;
             table.insert(projection_key.as_str(), new.projection.as_slice()).map_err(crate::invalid)?;
         }
         // Once commit is attempted, an I/O error cannot prove non-application.
-        Ok(if tx.commit().is_ok() {
-            Commit::Applied
-        } else {
-            Commit::Unknown
-        })
+        if publishes_output {
+            self.fault.hit("before-progress-commit");
+        }
+        let committed = tx.commit().is_ok();
+        if committed && publishes_output {
+            self.fault.hit("after-progress-commit");
+        }
+        Ok(if committed { Commit::Applied } else { Commit::Unknown })
     }
 }
 
@@ -122,6 +147,7 @@ impl RedbControllerStore {
     pub fn open(disk: Arc<Disk>, initial: State) -> Result<Arc<Self>, Error> {
         verify_state(&initial)?;
         disk.initialize("controller-state.v1", &initial)?;
+        disk.initialize_progress()?;
         let this = Arc::new(Self { disk });
         let old = this.load()?;
         if old.cluster != initial.cluster
@@ -136,7 +162,7 @@ impl RedbControllerStore {
 }
 impl StateStore for RedbControllerStore {
     fn load(&self) -> Result<State, Error> {
-        let state = self.disk.load("controller-state.v1")?;
+        let state: State = self.disk.load("controller-state.v1")?;
         verify_state(&state)?;
         Ok(state)
     }
@@ -150,7 +176,15 @@ impl StateStore for RedbControllerStore {
         {
             return Err(Error::Invalid("invalid controller commit cohort/revision".into()));
         }
-        self.disk.cas("controller-state.v1", old, next)
+        self.disk.cas("controller-state.v1", old, next, Some((old, next)))
+    }
+    fn progress_snapshot(&self, run: Id) -> Result<ProgressSnapshot, Error> {
+        let (state, journal, state_ref) = self.disk.progress_view()?;
+        journal.snapshot(&state, run, state_ref)
+    }
+    fn progress_read(&self, cursor: ProgressCursor, limit: u32) -> Result<ProgressPage, Error> {
+        let (_, journal, _) = self.disk.progress_view()?;
+        journal.read(cursor, limit)
     }
 }
 pub struct RedbWorkerJournal {
@@ -175,7 +209,7 @@ impl RedbWorkerJournal {
 }
 impl WorkerJournal for RedbWorkerJournal {
     fn load(&self) -> Result<WorkerState, Error> {
-        let state = self.disk.load("worker-state.v1")?;
+        let state: WorkerState = self.disk.load("worker-state.v1")?;
         verify_worker(&state)?;
         Ok(state)
     }
@@ -191,7 +225,7 @@ impl WorkerJournal for RedbWorkerJournal {
         {
             return Err(Error::Invalid("invalid worker commit cohort/revision".into()));
         }
-        self.disk.cas("worker-state.v1", old, next)
+        self.disk.cas("worker-state.v1", old, next, None)
     }
 }
 

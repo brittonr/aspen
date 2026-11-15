@@ -1,3 +1,4 @@
+pub mod bounded_client;
 mod canonical;
 mod composition;
 mod installed;

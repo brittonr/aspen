@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cp",
+    "--",
+    "/nix/store/xj41rssnj874jgsig6zcd7fgx76yx9wv-0zk04glcl69ig83lva1d1gh5ms3cfjd1-profile-bundle/perf.data",
+    "/build/validation/perf.data"
+  ],
+  "elapsed_seconds": 0.012428396003087983,
+  "max_rss_kib": 1612.0,
+  "returncode": 0,
+  "system_seconds": 0.0,
+  "time_wall_seconds": 0.0,
+  "timeout": false,
+  "user_seconds": 0.0
+}

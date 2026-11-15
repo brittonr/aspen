@@ -132,57 +132,6 @@ impl MembershipPlacementProvider for DeterministicSimulationProvider {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct InMemoryAssignmentPersistence {
-    pub assignments: std::collections::BTreeMap<String, RoleAssignment>,
-    pub intents: Vec<String>,
-    pub commits: Vec<String>,
-    pub fail_intent: bool,
-    pub fail_commit: bool,
-}
-
-impl AssignmentPersistence for InMemoryAssignmentPersistence {
-    fn record_intent(
-        &mut self,
-        current: &RoleAssignment,
-        transition: &AssignmentTransition,
-    ) -> FabricPortResult<String> {
-        if self.fail_intent {
-            return Err(FabricPortError::storage("injected assignment intent failure"));
-        }
-        let value = crate::preserves_rail::record("fabric-assignment-intent-v1", vec![
-            crate::preserves_rail::string(&current.assignment_id),
-            crate::preserves_rail::string(current.state.as_str()),
-            crate::preserves_rail::string(transition.next.state.as_str()),
-            crate::preserves_rail::u64_value(current.assignment_epoch),
-        ]);
-        let intent_ref = crate::preserves_rail::canonical_hash(&value).map_err(FabricPortError::from)?;
-        self.intents.push(intent_ref.clone());
-        Ok(intent_ref)
-    }
-
-    fn commit(
-        &mut self,
-        transition: &AssignmentTransition,
-        intent_ref: &str,
-        role_effect_ref: Option<&str>,
-    ) -> FabricPortResult<String> {
-        if self.fail_commit {
-            return Err(FabricPortError::uncertain("injected assignment commit failure"));
-        }
-        let value = crate::preserves_rail::record("fabric-assignment-commit-v1", vec![
-            crate::preserves_rail::string(intent_ref),
-            crate::preserves_rail::string(role_effect_ref.unwrap_or("no-role-effect")),
-            crate::preserves_rail::string(&transition.next.assignment_id),
-            crate::preserves_rail::string(transition.next.state.as_str()),
-        ]);
-        let commit_ref = crate::preserves_rail::canonical_hash(&value).map_err(FabricPortError::from)?;
-        self.assignments.insert(transition.next.assignment_id.clone(), transition.next.clone());
-        self.commits.push(commit_ref.clone());
-        Ok(commit_ref)
-    }
-}
-
 fn require_provider_kind(
     snapshot: &MembershipProviderSnapshot,
     expected: MembershipProviderKind,

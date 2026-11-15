@@ -43,6 +43,10 @@ r[impl molten.testing.cap_std_cleanup] Normal drop cleans the owned workspace. S
 
 The first enforced migration includes the shared library and binary test shell, all integration CLI/cluster/process fixtures using the common `temp_dir` bridge, the local-store tests, the shared chunk, dataspace, exchange, and evidence-chain helpers, a retention capability workflow, and node lifecycle plus async live-Iroh workflows. Unconverted module-local helpers may still use legacy predictable roots, but the former shared process-wide stale-prefix scanner is now an intentional no-op. Those helpers are outside the blocking rule until migrated; they receive no broad cleanup authority.
 
+The local-store rule target is `src/local_store/tests.rs`; the Nix structural
+rail follows that current module location without changing the authority rule
+or its positive and negative fixtures.
+
 r[impl molten.testing.cap_std_regression_gate] `test-ambient-temp-workspace.yml` blocks `std::env::temp_dir`, process-id root construction, and broad `remove_dir_all(entry.path())` cleanup in converted shared CLI, store, retention, dataspace, exchange, evidence, node, and test-support helper scopes. Its positive fixture preserves the prohibited patterns; its negative fixture covers `cap-tempfile` bootstrap and explicit capability-rooted export.
 
 The gate is syntax-level evidence only. It does not prove RAII cleanup after a crash, semantic test isolation, operating-system sandboxing, or that an arbitrary child process respects its supplied root.

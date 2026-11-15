@@ -1,4 +1,4 @@
-# Molten standalone batch orchestration pilot
+# Aspen standalone batch orchestration pilot
 
 The reviewed source candidate is now maintained in-tree. Run the pinned repository
 shell and `scripts/verify.sh` before use. This workspace implements a standalone,
@@ -71,6 +71,7 @@ dependency outputs follow sorted dependency-id order.
 | `codec` | Versioned Preserves projection, canonical identity and verified reconstruction | `batch-core`, Preserves, BLAKE3, Serde |
 | `adapters` | Capability-rooted Redb, file-policy observations, Iroh, Wasmtime, bounded RPC ingress and composition | Application ports and selected infrastructure |
 | `cli` | Explicit root acquisition, enrollment, operator commands and launch | Application and adapters |
+| `render` | Original pure CPU scene renderer, versioned manifest, checked tiles/assembly and fixture shell | `batch-core`, `codec`, Serde |
 
 Output ports are `StateStore`, `WorkerJournal`, `ContentPort`, `IdentityPort`,
 `PlacementPort`, `AdmissionPort`, `WorkerClient`, `ExecutionPort` and
@@ -100,7 +101,7 @@ trailing data. This is an explicitly new RPC profile, not wire compatibility wit
 Molten's native-extension protocol. See `docs/PROTOCOL.md`.
 
 Iroh uses the `Minimal` preset, explicit direct IP addresses, exact peer keys and
-ALPN `molten-orchestrator/batch-rpc/v1`. No relay, DNS discovery or transport retry
+ALPN `molten-orchestrator/batch-rpc/v2`. No relay, DNS discovery or transport retry
 is silently selected. A controller accepts only configured operator keys. A
 worker accepts only its configured controller key. Connectivity is not enrollment.
 
@@ -241,3 +242,26 @@ result. Same-host multi-process tests are not cross-host qualification.
 The original scheduler fix requires the full Aspen dependency environment. After
 applying the guarded patch to its exact base, run `scripts/reference-tests.sh`.
 Old simulation reports do not validate the changed epoch-bearing command shape.
+
+## Durable progress and rendering
+
+Aspen's [progress v1 contract](docs/PROGRESS.md) exposes controller-accepted output
+references and terminal runs through the existing admitted Iroh RPC. State,
+events and cursor position commit together in Redb; a selected-run snapshot and
+watermark share one read transaction. Pages retain stable canonical identities,
+explicit retention/artifact gaps and bounded work. Observation disconnect never
+requests cancellation. The implementation shares the authoritative
+`crates/molten-core/src/committed_stream` source, so packaging must include that
+tree as declared by `default.nix`; no forked stream core is maintained here.
+
+The [original CPU renderer](render/README.md) builds an import-free component,
+renders a frozen 640x360 scene through ordinary batch tasks, checks complete tile
+coverage and emits a verified image. `render-demo.sh` consumes accepted progress
+and retains inspectable manifests, artifacts and outcomes. See the exact Nix
+entrypoints and qualification limits in the linked docs. Existing `molten-*`
+crate/binary/schema names are Aspen's internal Molten codename, not another product.
+
+New lifecycle/progress/render fixtures are authored, not passing evidence. No
+cross-host, machine-loss, production-isolation or cross-architecture equality
+claim follows from their presence. Parent integration must regenerate/review
+the standalone and guest locks and run the source/package/process rails.

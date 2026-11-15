@@ -45,17 +45,23 @@ pub struct SimulatedStreamInput<'a> {
 // r[impl molten.content_store_adapter.partial_state]
 // r[impl molten.content_store_adapter.live_sim_conformance]
 pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error::Result<ModelExecution> {
-    let SimulatedStreamInput {
-        profile,
-        manifest,
-        command,
-        fault,
-        ..
-    } = input;
-    let mut state = match begin_simulated_state(input)? {
+    if matches!(input.fault, Some(Fault::TornPutAt(_) | Fault::MultipartAbortAt(_))) {
+        return Err(crate::error::Failure::invalid_harness("put-only fault requires the put simulator"));
+    }
+    let state = match begin_simulated_state(input)? {
         std::ops::ControlFlow::Continue(state) => state,
         std::ops::ControlFlow::Break(execution) => return Ok(execution),
     };
+    observe_simulated_chunks(input, state)
+}
+
+fn observe_simulated_chunks(
+    input: SimulatedStreamInput<'_>,
+    mut state: ContentPartialState,
+) -> crate::error::Result<ModelExecution> {
+    let profile = input.profile;
+    let manifest = input.manifest;
+    let fault = input.fault;
     let resume_position = state.verified_chunk_refs.len();
     // Every remaining chunk adds at most one event and one verified chunk before the loop ends.
     let remaining_chunks = manifest.chunks.len().saturating_sub(resume_position);
@@ -74,6 +80,12 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             events.push(terminal_stream_event(input, &state, None, state.failure)?);
             break;
         }
+        if fault == Some(Fault::ProviderThrottleAt(descriptor.position)) {
+            state = classify_content_failure(profile, &state, ContentFailure::ProviderThrottle, UNACKNOWLEDGED_PUT)
+                .map_err(transition_error)?;
+            events.push(terminal_stream_event(input, &state, None, state.failure)?);
+            break;
+        }
         let (bytes, observation) = simulated_chunk_observation(input, descriptor, &state)?;
         match apply_chunk_observation(profile, manifest, &state, &observation) {
             Ok(next) => {
@@ -83,18 +95,7 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
                     position: descriptor.position,
                     bytes: bytes.clone(),
                 });
-                events.push(bind_event(
-                    profile,
-                    &event(EventInput {
-                        command,
-                        sequence: observation.sequence,
-                        terminal: state.terminal,
-                        chunk_ref: Some(descriptor.chunk_ref.clone()),
-                        observed_bytes: observation.observed_length,
-                        failure: None,
-                        evidence_refs: &manifest.evidence_refs,
-                    }),
-                )?);
+                events.push(observed_stream_event(input, descriptor, &observation, state.terminal)?);
             }
             Err(issues) => {
                 let failure = failure_from_issues(&issues);
@@ -111,6 +112,26 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
         events,
         verified_chunks,
     })
+}
+
+fn observed_stream_event(
+    input: SimulatedStreamInput<'_>,
+    descriptor: &ContentChunkDescriptor,
+    observation: &ContentChunkObservation,
+    terminal: ContentTerminal,
+) -> crate::error::Result<Artifact<ContentEvent>> {
+    bind_event(
+        input.profile,
+        &event(EventInput {
+            command: input.command,
+            sequence: observation.sequence,
+            terminal,
+            chunk_ref: Some(descriptor.chunk_ref.clone()),
+            observed_bytes: observation.observed_length,
+            failure: None,
+            evidence_refs: &input.manifest.evidence_refs,
+        }),
+    )
 }
 
 /// Admits the simulation and begins its partial state, or finishes early for an overload or a

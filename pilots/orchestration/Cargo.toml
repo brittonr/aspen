@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [workspace]
-members = ["core", "application", "batch-core", "batch-application", "codec", "adapters", "cli"]
+members = ["core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render"]
 resolver = "2"
 
 [workspace.package]

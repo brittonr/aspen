@@ -31,6 +31,16 @@ let valid_bounds = fun value =>
   && std.is_number value.max_retries
   && value.max_retries >= 0
   && value.max_retries % 1 == 0 in
+let valid_object_policy = fun value =>
+  positive_integer value.max_local_tier_bytes
+  && positive_integer value.minimum_verified_bytes_per_second
+  && positive_integer value.max_rebuild_seconds
+  && value.max_local_tier_bytes <= value.minimum_verified_bytes_per_second * value.max_rebuild_seconds
+  && value.rebuild_path == "refetch-and-reverify-hot-chunks"
+  && value.at_capacity == "verified-remote-only-no-eviction"
+  && value.max_remote_connections == 1
+  && value.endpoint_resolution == "fixed-numeric-at-admission"
+  && value.credential_refresh == "fixed-at-admission-no-refresh" in
 let valid_profile = fun profile =>
   std.is_record profile
   && std.is_string profile.class
@@ -61,6 +71,7 @@ let valid_profile_set = fun value =>
   && valid_profile value.profiles.object_storage
   && value.profiles.object_storage.class == "object-storage"
   && value.profiles.object_storage.live_network_required
+  && valid_object_policy value.profiles.object_storage.object_storage_policy
   && valid_profile value.profiles.deterministic_simulation
   && value.profiles.deterministic_simulation.class == "deterministic-simulation"
   && value.profiles.deterministic_simulation.same_contract_as_live

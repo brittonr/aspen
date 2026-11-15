@@ -1,0 +1,9 @@
+
+running 4 tests
+test bounded_transition_replay ... ok
+test empty_recovery_replay ... ok
+test mixed_view_guard_replay ... ok
+test recovery_and_duplicate_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.04s
+

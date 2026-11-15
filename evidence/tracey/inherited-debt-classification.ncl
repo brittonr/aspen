@@ -44,24 +44,24 @@ let ClassificationMetadata = {
 in
 let metadata | ClassificationMetadata = {
   schema = "molten.inherited-tracey-debt-classification.v1",
-  observed_date = "2026-10-22",
+  observed_date = "2026-11-13",
   classification_base_revision = "9842cc6453a00ed943a866549bb4307c8502d575",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "f8d79bcc696e7a3607e4de3b9a8e23e9274f55129f3ef292758fcc61d0ed2ecc",
-    entries = 1934,
+    blake3 = "ec66bc53d31b3ac8e3a5468bec33757f412df9a234a506368248682a0133d58f",
+    entries = 1933,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "87d126813f3d757157ff02bc64cffaba6b7a7671bd0b30bd09aba837a361c49e",
+    blake3 = "b02bec4d1995daa35d0b33d4d398ea3df1be12b9b38282f2c781292aaad57ab7",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "56df39b875f493b22cf88552ec0c6063863f896a30066b3ff94a92583bd8e0c1",
-    entries = 1934,
+    summary_blake3 = "0051bc5d67aef9795d444117949a585f97e572ce8b35d3455dc1299833a8349a",
+    entries = 1933,
     specification_groups = 38,
     source_area_groups = 109,
   },
   classes = {
-    accepted_implementation_unestablished = 1934,
+    accepted_implementation_unestablished = 1933,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,
@@ -81,6 +81,11 @@ let metadata | ClassificationMetadata = {
       requirement_id = "molten.testing.receipt_driven_traceability.coverage_derivation",
       implementation_path = "src/testing/traceability/parts/p002/body.rs",
       verification_path = "src/testing/traceability/parts/tests/p001/body.rs",
+    },
+    {
+      requirement_id = "molten.testing.capability_context.request_binding",
+      implementation_path = "src/capability_qualification/mod.rs",
+      verification_path = "src/capability_qualification/tests.rs",
     },
   ],
   direct_repair_manifests = [

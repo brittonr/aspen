@@ -1,0 +1,21 @@
+{
+  "command": [
+    "nix",
+    "build",
+    "--impure",
+    "--out-link",
+    "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/candidate-build-result",
+    "--print-out-paths",
+    "--expr",
+    "(builtins.getFlake \"path:/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source\").legacyPackages.x86_64-linux.sample-pgo.mkVariant /nix/store/k8fm9p84y8y4vc35nmxw5w5f5na31anf-profile-bundle"
+  ],
+  "derivation_scope": "realization wall time and Nix client resources; may use substituters/cache",
+  "elapsed_seconds": 4562.274340411008,
+  "max_rss_kib": 1727004.0,
+  "returncode": 0,
+  "store_path": "/nix/store/9b64777b6m4nqaid4rd7b643h05l2v3p-rust_molten-0.1.0",
+  "system_seconds": 7.34,
+  "time_wall_seconds": 4562.21,
+  "timeout": false,
+  "user_seconds": 25.29
+}

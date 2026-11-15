@@ -32,16 +32,17 @@ qualified by this repository. See the open issues for their current status.
 ## Reporting a vulnerability
 
 Do not put exploitable details, credentials, private workload data, or memory
-dumps in a public issue. If GitHub offers **Report a vulnerability** on this
-repository, use its private advisory form. Otherwise request a private
-reporting channel from the repository owner before sending technical details.
-No response-time, fix-time, or backport commitment is currently offered.
+dumps in a public issue. Report suspected Aspen vulnerabilities through the
+maintainer-selected [private GitHub advisory form](https://github.com/brittonr/aspen/security/advisories/new).
+Private vulnerability reporting is enabled for this repository; its API state
+was verified on 2026-11-13 after explicit maintainer approval. No response-time,
+fix-time or backport commitment is offered.
 
-Include the exact Molten source revision, dependency revision, host and kernel
+Include the exact Aspen source revision, dependency revision, host and kernel
 versions, affected command or profile, a minimal reviewed reproducer, observed
 impact, and relevant artifact identities. Keep sensitive artifacts private.
 
-This document does not assert that GitHub private reporting is enabled. Public
-release requires the maintainer to verify a working private channel; until then
-the advisory form or an owner-provided private channel is the only accepted
-route.
+Use the private advisory thread for maintainer triage, reproducer review, fix
+coordination and agreed disclosure. Keep sensitive technical details private
+until that disclosure is agreed; a public issue or a passing fixture is not a
+substitute for the private channel.

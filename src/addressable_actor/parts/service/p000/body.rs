@@ -263,6 +263,18 @@ fn validate_host_binding(service: &Request<'_>, state: &ActorState) -> Result<()
         health: molten_core::system_extension::HealthState::Unknown,
         checkpoint_ref: host.system_extension_checkpoint_ref.clone(),
     };
+    // Completion observes the terminal native postcondition, not a fabricated starting phase.
+    let is_completed_start = state.phase == ActorPhase::Starting
+        && matches!(service.request.operation, ActorOperation::StartSucceeded { .. });
+    let is_completed_recovery = state.phase == ActorPhase::Recovering
+        && matches!(service.request.operation, ActorOperation::RecoverySucceeded { .. });
+    if (is_completed_start || is_completed_recovery)
+        && extension.phase == molten_core::system_extension::LifecyclePhase::Running
+        && extension.generation == state.extension_generation
+        && extension.checkpoint_ref == state.checkpoint_ref
+    {
+        return Ok(());
+    }
     if let Some(issue) = validate_system_extension_binding(state, &extension).into_iter().next() {
         return Err(Error::Host(issue));
     }

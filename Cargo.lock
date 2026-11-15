@@ -677,7 +677,7 @@ dependencies = [
 [[package]]
 name = "bounded-exec"
 version = "0.1.0"
-source = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
+source = "git+https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
 dependencies = [
  "bounded-exec-core",
  "nix 0.30.1",
@@ -686,7 +686,7 @@ dependencies = [
 [[package]]
 name = "bounded-exec-core"
 version = "0.1.0"
-source = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
+source = "git+https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
 
 [[package]]
 name = "bounded-http"
@@ -1812,8 +1812,18 @@ version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.20.11",
+ "darling_macro 0.20.11",
+]
+
+[[package]]
+name = "darling"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
+dependencies = [
+ "darling_core 0.23.0",
+ "darling_macro 0.23.0",
 ]
 
 [[package]]
@@ -1831,12 +1841,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
+dependencies = [
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim 0.11.1",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
- "darling_core",
+ "darling_core 0.20.11",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
+dependencies = [
+ "darling_core 0.23.0",
  "quote",
  "syn 2.0.117",
 ]
@@ -1866,6 +1900,27 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+]
+
+[[package]]
+name = "dashu-base"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993b95dc1b248e3f5747dcb017a41d6e75853a2e5ee4504f7d537c5b8dffdae4"
+
+[[package]]
+name = "dashu-int"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49c05a0d5cb0b39fcc87c46432fdac24b90dce239857c7f6b798be4ffc3c42c6"
+dependencies = [
+ "cfg-if",
+ "dashu-base",
+ "num-modular",
+ "num-order",
+ "rustversion",
+ "serde",
+ "static_assertions",
 ]
 
 [[package]]
@@ -1977,6 +2032,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 dependencies = [
  "powerfmt",
+ "serde_core",
 ]
 
 [[package]]
@@ -1994,7 +2050,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8"
 dependencies = [
- "darling",
+ "darling 0.20.11",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -2184,7 +2240,7 @@ dependencies = [
 [[package]]
 name = "durable-file-publication"
 version = "0.1.0"
-source = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#8e05e74e24b45f752d77145c4455385daaf6d6ab"
+source = "git+https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#8e05e74e24b45f752d77145c4455385daaf6d6ab"
 dependencies = [
  "rustix 1.1.4",
 ]
@@ -2394,7 +2450,7 @@ dependencies = [
 [[package]]
 name = "executable-extent-conformance"
 version = "0.1.0"
-source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+source = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
 dependencies = [
  "blake3",
  "executable-extent-core",
@@ -2403,7 +2459,7 @@ dependencies = [
 [[package]]
 name = "executable-extent-core"
 version = "0.1.0"
-source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+source = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
 dependencies = [
  "blake3",
 ]
@@ -2411,7 +2467,7 @@ dependencies = [
 [[package]]
 name = "executable-extent-linux"
 version = "0.1.0"
-source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+source = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
 dependencies = [
  "blake3",
  "executable-extent-core",
@@ -3043,7 +3099,7 @@ dependencies = [
 [[package]]
 name = "hardened-wasmtime-runtime"
 version = "0.1.0"
-source = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e"
+source = "git+https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e"
 dependencies = [
  "blake3",
  "serde",
@@ -3053,7 +3109,7 @@ dependencies = [
 [[package]]
 name = "hardened-wasmtime-shell"
 version = "0.1.0"
-source = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e"
+source = "git+https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e"
 dependencies = [
  "blake3",
  "hardened-wasmtime-runtime",
@@ -3671,6 +3727,7 @@ checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
+ "serde",
 ]
 
 [[package]]
@@ -4148,6 +4205,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
+]
+
+[[package]]
+name = "itf"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d620b7b3d17650581da9208d1240baaff4ee33decff1c7782bdb9b4cab71c20"
+dependencies = [
+ "dashu-int",
+ "serde",
+ "serde_json",
+ "serde_with",
 ]
 
 [[package]]
@@ -4899,6 +4968,7 @@ dependencies = [
  "nickel-lang",
  "preserves 5.0.0-rc.7",
  "preserves-schema",
+ "quint-connect",
  "redb 4.1.0",
  "release-channel-index",
  "release-channel-witness",
@@ -5469,6 +5539,21 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "num-modular"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd8e500409e6cd603b03e477c26a6caecdc27ac58979a53e881c75eafc079f44"
+
+[[package]]
+name = "num-order"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "537b596b97c40fcf8056d153049eb22f481c17ebce72a513ec9286e4986d1bb6"
+dependencies = [
+ "num-modular",
 ]
 
 [[package]]
@@ -6419,6 +6504,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "quint-connect"
+version = "0.1.2"
+source = "git+https://github.com/quint-co/quint-connect.git?rev=4f018f54fc7dd4cef341d10111427bab59d3b307#4f018f54fc7dd4cef341d10111427bab59d3b307"
+dependencies = [
+ "anyhow",
+ "colored",
+ "itf",
+ "quint-connect-macros",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "similar",
+ "tempfile",
+ "version_check",
+]
+
+[[package]]
+name = "quint-connect-macros"
+version = "0.1.2"
+source = "git+https://github.com/quint-co/quint-connect.git?rev=4f018f54fc7dd4cef341d10111427bab59d3b307#4f018f54fc7dd4cef341d10111427bab59d3b307"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7094,6 +7206,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7293,6 +7429,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_with"
+version = "3.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee78f1fbe43ac4a0e47aadb3dbd357b69eb0d3793e948624cd03dd2750ab1c0a"
+dependencies = [
+ "base64 0.22.1",
+ "bs58",
+ "chrono",
+ "hex",
+ "indexmap 1.9.3",
+ "indexmap 2.14.0",
+ "jiff",
+ "schemars 0.9.0",
+ "schemars 1.2.3",
+ "serde_core",
+ "serde_json",
+ "serde_with_macros",
+ "time",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "3.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8705578779c2b6bd90d84d66eb2e206b708b1a4d7b9f17641b293545bf1c7e46"
+dependencies = [
+ "darling 0.23.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "serde_yaml"
 version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7478,6 +7647,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "simple-counter"

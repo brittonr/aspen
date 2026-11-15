@@ -18,15 +18,18 @@ fn requested_output_roots(dag: &JobDag, request: &JobOutputRequest) -> Result<Ve
         request.roots.clone()
     };
     ensure_count_at_most(roots.len(), MAX_JOB_ROOTS, "job output roots")?;
+    validate_selected_output_roots(dag, &roots)?;
     Ok(roots)
 }
 
 fn collect_final_run_outputs(input: &CompleteInput<'_>, roots: Vec<String>) -> Result<FinalRunOutputs> {
     let mut final_values = Vec::with_capacity(roots.len());
     let mut final_refs = Vec::with_capacity(roots.len());
+    let mut selected_value_count = 0usize;
     for root in roots {
         let root_index = output_root_index(input.plan, &root)?;
         let values = output_values_for_root(input.outputs_by_index, root_index, &root)?;
+        count_selected_final_values(input.dag, values, &mut selected_value_count)?;
         extend_cloned_bounded(&mut final_values, values, MAX_JOB_STAGE_VALUES, "job final values")?;
         if let Some(refs) = input.output_refs_by_index.get(root_index).and_then(Option::as_ref) {
             extend_cloned_bounded(&mut final_refs, refs, MAX_JOB_REFS, "job final refs")?;
@@ -154,6 +157,7 @@ fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<Io
 }
 
 pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobPlan> {
+    validate_selected_current(dag)?;
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let stage_values = stage_plan_values(dag, &plan)?;

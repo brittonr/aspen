@@ -80,6 +80,7 @@ impl CryptoAlgorithm {
 pub enum KeyBackendClass {
     CapabilityFile,
     ManagedSecret,
+    Tpm2Sealed,
     InMemoryFixture,
 }
 
@@ -88,12 +89,13 @@ impl KeyBackendClass {
         match self {
             Self::CapabilityFile => "capability-file",
             Self::ManagedSecret => "managed-secret",
+            Self::Tpm2Sealed => "tpm2-sealed",
             Self::InMemoryFixture => "in-memory-fixture",
         }
     }
 
     pub const fn is_production_eligible(self) -> bool {
-        matches!(self, Self::CapabilityFile | Self::ManagedSecret)
+        matches!(self, Self::CapabilityFile | Self::ManagedSecret | Self::Tpm2Sealed)
     }
 }
 

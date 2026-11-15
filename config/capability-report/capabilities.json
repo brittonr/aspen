@@ -1,0 +1,234 @@
+{
+  "schema": "molten.capability-mapping.v1",
+  "capabilities": [
+    {
+      "id": "durable-state-recovery",
+      "requirements": [
+        "molten.fabric_durability.snapshot_recovery"
+      ],
+      "owners": [
+        "src/fabric_durability/"
+      ],
+      "profiles": [
+        "native-host-redb-v1",
+        "nixos-vm",
+        "onixos-live"
+      ],
+      "families": [
+        {
+          "id": "durable-restart-same-process",
+          "environment": "same-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "durable-restart-nixos-vm",
+          "environment": "nixos-vm",
+          "matrix_scopes": [
+            "vm"
+          ]
+        },
+        {
+          "id": "durable-restart-cross-host",
+          "environment": "cross-host",
+          "matrix_scopes": [
+            "dogfood"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effect-uncertainty",
+      "requirements": [
+        "molten.system_extension.native_effect_uncertainty",
+        "molten.fabric_execution.uncertainty"
+      ],
+      "owners": [
+        "src/system_extension/",
+        "src/fabric_execution/"
+      ],
+      "profiles": [
+        "native-process",
+        "nixos-vm",
+        "onixos-live"
+      ],
+      "families": [
+        {
+          "id": "post-effect-uncertainty-same-process",
+          "environment": "same-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "post-effect-uncertainty-distinct-process",
+          "environment": "distinct-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "post-effect-uncertainty-nixos-vm",
+          "environment": "nixos-vm",
+          "matrix_scopes": [
+            "vm"
+          ]
+        },
+        {
+          "id": "post-effect-uncertainty-cross-host",
+          "environment": "cross-host",
+          "matrix_scopes": [
+            "dogfood"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cross-process-transport",
+      "requirements": [
+        "molten.fabric_transport.cross_process_endpoint",
+        "molten.fabric_transport.cross_process_session"
+      ],
+      "owners": [
+        "src/fabric_transport/"
+      ],
+      "profiles": [
+        "iroh-cross-process-v1",
+        "nixos-vm",
+        "onixos-live"
+      ],
+      "families": [
+        {
+          "id": "frame-and-fencing-distinct-process",
+          "environment": "distinct-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "frame-and-fencing-nixos-vm",
+          "environment": "nixos-vm",
+          "matrix_scopes": [
+            "vm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cross-host-transport",
+      "requirements": [
+        "molten.fabric_transport.cross_process_session",
+        "molten.fabric_transport.cross_process_endpoint"
+      ],
+      "owners": [
+        "src/fabric_transport/"
+      ],
+      "profiles": [
+        "onixos-live"
+      ],
+      "families": [
+        {
+          "id": "remote-frame-cross-host",
+          "environment": "cross-host",
+          "matrix_scopes": [
+            "dogfood"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "world-replay-promotion-restore",
+      "requirements": [
+        "molten.world_replay.execution_boundary",
+        "molten.world_snapshot.restore",
+        "molten.world_branch_authority.activation"
+      ],
+      "owners": [
+        "src/world_replay/",
+        "src/world_snapshot/",
+        "src/world_promotion/",
+        "src/world_branch_authority/"
+      ],
+      "profiles": [
+        "runtime-spine-committed-turn-v1"
+      ],
+      "families": [
+        {
+          "id": "restore-current-admission-same-process",
+          "environment": "same-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "restore-current-admission-nixos-vm",
+          "environment": "nixos-vm",
+          "matrix_scopes": [
+            "vm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "control-plane-failover",
+      "requirements": [
+        "molten.fabric_consistency.live_raft",
+        "molten.fabric_consistency.final_validation"
+      ],
+      "owners": [
+        "src/fabric_consistency/raft/"
+      ],
+      "profiles": [
+        "live-raft-static-v1",
+        "nixos-vm",
+        "onixos-live"
+      ],
+      "families": [
+        {
+          "id": "quorum-loss-and-recovery-distinct-process",
+          "environment": "distinct-process",
+          "matrix_scopes": [
+            "integration"
+          ]
+        },
+        {
+          "id": "quorum-loss-and-recovery-nixos-vm",
+          "environment": "nixos-vm",
+          "matrix_scopes": [
+            "vm"
+          ]
+        },
+        {
+          "id": "quorum-loss-and-recovery-cross-host",
+          "environment": "cross-host",
+          "matrix_scopes": [
+            "dogfood"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "harness-runtime-capability-binding",
+      "requirements": [
+        "molten.testing.capability_context.request_binding"
+      ],
+      "owners": [
+        "src/harness/",
+        "src/capability_qualification/"
+      ],
+      "profiles": [
+        "harness-simulation-v1"
+      ],
+      "families": [
+        {
+          "id": "harness-simulation",
+          "environment": "simulation",
+          "matrix_scopes": [
+            "integration"
+          ]
+        }
+      ]
+    }
+  ]
+}

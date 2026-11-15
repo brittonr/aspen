@@ -36,6 +36,13 @@ pub enum Commit {
 pub trait StateStore: Send + Sync {
     fn load(&self) -> Result<State, Error>;
     fn compare_commit(&self, expected: &State, next: &State) -> Result<Commit, Error>;
+    /// Implementations without a durable stream must refuse, never synthesize history.
+    fn progress_snapshot(&self, _run: Id) -> Result<ProgressSnapshot, Error> {
+        Err(Error::Unsupported)
+    }
+    fn progress_read(&self, _cursor: ProgressCursor, _limit: u32) -> Result<ProgressPage, Error> {
+        Err(Error::Unsupported)
+    }
 }
 pub trait WorkerJournal: Send + Sync {
     fn load(&self) -> Result<WorkerState, Error>;
@@ -122,6 +129,7 @@ pub enum Diagnostic {
     Admission { attempt: Id },
     PendingReconciliation { attempt: Id },
     ServiceError,
+    Boundary(&'static str),
 }
 pub trait ObservabilityPort: Send + Sync {
     fn record(&self, event: Diagnostic);

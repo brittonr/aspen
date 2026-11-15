@@ -137,6 +137,13 @@ fn validate_promises(attempt: &StableViewAttempt) -> Result<(), FallbackReason> 
 }
 
 impl ApplicationLedger {
+    pub fn new() -> Self {
+        Self {
+            applied_commands: std::collections::BTreeSet::new(),
+            replied_operations: std::collections::BTreeSet::new(),
+        }
+    }
+
     // r[impl molten.consensus.fast_path_model.fallback_identity]
     pub fn converge(&mut self, operation: &OperationIdentity) -> ConvergenceOutcome {
         let is_applied = self.applied_commands.insert(operation.command_ref.clone());

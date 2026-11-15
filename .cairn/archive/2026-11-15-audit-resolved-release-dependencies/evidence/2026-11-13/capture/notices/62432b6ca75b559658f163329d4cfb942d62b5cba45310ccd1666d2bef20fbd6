@@ -1,0 +1,14 @@
+# kind	path	expected value or marker
+package	Cargo.toml	AGPL-3.0-or-later
+package	crates/ucan-core/Cargo.toml	MPL-2.0
+package	crates/ucan-nostr/Cargo.toml	AGPL-3.0-or-later
+package	vendor/verified-logic/Cargo.toml	MPL-2.0
+artifact	LICENSES/MPL-2.0.txt	Mozilla Public License Version 2.0
+artifact	LICENSES/AGPL-3.0-or-later.txt	GNU AFFERO GENERAL PUBLIC LICENSE
+artifact	crates/ucan-core/LICENSE	Mozilla Public License Version 2.0
+artifact	crates/ucan-nostr/LICENSE	GNU AFFERO GENERAL PUBLIC LICENSE
+artifact	vendor/verified-logic/LICENSE	Mozilla Public License Version 2.0
+contains	docs/licensing.md	The snapshot must be refreshed with `scripts/sync-verified-logic.sh`
+forbid	crates/ucan-core/Cargo.toml	ucan =
+forbid	crates/ucan-nostr/Cargo.toml	ucan =
+forbid	crates/ucan-nostr/Cargo.toml	ucan-core

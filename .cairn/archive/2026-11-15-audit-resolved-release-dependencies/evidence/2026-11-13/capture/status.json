@@ -1,0 +1,12 @@
+{
+  "metadata": 0,
+  "policy": 0,
+  "release_profile": 0,
+  "license_guard": 0,
+  "release_guard": 0,
+  "source_guard": 0,
+  "notice_capture": 0,
+  "scanner": 1,
+  "rustc": 0,
+  "cargo": 0
+}

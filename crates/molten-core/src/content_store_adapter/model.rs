@@ -397,3 +397,31 @@ pub enum ContentIssue {
     BackendHintCannotReplaceIdentity,
     ProtectionCannotGrantAuthority,
 }
+
+// r[impl molten.content_store_adapter.streaming_bounds]
+/// Conditional verified-transfer budget, independent of operation and remote inventory size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContentTierRecoveryBudget {
+    pub max_local_tier_bytes: u64,
+    pub minimum_verified_bytes_per_second: u64,
+    pub max_rebuild_seconds: u64,
+}
+
+impl ContentTierRecoveryBudget {
+    pub fn validate(self) -> Result<(), ContentIssue> {
+        if self.max_local_tier_bytes == 0
+            || self.minimum_verified_bytes_per_second == 0
+            || self.max_rebuild_seconds == 0
+        {
+            return Err(ContentIssue::ZeroBound("local-tier-recovery"));
+        }
+        let recoverable = self
+            .minimum_verified_bytes_per_second
+            .checked_mul(self.max_rebuild_seconds)
+            .ok_or(ContentIssue::ArithmeticOverflow)?;
+        if self.max_local_tier_bytes > recoverable {
+            return Err(ContentIssue::TotalBytesExceeded);
+        }
+        Ok(())
+    }
+}

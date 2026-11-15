@@ -1,0 +1,7 @@
+{
+  "schema": "molten.dependency-audit-controls.v1",
+  "fixture_only": true,
+  "database_revision": "4ef2df8e806a65e2f1ecc14f56f51249062b23d6",
+  "affected_raw_ref": "blake3:3dc4ad955e1c25655cee263e61215e939d96fe8e17ddf6e43366cc89bc4a894e",
+  "decision": "pass"
+}

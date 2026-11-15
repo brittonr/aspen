@@ -10,6 +10,7 @@
 
 mod adapters;
 mod canonical;
+mod consumer;
 pub(crate) mod cross_process;
 mod ports;
 mod shell;
@@ -19,6 +20,7 @@ mod tests;
 
 pub use adapters::*;
 pub use canonical::*;
+pub use consumer::*;
 pub use cross_process::*;
 pub use molten_core::fabric_transport::*;
 pub use ports::*;

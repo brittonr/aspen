@@ -22,7 +22,7 @@ let RequiredNonClaims = [
 ] in
 let ValidAlgorithms = [ProductionAlgorithm, FixtureAlgorithm] in
 let ValidEntropySources = ["os-csprng", "deterministic-fixture"] in
-let ValidBackends = ["capability-file", "managed-external", "deterministic-fixture"] in
+let ValidBackends = ["capability-file", "managed-external", "tpm2-sealed", "deterministic-fixture"] in
 let valid_ref = fun value =>
   std.is_string value
   && std.string.is_match "^blake3:[0-9a-f]{64}$" value in
@@ -37,7 +37,9 @@ let valid_profile = fun value =>
   && std.array.elem value.algorithm ValidAlgorithms
   && std.array.elem value.entropy.source_kind ValidEntropySources
   && std.array.elem value.backend.class ValidBackends
-  && value.purposes == RequiredPurposes
+  && (if value.backend.class == "tpm2-sealed"
+      then value.purposes == ["transport-endpoint"]
+      else value.purposes == RequiredPurposes)
   && value.domain.id == "molten.crypto.signature"
   && value.domain.version == "v1"
   && value.rotation.generation_fenced

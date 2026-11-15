@@ -1,0 +1,100 @@
+{
+  "schema": "molten.fastpath-quint-conformance.v1",
+  "status": "passed",
+  "runs": [
+    {
+      "label": "version",
+      "executable": "quint",
+      "args": [
+        "--version"
+      ],
+      "elapsedMs": 954.144193,
+      "exitCode": 0,
+      "error": null,
+      "signal": null
+    },
+    {
+      "label": "typecheck",
+      "executable": "quint",
+      "args": [
+        "typecheck",
+        "verification/tla/ConsensusFastPath.qnt"
+      ],
+      "elapsedMs": 1939.207489,
+      "exitCode": 0,
+      "error": null,
+      "signal": null
+    },
+    {
+      "label": "bounded-properties",
+      "executable": "quint",
+      "args": [
+        "run",
+        "verification/tla/ConsensusFastPath.qnt",
+        "--invariant",
+        "inv",
+        "--seed",
+        "5",
+        "--max-samples",
+        "64",
+        "--max-steps",
+        "48",
+        "--n-traces",
+        "64",
+        "--out-itf",
+        "/dev/shm/aspen-quint-campaign-single-backend-20261113/simulation-{seq}.itf.json"
+      ],
+      "elapsedMs": 6623.511143000001,
+      "exitCode": 0,
+      "error": null,
+      "signal": null
+    },
+    {
+      "label": "minimal-trace",
+      "executable": "quint",
+      "args": [
+        "test",
+        "verification/tla/ConsensusFastPath.qnt",
+        "--match",
+        "^mixedViewGuardTest$",
+        "--seed",
+        "5",
+        "--max-samples",
+        "1",
+        "--out-itf",
+        "/dev/shm/aspen-quint-campaign-single-backend-20261113/minimal-{seq}.itf.json"
+      ],
+      "elapsedMs": 2073.6307129999987,
+      "exitCode": 0,
+      "error": null,
+      "signal": null
+    },
+    {
+      "label": "normal-replay",
+      "executable": "/dev/shm/aspen-open-issues-target/debug/deps/fastpathquint-e8195000467f6563",
+      "args": [
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "elapsedMs": 21044.156709,
+      "exitCode": 0,
+      "error": null,
+      "signal": null
+    },
+    {
+      "label": "mutated-guard-replay",
+      "executable": "/dev/shm/aspen-fastpath-mutant-binary-20261113",
+      "args": [
+        "--exact",
+        "mixed_view_guard_replay",
+        "--nocapture"
+      ],
+      "elapsedMs": 711.3184399999991,
+      "exitCode": 101,
+      "error": null,
+      "signal": null
+    }
+  ],
+  "elapsedMs": 33363.012939,
+  "scope": "bounded API conformance, not TLA+/Quint equivalence or live-engine proof"
+}

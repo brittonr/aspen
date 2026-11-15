@@ -1,0 +1,11 @@
+
+running 6 tests
+test fabric_consistency::raft::live_process::bounded_client::tests::native_executor_rejects_request_substitution_before_spawning ... ok
+test fabric_consistency::raft::live_process::bounded_client::tests::native_horizon_checker_rejects_late_election_after_earlier_interval ... ok
+test fabric_consistency::raft::live_process::bounded_client::tests::native_precheckpoint_prefixes_remain_incomplete_without_io_abort ... ok
+test fabric_consistency::raft::live_process::bounded_client::tests::native_recovery_horizon_counts_only_after_advancement_and_fault_off ... ok
+test fabric_consistency::raft::live_process::bounded_client::tests::retained_native_healthy_control ... ok
+test fabric_consistency::raft::live_process::bounded_client::tests::retained_native_mutant_repeats_reduces_and_requires_its_property ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2098 filtered out; finished in 5.23s
+

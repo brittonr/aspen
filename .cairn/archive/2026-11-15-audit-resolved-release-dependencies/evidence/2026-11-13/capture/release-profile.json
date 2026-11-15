@@ -1,0 +1,599 @@
+{
+  "archive_receipts": [
+    {
+      "archive_path": ".cairn/archive/1970-01-01-preserve-component-execution-boundaries",
+      "evidence_files": [
+        {
+          "blake3": "d4a6554a7a61162d339bf9dc515be4e5725847ef8cb7c5b3167e1543fb8aea87",
+          "relative_path": ".cairn/archive/1970-01-01-preserve-component-execution-boundaries/tasks.md"
+        },
+        {
+          "blake3": "e5b243937ee427890b0f81c84d07f7801eeaed88a2e9947ee7ddd9fbe70c4eec",
+          "relative_path": "crates/hardened-wasmtime-shell/src/lib.rs"
+        },
+        {
+          "blake3": "ad9639e51a32ab13ff4aaae009c96155cd7d11d23e0c79c3864fbe467f127e04",
+          "relative_path": ".cairn/archive/1970-01-01-preserve-component-execution-boundaries/verification.md"
+        }
+      ],
+      "id": "hardened-wasmtime-resumable",
+      "nix_input": "hardened-wasmtime-src",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "source_coordinate": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git",
+      "source_revision": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+      "status": "archived"
+    },
+    {
+      "archive_path": ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees",
+      "evidence_files": [
+        {
+          "blake3": "bd63c64838ee125d006b75919d820cfdf9352a36e995cbdcfbb1a5a42469c7fc",
+          "relative_path": ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md"
+        },
+        {
+          "blake3": "3a613c1977ffd6a1e2dd6fc3f73aea9f961b7badb9aa97ad133eba65642c73fb",
+          "relative_path": "crates/mantle-wasm-consumer-verifier/README.md"
+        },
+        {
+          "blake3": "691c117450a84e9eaa4d98235a7ff7b1c18f72660f1b19b247a31bf6fd44aeca",
+          "relative_path": ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md"
+        },
+        {
+          "blake3": "b8f6b0c99772dffc43b1abb288c42998e2b31510859c72325c41e18625102be5",
+          "relative_path": ".cairn/archive/2026-10-28-select-octet-component-profiles/tasks.md"
+        },
+        {
+          "blake3": "0c25d040bea97458f9de1dd10f20a79dd8e760e6b61a8325ca5a37d9807e8e63",
+          "relative_path": ".cairn/archive/2026-10-28-select-octet-component-profiles/evidence/2026-10-28-profile-selection.md"
+        }
+      ],
+      "id": "mantle-wasm-consumer-verifier",
+      "nix_input": "mantle-wasm-verifier-src",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "source_coordinate": "https://github.com/OnixResearch/mantle.git",
+      "source_revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+      "status": "archived"
+    },
+    {
+      "archive_path": "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries",
+      "evidence_files": [
+        {
+          "blake3": "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2",
+          "relative_path": "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries/tasks.md"
+        },
+        {
+          "blake3": "2af098dd7a17c36dc47d051b7fafbd9a08224b1ead21f647fac012ce7f70be39",
+          "relative_path": ".cairn/archive/1970-01-01-admit-octet-policy-check-provenance/tasks.md"
+        },
+        {
+          "blake3": "edab55eb078f6296d1e363836a04622c974dd7770c7718e635356e5f774a3c62",
+          "relative_path": ".cairn/archive/1970-01-01-admit-octet-policy-check-provenance/evidence/2026-10-28-verification.md"
+        }
+      ],
+      "id": "valence-integrity",
+      "nix_input": "valence-src",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "source_coordinate": "https://github.com/OnixResearch/valence.git",
+      "source_revision": "9201074343cd9da0ffaf6ec9db690af5b445d663",
+      "status": "archived"
+    },
+    {
+      "archive_path": "cairn/archive/1970-01-01-complete-standalone-valence-cutover",
+      "evidence_files": [
+        {
+          "blake3": "b3ac48ea0a241194d86293473facd24b3f380beb264a05f0334c002bb0ca2f34",
+          "relative_path": "cairn/archive/1970-01-01-complete-standalone-valence-cutover/tasks.md"
+        },
+        {
+          "blake3": "811bf0ce699b31f981ee4dfcdae40f5b3a2152e47e607f70dfaa5b7ff0483439",
+          "relative_path": "standards/valence-core-cutover/generated-manifest.json"
+        }
+      ],
+      "id": "octet-cutover",
+      "nix_input": "octet-cutover-src",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "source_coordinate": "https://github.com/OnixResearch/octet.git",
+      "source_revision": "4367300e10740ecc99ba4b2171ace561b4787327",
+      "status": "archived"
+    }
+  ],
+  "canonical_valence": {
+    "immutable_revision": "9201074343cd9da0ffaf6ec9db690af5b445d663",
+    "source_coordinate": "https://github.com/OnixResearch/valence.git"
+  },
+  "dependencies": [
+    {
+      "disposition": "development",
+      "immutable_revision": "4f018f54fc7dd4cef341d10111427bab59d3b307",
+      "manifest_dependency": "quint-connect",
+      "nix_input": "quint-connect-src",
+      "package_name": "quint-connect",
+      "package_version": "0.1.2",
+      "source_coordinate": "https://github.com/quint-co/quint-connect.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+      "manifest_dependency": "durable-authority-state-redb",
+      "nix_input": "durable-authority-state-src",
+      "package_name": "durable-authority-state-redb",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+      "manifest_dependency": "replay-ledger-core",
+      "nix_input": "durable-authority-state-src",
+      "package_name": "replay-ledger-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+      "manifest_dependency": "revocation-view-core",
+      "nix_input": "durable-authority-state-src",
+      "package_name": "revocation-view-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+      "manifest_dependency": "release-channel-index",
+      "nix_input": "release-channel-src",
+      "package_name": "release-channel-index",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/release-channel.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+      "manifest_dependency": "release-channel-witness",
+      "nix_input": "release-channel-src",
+      "package_name": "release-channel-witness",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/release-channel.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+      "manifest_dependency": "spacewasm",
+      "nix_input": "spacewasm-src",
+      "package_name": "spacewasm",
+      "package_version": "0.0.0",
+      "source_coordinate": "https://github.com/nasa/spacewasm",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "aa01409ed38bf7a978570ff567c4475376925df6",
+      "manifest_dependency": "wrpc-transport",
+      "nix_input": "wrpc-src",
+      "package_name": "wrpc-transport",
+      "package_version": "0.28.4",
+      "source_coordinate": "https://github.com/bytecodealliance/wrpc",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "aa01409ed38bf7a978570ff567c4475376925df6",
+      "manifest_dependency": "wrpc-runtime-wasmtime",
+      "nix_input": "wrpc-src",
+      "package_name": "wrpc-runtime-wasmtime",
+      "package_version": "0.29.0",
+      "source_coordinate": "https://github.com/bytecodealliance/wrpc",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+      "manifest_dependency": "hardened-wasmtime-runtime",
+      "nix_input": "hardened-wasmtime-src",
+      "package_name": "hardened-wasmtime-runtime",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+      "manifest_dependency": "hardened-wasmtime-shell",
+      "nix_input": "hardened-wasmtime-src",
+      "package_name": "hardened-wasmtime-shell",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+      "manifest_dependency": "mantle-wasm-consumer-verifier",
+      "nix_input": "mantle-wasm-verifier-src",
+      "package_name": "mantle-wasm-consumer-verifier",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/mantle.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+      "manifest_dependency": "artifact-auth-core",
+      "nix_input": "artifact-src",
+      "package_name": "artifact-auth-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/onix-artifact.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+      "manifest_dependency": "artifact-auth-ed25519",
+      "nix_input": "artifact-src",
+      "package_name": "artifact-auth-ed25519",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/onix-artifact.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+      "manifest_dependency": "artifact-binding-core",
+      "nix_input": "artifact-src",
+      "package_name": "artifact-binding-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/onix-artifact.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "29dac88ecded94457572db3fdfaaaab95fa91525",
+      "manifest_dependency": "bounded-exec",
+      "nix_input": "bounded-exec-src",
+      "package_name": "bounded-exec",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/bounded-exec.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+      "manifest_dependency": "durable-file-publication",
+      "nix_input": "durable-file-publication-src",
+      "package_name": "durable-file-publication",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "manifest_dependency": "executable-extent-conformance",
+      "nix_input": "executable-extent-src",
+      "package_name": "executable-extent-conformance",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "manifest_dependency": "executable-extent-core",
+      "nix_input": "executable-extent-src",
+      "package_name": "executable-extent-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "manifest_dependency": "executable-extent-linux",
+      "nix_input": "executable-extent-src",
+      "package_name": "executable-extent-linux",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+      "manifest_dependency": "choregraph-history",
+      "nix_input": "choregraph-src",
+      "package_name": "choregraph-history",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/choregraph.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+      "manifest_dependency": "chaoscontrol-snapshot-descriptor",
+      "nix_input": "chaoscontrol-src",
+      "package_name": "chaoscontrol-snapshot-descriptor",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/brittonr/chaoscontrol.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "optional-runtime",
+      "immutable_revision": "31f1696ba9391bfda8577a58af84f72361d5573e",
+      "manifest_dependency": "vm-cohort-core",
+      "nix_input": "vm-cohort-src",
+      "package_name": "vm-cohort-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3",
+      "source_kind": "git",
+      "transport_policy": "private-radicle"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+      "manifest_dependency": "kamacite-core",
+      "nix_input": "kamacite-src",
+      "package_name": "kamacite-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/kamacite.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "89675cd4f585f837323c049e4a25f7b94c903038",
+      "manifest_dependency": "basalt",
+      "nix_input": "basalt-src",
+      "package_name": "basalt",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/basalt.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
+      "manifest_dependency": "cairn",
+      "nix_input": "cairn-src",
+      "package_name": "cairn-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/cairn.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "9201074343cd9da0ffaf6ec9db690af5b445d663",
+      "manifest_dependency": "valence",
+      "nix_input": "valence-src",
+      "package_name": "valence-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://github.com/OnixResearch/valence.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "89675cd4f585f837323c049e4a25f7b94c903038",
+      "manifest_dependency": "trellis",
+      "nix_input": "basalt-src",
+      "package_name": "verified-logic",
+      "package_version": "0.2.0",
+      "source_coordinate": "https://github.com/OnixResearch/basalt.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "4fe90e130f2871cf69a6febcdc70785adca98aea",
+      "manifest_dependency": "schema-migration-core",
+      "nix_input": "schema-migration-core-src",
+      "package_name": "schema-migration-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+      "manifest_dependency": "schema-identity-core",
+      "nix_input": "schema-identity-src",
+      "package_name": "schema-identity-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "development",
+      "immutable_revision": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+      "manifest_dependency": "schema-identity-conformance",
+      "nix_input": "schema-identity-src",
+      "package_name": "schema-identity-conformance",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "runtime",
+      "immutable_revision": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+      "manifest_dependency": "transactional-reconciliation-core",
+      "nix_input": "transactional-reconciliation-src",
+      "package_name": "transactional-reconciliation-core",
+      "package_version": "0.1.0",
+      "source_coordinate": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git",
+      "source_kind": "git",
+      "transport_policy": "https"
+    },
+    {
+      "disposition": "development",
+      "immutable_revision": "ed949b8084595cb467e983747f1089e214965ac6",
+      "manifest_dependency": "hegeltest",
+      "nix_input": "hegel-src",
+      "package_name": "hegeltest",
+      "package_version": "0.14.12",
+      "source_coordinate": "https://github.com/hegeldev/hegel-rust",
+      "source_kind": "git",
+      "transport_policy": "https"
+    }
+  ],
+  "distribution": {
+    "license": "AGPL-3.0-or-later",
+    "non_claims": [
+      "distribution-profile evidence records project policy and is not legal advice",
+      "distribution-profile evidence does not prove compliance in every jurisdiction"
+    ],
+    "notice_artifacts": [
+      "LICENSE",
+      "THIRD_PARTY_LICENSES.md"
+    ],
+    "source_coordinate": "https://github.com/OnixResearch/aspen.git",
+    "source_export_artifacts": [
+      "Cargo.toml",
+      "Cargo.lock",
+      "flake.nix",
+      "flake.lock",
+      "build-plan.json",
+      "release-policy-build-plan.json",
+      "config/release-dependencies/profile.ncl",
+      "README.md"
+    ],
+    "source_revision": "b470187ab532b7fdf2bc2a9a0a85c1eeb5343ac2"
+  },
+  "registry_dependencies": [
+    {
+      "checksum": "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "reqwest",
+      "package_name": "reqwest",
+      "package_version": "0.13.4",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "sha2",
+      "package_name": "sha2",
+      "package_version": "0.10.9",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "hmac",
+      "package_name": "hmac",
+      "package_version": "0.12.1",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "time",
+      "package_name": "time",
+      "package_version": "0.3.47",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "41e7ba0ded1ee3730fe4445fbdf4754756b2edd86617f19507c89d3b71383277",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "art",
+      "package_name": "art",
+      "package_version": "1.0.0",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "c00d04008994fed635a52323bbe1dd8c0947292183585ddf8f1090615fafc3c6",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "marble",
+      "package_name": "marble",
+      "package_version": "16.0.2",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "15396de4fce22e431aa913a9d17325665e72a39aaa7972c8aeae7507eff6144f",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "wasmtime-rpc",
+      "package_name": "wasmtime",
+      "package_version": "33.0.0",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    },
+    {
+      "checksum": "1d357e5699ed32103d0dab897c3965fd66f1ba29a37072d441199e7febe6324e",
+      "disposition": "optional-runtime",
+      "manifest_dependency": "wasmtime-wasi-rpc",
+      "package_name": "wasmtime-wasi",
+      "package_version": "33.0.0",
+      "plane": "implementation",
+      "source_coordinate": "registry+https://github.com/rust-lang/crates.io-index",
+      "source_kind": "crates-io",
+      "transport_policy": "crates.io"
+    }
+  ],
+  "schema": "molten.release-dependency-profile.v2"
+}

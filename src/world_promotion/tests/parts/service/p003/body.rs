@@ -1,4 +1,4 @@
-// r[verify molten.world_promotion.retry]
+// r[verify molten.world_promotion.dispatch]
 #[test]
 fn retry_plan_rebuilds_the_original_plan_and_requires_duplicate_risk_acknowledgement() {
     let request = promotion_request();

@@ -1,0 +1,15 @@
+{
+  "kind": "authored-causal-replay-fixture-not-observed-evidence",
+  "spec": "verification/tla/ConsensusFastPath.qnt",
+  "run": "mixedViewGuardTest",
+  "states": 2,
+  "inputs": [
+    { "action": "Init" },
+    { "action": "FastCommit", "command": "c1", "ack_mode": "mixed", "promise_mode": "all", "conflict_free": true }
+  ],
+  "projection": "last_decision",
+  "expected": "MixedView",
+  "mutant": "FastCommitted",
+  "mutation": "verification/tla/mutants/mixed-view-guard.patch",
+  "minimality": "Initialization plus one admission input; deleting that input leaves no admission decision to diverge. Generated ITF must be retained by the executed campaign."
+}

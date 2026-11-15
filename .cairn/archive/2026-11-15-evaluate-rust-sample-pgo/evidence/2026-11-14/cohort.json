@@ -1,0 +1,22 @@
+{
+  "baseline_expression": "(builtins.getFlake \"path:/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source\").legacyPackages.x86_64-linux.sample-pgo.baseline",
+  "candidate_expression": "(builtins.getFlake \"path:/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source\").legacyPackages.x86_64-linux.sample-pgo.mkVariant",
+  "compiler": "/nix/store/ni6gfxxw5knjdcahgwi7ax0j6mpqi6zz-molten-sample-pgo-rust-1.100.0-nightly-2026-08-20/bin/rustc",
+  "compiler_revision": "f7d782a3be46d6bb4b9792fe69a61db389ba1769",
+  "converter": "/nix/store/qpcj5lmxsrai5fyrh8w8br21msaxkij8-molten-sample-pgo-llvm-profgen-21cf28432798952d942bacc6bcee3a328faa3638/bin/llvm-profgen",
+  "flags": [
+    "-Copt-level=3",
+    "-Ccodegen-units=1",
+    "-Clto=off",
+    "-Ctarget-cpu=x86-64",
+    "-Ctarget-feature=+sse2",
+    "-Cdebuginfo=line-tables-only",
+    "-Cforce-frame-pointers=yes",
+    "-Clink-arg=-Wl,--build-id=sha1",
+    "-Zunstable-options",
+    "-Zdebuginfo-for-profiling"
+  ],
+  "llvm_revision": "21cf28432798952d942bacc6bcee3a328faa3638",
+  "policy": "/nix/store/nvjlrs9a3qrpvpw3niklcawwb3f6js5z-experiment.json",
+  "source": "/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source"
+}

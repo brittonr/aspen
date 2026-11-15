@@ -1,0 +1,73 @@
+{
+  "workspace_root": "/fixture",
+  "workspace_members": [
+    "root"
+  ],
+  "packages": [
+    {
+      "name": "molten",
+      "version": "0.1.0",
+      "id": "root",
+      "source": null,
+      "license": "AGPL-3.0-or-later",
+      "license_file": null,
+      "manifest_path": "/fixture/Cargo.toml"
+    },
+    {
+      "name": "time",
+      "version": "0.1.43",
+      "id": "time",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "manifest_path": "/fixture/time/Cargo.toml"
+    },
+    {
+      "name": "dev-only-control",
+      "version": "0.0.0",
+      "id": "dev",
+      "source": "git+https://example.invalid/unreviewed#1111111111111111111111111111111111111111",
+      "license": null,
+      "license_file": null,
+      "manifest_path": "/fixture/dev/Cargo.toml"
+    }
+  ],
+  "resolve": {
+    "nodes": [
+      {
+        "id": "root",
+        "features": [],
+        "deps": [
+          {
+            "pkg": "time",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          },
+          {
+            "pkg": "dev",
+            "dep_kinds": [
+              {
+                "kind": "dev",
+                "target": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "time",
+        "features": [],
+        "deps": []
+      },
+      {
+        "id": "dev",
+        "features": [],
+        "deps": []
+      }
+    ]
+  }
+}

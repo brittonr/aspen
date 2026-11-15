@@ -1,3 +1,5 @@
+pub mod actor;
+
 mod effects;
 
 /// Runtime adapter over actual admitted, journal-backed native supervisors.
@@ -107,6 +109,14 @@ where
             }
             super::RuntimeAction::Restart => {
                 service.restart(logical_tick).map_err(supervisor_error)?;
+            }
+            super::RuntimeAction::Recover => {
+                if service.instance().map_err(supervisor_error)?.lifecycle.phase
+                    == crate::system_extension::LifecyclePhase::Drained
+                {
+                    service.observe_process_loss().map_err(supervisor_error)?;
+                }
+                service.recover(logical_tick).map_err(supervisor_error)?;
             }
             super::RuntimeAction::Drain => {
                 service.drain(logical_tick).map_err(supervisor_error)?;

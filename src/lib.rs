@@ -23,6 +23,8 @@ pub mod burnin;
 #[doc(hidden)]
 #[path = "capability/mod.rs"]
 pub mod capabilities_core;
+#[path = "capability_qualification/mod.rs"]
+pub mod capability_qualification;
 #[doc(hidden)]
 #[path = "typed/storage.rs"]
 pub mod cells;

@@ -1,0 +1,6 @@
+{
+  "decision": null,
+  "reason": "candidate-build: unexpected exit 1, timeout=False; see /dev/shm/aspen-sample-pgo-run-nocache-20261113/candidate-build.stderr",
+  "role": "development-observation",
+  "status": "blocked"
+}

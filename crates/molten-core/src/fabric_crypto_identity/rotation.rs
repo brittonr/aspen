@@ -62,6 +62,7 @@ pub struct KeyRotationOutcome {
 }
 
 // r[impl molten.crypto_identity.rotation_revocation]
+// r[impl molten.crypto_identity.tpm2_backend_rotation]
 pub fn plan_key_rotation(
     profile: &CryptoAdapterProfile,
     current: &OpaqueKeyHandle,
@@ -85,7 +86,21 @@ pub fn plan_key_rotation(
     if request.purpose != current.purpose {
         issues.push(CryptoIdentityIssue::PurposeMismatch);
     }
-    if request.backend_class != current.backend_class || request.backend_ref != current.backend_ref {
+    if (request.backend_class == KeyBackendClass::Tpm2Sealed || current.backend_class == KeyBackendClass::Tpm2Sealed)
+        && request.purpose != KeyPurpose::TransportEndpoint
+    {
+        issues.push(CryptoIdentityIssue::UnsupportedPurpose(request.purpose));
+    }
+    let same_backend = request.backend_class == current.backend_class && request.backend_ref == current.backend_ref;
+    let sealed_migration = matches!(
+        (current.backend_class, request.backend_class),
+        (KeyBackendClass::CapabilityFile, KeyBackendClass::Tpm2Sealed)
+            | (KeyBackendClass::Tpm2Sealed, KeyBackendClass::CapabilityFile)
+    );
+    if (!same_backend && !sealed_migration)
+        || !profile.backend_classes.contains(&current.backend_class)
+        || !profile.backend_classes.contains(&request.backend_class)
+    {
         issues.push(CryptoIdentityIssue::RotationPolicyMismatch);
     }
     if request.old_handle_ref != current.handle_ref || request.old_public_key_ref != current.public_key_ref {

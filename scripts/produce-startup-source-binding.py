@@ -99,7 +99,7 @@ def copy_binaries(candidate, output):
         members.append(member)
         if len(members) > 64:
             raise RuntimeError("candidate binary count bound exceeded")
-    required = {"molten", "molten-native-extension-fixture", "molten-collaboration-scope"}
+    required = {"molten", "molten-native-extension-fixture", "molten-collaboration-scope", "molten-addressable-counter"}
     if not required.issubset({member.name for member in members}):
         raise RuntimeError("candidate is missing a required production-built host binary")
     total = 0

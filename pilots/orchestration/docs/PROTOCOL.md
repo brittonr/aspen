@@ -1,4 +1,4 @@
-# Batch profile v1: canonical and wire contracts
+# Batch profile v1: canonical state and RPC v2 contracts
 
 ## Identity domains
 
@@ -14,7 +14,7 @@ of canonical Preserves values in the following domains:
 - `execution-result.v1`: exact request reference, stopped disposition and outcome.
 - `content-manifest.v1`: kind, raw-byte BLAKE3 digest and exact length.
 - `controller-state.v1`, `worker-state.v1`: complete versioned snapshots.
-- `batch-rpc.request.v1`, `batch-rpc.reply.v1`: request/response adapter envelopes.
+- `batch-rpc.request.v2`, `batch-rpc.reply.v2`: request/response adapter envelopes.
 
 A content reference confers no installation, execution or result-acceptance authority.
 The standalone content manifest is not claimed to be byte-compatible with an
@@ -72,6 +72,13 @@ The endpoint admits only the selected ALPN. The server checks the authenticated
 remote key against explicit role enrollment before reading the body. No retry,
 relay, name lookup, protocol fallback or authority promotion is performed by the
 transport adapter. Errors return bounded codes, never backend paths or secrets.
+
+RPC v2 selects an optional run in the status request, before reply framing. A
+selected-run reply carries only that run; complete-state status remains explicit
+for raw inspection and planning. The CLI's selected-run JSON is unchanged. All
+clients, controllers and workers use the v2 ALPN together; there is no v1 fallback
+or mixed-carrier compatibility. Workload, durable-state and progress identities
+remain in their existing v1 domains, so this carrier cutover rewrites no database.
 
 ## Request and attempt idempotency
 

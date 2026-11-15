@@ -1,0 +1,6 @@
+
+running 1 test
+test fabric_crypto_identity::tpm2::tests::sealed::load_pcr_denial_secrecy_and_rotation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2098 filtered out; finished in 0.28s
+

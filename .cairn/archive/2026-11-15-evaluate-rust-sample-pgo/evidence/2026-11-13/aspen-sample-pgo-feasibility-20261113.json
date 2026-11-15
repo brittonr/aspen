@@ -1,0 +1,23 @@
+{
+  "status": "blocked",
+  "decision": null,
+  "role": "development-observation",
+  "reason": "Full fresh experiment not launched: parent disallowed a large store build with approximately 3 GiB free. New-source baseline dry-run requires three local builds, and a profile-consuming dependency graph plus builder scratch has no admitted storage reserve. No ENOSPC execution or exact future peak-size claim is made.",
+  "storage_observation_command": "df -B1 /nix/store /dev/shm",
+  "store_available_bytes": 2625503232,
+  "tmpfs_available_bytes": 12284141568,
+  "existing_baseline_nar_bytes": 2969899696,
+  "existing_baseline_allocated_bytes": 955154944,
+  "allocated_size_command": "du -s -B1 /nix/store/pjyj70p6szibqg35y876cpg3bqgdh5vf-rust_molten-0.1.0",
+  "existing_baseline_runtime_closure_nar_bytes": 3312369992,
+  "baseline_size_command": "nix path-info --json --closure-size /nix/store/pjyj70p6szibqg35y876cpg3bqgdh5vf-rust_molten-0.1.0",
+  "fresh_baseline_dry_run_command": "nix build --dry-run --impure --no-link --expr '(builtins.getFlake \"path:/dev/shm/aspen-open-issues-20261113\").legacyPackages.x86_64-linux.sample-pgo.baseline' --option min-free 0 --option max-free 0 --builders ''",
+  "fresh_baseline_dry_run_derivations": [
+    "/nix/store/g3345apf63jvn7x9pdmkxjpi68bvww5i-rust_molten-core-0.1.0.drv",
+    "/nix/store/r6cv3gynmhl54rhkh22f664bi222ljvj-rust_molten-node-host-0.1.0.drv",
+    "/nix/store/88l1y5vk9qb134nhcbzfr18jdqv384d5-rust_molten-0.1.0.drv"
+  ],
+  "cache_observation": "Configured http://100.100.103.95:39400 cache connection refused; dry-run completed with local builds required.",
+  "sandbox_validation_output": "/nix/store/vkfqifq63y09s2824g3r0lbm83214l3s-aspen-owned-profile-validation-control",
+  "retained_old_capture_scope": "Verifier repair control for its exact original source/binary/converter only; never a profile for changed source or a new candidate."
+}

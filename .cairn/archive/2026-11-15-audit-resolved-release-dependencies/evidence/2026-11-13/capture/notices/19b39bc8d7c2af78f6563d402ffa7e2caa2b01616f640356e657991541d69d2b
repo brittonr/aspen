@@ -1,0 +1,18 @@
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright 2026 OnixResearch
+
+All first-party packages and new repository-owned source, contracts, schemas,
+fixtures, templates, documentation and policy are licensed under the GNU Affero
+General Public License, version 3 or (at your option) any later version.
+See LICENSE-AGPL for the complete license text. This work is distributed WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.
+
+This prospective policy does not revoke earlier grants. Previously granted
+material, including byte-identical content, remains available under its prior
+terms. LICENSE-MIT and LICENSE-APACHE at the repository root are retained for
+historical grants and third-party material, not as permissive offers for new
+owned contributions. Immutable imports, baselines, historical receipts and
+source identities retain their recorded terms. Third-party dependencies retain
+their own licenses. See the repository-root NOTICE and provenance for attribution,
+historical grants and source scope.

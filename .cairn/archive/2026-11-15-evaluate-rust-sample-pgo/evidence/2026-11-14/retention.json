@@ -1,0 +1,21 @@
+{
+  "schema": "molten.sample-pgo.retained-observation.v1",
+  "full_output": "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114",
+  "source": "/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source",
+  "profile_bundle": "/nix/store/k8fm9p84y8y4vc35nmxw5w5f5na31anf-profile-bundle",
+  "application_sample_weights": 478,
+  "case_pair_counts": {
+    "success": 30,
+    "denied": 30,
+    "exhausted": 30,
+    "error": 30
+  },
+  "decision": "revise",
+  "maintained_profile": "not-enabled; a separate reviewed Cairn change is required even for keep",
+  "large_artifacts": "Raw perf, converted profile, per-invocation stdout/stderr/usage, canonical artifacts and before/after host facts remain in full output; baseline/candidate result links retain Nix roots.",
+  "non_claims": [
+    "Machine-local native CLI experiment, not actor-service throughput, release eligibility or general performance.",
+    "No p99, retained heap or daemon-builder CPU/RSS measurement.",
+    "No maintained/default toolchain or profile enabled."
+  ]
+}

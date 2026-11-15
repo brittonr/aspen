@@ -169,7 +169,8 @@
         "availability",
         "import",
         "export",
-        "protection"
+        "protection",
+        "durable-completion"
       ],
       "class": "object-storage",
       "live_network_required": true,
@@ -182,6 +183,16 @@
         "availability-is-not-execution-authority",
         "verification-is-not-provenance"
       ],
+      "object_storage_policy": {
+        "at_capacity": "verified-remote-only-no-eviction",
+        "credential_refresh": "fixed-at-admission-no-refresh",
+        "endpoint_resolution": "fixed-numeric-at-admission",
+        "max_local_tier_bytes": 68719476736,
+        "max_rebuild_seconds": 64,
+        "max_remote_connections": 1,
+        "minimum_verified_bytes_per_second": 1073741824,
+        "rebuild_path": "refetch-and-reverify-hot-chunks"
+      },
       "persist_verified_partial_state": true,
       "pin_grants_read_authority": false,
       "protection_grants_retention_authority": false,

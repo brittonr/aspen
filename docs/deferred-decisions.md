@@ -51,18 +51,30 @@ acknowledgement, and uncertain-delivery semantics must remain unchanged.
 
 ## #9 TPM2-sealed node identity key
 
-**Decision: no `Tpm2Sealed` class or loader yet.**
+**Decision: supersede the earlier no-go with an explicit transport-only
+`Tpm2Sealed` backend; the retained disposable-swtpm consumer rail passed.**
 
-`ManagedSecret` does not cover this gap today. It appears in the profile's
-eligible classes and in a redaction fixture, but no loader fronts
-systemd-creds, a TPM, or another secret manager; the only implemented live
-loader is the capability-file adapter. Adding the class without a loader would
-overstate what is available.
+`ManagedSecret` does not front systemd-creds, TPM, or a secret manager. The
+[reviewed issue comment](https://github.com/brittonr/aspen/issues/9#issuecomment-6768827011)
+and [backend decision](fabric-cryptographic-identity/tpm2-sealed.md) distinguish
+that eligibility label from an implemented loader and from PKCS11 signing.
 
-The remaining work needs a swtpm-backed PCR-policy seal/unseal test, a typed
-fail-closed denial on an altered PCR state, and rotation between
-`CapabilityFile` and the new class through the existing rotation plan. Reopen
-when that hardware or swtpm rail and the exact backend ref are available.
+The new loader checks the exact policy-only public object and measured tool,
+unseals a PCR-bound transport record into memory through bounded execution,
+and returns typed failures without file fallback. The existing rotation plan
+admits exact `CapabilityFile`/`Tpm2Sealed` transitions in both directions.
+The pinned disposable swtpm rail covers actual seal/load, selected-PCR extension
+and denial, consumer-owned plaintext absence, and actual destination-key rotation
+completion. The original parent rail execution reached both rotations, then
+failed its plaintext scan with emulator state inside the consumer namespace.
+The repaired rail separates provider device-state authority without excluding
+any consumer file. Its retained consumer control subsequently passed with
+`tpm2-tools` 5.7 and `swtpm` 0.10.1, including seal/load, both rotation directions,
+consumer-file plaintext absence and denial after extending `sha256:16`; see the
+[execution log](../.cairn/archive/2026-11-15-add-tpm2-sealed-identity/evidence/swtpm-2026-11-13/consumer.log)
+and [cohort](../.cairn/archive/2026-11-15-add-tpm2-sealed-identity/evidence/swtpm-2026-11-13/cohort.txt).
+This is software-TPM evidence, not physical-TPM qualification, encrypted provider
+state, host-filesystem secrecy, startup integration, attestation or production admission.
 
 ## #10 Encrypted discovery provider
 

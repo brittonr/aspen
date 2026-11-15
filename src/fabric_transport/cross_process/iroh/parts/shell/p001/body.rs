@@ -4,8 +4,15 @@ impl Listener {
     // r[impl molten.fabric_transport.cross_process_session]
     pub async fn bind(input: ListenerInput) -> crate::error::Result<Self> {
         validate_listener_input(&input)?;
+        Self::bind_admitted(input, None).await
+    }
+
+    async fn bind_admitted(input: ListenerInput, direct: Option<&DirectStreamBounds>) -> crate::error::Result<Self> {
         let alpn = input.protocol.alpn.as_bytes().to_vec();
-        let endpoint = bind_explicit_endpoint(input.bind_addr, input.capability, &alpn).await?;
+        let endpoint = match direct {
+            Some(bounds) => direct::bind_endpoint(input.bind_addr, input.capability, &alpn, bounds).await?,
+            None => bind_explicit_endpoint(input.bind_addr, input.capability, &alpn).await?,
+        };
         let endpoint_addr = endpoint.addr();
         let locators = endpoint_locators(&endpoint_addr)?;
         let bindings = EndpointDescriptorBindings {
@@ -206,6 +213,10 @@ impl Listener {
             apply_cross_process_listener_command(&self.state, &CrossProcessListenerCommand::BeginDrain { reason })
                 .map_err(|issues| validation_error("cross-process listener drain", &issues))?
                 .next;
+        self.close_draining(reason).await
+    }
+
+    async fn close_draining(mut self, reason: ListenerDrainReason) -> crate::error::Result<ListenerCleanup> {
         if self.state.active_sessions != 0 {
             return Err(crate::error::Failure::invalid_harness(
                 "cross-process listener drain requires all sessions to be terminal",

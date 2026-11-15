@@ -1,0 +1,792 @@
+{
+  "schema": "molten.anonymous-source-acquisition-observation.v1",
+  "date": "2026-11-13",
+  "classification": "source-acquisition and owning-generator observations only; not build, source-gate, runtime, authority or release qualification",
+  "authority": {
+    "catalog": "/home/brittonr/git/OnixResearch/docs/catalog.ncl",
+    "bounded_exec_catalog_lines": "85-92",
+    "bounded_tree_catalog_lines": "95-102",
+    "bounded_exec_github_url": "https://github.com/OnixResearch/bounded-exec",
+    "bounded_tree_github_url": null,
+    "bounded_tree_radicle_url": "rad://zqhtZvsteJhxCJE96dMAZSZ9y1PX",
+    "provider_tree_publication_policy": "bounded-tree/docs/radicle-publication.md:3-30",
+    "radicle_bootstrap_guides": [
+      "https://radicle.dev/guides/user",
+      "https://radicle.dev/guides/protocol",
+      "https://radicle.dev/guides/seeder"
+    ]
+  },
+  "anonymous_environment": {
+    "HOME": "fresh task-owned directory",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "credential_helper": "cleared",
+    "http_extra_header": "cleared",
+    "SSH_AUTH_SOCK": "unset",
+    "preexisting_access_credentials_used": false,
+    "provider_publication_performed": false,
+    "radicle_node_started": false
+  },
+  "bounded_exec": {
+    "selected_revision": "29dac88ecded94457572db3fdfaaaab95fa91525",
+    "source": "https://github.com/OnixResearch/bounded-exec.git",
+    "git_tree": "fc0b6f75a01088faf4f22be57edc073a3fe45e54",
+    "metadata_free_nar_hash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+    "previous_metadata_free_nar_hash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+    "revision_changed": false,
+    "provider_tree_changed": false,
+    "exact_acquisition_commands": [
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -c init.defaultBranch=main init /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact",
+        "output": "Initialized empty Git repository in /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact/.git/\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact fetch --no-tags --depth=1 https://github.com/OnixResearch/bounded-exec.git 29dac88ecded94457572db3fdfaaaab95fa91525",
+        "output": "From https://github.com/OnixResearch/bounded-exec\n * branch            29dac88ecded94457572db3fdfaaaab95fa91525 -> FETCH_HEAD\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact checkout --detach 29dac88ecded94457572db3fdfaaaab95fa91525",
+        "output": "HEAD is now at 29dac88 record why the shared runner boundary holds across consumers\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact show -s --format=\"commit=%H%ntree=%T%ncommitter_epoch=%ct%ncommitter_iso=%cI\" HEAD",
+        "output": "commit=29dac88ecded94457572db3fdfaaaab95fa91525\ntree=fc0b6f75a01088faf4f22be57edc073a3fe45e54\ncommitter_epoch=1784441700\ncommitter_iso=2026-07-19T02:15:00-04:00\n",
+        "exit_code": 0
+      }
+    ],
+    "tree_identity": {
+      "checkout_index_command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-exact checkout-index --all --prefix=/dev/shm/aspen-anonymous-sources-20261113/bounded-exec-tree/",
+      "hash_command": "nix --option min-free 0 --option max-free 0 --option substituters https://cache.nixos.org --option connect-timeout 10 hash path --type sha256 --sri /dev/shm/aspen-anonymous-sources-20261113/bounded-exec-tree/",
+      "metadata_free_nar_hash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+      "previous_locked_nar_hash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+      "same_tree_identity": true,
+      "source_commit": "29dac88ecded94457572db3fdfaaaab95fa91525",
+      "source_git_tree": "fc0b6f75a01088faf4f22be57edc073a3fe45e54"
+    },
+    "transitive_manifest_observation": "Selected bounded-exec depends on workspace-local bounded-exec-core and registry nix ^0.30.1 for Unix; neither package adds another Git coordinate."
+  },
+  "bounded_tree": {
+    "selected_revision": "250f3b25d0933c2fa106aa82d1cc17a496716f06",
+    "rid": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX",
+    "source": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
+    "git_tree": "0cc4596f8335e25f197971afd4f5e6bbbb49d485",
+    "metadata_free_nar_hash": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=",
+    "previous_metadata_free_nar_hash": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=",
+    "coordinate_changed": false,
+    "revision_changed": false,
+    "fallbacks_added": [],
+    "provider_declaration_observed_in_fresh_checkout": {
+      "file": "config/radicle-source.ncl",
+      "rid": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX",
+      "default_branch": "main",
+      "fallbacks": [],
+      "license": "AGPL-3.0-or-later"
+    },
+    "transitive_manifest_observation": "Selected capability crate depends on workspace-local bounded-tree-core and registry blake3, cap-fs-ext and cap-std; tempfile is development-only. No extra Git source occurs in these provider manifest tables.",
+    "observations": [
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= ls-remote https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
+        "output": "f73685b4b85ae7446ee3e52eb199ae871cd32ffd\tHEAD\nf73685b4b85ae7446ee3e52eb199ae871cd32ffd\trefs/heads/main\n9a64efaed508af2afeb2f14ff43b51532318103c\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/cobs/xyz.radicle.id/9a64efaed508af2afeb2f14ff43b51532318103c\n034459b3a0c2425731c323d16397315fcf459c20\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/heads/cairn/admit-rooted-absolute-links-20261016\nb0fd0103bc9eed2c1b6d852045959462d105d8f1\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/heads/cairn/establish-bounded-tree-20260803\nf73685b4b85ae7446ee3e52eb199ae871cd32ffd\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/heads/main\n9a64efaed508af2afeb2f14ff43b51532318103c\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/rad/id\n9a64efaed508af2afeb2f14ff43b51532318103c\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/rad/root\n3c47abaf8a4020b350cbb8190ffc483e3fa60ed2\trefs/namespaces/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx/refs/rad/sigrefs\n9a64efaed508af2afeb2f14ff43b51532318103c\trefs/rad/id\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous RAD_PASSPHRASE= rad auth --alias aspen-anonymous-acquisition-20261113 --stdin",
+        "output": "$ env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous RAD_PASSPHRASE= rad auth --alias aspen-anonymous-acquisition-20261113 --stdin: exited with code 2\nerror: invalid value 'aspen-anonymous-acquisition-20261113' for '--alias <ALIAS>': alias cannot be greater than 32 bytes\n\nFor more information, try '--help'.",
+        "exit_code": 2
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -c init.defaultBranch=main init /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact",
+        "output": "Initialized empty Git repository in /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact/.git/\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact fetch --no-tags --depth=1 https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git 250f3b25d0933c2fa106aa82d1cc17a496716f06 refs/rad/id:refs/rad/id",
+        "output": "From https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX\n * branch            250f3b25d0933c2fa106aa82d1cc17a496716f06 -> FETCH_HEAD\n * [new ref]         refs/rad/id -> refs/rad/id\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact checkout --detach 250f3b25d0933c2fa106aa82d1cc17a496716f06",
+        "output": "HEAD is now at 250f3b2 Reject substituted FIFO members without blocking source opens\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact show -s --format=\"commit=%H%ntree=%T%ncommitter_epoch=%ct%ncommitter_iso=%cI\" HEAD",
+        "output": "commit=250f3b25d0933c2fa106aa82d1cc17a496716f06\ntree=0cc4596f8335e25f197971afd4f5e6bbbb49d485\ncommitter_epoch=1793131480\ncommitter_iso=2026-10-27T16:04:40-04:00\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false git -c credential.helper= -c http.extraHeader= -C /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact checkout-index --all --prefix=/dev/shm/aspen-anonymous-sources-20261113/bounded-tree-tree/",
+        "output": "",
+        "exit_code": 0
+      },
+      {
+        "command": "nix --option min-free 0 --option max-free 0 --option substituters https://cache.nixos.org --option connect-timeout 10 hash path --type sha256 --sri /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-tree/",
+        "output": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=\n",
+        "exit_code": 0
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous rad inspect --rid /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact",
+        "output": "$ env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous rad inspect --rid /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact: exited with code 1\n\u2717 Error: Supplied argument is not a valid path",
+        "exit_code": 1
+      },
+      {
+        "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous rad inspect --payload /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact",
+        "output": "$ env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false RAD_HOME=/dev/shm/aspen-anonymous-sources-20261113/radicle-anonymous rad inspect --payload /dev/shm/aspen-anonymous-sources-20261113/bounded-tree-exact: exited with code 1\n\u2717 Error: Supplied argument is not a valid path",
+        "exit_code": 1
+      }
+    ],
+    "bootstrap_outcome": "Existing advertised Git-over-HTTPS transport supplied the selected exact objects. Disposable Radicle auth attempt was rejected for an overlong alias before initialization; no profile/node bootstrap was needed or completed.",
+    "radicle_inspection_outcome": "rad inspect --rid/--payload rejected the ordinary Git checkout path. No Radicle signed-ref/identity verification is claimed; canonical RID is retained from catalog and acquired provider declaration."
+  },
+  "owning_generators": [
+    {
+      "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= GIT_CONFIG_KEY_1=http.extraHeader GIT_CONFIG_VALUE_1= GIT_ASKPASS=/bin/false CARGO_HOME=/home/brittonr/.cargo CARGO_NET_GIT_FETCH_WITH_CLI=true /nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/bin/cargo update --workspace",
+      "exit_code": 0,
+      "output": "    Updating git repository `https://github.com/OnixResearch/bounded-exec.git`\n     Locking 2 packages to latest Rust 1.98.0-nightly compatible versions\n    Removing bounded-exec v0.1.0 (https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)\n      Adding bounded-exec v0.1.0 (https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)\n    Removing bounded-exec-core v0.1.0 (https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)\n      Adding bounded-exec-core v0.1.0 (https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)\nnote: pass `--verbose` to see 316 unchanged dependencies behind latest\n\n\nWall time: 1.01 seconds",
+      "effect": "Only bounded-exec and bounded-exec-core source records removed/added at unchanged revisions and versions."
+    },
+    {
+      "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_ASKPASS=/bin/false XDG_CACHE_HOME=/dev/shm/aspen-anonymous-sources-20261113/nix-cache nix --option min-free 0 --option max-free 0 --option substituters https://cache.nixos.org --option connect-timeout 10 flake lock --update-input bounded-exec-src",
+      "exit_code": 0,
+      "output": "warning: '--update-input' is a deprecated alias for 'flake update' and will be removed in a future version.\nremote: Enumerating objects: 36, done.        \nremote: Counting objects:   2% (1/36)        \nremote: Counting objects:   5% (2/36)        \nremote: Counting objects:   8% (3/36)        \nremote: Counting objects:  11% (4/36)        \nremote: Counting objects:  13% (5/36)        \nremote: Counting objects:  16% (6/36)        \nremote: Counting objects:  19% (7/36)        \nremote: Counting objects:  22% (8/36)        \nremote: Counting objects:  25% (9/36)        \nremote: Counting objects:  27% (10/36)        \nremote: Counting objects:  30% (11/36)        \nremote: Counting objects:  33% (12/36)        \nremote: Counting objects:  36% (13/36)        \nremote: Counting objects:  38% (14/36)        \nremote: Counting objects:  41% (15/36)        \nremote: Counting objects:  44% (16/36)        \nremote: Counting objects:  47% (17/36)        \nremote: Counting objects:  50% (18/36)        \nremote: Counting objects:  52% (19/36)        \nremote: Counting objects:  55% (20/36)        \nremote: Counting objects:  58% (21/36)        \nremote: Counting objects:  61% (22/36)        \nremote: Counting objects:  63% (23/36)        \nremote: Counting objects:  66% (24/36)        \nremote: Counting objects:  69% (25/36)        \nremote: Counting objects:  72% (26/36)        \nremote: Counting objects:  75% (27/36)        \nremote: Counting objects:  77% (28/36)        \nremote: Counting objects:  80% (29/36)        \nremote: Counting objects:  83% (30/36)        \nremote: Counting objects:  86% (31/36)        \nremote: Counting objects:  88% (32/36)        \nremote: Counting objects:  91% (33/36)        \nremote: Counting objects:  94% (34/36)        \nremote: Counting objects:  97% (35/36)        \nremote: Counting objects: 100% (36/36)        \nremote: Counting objects: 100% (36/36), done.        \nremote: Compressing objects:   4% (1/24)        \nremote: Compressing objects:   8% (2/24)        \nremote: Compressing objects:  12% (3/24)        \nremote: Compressing objects:  16% (4/24)        \nremote: Compressing objects:  20% (5/24)        \nremote: Compressing objects:  25% (6/24)        \nremote: Compressing objects:  29% (7/24)        \nremote: Compressing objects:  33% (8/24)        \nremote: Compressing objects:  37% (9/24)        \nremote: Compressing objects:  41% (10/24)        \nremote: Compressing objects:  45% (11/24)        \nremote: Compressing objects:  50% (12/24)        \nremote: Compressing objects:  54% (13/24)        \nremote: Compressing objects:  58% (14/24)        \nremote: Compressing objects:  62% (15/24)        \nremote: Compressing objects:  66% (16/24)        \nremote: Compressing objects:  70% (17/24)        \nremote: Compressing objects:  75% (18/24)        \nremote: Compressing objects:  79% (19/24)        \nremote: Compressing objects:  83% (20/24)        \nremote: Compressing objects:  87% (21/24)        \nremote: Compressing objects:  91% (22/24)        \nremote: Compressing objects:  95% (23/24)        \nremote: Compressing objects: 100% (24/24)        \nremote: Compressing objects: 100% (24/24), done.        \nremote: Total 36 (delta 7), reused 36 (delta 7), pack-reused 0 (from 0)        \nFrom https://github.com/OnixResearch/bounded-exec\n * branch            29dac88ecded94457572db3fdfaaaab95fa91525 -> FETCH_HEAD\nwarning: updating lock file \"/dev/shm/aspen-open-issues-20261113/flake.lock\":\n\u2022 Updated input 'bounded-exec-src':\n    'git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?ref=refs/heads/main&rev=29dac88' (2026-07-19)\n  \u2192 'git+https://github.com/OnixResearch/bounded-exec.git?ref=refs/heads/main&rev=29dac88' (2026-07-19)\n",
+      "effect": "Only selected bounded-exec-src transport coordinate changed."
+    },
+    {
+      "command": "env -u SSH_AUTH_SOCK -u SSH_ASKPASS -u GH_TOKEN -u GITHUB_TOKEN -u GIT_TOKEN -u GIT_SSL_CERT -u GIT_SSL_KEY HOME=/dev/shm/aspen-anonymous-sources-20261113/anonymous-home GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= GIT_CONFIG_KEY_1=http.extraHeader GIT_CONFIG_VALUE_1= GIT_ASKPASS=/bin/false CARGO_HOME=/home/brittonr/.cargo CARGO_NET_GIT_FETCH_WITH_CLI=true TMPDIR=/dev/shm/aspen-anonymous-sources-20261113/tmp XDG_CACHE_HOME=/dev/shm/aspen-anonymous-sources-20261113/nix-cache NIX_CONFIG='min-free = 0\nmax-free = 0\nsubstituters = https://cache.nixos.org\nconnect-timeout = 10\n' bash scripts/git-source-hashes.sh --write",
+      "exit_code": 0,
+      "output": "Initialized empty Git repository in /dev/shm/aspen-anonymous-sources-20261113/tmp/git-checkout-tmp-IlGJN98h/clone/.git/\nfatal: unable to access 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git/': The requested URL returned error: 530\nfatal: unable to access 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git/': The requested URL returned error: 530\nERROR: `git fetch' failed.\nThis might be due to the dumb transfer protocol not supporting shallow fetch or no-tag cloning. Trying with `--tags' and without `--depth=1'...\nfatal: unable to access 'https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git/': The requested URL returned error: 530\nUnable to checkout 8e05e74e24b45f752d77145c4455385daaf6d6ab from https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git.\nprefetch unavailable for https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git; using the flake.lock narHash locked at 8e05e74e24b45f752d77145c4455385daaf6d6ab\nwrote 26 revision-qualified git source hashes to crate-hashes.json\n\n\nWall time: 42.01 seconds",
+      "effect": "26 revision-qualified source bindings emitted by scripts/git-source-hashes.sh --write; unchanged Durable File Publication lookup failed with HTTP530 and used existing exact flake.lock NAR identity."
+    },
+    {
+      "command": "nickel export --format json docs/fabric-execution/profile.ncl",
+      "exit_code": 0,
+      "output_path": "docs/fabric-execution/generated/profile.json",
+      "effect": "Nickel-owned current source-cohort JSON export regenerated."
+    },
+    {
+      "command": "unit2nix --workspace -o build-plan.json",
+      "exit_code": 0,
+      "observed_output_summary": {
+        "units": 1028,
+        "roots": 12,
+        "metadata_packages": 894,
+        "lock_checksum_packages": 963,
+        "cargo_lock_sha256": "701c035a19f11bc61a1ccb93374c27783f2a50717038a79bb8590436622b78b4",
+        "test_unit_graph_units": 1090,
+        "test_unit_graph_roots": 37,
+        "merged_crates": 745,
+        "workspace_members": 4,
+        "git_source_hashes_applied": 38
+      },
+      "note": "Cargo build/test --unit-graph invocations only; no actual compiler build or test execution."
+    },
+    {
+      "command": "unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json",
+      "exit_code": 0,
+      "observed_output_summary": {
+        "units": 322,
+        "roots": 1,
+        "metadata_packages": 894,
+        "lock_checksum_packages": 963,
+        "cargo_lock_sha256": "701c035a19f11bc61a1ccb93374c27783f2a50717038a79bb8590436622b78b4",
+        "merged_crates": 253,
+        "workspace_members": 2,
+        "git_source_hashes_applied": 17
+      },
+      "note": "Unit-graph generation only; not build or test evidence."
+    }
+  ],
+  "exported_constant_references": {
+    "method": "textDocument/references",
+    "symbol": "BOUNDED_EXEC_REPOSITORY",
+    "project_crates": [
+      "/dev/shm/aspen-open-issues-20261113/src/lib.rs",
+      "/dev/shm/aspen-open-issues-20261113/src/bin/molten-service-host-cohort.rs",
+      "/dev/shm/aspen-open-issues-20261113/tests/collaborationnative.rs",
+      "/dev/shm/aspen-open-issues-20261113/tests/nativesystemextension.rs",
+      "/dev/shm/aspen-open-issues-20261113/crates/molten-core/src/lib.rs",
+      "/dev/shm/aspen-open-issues-20261113/crates/molten-node-host/src/lib.rs",
+      "/dev/shm/aspen-open-issues-20261113/crates/molten-release-policy/src/lib.rs"
+    ],
+    "build_scripts_enabled": false,
+    "cargo_checks_enabled": false,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": [
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/src/fabric_execution/canonical/mod.rs",
+          "range": {
+            "start": {
+              "line": 67,
+              "character": 20
+            },
+            "end": {
+              "line": 67,
+              "character": 43
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/src/bin/servicehostcohort/service/profiles.rs",
+          "range": {
+            "start": {
+              "line": 89,
+              "character": 56
+            },
+            "end": {
+              "line": 89,
+              "character": 79
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/crates/molten-core/src/fabric_execution/admission/profile.rs",
+          "range": {
+            "start": {
+              "line": 40,
+              "character": 58
+            },
+            "end": {
+              "line": 40,
+              "character": 81
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/crates/molten-core/src/fabric_execution/tests.rs",
+          "range": {
+            "start": {
+              "line": 58,
+              "character": 30
+            },
+            "end": {
+              "line": 58,
+              "character": 53
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/tests/collaborationnative/producer/mechanisms.rs",
+          "range": {
+            "start": {
+              "line": 68,
+              "character": 56
+            },
+            "end": {
+              "line": 68,
+              "character": 79
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/src/fabric_execution/tests.rs",
+          "range": {
+            "start": {
+              "line": 87,
+              "character": 30
+            },
+            "end": {
+              "line": 87,
+              "character": 53
+            }
+          }
+        },
+        {
+          "uri": "file:///dev/shm/aspen-open-issues-20261113/crates/molten-core/src/fabric_execution/model/mod.rs",
+          "range": {
+            "start": {
+              "line": 16,
+              "character": 10
+            },
+            "end": {
+              "line": 16,
+              "character": 33
+            }
+          }
+        }
+      ]
+    },
+    "server_status": [
+      {
+        "health": "ok",
+        "quiescent": false,
+        "message": null
+      },
+      {
+        "health": "ok",
+        "quiescent": true,
+        "message": null
+      }
+    ],
+    "stderr": "",
+    "error": null,
+    "earlier_attempts": {
+      "method": "textDocument/references",
+      "symbol": "BOUNDED_EXEC_REPOSITORY",
+      "project_crates": [
+        "/dev/shm/aspen-open-issues-20261113/src/lib.rs",
+        "/dev/shm/aspen-open-issues-20261113/src/bin/molten-service-host-cohort.rs",
+        "/dev/shm/aspen-open-issues-20261113/tests/collaborationnative.rs",
+        "/dev/shm/aspen-open-issues-20261113/tests/nativesystemextension.rs",
+        "/dev/shm/aspen-open-issues-20261113/crates/molten-core/src/lib.rs",
+        "/dev/shm/aspen-open-issues-20261113/crates/molten-node-host/src/lib.rs",
+        "/dev/shm/aspen-open-issues-20261113/crates/molten-release-policy/src/lib.rs"
+      ],
+      "build_scripts_enabled": false,
+      "cargo_checks_enabled": false,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": []
+      },
+      "server_status": [
+        {
+          "health": "ok",
+          "quiescent": false,
+          "message": null
+        },
+        {
+          "health": "warning",
+          "quiescent": true,
+          "message": "Auto-reloading is disabled and the workspace has changed, a manual workspace reload is required."
+        }
+      ],
+      "messages": [
+        {
+          "method": "window/workDoneProgress/create",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "experimental/serverStatus",
+          "params": {
+            "health": "ok",
+            "quiescent": false,
+            "message": null
+          }
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "window/workDoneProgress/create",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "window/workDoneProgress/create",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        },
+        {
+          "method": "$/progress",
+          "params": null
+        }
+      ],
+      "stderr": "",
+      "error": null,
+      "earlier_attempts": [
+        "Initialization succeeded but did not advertise server-status capability; no query sent before timeout.",
+        {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "error": {
+            "code": -32603,
+            "message": "file not found: /dev/shm/aspen-open-issues-20261113/crates/molten-core/src/fabric_execution/model/mod.rs"
+          }
+        }
+      ]
+    }
+  },
+  "preserved_scope": {
+    "counter_target_manifest_path": "src/addressable_actor/counter/main.rs",
+    "provider_revisions_changed": [],
+    "profile_namespace_or_schema_changes": [],
+    "historical_archives_rewritten": false,
+    "provider_code_modified": false
+  },
+  "remaining_prerequisites": [
+    "Unchanged Durable File Publication route https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git returned HTTP530. Its exact locked NAR identity fallback is not proof of anonymous fresh acquisition. Catalog advertises a separate GitHub source; no extra transport cutover was made in this Exec/Tree slice.",
+    "Parent-owned focused source/dependency checks, builds, tests, lints, formatter and lifecycle gates were not run here.",
+    "Acquisition availability is time/endpoint scoped; same immutable source bytes do not grant source trust, current authority, legal distribution or runtime qualification."
+  ]
+}

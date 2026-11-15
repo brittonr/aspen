@@ -97,7 +97,12 @@ pub fn subscribe(
             current_epoch: stream.stream_epoch,
         });
     }
-    if cursor.revision < stream.first_retained_revision {
+    if cursor.revision < stream.first_retained_revision
+        || stream
+            .events
+            .first()
+            .is_some_and(|first| cursor.revision == first.revision && cursor.ordinal < first.ordinal)
+    {
         return Ok(SubscriptionOutcome::RetentionGap {
             resnapshot_from: StreamCursor::start(&stream.service_id, stream.stream_epoch),
         });

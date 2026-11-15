@@ -18,6 +18,10 @@ pub struct Arguments {
     pub nonce_file: std::path::PathBuf,
     #[arg(long, value_enum, default_value = "text")]
     pub request_format: Format,
+    /// Explicit external qualification only: export public trust revoking this actual signed token.
+    /// Does not change current host trust or retain private seeds.
+    #[arg(long)]
+    pub revoked_trust_output: Option<String>,
 }
 
 #[derive(Clone, clap::ValueEnum)]
@@ -58,6 +62,28 @@ pub(super) fn authorize(args: Arguments) -> molten::error::Result<()> {
         .map_err(|_| super::invalid("invocation nonce must contain exactly 32 raw bytes"))?;
     operator.authorize(&root, &bundle_ref, &request, nonce)?;
     let reference = molten::node_service_host::authority::request_ref(&bundle_ref, &request)?;
+    if let Some(output) = args.revoked_trust_output {
+        let path = molten::node_state::RelativePath::parse(&output)?;
+        if output == "service-host-trust" {
+            return Err(super::invalid("revocation fixture cannot replace host trust"));
+        }
+        let credential = molten::node_service_host::authority::wire::decode_credential(
+            &root.read(&molten::node_service_host::authority::credential_path(&reference)?, 2_228_224)?,
+        )?;
+        let token = basalt::ucan::CompactToken::new(&credential.token)
+            .map_err(|_| super::invalid("actual signed qualification token cannot be decoded"))?;
+        let mut trust = molten::node_service_host::authority::wire::decode_trust(
+            &root.read(&molten::node_state::RelativePath::parse("service-host-trust")?, 262_144)?,
+        )?;
+        let proof: [u8; 32] = basalt::ucan::proof_reference(&token)
+            .as_bytes()
+            .try_into()
+            .map_err(|_| super::invalid("actual UCAN proof digest has unexpected width"))?;
+        if !trust.revoked.contains(&proof) {
+            trust.revoked.push(proof);
+        }
+        root.write_new(&path, &molten::node_service_host::authority::wire::encode_trust(&trust)?)?;
+    }
     println!(
         "{}",
         molten::preserves_rail::to_text(&molten::preserves_rail::record(

@@ -9,7 +9,12 @@
 
 mod chaoscontrol;
 mod local;
-mod localtree;
+#[path = "local/admission.rs"]
+mod localadmission;
+#[path = "local/profile.rs"]
+mod localprofile;
+#[path = "local/runtime.rs"]
+mod localruntime;
 mod ports;
 mod records;
 mod service;
@@ -18,6 +23,9 @@ mod vm;
 
 pub use chaoscontrol::*;
 pub use local::*;
+pub use localadmission::*;
+pub use localprofile::*;
+pub use localruntime::*;
 pub use ports::*;
 pub use records::*;
 pub use service::*;

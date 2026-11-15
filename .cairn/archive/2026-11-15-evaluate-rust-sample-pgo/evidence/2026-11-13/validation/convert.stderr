@@ -1,0 +1,7 @@
+warning: 13.54%(8894/65684) of functions failed to determine function entry due to inconsistent name from symbol table and dwarf info.
+warning: 0.03%(5/14604) of samples are from ranges that are not on instruction boundary.
+warning: 7.82%(1142/14604) of samples are from ranges that do not belong to any functions.
+warning: 0.12%(18/14604) of samples are from ranges that do cross function boundaries.
+warning: 0.47%(68/14604) of samples are from ranges that have range start after or too far from range end acrossing the unconditinal jmp.
+warning: 7.86%(706/8981) of branch targets do not match the binary.
+warning: Sample PGO is estimated to optimize better with 4002.4x more samples. Please consider increasing sampling rate or profiling for longer duration to get more samples.

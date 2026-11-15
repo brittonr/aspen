@@ -1,17 +1,17 @@
 let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "5f3962d7471d1547e044f57daeda72f56621fd52" in
 let BoundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525" in
-let BoundedExecSource = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git" in
+let BoundedExecSource = "https://github.com/OnixResearch/bounded-exec.git" in
 let DurableFilePublicationRevision = "8e05e74e24b45f752d77145c4455385daaf6d6ab" in
-let DurableFilePublicationSource = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git" in
+let DurableFilePublicationSource = "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git" in
 let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
-let ChoregraphSource = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git" in
+let ChoregraphSource = "https://github.com/OnixResearch/choregraph.git" in
 let ChaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85" in
 let ChaosControlSource = "https://github.com/brittonr/chaoscontrol.git" in
 let VmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e" in
 let VmCohortSource = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
-let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
+let ExecutableExtentSource = "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "9201074343cd9da0ffaf6ec9db690af5b445d663" in
 let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
@@ -21,7 +21,7 @@ let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1s
 let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
 let HardenedWasmtimeRevision = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e" in
-let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
+let HardenedWasmtimeSource = "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git" in
 let MantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df" in
 let MantleWasmVerifierSource = "https://github.com/OnixResearch/mantle.git" in
 let DurableAuthorityRevision = "a0de79303f3f45c18a34fff535b690a85cb3cf59" in
@@ -40,6 +40,17 @@ in
 {
   schema = "molten.release-dependency-profile.v2",
   dependencies = [
+    {
+      manifest_dependency = "quint-connect",
+      package_name = "quint-connect",
+      package_version = "0.1.2",
+      source_kind = "git",
+      source_coordinate = "https://github.com/quint-co/quint-connect.git",
+      immutable_revision = "4f018f54fc7dd4cef341d10111427bab59d3b307",
+      nix_input = "quint-connect-src",
+      transport_policy = "https",
+      disposition = "development",
+    },
     {
       manifest_dependency = "durable-authority-state-redb",
       package_name = "durable-authority-state-redb",
@@ -136,7 +147,7 @@ in
       source_coordinate = HardenedWasmtimeSource,
       immutable_revision = HardenedWasmtimeRevision,
       nix_input = "hardened-wasmtime-src",
-      transport_policy = "private-radicle",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -147,7 +158,7 @@ in
       source_coordinate = HardenedWasmtimeSource,
       immutable_revision = HardenedWasmtimeRevision,
       nix_input = "hardened-wasmtime-src",
-      transport_policy = "private-radicle",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {
@@ -224,7 +235,7 @@ in
       source_coordinate = ExecutableExtentSource,
       immutable_revision = ExecutableExtentRevision,
       nix_input = "executable-extent-src",
-      transport_policy = "private-radicle",
+      transport_policy = "https",
       disposition = "optional-runtime",
     },
     {
@@ -235,7 +246,7 @@ in
       source_coordinate = ExecutableExtentSource,
       immutable_revision = ExecutableExtentRevision,
       nix_input = "executable-extent-src",
-      transport_policy = "private-radicle",
+      transport_policy = "https",
       disposition = "optional-runtime",
     },
     {
@@ -246,7 +257,7 @@ in
       source_coordinate = ExecutableExtentSource,
       immutable_revision = ExecutableExtentRevision,
       nix_input = "executable-extent-src",
-      transport_policy = "private-radicle",
+      transport_policy = "https",
       disposition = "optional-runtime",
     },
     {
@@ -394,6 +405,50 @@ in
     },
   ],
   registry_dependencies = [
+    {
+      manifest_dependency = "reqwest",
+      package_name = "reqwest",
+      package_version = "0.13.4",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "sha2",
+      package_name = "sha2",
+      package_version = "0.10.9",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "hmac",
+      package_name = "hmac",
+      package_version = "0.12.1",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "time",
+      package_name = "time",
+      package_version = "0.3.47",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
     {
       manifest_dependency = "art",
       package_name = "art",

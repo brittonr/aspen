@@ -1,6 +1,6 @@
 # Content-store adapter runtime
 
-Molten content identity remains owned by the existing chunk manifest and chunk primitives. `molten-core::content_store_adapter` adds a pure bounded command, preflight, range-plan, partial-state, verification-transition, failure, availability, and authority core. `molten::content_store_adapter` supplies canonical Preserves artifacts and capability-rooted local, Redb-indexed, live Iroh Blobs, and deterministic simulation shells.
+Aspen content identity remains owned by the existing chunk manifest and chunk primitives. The internal `molten-core::content_store_adapter` module supplies the pure bounded command/transition core; `molten::content_store_adapter` supplies canonical Preserves artifacts and capability-rooted local, Redb-indexed, live Iroh Blobs, optional object-storage, and deterministic simulation shells.
 
 ## Identity boundary
 
@@ -18,7 +18,7 @@ Profiles declare capabilities explicitly. Unsupported range, transform, durabili
 
 Preflight checks total bytes, chunk count and size, range size, concurrency, queue and memory bytes, logical deadline, retry count, and event count. Local and live shells read one bounded chunk at a time. Each shell computes the existing domain-separated chunk identity and passes an observation into the pure transition core. Bytes enter a `VerifiedChunkPayload` only after hash, length, position, sequence, operation, manifest, profile, and generation checks pass. Full assembly additionally re-verifies every payload and is unavailable until the complete manifest is verified.
 
-A backend success callback, QUIC connection, Iroh blob hash, or Redb row never marks a Molten chunk available by itself.
+A backend success callback, QUIC connection, Iroh blob hash, or Redb row never marks an Aspen chunk available by itself.
 
 ## Partial state and failure semantics
 
@@ -31,7 +31,7 @@ Terminal classes distinguish accepted, streaming, verified, durable, cancelled, 
 - **Capability local** streams verified chunks through `ChunkStoreRoot` and uses existing canonical manifests and receipts.
 - **Redb indexed** projects bounded availability and missing counts from the existing index without exposing the database handle.
 - **Iroh Blobs** starts an actual `iroh_blobs::BlobsProtocol` router under an admitted persisted transport key and streams BAO leaves over Iroh with a hard per-chunk bound. The client re-verifies Molten chunk identity after transport.
-- **Object storage** declares a distinct `object-storage` class and profile with streaming put/get, availability, import, export, and protection capabilities. A bounded path-style S3 client now implements SigV4 signing, put/get/head, key and size validation, and a mock-endpoint signing test. A bounded local tier implements a recovery-constrained capacity, no-eviction remote-only admission, BLAKE3 verification before exposure, and corruption rejection; it can require a non-rotational backing device. An ignored qualification test passed on a path backed by `nvme1n1p3` with that requirement enabled. The cached client serves verified local hits without a remote request, verifies every remote read before exposure/caching, and refuses corrupt remote bytes. Ignored live tests take `MOLTEN_S3_ENDPOINT` and `MOLTEN_S3_BUCKET`: a client roundtrip and an object-shell Put/Get through the transition core both passed against SeaweedFS 4.53. A latency recorder reports local-hit and remote-read p50/p99 separately without a speedup claim. An object-storage shell publishes every verified chunk through the S3 client and runs Get through the shared command/transition core against a local mock endpoint; it exposes only verified chunks and does not claim durable completion. It is gated by the `content-store-object-storage` Cargo feature; default builds do not compile it. The feature's direct dependency allowlist is [documented here](content-store-adapter/object-storage-dependency-allowlist.tsv). A live S3-compatible endpoint run and the verified local NVMe tier are not implemented; no `durable-completion` claim applies until the remote put is confirmed. See the open object-storage issue.
+- **Object storage** is the distinct optional `object-storage` profile, gated by `content-store-object-storage`. Its existing thin path-style SigV4 client and injectable local HTTP endpoint use the same bounded put/get command and transition core. The shell verifies local hits without remote requests and verifies remote chunk identity and length before caching or exposure. `execute_object_put` reports durable completion only after every provider acknowledgement; it does not equate that acknowledgement with measured physical durability. The client freezes a numeric endpoint and credentials at admission, disables proxies, redirects and automatic retries, and bounds connection/request time, outstanding requests, configuration and body bytes. Its separate capability-rooted local tier has byte/entry/recovery bounds and no automatic eviction: a full tier leaves new cold reads verified remote-only. The [qualification runbook](content-store-adapter/object-storage-qualification.md) covers the pinned endpoint, mock faults, canonical receipts, dependency allowlist, split latency samples and actual NVMe-device inputs. Source fixtures are not executed evidence; no speedup, NVMe, MTTR or production-durability claim follows from them.
 - **Deterministic simulation** runs the same command and transition core for get and put. The get path models corruption, truncation, cancellation, disconnect, capacity, latency, restart, and resume. The put path models provider throttle, torn put with possible remote acceptance, and multipart abort; failure arms never return a durable terminal or verified payloads.
 
 The older `chunk_store::publish_iroh_blobs` / `fetch_iroh_blobs` compatibility helpers copy through a capability-rooted local blob directory. They are retained for compatibility and are **not** evidence of live Iroh transport. New live claims require `publish_chunks` plus `execute_stream_get` receipts or test evidence.
@@ -42,12 +42,12 @@ Backend tags and protection handles are effects subordinate to canonical retenti
 
 ## Object-storage parity
 
-Retained runs against SeaweedFS 4.53 and the mock endpoint:
+The command shell retains corruption/truncation as failed verification, provider throttle as retryable, get disconnect before progress as retryable, get disconnect after progress as uncertain, and timeout as uncertain. Dispatched PUT disconnects conservatively remain uncertain because mutation cannot be excluded, even without a response. Simulated torn-put, provider-throttle and multipart-abort arms use the same pure classifier. Neither shell silently retries uncertain puts.
 
-| Case | Mock | Live SeaweedFS |
-|---|---|---|
-| Put/Get through the object shell | Verified | Verified |
-| Corrupt remote chunk | Failed, 0 verified chunks | Failed, 0 verified chunks |
+Deletion requires the canonical retention policy/no-pin/deletion-gate decision **and** passes the local protection veto before dispatch. Unprotect is not deletion admission. An independently requested protected-remote-presence audit bypasses the cache and fails if a provider lifecycle rule removed the remote copy, even when a valid local copy exists. The adapter cannot prevent an out-of-band provider lifecycle rule; operators must prohibit destructive rules for protected inventory and run that audit.
 
-Remote deletes are guarded by an explicit retention set: a protected chunk is denied before any network request, and an unprotected delete removes both the remote object and the local cached copy. Canonical retention remains the authority. These are bounded observations, not a latency or durability claim. The live arm
-is an ignored test gated by `MOLTEN_S3_ENDPOINT` and `MOLTEN_S3_BUCKET`.
+The earlier checked-in `evidence/` inventory contained no matching object-storage receipts and `runs/` was absent; that historical inventory does not invalidate later retained local executions or promote the earlier prose-only SeaweedFS/device claims.
+
+The [parent execution record](../.cairn/archive/2026-11-15-complete-object-storage-bounds/tasks.md#parent-execution-2026-11-13) records 32 passing object-feature controls, passing actual local S3 command/cache roundtrips, and the actual NVMe-path capacity/reopen control. Canonical object-conformance and NVMe-path receipts were retained for those specific execution cohorts. Task-owned tmpfs is not their NVMe storage claim.
+
+For issue #8 closure, a passing local-S3 CI run with uploaded canonical conformance artifacts remains required and unrecorded. Local observations do not establish cloud-provider behavior, physical power-loss durability, machine-loss recovery, sustained throughput or qualification of later source edits. Source fixtures and receipt producers for issues #13/#14 are not execution by themselves; retain each selected negative outcome and its emitted artifact rather than treating implementation as receipt acceptance. See the runbook for exact inputs and commands.

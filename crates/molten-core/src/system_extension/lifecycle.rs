@@ -290,6 +290,7 @@ pub fn plan_lifecycle_transition(
             | LifecyclePhase::Checkpointing
             | LifecyclePhase::Recovering
             | LifecyclePhase::Draining
+            | LifecyclePhase::Drained
             | LifecyclePhase::Restarting
             | LifecyclePhase::Upgrading
             | LifecyclePhase::RollingBack

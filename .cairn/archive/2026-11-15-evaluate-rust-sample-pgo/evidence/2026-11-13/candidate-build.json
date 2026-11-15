@@ -1,0 +1,19 @@
+{
+  "command": [
+    "nix",
+    "build",
+    "--impure",
+    "--out-link",
+    "/dev/shm/aspen-sample-pgo-run-nocache-20261113/candidate-build-result",
+    "--print-out-paths",
+    "--expr",
+    "(builtins.getFlake \"path:/nix/store/h4qssl538w95b26avps4is2q2336gb2r-3lnxhq7iccl90k78l9vxfwcf8q9780f0-source\").legacyPackages.x86_64-linux.sample-pgo.mkVariant /nix/store/0zk04glcl69ig83lva1d1gh5ms3cfjd1-profile-bundle"
+  ],
+  "elapsed_seconds": 54.2014890749997,
+  "max_rss_kib": 1679744.0,
+  "returncode": 1,
+  "system_seconds": 7.13,
+  "time_wall_seconds": 54.18,
+  "timeout": false,
+  "user_seconds": 21.39
+}

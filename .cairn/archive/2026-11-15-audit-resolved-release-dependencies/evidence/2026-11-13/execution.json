@@ -1,0 +1,84 @@
+{
+  "schema": "molten.dependency-audit-execution-observation.v1",
+  "observed_source_root": "/dev/shm/aspen-open-issues-20261113",
+  "source_scope": "Frozen pre-documentation snapshot; later evidence/documentation/lifecycle edits are not included and must not be represented as the audited latest tree.",
+  "capture_command": [
+    "/nix/store/jy47hh5hcs5a1jlw0cry6vwa0aij34bf-molten-dependency-audit/bin/molten-dependency-audit",
+    "--database",
+    "/dev/shm/aspen-rustsec-20261113",
+    "--database-revision",
+    "4ef2df8e806a65e2f1ecc14f56f51249062b23d6",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--as-of",
+    "2026-11-13",
+    "--out",
+    "/dev/shm/aspen-audit-workspace-complete-20261113",
+    "--release-evidence-source",
+    "hardened-wasmtime-resumable=/nix/store/4nrv5qvsq2ffqzn5931v3jx09fw3aqg1-source",
+    "--release-evidence-source",
+    "mantle-wasm-consumer-verifier=/nix/store/8bx4clprdx4g5rg0zpmzhxcjs6r07sv6-source",
+    "--release-evidence-source",
+    "valence-integrity=/nix/store/z6h9ircysn9mbiaw85nm7gvcc05qyfk2-source",
+    "--release-evidence-source",
+    "octet-cutover=/nix/store/h3g05jyhyl9yx5s31991q4fm0lh1yg06-source"
+  ],
+  "capture_exit_status": 1,
+  "capture_elapsed_seconds": 68.238,
+  "capture_stdout": "dependency audit deny: 741 packages, 204 findings; /dev/shm/aspen-audit-workspace-complete-20261113\n",
+  "capture_stderr": "",
+  "normalization_command": [
+    "/nix/store/xqzvx0c56f49nxjv6768yawdbi18nqbj-molten-dependency-audit-normalizer-0.1.0/bin/molten-dependency-audit-normalizer",
+    "--bundle",
+    "/dev/shm/aspen-audit-workspace-complete-20261113",
+    "--root",
+    "/dev/shm/aspen-open-issues-20261113",
+    "--as-of",
+    "2026-11-13"
+  ],
+  "normalizations": [
+    {
+      "iteration": 1,
+      "exit_status": 1,
+      "stdout": "dependency audit deny: 741 packages, 204 findings; /dev/shm/aspen-audit-workspace-complete-20261113\n",
+      "stderr": "",
+      "report_equal_to_capture": true,
+      "summary_equal_to_capture": true,
+      "binding_unchanged": true
+    },
+    {
+      "iteration": 2,
+      "exit_status": 1,
+      "stdout": "dependency audit deny: 741 packages, 204 findings; /dev/shm/aspen-audit-workspace-complete-20261113\n",
+      "stderr": "",
+      "report_equal_to_capture": true,
+      "summary_equal_to_capture": true,
+      "binding_unchanged": true
+    }
+  ],
+  "source_inventory_equal": true,
+  "refs": {
+    "binding.json": "blake3:f15f7d39423651267302313835630e042be48cd27b9cee700501001bddff987d",
+    "report.json": "blake3:cd147370af9c586e7f6e9c08078f15459d62019843f5985c57128d6911b6e7d0",
+    "summary.md": "blake3:ca2edfb64f11f28bbee89fdf63d277507140219bc76dae33723e3f121209ffe9",
+    "scanner.json": "blake3:2314e282d93f6b7dcde790be3b590a7f8b44a011e1a7c70f5b83633de63d94ef",
+    "source-files.json": "blake3:530fb17b83a68d429d4c4f5800d70c1cb1233204d2d9f997f269f226ac052c11"
+  },
+  "decision": "deny",
+  "resolved_package_count": 741,
+  "finding_counts": {
+    "advisory": 67,
+    "unavailable-license": 40,
+    "unavailable-notices": 87,
+    "license-policy": 5,
+    "source-policy": 5
+  },
+  "prior_attempts": {
+    "official": "/dev/shm/aspen-audit-workspace-official-20261113",
+    "official_limits": "207 findings include missing release evidence prerequisite and source drift; superseded by this frozen capture, not deleted.",
+    "bound": "/dev/shm/aspen-audit-workspace-bound-20261113",
+    "bound_observation": "Not present at follow-up inspection; earlier timeout is not a completed scan."
+  },
+  "existing_controls": "Copied unchanged from /dev/shm/aspen-audit-official-controls-20261113; not rerun.",
+  "cache_exclusion": "scanner-home excluded from both retained directories; no Cargo, RustSec Git checkout, build target, or scanner cache copied."
+}

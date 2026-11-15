@@ -1,0 +1,31 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 69 and seed -7038962199394938546 with 1 worker on 32 cores with 2048MB heap and 64MB offheap memory [pid: 1999322] (Linux 6.18.60 amd64, Eclipse Adoptium 21.0.13 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /dev/shm/aspen-fastpath-model-evidence-20261113-complete-jre/ConsensusFastPath.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module ConsensusFastPath
+Starting... (2026-11-13 13:58:12)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-13 13:58:12.
+Checking temporal properties for the current state space with 84698 total distinct states at (2026-11-13 13:58:15)
+Finished checking temporal properties in 00s at 2026-11-13 13:58:15
+Progress(14) at 2026-11-13 13:58:15: 372,405 states generated (372,405 s/min), 84,698 distinct states found (84,698 ds/min), 32,268 states left on queue.
+Progress(41) at 2026-11-13 13:58:44: 6,312,147 states generated, 966,147 distinct states found, 0 states left on queue.
+Checking temporal properties for the complete state space with 966147 total distinct states at (2026-11-13 13:58:44)
+Finished checking temporal properties in 06s at 2026-11-13 13:58:51
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 2.8E-7
+  based on the actual fingerprints:  val = 2.5E-7
+6312147 states generated, 966147 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 41.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 11 and the 95th percentile is 3).
+Finished in 39s at (2026-11-13 13:58:51)

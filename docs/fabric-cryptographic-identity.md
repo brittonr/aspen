@@ -16,6 +16,14 @@ The checked production profile is `docs/fabric-cryptographic-identity/profile.nc
 
 Node first boot writes a binary Ed25519 key record through the identity namespace at mode `0600`. Restart resolves the same public identity. Live Iroh endpoint construction reloads that admitted record through the capability root and checks the endpoint ID plus opaque handle before use. It no longer derives an endpoint secret from public node inputs.
 
+An explicit transport-only `Sealed` shell additionally resolves a
+provisioned policy-only TPM object through a measured retained executable and
+namespace capability. It is not a `ManagedSecret` alias, not PKCS11 signing,
+and never falls back to the file loader. See the [TPM2 backend decision,
+provisioning contract and disposable qualification rail](fabric-cryptographic-identity/tpm2-sealed.md).
+The default node first-boot path remains capability-file; selecting this API
+does not synthesize node startup/source admission or activate a rotation.
+
 ## Signing and verification
 
 `IrohEd25519` signs canonical domain records, not arbitrary ambient bytes. The signed record binds the profile, purpose, domain ID/version, payload schema/ref, signer public-key ref, and verifier-context ref. The shell returns canonical public signatures and outcomes. Federation and evidence admission helpers consume those outcomes without receiving adapter runtime objects or private material.

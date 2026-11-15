@@ -2,16 +2,16 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use molten_batch_application::*;
 use molten_batch_core::*;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const ALPN: &[u8] = b"molten-orchestrator/batch-rpc/v1";
-pub const REQUEST_SCHEMA: &str = "batch-rpc.request.v1";
-pub const REPLY_SCHEMA: &str = "batch-rpc.reply.v1";
+pub const ALPN: &[u8] = b"molten-orchestrator/batch-rpc/v2";
+pub const REQUEST_SCHEMA: &str = "batch-rpc.request.v2";
+pub const REPLY_SCHEMA: &str = "batch-rpc.reply.v2";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Controller,
@@ -119,7 +119,10 @@ pub enum Request {
     Observe { request: ExecutionRequest },
     CancelAttempt { request: ExecutionRequest },
     Submit { key: String, spec: JobSpec },
-    Status,
+    Status { run: Option<Id> },
+    ProgressSnapshot { run: Id },
+    ProgressRead { cursor: ProgressCursor, limit: u32 },
+    ProgressArtifact { id: Id },
     CancelRun { run: Id },
     DrainNode { node: Id, draining: bool },
     WorkerDrain,
@@ -196,6 +199,10 @@ pub enum Reply {
     Content(WireContent),
     Observation(WireObservation),
     State(State),
+    Run(molten_batch_core::Run),
+    ProgressSnapshot(ProgressSnapshot),
+    ProgressPage(ProgressPage),
+    ArtifactGap { id: Id },
     Error(String),
 }
 pub fn error_reply(e: Error) -> Reply {

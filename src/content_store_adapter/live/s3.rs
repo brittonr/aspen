@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use hmac::Hmac;
 use hmac::Mac;
+use molten_core::content_store_adapter::ContentFailure;
 use sha2::Digest;
 use sha2::Sha256;
 use time::OffsetDateTime;
@@ -40,37 +41,63 @@ pub struct ObjectObservation {
 pub struct Client {
     client: reqwest::Client,
     config: ClientConfig,
+    request_slot: tokio::sync::Semaphore,
+}
+
+/// Redacted policy observation; no endpoint or credential material is exposed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemotePolicyObservation {
+    pub max_remote_connections: usize,
+    pub endpoint_resolution: &'static str,
+    pub credential_refresh: &'static str,
 }
 
 impl Client {
+    pub fn policy(&self) -> RemotePolicyObservation {
+        RemotePolicyObservation {
+            max_remote_connections: 1,
+            endpoint_resolution: "fixed-numeric-at-admission",
+            credential_refresh: "fixed-at-admission-no-refresh",
+        }
+    }
+
     pub fn connect(config: ClientConfig) -> Result<Self> {
         Self::connect_with_timeout(config, REQUEST_TIMEOUT)
     }
 
     pub fn connect_with_timeout(config: ClientConfig, timeout: Duration) -> Result<Self> {
         validate_config(&config)?;
-        if timeout.is_zero() {
-            return Err(Failure::invalid_harness("s3 request timeout must be nonzero"));
+        if timeout.is_zero() || timeout > REQUEST_TIMEOUT {
+            return Err(Failure::invalid_harness("s3 request timeout must be within 1ns..=30s"));
         }
         let client = reqwest::Client::builder()
+            .connect_timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .retry(reqwest::retry::never())
+            .no_proxy()
+            .pool_max_idle_per_host(0)
             .timeout(timeout)
             .build()
             .map_err(|error| Failure::invalid_harness(format!("s3 client: {error}")))?;
-        Ok(Self { client, config })
+        Ok(Self {
+            client,
+            config,
+            request_slot: tokio::sync::Semaphore::new(1),
+        })
     }
 
     pub async fn put(&self, key: &str, bytes: &[u8]) -> Result<ObjectObservation> {
-        validate_key(key)?;
-        if bytes.len() as u64 > MAX_OBJECT_BYTES {
-            return Err(Failure::invalid_harness("s3 object exceeds its bound"));
-        }
-        let request = self.signed(reqwest::Method::PUT, key, bytes)?;
-        let response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(|error| Failure::invalid_harness(format!("s3 put: {error}")))?;
-        require_success(response.status(), "put").await?;
+        self.put_classified(key, bytes).await.map_err(remote_failure)
+    }
+
+    pub(super) async fn put_classified(
+        &self,
+        key: &str,
+        bytes: &[u8],
+    ) -> std::result::Result<ObjectObservation, ContentFailure> {
+        let _slot = self.request_slot.try_acquire().map_err(|_| ContentFailure::Overload)?;
+        let response = self.execute(reqwest::Method::PUT, key, bytes).await?;
+        classify_status(response.status())?;
         Ok(ObjectObservation {
             object_ref: crate::preserves_rail::content_ref_from_bytes(bytes),
             bytes: bytes.len() as u64,
@@ -78,60 +105,81 @@ impl Client {
     }
 
     pub async fn get(&self, key: &str) -> Result<Vec<u8>> {
-        validate_key(key)?;
-        let request = self.signed(reqwest::Method::GET, key, b"")?;
-        let response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(|error| Failure::invalid_harness(format!("s3 get: {error}")))?;
-        let status = response.status();
-        if status == reqwest::StatusCode::NOT_FOUND {
-            return Err(Failure::invalid_harness("s3 object is missing"));
-        }
-        if !status.is_success() {
-            return Err(Failure::invalid_harness(format!("s3 get returned {status}")));
-        }
-        if response.content_length().is_some_and(|length| length > MAX_OBJECT_BYTES) {
-            return Err(Failure::invalid_harness("s3 object exceeds its bound"));
-        }
-        let bytes =
-            response.bytes().await.map_err(|error| Failure::invalid_harness(format!("s3 get body: {error}")))?;
-        if bytes.len() as u64 > MAX_OBJECT_BYTES {
-            return Err(Failure::invalid_harness("s3 object exceeds its bound"));
-        }
-        Ok(bytes.to_vec())
+        self.get_classified(key).await.map_err(remote_failure)
     }
 
-    pub async fn delete(&self, key: &str) -> Result<()> {
-        validate_key(key)?;
-        let request = self.signed(reqwest::Method::DELETE, key, b"")?;
-        let response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(|error| Failure::invalid_harness(format!("s3 delete: {error}")))?;
-        require_success(response.status(), "delete").await
+    pub(super) async fn get_classified(&self, key: &str) -> std::result::Result<Vec<u8>, ContentFailure> {
+        self.get_bounded(key, MAX_OBJECT_BYTES).await
+    }
+
+    pub(super) async fn get_bounded(&self, key: &str, max_bytes: u64) -> std::result::Result<Vec<u8>, ContentFailure> {
+        let max_bytes = max_bytes.min(MAX_OBJECT_BYTES);
+        let _slot = self.request_slot.try_acquire().map_err(|_| ContentFailure::Overload)?;
+        let mut response = self.execute(reqwest::Method::GET, key, b"").await?;
+        classify_status(response.status())?;
+        if response.content_length().is_some_and(|length| length > max_bytes) {
+            return Err(ContentFailure::TruncatedChunk);
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|error| {
+            if error.is_timeout() {
+                ContentFailure::Timeout
+            } else {
+                ContentFailure::TruncatedChunk
+            }
+        })? {
+            if chunk.len() as u64 > max_bytes.saturating_sub(bytes.len() as u64) {
+                return Err(ContentFailure::TruncatedChunk);
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
+    }
+
+    async fn execute(
+        &self,
+        method: reqwest::Method,
+        key: &str,
+        body: &[u8],
+    ) -> std::result::Result<reqwest::Response, ContentFailure> {
+        if body.len() as u64 > MAX_OBJECT_BYTES {
+            return Err(ContentFailure::Overload);
+        }
+        let request = self.signed(method, key, body).map_err(|_| ContentFailure::AdapterFailure)?;
+        self.client.execute(request).await.map_err(|error| {
+            if error.is_timeout() {
+                ContentFailure::Timeout
+            } else {
+                ContentFailure::TransportDisconnected
+            }
+        })
+    }
+
+    pub(super) async fn delete(&self, key: &str) -> Result<()> {
+        let _slot = self.request_slot.try_acquire().map_err(|_| remote_failure(ContentFailure::Overload))?;
+        let response = self.execute(reqwest::Method::DELETE, key, b"").await.map_err(remote_failure)?;
+        classify_status(response.status()).map_err(remote_failure)
     }
 
     pub async fn head(&self, key: &str) -> Result<Option<u64>> {
-        validate_key(key)?;
-        let request = self.signed(reqwest::Method::HEAD, key, b"")?;
-        let response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(|error| Failure::invalid_harness(format!("s3 head: {error}")))?;
+        let _slot = self.request_slot.try_acquire().map_err(|_| remote_failure(ContentFailure::Overload))?;
+        let response = self.execute(reqwest::Method::HEAD, key, b"").await.map_err(remote_failure)?;
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
         if !response.status().is_success() {
             return Err(Failure::invalid_harness(format!("s3 head returned {}", response.status())));
         }
-        Ok(response.content_length())
+        // A HEAD response has an empty body; its header describes the object.
+        Ok(response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok()))
     }
 
     fn signed(&self, method: reqwest::Method, key: &str, body: &[u8]) -> Result<reqwest::Request> {
+        validate_key(key)?;
         let url = format!("{}/{}/{}", self.config.endpoint.trim_end_matches('/'), self.config.bucket, key);
         let url = reqwest::Url::parse(&url).map_err(|error| Failure::invalid_harness(format!("s3 url: {error}")))?;
         let host = host_header(&url)?;
@@ -185,6 +233,30 @@ impl Client {
 }
 
 fn validate_config(config: &ClientConfig) -> Result<()> {
+    if config.endpoint.len() > 2048
+        || config.bucket.len() > 63
+        || config.region.len() > 64
+        || config.access_key.len() > 256
+        || config.secret_key.len() > 256
+        || config.session_token.as_ref().is_some_and(|token| token.len() > 8192)
+    {
+        return Err(Failure::invalid_harness("s3 admitted configuration exceeds its bound"));
+    }
+    let endpoint =
+        reqwest::Url::parse(&config.endpoint).map_err(|_| Failure::invalid_harness("s3 endpoint is malformed"))?;
+    if endpoint
+        .host_str()
+        .and_then(|host| host.trim_matches(['[', ']']).parse::<std::net::IpAddr>().ok())
+        .is_none()
+        || !endpoint.username().is_empty()
+        || endpoint.password().is_some()
+        || endpoint.query().is_some()
+        || endpoint.fragment().is_some()
+        || endpoint.path() != "/"
+        || !config.bucket.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.'))
+    {
+        return Err(Failure::invalid_harness("s3 requires a fixed numeric endpoint and canonical bucket"));
+    }
     if !(config.endpoint.starts_with("http://") || config.endpoint.starts_with("https://"))
         || config.region.is_empty()
         || config.bucket.is_empty()
@@ -216,11 +288,18 @@ fn host_header(url: &reqwest::Url) -> Result<String> {
     })
 }
 
-async fn require_success(status: reqwest::StatusCode, operation: &str) -> Result<()> {
-    if status.is_success() {
-        return Ok(());
+fn classify_status(status: reqwest::StatusCode) -> std::result::Result<(), ContentFailure> {
+    match status.as_u16() {
+        200..=299 => Ok(()),
+        429 | 503 => Err(ContentFailure::ProviderThrottle),
+        401 | 403 => Err(ContentFailure::PermissionDenied),
+        408 | 504 => Err(ContentFailure::Timeout),
+        _ => Err(ContentFailure::AdapterFailure),
     }
-    Err(Failure::invalid_harness(format!("s3 {operation} returned {status}")))
+}
+
+fn remote_failure(failure: ContentFailure) -> Failure {
+    Failure::invalid_harness(format!("s3 {}", failure.as_str()))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -271,6 +350,13 @@ mod tests {
                 .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
                 .await
                 .expect("put response");
+            let (mut socket, _) = listener.accept().await.expect("accept head");
+            let request = read_request(&mut socket).await;
+            assert!(request.contains("HEAD /bucket/objects/one"));
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\n")
+                .await
+                .expect("head response");
             let (mut socket, _) = listener.accept().await.expect("accept get");
             let request = read_request(&mut socket).await;
             assert!(request.contains("GET /bucket/objects/one"));
@@ -290,8 +376,40 @@ mod tests {
         .expect("store");
         let observation = store.put("objects/one", b"hello").await.expect("put");
         assert_eq!(observation.bytes, 5);
+        assert_eq!(store.head("objects/one").await.expect("head"), Some(5));
         assert_eq!(store.get("objects/one").await.expect("get"), b"hello");
         server.await.expect("server");
+    }
+
+    #[test]
+    fn hostnames_are_not_admitted() {
+        let config = ClientConfig {
+            endpoint: "http://localhost:9000".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "bucket".to_string(),
+            access_key: "access".to_string(),
+            secret_key: "secret".to_string(),
+            session_token: None,
+        };
+        assert!(Client::connect(config).is_err());
+    }
+
+    #[tokio::test]
+    async fn connection_cap_denies_before_dispatch() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let client = Client::connect(ClientConfig {
+            endpoint: format!("http://{}", listener.local_addr().expect("address")),
+            region: "us-east-1".to_string(),
+            bucket: "bucket".to_string(),
+            access_key: "access".to_string(),
+            secret_key: "secret".to_string(),
+            session_token: None,
+        })
+        .expect("client");
+        assert_eq!(client.policy().max_remote_connections, 1);
+        let _held = client.request_slot.try_acquire().expect("occupy connection budget");
+        assert_eq!(client.get_classified("objects/one").await, Err(ContentFailure::Overload));
+        assert!(tokio::time::timeout(Duration::from_millis(20), listener.accept()).await.is_err());
     }
 
     async fn read_request(socket: &mut tokio::net::TcpStream) -> String {

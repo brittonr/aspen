@@ -22,6 +22,11 @@ fn decode_key_record(bytes: &[u8]) -> crate::error::Result<KeyRecord> {
     })
 }
 
+pub(super) fn decode_transport_record(bytes: &[u8]) -> crate::error::Result<(u64, iroh::SecretKey)> {
+    let record = decode_key_record(bytes)?;
+    Ok((record.generation, record.secret_key))
+}
+
 fn decode_secret_hex(secret: &str) -> crate::error::Result<[u8; ED25519_SECRET_BYTES]> {
     const HEX_CHARS_PER_BYTE: usize = 2;
     const HEX_RADIX: u32 = 16;

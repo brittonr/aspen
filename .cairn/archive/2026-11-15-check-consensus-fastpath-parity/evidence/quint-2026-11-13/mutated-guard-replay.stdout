@@ -1,0 +1,11 @@
+
+running 1 test
+test mixed_view_guard_replay ... FAILED
+
+failures:
+
+failures:
+    mixed_view_guard_replay
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.71s
+

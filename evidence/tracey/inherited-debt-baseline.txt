@@ -1615,7 +1615,6 @@ molten.testing.capability_context.gate_receipts.checks
 molten.testing.capability_context.policy_composition
 molten.testing.capability_context.policy_composition.capability_denies
 molten.testing.capability_context.policy_composition.policy_denies
-molten.testing.capability_context.request_binding
 molten.testing.capability_context.request_binding.send
 molten.testing.capability_context.request_binding.tampered
 molten.testing.capability_context.ucan_negative_fixtures

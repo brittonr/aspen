@@ -28,7 +28,23 @@ pub trait MembershipPlacementProvider {
     fn snapshot(&mut self) -> FabricPortResult<MembershipProviderSnapshot>;
 }
 
+/// Canonical current assignment observed from the assignment persistence owner.
+/// This is an observation, not permission: callers must independently admit exact operator scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentAssignment {
+    pub assignment_ref: String,
+    pub assignment: RoleAssignment,
+}
+
 pub trait AssignmentPersistence {
+    /// Insert pure Proposed state without replacing an ID. A role successor must bind its exact
+    /// released predecessor and advance the durable role-slot epoch and fencing token.
+    fn initialize(&mut self, proposal: &AssignmentProposal) -> FabricPortResult<CurrentAssignment>;
+
+    /// Read committed current role ownership. An unresolved intent or superseded ID fails closed,
+    /// never returning an old apparently-current assignment. Pending role effects must not replay.
+    fn current(&self, assignment_id: &str) -> FabricPortResult<Option<CurrentAssignment>>;
+
     fn record_intent(
         &mut self,
         current: &RoleAssignment,

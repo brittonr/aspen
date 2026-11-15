@@ -32,7 +32,11 @@ impl<A: super::super::AuthorityPort, R: super::super::RuntimePort> super::super:
         self.drive(group_id, logical_tick)
     }
 
-    pub(super) fn drive(&mut self, group_id: &str, logical_tick: u64) -> crate::error::Result<()> {
+    pub(in crate::node_service_hosting) fn drive(
+        &mut self,
+        group_id: &str,
+        logical_tick: u64,
+    ) -> crate::error::Result<()> {
         loop {
             let action = self.state.groups.get(group_id).and_then(|group| group.pending.first()).cloned();
             let Some(mut action) = action else {
@@ -112,6 +116,16 @@ fn require_postcondition(
                 && observed.lifecycle.incarnation > before.lifecycle.incarnation
                 && before.lifecycle.restart_attempts.checked_add(1) == Some(observed.lifecycle.restart_attempts)
         }
+        super::super::RuntimeAction::Recover => {
+            is_same_generation
+                && phase == crate::system_extension::LifecyclePhase::Running
+                && before.lifecycle.incarnation.checked_add(1) == Some(observed.lifecycle.incarnation)
+                && observed.lifecycle.restart_attempts == before.lifecycle.restart_attempts
+                && observed.checkpoint_ref == before.checkpoint_ref
+                && observed.state_ref.is_some()
+                && observed.is_accepting_ingress
+                && observed.callback_sequence > before.callback_sequence
+        }
         super::super::RuntimeAction::Drain => {
             is_same_generation && is_same_incarnation && phase == crate::system_extension::LifecyclePhase::Drained
         }
@@ -126,23 +140,29 @@ fn require_postcondition(
                 )
         }
         super::super::RuntimeAction::Upgrade { ref admission_ref } => {
-            let observed_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
-                "host-native-replacement-v1",
-                vec![
-                    crate::preserves_rail::string(&observed.manifest_ref),
-                    crate::preserves_rail::string(&observed.executable_ref),
-                    crate::preserves_rail::string(&observed.profile_ref),
-                ],
-            ))?;
-            before.lifecycle.generation.checked_add(1) == Some(observed.lifecycle.generation)
-                && is_same_incarnation
-                && phase == crate::system_extension::LifecyclePhase::Running
-                && observed.state_ref.is_some()
-                && observed_ref == *admission_ref
+            is_upgrade_completed(before, observed, admission_ref)?
         }
     };
     if !is_completed {
         return Err(super::super::invalid("native lifecycle intent remains uncertain; callback is not repeated"));
     }
     Ok(())
+}
+
+fn is_upgrade_completed(
+    before: &crate::system_extension::NativeInstanceRecord,
+    observed: &crate::system_extension::NativeInstanceRecord,
+    admission_ref: &str,
+) -> crate::error::Result<bool> {
+    let observed_ref =
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("host-native-replacement-v1", vec![
+            crate::preserves_rail::string(&observed.manifest_ref),
+            crate::preserves_rail::string(&observed.executable_ref),
+            crate::preserves_rail::string(&observed.profile_ref),
+        ]))?;
+    Ok(before.lifecycle.generation.checked_add(1) == Some(observed.lifecycle.generation)
+        && observed.lifecycle.incarnation == before.lifecycle.incarnation
+        && observed.lifecycle.phase == crate::system_extension::LifecyclePhase::Running
+        && observed.state_ref.is_some()
+        && observed_ref == admission_ref)
 }

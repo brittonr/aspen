@@ -231,12 +231,14 @@ pub fn parse_blob_ref_job_receipt_value(value: &IoValue) -> Result<JobReceipt> {
 }
 
 pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
-    let fields = value
-        .collect_simple_record("job-dag-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-v1 ...>"))?;
-    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_SCHEMA, "job dag")?;
+    let selected = value.collect_simple_record("job-dag-v2", Some(10));
+    let is_selected = selected.is_some();
+    let fields = selected.or_else(|| value.collect_simple_record("job-dag-v1", Some(10)))
+        .ok_or_else(|| MoltenError::invalid_harness("expected versioned job dag"))?;
+    let schema = if is_selected { "molten.job-dag.selected-sequence.v2" } else { crate::preserves_rail::JOB_DAG_SCHEMA };
+    require_schema(&fields[0], schema, "job dag")?;
     let version = record_string(&fields[1], "version")?;
-    if version != "v1" {
+    if version != if is_selected { SELECTED_SEQUENCE_PROFILE } else { "v1" } {
         return Err(MoltenError::invalid_harness(format!("unsupported job dag version {version}")));
     }
     let nodes = parse_node_sequence(&fields[2])?;
@@ -268,6 +270,14 @@ pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
     require_check(&checks, "canonical-dag", "job dag")?;
     require_check(&checks, "no-name-identity", "job dag")?;
     validate_topology(&nodes, &edges)?;
+    if is_selected {
+        validate_selected_graph(&nodes, &edges, &output_roots)?;
+        validate_selected_port_metadata(&fields[2])?;
+        if !record_ref_sequence(&fields[6], "effect-manifests")?.is_empty()
+            || nodes.iter().any(|node| !node.effect_manifest_refs.is_empty()) {
+            return Err(MoltenError::invalid_harness("selected sequence profile is pure-only; effects require runtime admission"));
+        }
+    }
     Ok(JobDag {
         job_ref: crate::preserves_rail::canonical_hash(value)?,
         version,

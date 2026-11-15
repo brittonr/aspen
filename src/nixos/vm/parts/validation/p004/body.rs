@@ -139,8 +139,3 @@ fn status(is_passing: bool) -> &'static str {
     if is_passing { "pass" } else { "deny" }
 }
 
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/tests/m000/p001/body.rs"));
-}

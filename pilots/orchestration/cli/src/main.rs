@@ -8,9 +8,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
@@ -105,6 +105,8 @@ enum Cmd {
         root: PathBuf,
         #[arg(long)]
         resume: bool,
+        #[arg(long, help = "Conformance only: abrupt exit 86 at one named boundary")]
+        crash_at: Option<String>,
     },
     Put {
         #[command(flatten)]
@@ -137,6 +139,17 @@ enum Cmd {
         run: Option<String>,
         #[arg(long)]
         raw: bool,
+    },
+    /// Read one consistent run snapshot or one bounded page; disconnect never cancels.
+    Progress {
+        #[command(flatten)]
+        client: Client,
+        #[arg(long, required_unless_present = "cursor", conflicts_with = "cursor")]
+        run: Option<String>,
+        #[arg(long, conflicts_with = "run")]
+        cursor: Option<PathBuf>,
+        #[arg(long, default_value_t = 64)]
+        limit: u32,
     },
     Plan {
         #[command(flatten)]
@@ -211,8 +224,8 @@ async fn call(c: &Client, request: Request) -> Result<Reply> {
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::signal;
         use tokio::signal::unix::SignalKind;
+        use tokio::signal::unix::signal;
         match signal(SignalKind::terminate()) {
             Ok(mut term) => {
                 tokio::select! {_=tokio::signal::ctrl_c()=>{},_=term.recv()=>{}}
@@ -357,8 +370,12 @@ async fn main() -> Result<()> {
             r.replace("revoked.json", &serde_json::to_vec_pretty(&revoked)?)?;
             emit(serde_json::json!({"revoked":!undo,"component":id,"active_work_requires_explicit_cancel":true}))?;
         }
-        Cmd::Serve { root: dir, resume } => {
-            let running = open_service(root(&dir)?, resume).await?;
+        Cmd::Serve {
+            root: dir,
+            resume,
+            crash_at,
+        } => {
+            let running = open_service_with_fault(root(&dir)?, resume, ProcessFault::at(crash_at)?).await?;
             eprintln!("orchestrator ready id={}", endpoint_id(&running.endpoint));
             let (tx, rx) = tokio::sync::watch::channel(false);
             tokio::spawn(async move {
@@ -386,7 +403,7 @@ async fn main() -> Result<()> {
         }
         Cmd::Get { client, id, out } => {
             let id = parse_id(&id)?;
-            match call(&client, Request::Get { id }).await? {
+            match call(&client, Request::ProgressArtifact { id }).await? {
                 Reply::Content(c) => {
                     let c = c.content()?;
                     if content_id(&c)? != id {
@@ -394,6 +411,9 @@ async fn main() -> Result<()> {
                     }
                     write_new(&out, &c.bytes)?;
                     emit(serde_json::json!({"id":id,"bytes":c.bytes.len()}))?;
+                }
+                Reply::ArtifactGap { id } => {
+                    bail!("artifact unavailable or expired: {id}; resnapshot does not restore content")
                 }
                 _ => bail!("unexpected get response"),
             }
@@ -406,22 +426,49 @@ async fn main() -> Result<()> {
             }
         }
         Cmd::Status { client, run, raw } => {
-            let Reply::State(state) = call(&client, Request::Status).await? else {
-                bail!("unexpected status response")
-            };
-            if raw {
-                emit(serde_json::to_value(state)?)?;
-            } else if let Some(id) = run {
-                let r = state.runs.get(&parse_id(&id)?).context("run not found")?;
-                emit(serde_json::json!({"run":r,"phase":r.phase()}))?;
+            let selected = if raw {
+                None
             } else {
-                emit(
-                    serde_json::json!({"revision":state.revision,"logical_tick":state.tick,"nodes":state.nodes,"runs":state.runs.values().map(|r|serde_json::json!({"id":r.id,"name":r.spec.name,"phase":r.phase()})).collect::<Vec<_>>(),"pending":explain(&state)}),
-                )?;
+                run.as_deref().map(parse_id).transpose()?
+            };
+            match (call(&client, Request::Status { run: selected }).await?, selected) {
+                (Reply::Run(run), Some(id)) if run.id == id => {
+                    emit(serde_json::json!({"run":run,"phase":run.phase()}))?
+                }
+                (Reply::State(state), None) => {
+                    if raw {
+                        emit(serde_json::to_value(state)?)?;
+                    } else {
+                        emit(
+                            serde_json::json!({"revision":state.revision,"logical_tick":state.tick,"nodes":state.nodes,"runs":state.runs.values().map(|r|serde_json::json!({"id":r.id,"name":r.spec.name,"phase":r.phase()})).collect::<Vec<_>>(),"pending":explain(&state)}),
+                        )?;
+                    }
+                }
+                _ => bail!("unexpected status response"),
+            }
+        }
+        Cmd::Progress {
+            client,
+            run,
+            cursor,
+            limit,
+        } => {
+            if let Some(run) = run {
+                match call(&client, Request::ProgressSnapshot { run: parse_id(&run)? }).await? {
+                    Reply::ProgressSnapshot(snapshot) => emit(serde_json::to_value(snapshot)?)?,
+                    _ => bail!("unexpected progress snapshot response"),
+                }
+            } else {
+                let path = cursor.context("cursor required")?;
+                let cursor: ProgressCursor = serde_json::from_slice(&read_file(&path, 4096)?)?;
+                match call(&client, Request::ProgressRead { cursor, limit }).await? {
+                    Reply::ProgressPage(page) => emit(serde_json::to_value(page)?)?,
+                    _ => bail!("unexpected progress page response"),
+                }
             }
         }
         Cmd::Plan { client } => {
-            let Reply::State(state) = call(&client, Request::Status).await? else {
+            let Reply::State(state) = call(&client, Request::Status { run: None }).await? else {
                 bail!("unexpected status response")
             };
             emit(serde_json::json!({"pending":explain(&state),"advisory_only":true}))?;

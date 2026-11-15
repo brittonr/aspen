@@ -14,6 +14,7 @@ pub(super) struct Prepared {
     pub target_ref: String,
     pub materialization_ref: String,
     pub provenance_ref: String,
+    pub profile: super::Profile,
 }
 
 pub(super) fn prepare(args: &super::Arguments) -> molten::error::Result<Prepared> {
@@ -36,14 +37,14 @@ pub(super) fn prepare(args: &super::Arguments) -> molten::error::Result<Prepared
     )?;
     let output = cap_std::fs::Dir::open_ambient_dir(&args.signed_output, cap_std::ambient_authority())
         .map_err(molten::error::Failure::from)?;
-    let (callback_ref, callback_size, header) = publish_elf(&root, &output)?;
+    let (callback_ref, callback_size, header) = publish_elf(&root, &output, args.profile.executable())?;
     let (kind_ref, target_ref) = elf(&root, &header)?;
     let closure_ref = closure(&output, &validation)?;
     let provenance_ref = record(&root, "signed-nix-native-provenance-v1", vec![
         molten::preserves_rail::string(selected),
         molten::preserves_rail::string(&validation.binding_ref),
         molten::preserves_rail::string(&validation.selected_output_validation_ref),
-        molten::preserves_rail::string("bin/molten-native-extension-fixture"),
+        molten::preserves_rail::string(args.profile.executable()),
         molten::preserves_rail::string(&callback_ref),
         molten::preserves_rail::string(&closure_ref),
     ])?;
@@ -72,6 +73,7 @@ pub(super) fn prepare(args: &super::Arguments) -> molten::error::Result<Prepared
         target_ref,
         materialization_ref,
         provenance_ref,
+        profile: args.profile,
     })
 }
 
@@ -161,8 +163,9 @@ fn read_file(file: impl Read, maximum: u64) -> molten::error::Result<Vec<u8>> {
 fn publish_elf(
     root: &molten::node_state::DirectoryRoot,
     output: &cap_std::fs::Dir,
+    executable: &str,
 ) -> molten::error::Result<(String, u64, [u8; 20])> {
-    let mut source = output.open("bin/molten-native-extension-fixture").map_err(molten::error::Failure::from)?;
+    let mut source = output.open(executable).map_err(molten::error::Failure::from)?;
     if !source.metadata().map_err(molten::error::Failure::from)?.is_file() {
         return Err(super::invalid("signed callback artifact must be a regular file"));
     }

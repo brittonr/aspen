@@ -33,3 +33,12 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p024/body.rs"))
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p025/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p026/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p027/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/selected/registry.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/selected/routing.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/authoring/inputs.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/authoring/model.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/authoring/evaluate.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/authoring/lower.rs"));
+#[cfg(test)]
+#[path = "selected/tests.rs"]
+mod selected_sequence_tests;

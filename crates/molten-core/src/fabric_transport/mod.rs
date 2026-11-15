@@ -4,11 +4,15 @@
 //! runtime. Adapter shells submit explicit commands and observed adapter facts.
 
 mod cross_process;
+mod direct;
+mod receive;
 mod transition;
 
 use std::collections::BTreeMap;
 
 pub use cross_process::*;
+pub use direct::*;
+pub use receive::*;
 pub use transition::*;
 
 use crate::fabric::valid_blake3_ref;

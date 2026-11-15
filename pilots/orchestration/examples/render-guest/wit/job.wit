@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+package molten:orchestrator-guest;
+world batch-job {
+    export run: func(inputs: list<list<u8>>) -> list<u8>;
+}

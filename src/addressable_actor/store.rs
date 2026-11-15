@@ -1,3 +1,5 @@
+pub(crate) mod completion;
+
 use molten_core::addressable_actor::*;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
@@ -88,6 +90,7 @@ fn initialize(database: &redb::Database) -> PortResult<()> {
     let write = database.begin_write().map_err(redb_error)?;
     {
         let _table = write.open_table(ACTOR_STATE_TABLE).map_err(redb_error)?;
+        let _completions = write.open_table(completion::COMPLETION_TABLE).map_err(redb_error)?;
     }
     write.commit().map_err(redb_error)
 }

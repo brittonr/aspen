@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/nix/store/qpcj5lmxsrai5fyrh8w8br21msaxkij8-molten-sample-pgo-llvm-profgen-21cf28432798952d942bacc6bcee3a328faa3638/bin/llvm-profgen",
+    "--binary=/nix/store/pjyj70p6szibqg35y876cpg3bqgdh5vf-rust_molten-0.1.0/bin/molten",
+    "--perfdata=/build/validation/perf.data",
+    "--output=/build/validation/regenerated.prof",
+    "--format=text"
+  ],
+  "elapsed_seconds": 19.86025787901599,
+  "max_rss_kib": 3216756.0,
+  "returncode": 0,
+  "system_seconds": 1.74,
+  "time_wall_seconds": 19.85,
+  "timeout": false,
+  "user_seconds": 16.17
+}

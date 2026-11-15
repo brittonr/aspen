@@ -19,7 +19,7 @@ let IsProfile = fun value =>
   && value.invocation_mode == "direct"
   && value.executable_resolution == "exact-artifact"
   && value.workspace_mode == "capability-root"
-  && value.component.repository == "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+  && value.component.repository == "https://github.com/OnixResearch/bounded-exec.git"
   && value.component.revision == "29dac88ecded94457572db3fdfaaaab95fa91525"
   && value.component.license == "AGPL-3.0-or-later"
   && value.component.package == "bounded-exec"

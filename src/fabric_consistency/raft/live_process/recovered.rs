@@ -22,6 +22,8 @@ pub(super) async fn run(
         delivery_limit: INGRESS_DELIVERY_LIMIT,
     })?;
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "recovered-ready")?;
+    let client_input = super::client_projection::input(run_directory)?;
+    let mut client_horizon = super::client_projection::RecoveryHorizon::new(node.service.state().current_term);
     wait_for_file(&run_directory.join(RESTART_START_FILE))?;
     if matches!(node.service.state().rejoin, ReplicaRejoin::Recovering(_)) {
         let timer_ref = node.service.state().active_election_timer_ref.clone();
@@ -47,19 +49,21 @@ pub(super) async fn run(
             send_stale_leader_frame(&mut node).await?;
             is_stale_frame_sent = true;
         }
-        let Some(event) = child::poll_event(&mut ingress).await? else {
-            continue;
-        };
-        let message_term = match &event.event {
-            ReplicaEvent::Message { envelope } => Some(envelope.message.term()),
-            _ => None,
-        };
-        child::require_applied(node.service.handle_event(event.event).await)?;
-        if node_id == super::super::tests::NODE_B && node.service.state().role == ReplicaRole::Leader {
-            write_signal(&run_directory.join(RECOVERED_LEADER_FILE), "recovered-leader")?;
-            if message_term == Some(STALE_LEADER_TERM) && node.service.state().current_term > STALE_LEADER_TERM {
-                write_signal(&run_directory.join(STALE_FENCED_FILE), "stale-fenced")?;
+        if let Some(event) = child::poll_event(&mut ingress).await? {
+            let message_term = match &event.event {
+                ReplicaEvent::Message { envelope } => Some(envelope.message.term()),
+                _ => None,
+            };
+            child::require_applied(node.service.handle_event(event.event).await)?;
+            if node_id == super::super::tests::NODE_B && node.service.state().role == ReplicaRole::Leader {
+                write_signal(&run_directory.join(RECOVERED_LEADER_FILE), "recovered-leader")?;
+                if message_term == Some(STALE_LEADER_TERM) && node.service.state().current_term > STALE_LEADER_TERM {
+                    write_signal(&run_directory.join(STALE_FENCED_FILE), "stale-fenced")?;
+                }
             }
+        }
+        if let Some(input) = &client_input {
+            client_horizon.observe(run_directory, &node_id, step as u64, node.service.state().current_term, input)?;
         }
     }
     Err(crate::error::Failure::invalid_harness("recovered replica exhausted its bounded event loop"))

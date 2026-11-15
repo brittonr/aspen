@@ -11,6 +11,7 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     }) && let Some(output) = hit.output
     {
         let output_values = parse_cached_stage_output(&output)?;
+        if input.dag.version == SELECTED_SEQUENCE_PROFILE { validate_selected_outputs(input.node, &output_values)?; }
         let output_refs = refs_for_values(&output_values)?;
         let cache_ref = crate::preserves_rail::canonical_hash(&hit.receipt_value)?;
         let receipt_value = job_receipt_value(JobReceiptInput {
@@ -92,14 +93,14 @@ fn execute_stage(
     options: &JobRunOptions<'_>,
 ) -> Result<JobStageRun> {
     let mut effects = Vec::new();
-    let output_values = match node.kind.as_str() {
+    let output_values = if dag.version == SELECTED_SEQUENCE_PROFILE { execute_selected_stage(node, inputs)? } else { match node.kind.as_str() {
         "source" => execute_source(node, options, &mut effects)?,
         "map" => execute_map(node, inputs)?,
         "filter" => execute_filter(node, inputs)?,
         "reduce" => execute_reduce(node, inputs)?,
         "materialize" => execute_materialize(node, inputs, options, &mut effects)?,
         _ => return Err(MoltenError::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
-    };
+    }};
     let output_refs = refs_for_values(&output_values)?;
     let receipt_value = job_receipt_value(JobReceiptInput {
         operation: if node.kind == "materialize" {
@@ -140,14 +141,14 @@ fn execute_stage_with_capabilities(
     options: &CapabilityJobRunOptions<'_>,
 ) -> Result<JobStageRun> {
     let mut effects = Vec::new();
-    let output_values = match node.kind.as_str() {
+    let output_values = if dag.version == SELECTED_SEQUENCE_PROFILE { execute_selected_stage(node, inputs)? } else { match node.kind.as_str() {
         "source" => execute_source_with_capabilities(node, options, &mut effects)?,
         "map" => execute_map(node, inputs)?,
         "filter" => execute_filter(node, inputs)?,
         "reduce" => execute_reduce(node, inputs)?,
         "materialize" => execute_materialize_with_capabilities(node, inputs, options, &mut effects)?,
         _ => return Err(MoltenError::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
-    };
+    }};
     let output_refs = refs_for_values(&output_values)?;
     let receipt_value = job_receipt_value(JobReceiptInput {
         operation: if node.kind == "materialize" {

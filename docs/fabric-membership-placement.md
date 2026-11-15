@@ -1,6 +1,6 @@
 # Fabric membership and placement runtime
 
-Molten exposes membership, failure observation, placement, and role assignment as separate fabric facts. The runtime is generic across system extensions, but it does not invent a global cluster truth or service semantics.
+Aspen exposes membership, failure observation, placement, and role assignment as separate fabric facts. The runtime is generic across system extensions, but it does not invent a global cluster truth or service semantics. Existing `molten` module and wire names retain the internal codename.
 
 ## Authority boundaries
 
@@ -34,7 +34,7 @@ The planner receives the complete view, descriptors, current reservations, obser
 - assignment persistence records intent before an external role effect and commits afterward;
 - an intent, role-effect, or commit failure returns an explicit phase and whether an effect may have happened. It is never rewritten as a clean denial or successful assignment.
 
-A durable store, quorum authority, or external fencing service can implement these ports, but the generic shell does not claim their strength. Process-local, node-local durable, quorum-ordered, and externally enforced fencing profiles remain distinct.
+`fabric_membership::persistence::Redb` supplies the node-local backend through a capability-derived `DurableStoreRoot`. It stores canonical packed Preserves assignments, pending intents and a same-transaction current role-slot index. `initialize` admits only pure Proposed state. `current` refuses unresolved intents and superseded IDs; intent preparation compares the complete expected assignment, and commit requires its exact pending intent. Reopening never replays a role effect. Successor installation requires an exact Released predecessor ref/epoch, increasing epoch/token and nonregressing service generation. This backend does not grant operator authority or claim cross-host exclusion. Quorum authority and externally enforced fencing remain separate stronger profiles.
 
 ## Drain and replacement
 

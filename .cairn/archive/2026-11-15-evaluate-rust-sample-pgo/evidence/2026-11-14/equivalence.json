@@ -1,0 +1,194 @@
+{
+  "denied": {
+    "baseline": {
+      "artifact": {
+        "bytes": 15169,
+        "raw_blake3": "8d12c9c15b709cdf0760569d801f2683aed5e4bb25ed83cf3fb4015d57ee0e1e",
+        "sha256": "49d360a48b19d6fd53ec31dda6514e794b6427da0f8aa397ffccdadade382823"
+      },
+      "command": [
+        "/nix/store/n7xrnjds1jq2yhbkmmwqjq6cyralw0y9-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/denied.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/denied/baseline/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.07041018700692803,
+      "max_rss_kib": 16508.0,
+      "returncode": 0,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.02,
+      "timeout": false,
+      "user_seconds": 0.02
+    },
+    "candidate": {
+      "artifact": {
+        "bytes": 15169,
+        "raw_blake3": "8d12c9c15b709cdf0760569d801f2683aed5e4bb25ed83cf3fb4015d57ee0e1e",
+        "sha256": "49d360a48b19d6fd53ec31dda6514e794b6427da0f8aa397ffccdadade382823"
+      },
+      "command": [
+        "/nix/store/9b64777b6m4nqaid4rd7b643h05l2v3p-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/denied.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/denied/candidate/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.0714099439792335,
+      "max_rss_kib": 16908.0,
+      "returncode": 0,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.04,
+      "timeout": false,
+      "user_seconds": 0.04
+    },
+    "canonical_equal": true,
+    "replay": "passed"
+  },
+  "error": {
+    "baseline": {
+      "artifact": {
+        "bytes": 711,
+        "raw_blake3": "1847113c7de1cb76513edac3ee981f0f7463bafd8a2c1ff8574347f469b9f6e2",
+        "sha256": "57de2a334351a86e16bddd3fa63dcc3146c3497fe99496d2e7798dfceea2be46"
+      },
+      "command": [
+        "/nix/store/n7xrnjds1jq2yhbkmmwqjq6cyralw0y9-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/error.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/error/baseline/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.009065432008355856,
+      "max_rss_kib": 12720.0,
+      "returncode": 1,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.0,
+      "timeout": false,
+      "user_seconds": 0.0
+    },
+    "candidate": {
+      "artifact": {
+        "bytes": 711,
+        "raw_blake3": "1847113c7de1cb76513edac3ee981f0f7463bafd8a2c1ff8574347f469b9f6e2",
+        "sha256": "57de2a334351a86e16bddd3fa63dcc3146c3497fe99496d2e7798dfceea2be46"
+      },
+      "command": [
+        "/nix/store/9b64777b6m4nqaid4rd7b643h05l2v3p-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/error.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/error/candidate/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.008718489960301667,
+      "max_rss_kib": 13100.0,
+      "returncode": 1,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.0,
+      "timeout": false,
+      "user_seconds": 0.0
+    },
+    "canonical_equal": true,
+    "replay": "not-applicable-preflight-failure"
+  },
+  "exhausted": {
+    "baseline": {
+      "artifact": {
+        "bytes": 868,
+        "raw_blake3": "155ae58afa51980e26c31c13be70c14e365789d0726c22f3ce8be6b954ae1357",
+        "sha256": "72795ba29724628160a0803bc959224b5c29af763bf495a2d98be8b27c6b1ebd"
+      },
+      "command": [
+        "/nix/store/n7xrnjds1jq2yhbkmmwqjq6cyralw0y9-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/exhausted.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/exhausted/baseline/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.010211053013335913,
+      "max_rss_kib": 12544.0,
+      "returncode": 1,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.0,
+      "timeout": false,
+      "user_seconds": 0.0
+    },
+    "candidate": {
+      "artifact": {
+        "bytes": 868,
+        "raw_blake3": "155ae58afa51980e26c31c13be70c14e365789d0726c22f3ce8be6b954ae1357",
+        "sha256": "72795ba29724628160a0803bc959224b5c29af763bf495a2d98be8b27c6b1ebd"
+      },
+      "command": [
+        "/nix/store/9b64777b6m4nqaid4rd7b643h05l2v3p-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/exhausted.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/exhausted/candidate/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.00935960398055613,
+      "max_rss_kib": 12736.0,
+      "returncode": 1,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.0,
+      "timeout": false,
+      "user_seconds": 0.0
+    },
+    "canonical_equal": true,
+    "replay": "not-applicable-preflight-failure"
+  },
+  "success": {
+    "baseline": {
+      "artifact": {
+        "bytes": 500803,
+        "raw_blake3": "d5946fe4fc2256072bd1989e9247294a21288f749ae41ebf0dcea75e8ee31483",
+        "sha256": "a861f2d6ad464f1d824f59f60b8de426a7b979c8311d0738906f39ee71cd9924"
+      },
+      "command": [
+        "/nix/store/n7xrnjds1jq2yhbkmmwqjq6cyralw0y9-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/success.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/success/baseline/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.12011300300946459,
+      "max_rss_kib": 16436.0,
+      "returncode": 0,
+      "system_seconds": 0.0,
+      "time_wall_seconds": 0.07,
+      "timeout": false,
+      "user_seconds": 0.03
+    },
+    "candidate": {
+      "artifact": {
+        "bytes": 500803,
+        "raw_blake3": "d5946fe4fc2256072bd1989e9247294a21288f749ae41ebf0dcea75e8ee31483",
+        "sha256": "a861f2d6ad464f1d824f59f60b8de426a7b979c8311d0738906f39ee71cd9924"
+      },
+      "command": [
+        "/nix/store/9b64777b6m4nqaid4rd7b643h05l2v3p-rust_molten-0.1.0/bin/molten",
+        "test",
+        "run",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/datasets/success.preserves",
+        "--report-out",
+        "/home/brittonr/git/OnixResearch/aspen/target/aspen-sample-pgo-fresh-20261114/semantics/success/candidate/artifact.preserves"
+      ],
+      "elapsed_seconds": 0.11685052700340748,
+      "max_rss_kib": 15960.0,
+      "returncode": 0,
+      "system_seconds": 0.01,
+      "time_wall_seconds": 0.06,
+      "timeout": false,
+      "user_seconds": 0.05
+    },
+    "canonical_equal": true,
+    "replay": "passed"
+  }
+}

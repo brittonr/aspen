@@ -141,6 +141,11 @@ mod display_port;
 mod cli_report {
     pub(crate) use super::display_port::*;
 }
+#[path = "cli/evidence/qualification.rs"]
+mod qualification_port;
+mod cli_qualification {
+    pub(crate) use super::qualification_port::*;
+}
 #[path = "cli/runtime/repro/mod.rs"]
 mod bundle_port;
 mod cli_repro {

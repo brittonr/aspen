@@ -1,0 +1,98 @@
+{
+  "approximate_95_percent_interval": [
+    -0.5806037919814311,
+    -0.34386199089867237
+  ],
+  "binary_growth": 0.12509542487116443,
+  "build_cpu_and_peak_memory": "unsupported for daemon builders; build records measure Nix client and realization wall only",
+  "canonical_equivalence": "passed",
+  "cases": {
+    "denied": {
+      "baseline_median_cpu_seconds": 0.01,
+      "baseline_median_seconds": 0.03480939051951282,
+      "baseline_peak_rss_kib": 16576.0,
+      "baseline_range_seconds": [
+        0.018334717024117708,
+        0.09906197601230815
+      ],
+      "baseline_requests_per_second": 28.727880180477108,
+      "candidate_median_cpu_seconds": 0.03,
+      "candidate_median_seconds": 0.0669111525057815,
+      "candidate_peak_rss_kib": 16892.0,
+      "candidate_range_seconds": [
+        0.06527424399973825,
+        0.12729715200839564
+      ],
+      "candidate_requests_per_second": 14.945191684055873,
+      "median_regression": 0.9222155719237215
+    },
+    "error": {
+      "baseline_median_cpu_seconds": 0.0,
+      "baseline_median_seconds": 0.009677411027951166,
+      "baseline_peak_rss_kib": 13804.0,
+      "baseline_range_seconds": [
+        0.008743868034798652,
+        0.12743169500026852
+      ],
+      "baseline_requests_per_second": 103.33342224606461,
+      "candidate_median_cpu_seconds": 0.0,
+      "candidate_median_seconds": 0.009886628511594608,
+      "candidate_peak_rss_kib": 13412.0,
+      "candidate_range_seconds": [
+        0.00877562805544585,
+        0.03746679099276662
+      ],
+      "candidate_requests_per_second": 101.14671536684558,
+      "median_regression": 0.021619158578586983
+    },
+    "exhausted": {
+      "baseline_median_cpu_seconds": 0.0,
+      "baseline_median_seconds": 0.010684090986615047,
+      "baseline_peak_rss_kib": 13840.0,
+      "baseline_range_seconds": [
+        0.008749819011427462,
+        0.08191394800087437
+      ],
+      "baseline_requests_per_second": 93.59710631936707,
+      "candidate_median_cpu_seconds": 0.0,
+      "candidate_median_seconds": 0.009651097003370523,
+      "candidate_peak_rss_kib": 13496.0,
+      "candidate_range_seconds": [
+        0.008951527997851372,
+        0.022686867974698544
+      ],
+      "candidate_requests_per_second": 103.61516412598098,
+      "median_regression": -0.09668524767700415
+    },
+    "success": {
+      "baseline_median_cpu_seconds": 0.04,
+      "baseline_median_seconds": 0.06690875298227184,
+      "baseline_peak_rss_kib": 17064.0,
+      "baseline_range_seconds": [
+        0.0648748530074954,
+        0.20274546899599954
+      ],
+      "baseline_requests_per_second": 14.94572765785906,
+      "candidate_median_cpu_seconds": 0.06,
+      "candidate_median_seconds": 0.11697454049135558,
+      "candidate_peak_rss_kib": 17472.0,
+      "candidate_range_seconds": [
+        0.06542776199057698,
+        0.40403688995866105
+      ],
+      "candidate_requests_per_second": 8.54886880341197,
+      "median_regression": 0.7482696250870076
+    }
+  },
+  "decision": "revise",
+  "interval_method": "paired mean Student-t interval, df=29, predeclared multiplier=2.04523; assumes independent pairs",
+  "maintained_profile": "not-enabled; a separate reviewed Cairn change is required even for keep",
+  "maximum_paired_peak_rss_growth": 0.0813924367643375,
+  "mean_paired_wall_improvement": -0.46223289144005175,
+  "p99": "unsupported: fewer than 1000 observations per path",
+  "profile_bundle": "/nix/store/k8fm9p84y8y4vc35nmxw5w5f5na31anf-profile-bundle",
+  "retained_memory": "unsupported: each client process exits; peak RSS is measured, retained heap is not",
+  "scope": "machine-local CLI workload only; not release admission",
+  "status": "measured",
+  "throughput": "inverse complete CLI request wall latency; raw per-path samples retained"
+}

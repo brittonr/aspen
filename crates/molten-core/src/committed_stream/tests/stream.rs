@@ -202,3 +202,109 @@ fn bounded_pages_do_not_skip_events_within_one_committed_revision() {
         next_cursor: cursor,
     });
 }
+
+// r[verify molten.observations.cursors]
+// r[verify molten.observations.tests]
+#[test]
+fn a_returned_cursor_cannot_skip_an_evicted_ordinal_in_a_partially_retained_revision() {
+    let mut stream = stream();
+    let mut input = commit_input(PAYLOAD_REF);
+    input.event_count = 3;
+    let committed = commit_transition(&mut stream, &input).expect("first revision");
+    let SubscriptionOutcome::Events { events, next_cursor } =
+        subscribe(&stream, &StreamCursor::start(SERVICE_ID, 1), 1).expect("first page")
+    else {
+        panic!("an untrimmed stream accepts its start cursor");
+    };
+    assert_eq!(events, vec![committed[0].clone()]);
+    assert_eq!((next_cursor.revision, next_cursor.ordinal), (1, 1));
+
+    input.event_count = 4_095;
+    commit_transition(&mut stream, &input).expect("second revision");
+    let first = stream.events.first().expect("retained event");
+    assert_eq!((first.revision, first.ordinal), (1, 2));
+    assert_eq!(
+        subscribe(&stream, &next_cursor, 1).expect("resumed subscription"),
+        SubscriptionOutcome::RetentionGap {
+            resnapshot_from: StreamCursor::start(SERVICE_ID, 1),
+        }
+    );
+}
+
+// r[verify molten.observations.cursors]
+// r[verify molten.observations.tests]
+#[test]
+fn retention_boundary_pagination_remains_inclusive_across_successive_trims() {
+    let mut stream = stream();
+    let mut input = commit_input(PAYLOAD_REF);
+    input.event_count = 6;
+    commit_transition(&mut stream, &input).expect("first revision");
+    input.event_count = 4_094;
+    commit_transition(&mut stream, &input).expect("second revision");
+
+    for _ in 0..4 {
+        let first = stream.events[0].clone();
+        let boundary = StreamCursor {
+            revision: first.revision,
+            ordinal: first.ordinal,
+            ..StreamCursor::start(SERVICE_ID, 1)
+        };
+        if first.ordinal > 0 {
+            let before = StreamCursor {
+                ordinal: first.ordinal - 1,
+                ..boundary.clone()
+            };
+            assert!(matches!(
+                subscribe(&stream, &before, 1).expect("before boundary"),
+                SubscriptionOutcome::RetentionGap { .. }
+            ));
+        }
+        let SubscriptionOutcome::Events { events, next_cursor } =
+            subscribe(&stream, &boundary, 1).expect("at boundary")
+        else {
+            panic!("the retained boundary is inclusive");
+        };
+        assert_eq!(events, vec![first]);
+        let SubscriptionOutcome::Events { events, .. } = subscribe(&stream, &next_cursor, 2).expect("after boundary")
+        else {
+            panic!("a retained next-event cursor must remain resumable");
+        };
+        assert_eq!(events, stream.events[1..3]);
+        input.event_count = 1;
+        commit_transition(&mut stream, &input).expect("advance retention");
+    }
+}
+
+// r[verify molten.observations.cursors]
+// r[verify molten.observations.tests]
+#[test]
+fn empty_and_after_last_watermarks_do_not_report_retention_gaps() {
+    let mut stream = stream();
+    let empty = snapshot_with_watermark(&stream);
+    assert_eq!(subscribe(&stream, &empty.watermark, 1).expect("empty subscription"), SubscriptionOutcome::Events {
+        events: Vec::new(),
+        next_cursor: empty.watermark,
+    });
+
+    let mut input = commit_input(PAYLOAD_REF);
+    input.event_count = 3;
+    commit_transition(&mut stream, &input).expect("multi-event revision");
+    input.event_count = 4_095;
+    commit_transition(&mut stream, &input).expect("partially evict revision");
+    let snapshot = snapshot_with_watermark(&stream);
+    assert_eq!(
+        subscribe(&stream, &snapshot.watermark, 1).expect("after-last subscription"),
+        SubscriptionOutcome::Events {
+            events: Vec::new(),
+            next_cursor: snapshot.watermark.clone(),
+        }
+    );
+    input.event_count = 1;
+    let committed = commit_transition(&mut stream, &input).expect("post-snapshot transition");
+    let SubscriptionOutcome::Events { events, .. } =
+        subscribe(&stream, &snapshot.watermark, 1).expect("resume snapshot")
+    else {
+        panic!("a current snapshot watermark must observe subsequent commits");
+    };
+    assert_eq!(events, committed);
+}

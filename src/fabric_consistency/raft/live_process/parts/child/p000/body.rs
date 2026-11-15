@@ -46,6 +46,7 @@ pub(super) async fn run(
         }
     };
     if mode == ChildMode::Recover {
+        super::client_projection::sample(&run_directory, &node, &endpoint_identity, "reopen")?;
         return super::recovered::run(node_id, endpoint_identity, node, &run_directory).await;
     }
     run_fresh_node(node_id, endpoint_identity, node, &run_directory).await
@@ -92,6 +93,7 @@ pub(super) async fn finish_node(
     run_directory: &std::path::Path,
 ) -> crate::error::Result<()> {
     let mut receipt = from_node(&node_id, &endpoint_identity, &node)?;
+    super::client_projection::sample(run_directory, &node, &endpoint_identity, "terminal")?;
     crate::fabric_consistency::raft::live_cluster::setup::close_node(node).await;
     receipt.clean_shutdown = true;
     write_value(&path(run_directory, &node_id), &value(&receipt))
@@ -150,6 +152,7 @@ async fn run_leader(
             is_proposal_started = true;
         }
         if node.service.state().commit_index == INITIAL_LOG_INDEX && !is_read_started {
+            super::client_projection::duplicate_if_requested(node, run_directory)?;
             begin_read(node).await?;
             is_read_started = true;
         }
@@ -236,6 +239,7 @@ async fn run_follower(
     endpoint_identity: &str,
     is_lag_until_snapshot: bool,
 ) -> crate::error::Result<()> {
+    let is_client = super::client_projection::input(run_directory)?.is_some();
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
@@ -245,6 +249,9 @@ async fn run_follower(
             continue;
         };
         if run_directory.join(PARTITION_FILE).is_file() {
+            if is_client {
+                write_signal(&run_directory.join(format!("{}-client-fault-applied.preserves", node.service.state().node_id)), "transport-event-dropped")?;
+            }
             continue;
         }
         if is_lag_until_snapshot && should_drop_before_snapshot(node.service.state(), &event.event) {
@@ -283,5 +290,6 @@ fn write_checkpoint_if_requested(
         return Ok(());
     }
     let receipt = from_node(&node.service.state().node_id, endpoint_identity, node)?;
+    super::client_projection::sample(run_directory, node, endpoint_identity, "checkpoint")?;
     write_value(&output, &value(&receipt))
 }

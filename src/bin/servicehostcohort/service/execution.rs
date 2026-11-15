@@ -44,7 +44,7 @@ pub(super) fn build(
         profile_ref: context.profiles.execution.profile_ref.clone(),
     };
     let resolved = molten::fabric_execution::ResolvedContext {
-        executable_path: source.output.join("bin/molten-native-extension-fixture"),
+        executable_path: source.output.join(source.profile.executable()),
         executable_artifact_ref: source.artifact_ref.clone(),
         executable_identity_ref: source.callback_ref.clone(),
         workspace_path: source.root_path.join("ledger").join(cache),

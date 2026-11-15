@@ -1,0 +1,6 @@
+tpm2-tools=5.7
+swtpm=0.10.1
+PCR=sha256:16 (actually extended before denial)
+filesystem=all TPM consumer regular files scanned; provider device state is a separate authority
+provider-state=unencrypted disposable software TPM; no host-filesystem secrecy claim
+scope=disposable swtpm; no hardware/attestation/production qualification

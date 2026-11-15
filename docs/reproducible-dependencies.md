@@ -1,6 +1,6 @@
 # Reproducible release dependencies
 
-Molten release dependency identity is authored in the typed Nickel profile at
+Aspen release dependency identity is authored in the typed Nickel profile at
 [`config/release-dependencies/profile.ncl`](../config/release-dependencies/profile.ncl).
 The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
@@ -8,10 +8,72 @@ transport policy. Public GitHub dependencies use immutable HTTPS pins so a fresh
 checkout builds without GitHub SSH credentials. The Artifact packages use one
 exact HTTPS Git pin and one non-flake Nix input. Private Radicle sources remain
 explicit and require the documented public seed or a local Radicle profile.
-Bounded Exec uses its canonical read-only HTTPS source at revision
+Bounded Exec uses the catalog-advertised anonymous GitHub source
+`https://github.com/OnixResearch/bounded-exec.git` at unchanged revision
 `29dac88ecded94457572db3fdfaaaab95fa91525` and one matching non-flake input.
 Other OnixResearch Cargo sources retain their reviewed pins and immutable
 archive inputs for sandboxed Nix builds.
+
+## Anonymous acquisition observations
+
+On 2026-11-13 a fresh Git checkout, with an empty HOME, no system/global Git
+configuration, no SSH agent, no credential helper and no HTTP authorization
+header, acquired that exact Bounded Exec commit from GitHub. Its Git tree is
+`fc0b6f75a01088faf4f22be57edc073a3fe45e54`; its metadata-free NAR hash remains
+`sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=`. The latest mirror head
+was not selected. Its selected shell/core packages add no further Git source:
+the core is local to the same provider and the Unix shell uses crates.io `nix`.
+
+Bounded Tree remains exclusively identified by
+`rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX`; no GitHub fallback is declared. The existing
+public Git transport at
+`https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git` anonymously supplied
+selected commit `250f3b25d0933c2fa106aa82d1cc17a496716f06`, not its latest head.
+Its Git tree is `0cc4596f8335e25f197971afd4f5e6bbbb49d485` and its metadata-free
+NAR hash remains `sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=`.
+The acquired declaration retains that RID, branch `main`, no fallbacks and
+AGPL-3.0-or-later. Its selected capability/core packages use only their shared
+provider tree and declared registry dependencies. No credentials, sibling
+override, provider publication or running Radicle node was needed for these
+observed Git-over-HTTPS acquisitions. These observations do not assert a
+Radicle signed-ref verification or replace source-trust admission.
+
+Earlier commands and failed bootstrap attempts remain in
+[the initial change evidence](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-acquisition-20261113.json).
+An earlier hash-generation pass observed HTTP 530 from Durable File Publication's
+`git.onix.computer` route and reused its exact existing NAR identity; that was not
+fresh-source availability evidence. A subsequent anonymous GitHub fetch rejected
+the selected commit rather than supplying it. The provider's canonical RID
+`rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` then supplied that exact commit through
+`https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git`. Selected revision
+`8e05e74e24b45f752d77145c4455385daaf6d6ab`, Git tree
+`1c186b996dd3f85102b22035c57d133bf880fa76`, NAR
+`sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=` and the selected
+`MIT OR Apache-2.0` grant are unchanged. Cargo, Nix, source hashes and both unit
+graphs now select that actual public coordinate; no newer implementation or
+license grant was substituted.
+
+[Complete source-closure observations](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json)
+retain exact acquisition commands, outputs, revisions and measured NAR hashes
+for all 21 Git source cohorts in the selected default/development unit graph.
+They also enumerate all 78 fixed Nix source byte cohorts: 76 were acquired
+anonymously and matched their locked NARs. Recursive submodules and required LFS
+payloads are included, not pointer stubs. The executable-extent verifier's nested
+Cairn Artifact input now uses verified public HTTPS at unchanged commit
+`e41340bec587b6d049b5cc518ec7db925dde84be` and unchanged NAR
+`sha256-2cM912L2YXVnVX9LquwhAPKyjPP/z/oFQRe7Qq9bHHE=`, instead of hidden SSH
+credentials. Frozen provider contents and verifier implementation pins are
+unchanged.
+
+VM Cohort `31f1696ba9391bfda8577a58af84f72361d5573e` and the Mantle extent
+producer `2c636b1b25353a1b0befa5af48dc68615cd686dd` remain explicitly unavailable
+through the attempted anonymous paths. Their seed requests returned HTTP 500;
+the advertised Mantle GitHub repository also rejected its exact producer commit.
+Fresh public source publication for those unchanged bindings remains required.
+Source acquisition does not qualify optional features, a clean full public Nix
+build, legal distribution, runtime behavior, current authority or release
+eligibility.
+
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`
 rows for direct crates.io pins. Each row binds the manifest dependency, package
@@ -39,9 +101,16 @@ Run the focused check from the repository root:
 ```sh
 nix develop -c cargo run -p molten-release-policy -- \
   --root . \
-  --evidence-source valence-integrity=../valence \
-  --evidence-source octet-cutover=../octet
+  --evidence-source valence-integrity=/path/to/exact-valence \
+  --evidence-source octet-cutover=/path/to/exact-octet \
+  --evidence-source hardened-wasmtime-resumable=/path/to/exact-hardened-wasmtime \
+  --evidence-source mantle-wasm-consumer-verifier=/path/to/exact-mantle
 ```
+
+Each evidence root must contain the exact archive bytes selected in the current
+profile. An arbitrary current sibling checkout is not a substitute for those
+immutable provider inputs; the dependency-audit runner retains the guard's
+actual status and diagnostic if any required root is absent or mismatched.
 
 `nix flake check` runs the same validator against exact Nix source inputs. Local
 `--override-input` paths are development conveniences only and cannot replace

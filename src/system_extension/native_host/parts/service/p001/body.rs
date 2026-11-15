@@ -140,6 +140,15 @@ where
             return Err(Failure::Executor(error));
         }
         let dispatch = self.host.dispatch_request(&ingress.payload.value_ref, ingress.accounted_bytes, logical_tick)?;
+        if let DispatchResult::Executed { receipt, .. } = &dispatch {
+            let value = NativeCallbackValue {
+                value_ref: receipt.receipt_ref.clone(),
+                bytes: crate::preserves_rail::canonical_bytes(&receipt.value)?,
+            };
+            self.host.executor_mut()
+                .publish_external_value(&ingress.request_ref, "ingress-callback-receipt", &value)
+                .map_err(Failure::Executor)?;
+        }
         let terminal_ref = match &dispatch {
             DispatchResult::Executed { receipt, .. } | DispatchResult::Failed { receipt, .. } => {
                 receipt.receipt_ref.clone()
@@ -231,9 +240,24 @@ where
     // r[impl molten.system_extension.native_host.recovery]
     pub fn recover(&mut self, logical_tick: u64) -> std::result::Result<LifecycleReceipt, Failure> {
         let checkpoint = self.instance()?.checkpoint_ref.ok_or(Failure::MissingCheckpoint)?;
-        let receipt = self.host.recover(&checkpoint, logical_tick)?;
-        self.sync_instance(true)?;
-        Ok(receipt)
+        let state = self.host.state();
+        let event = LifecycleEvent::simple(LifecycleEventKind::BeginRecovery, state.generation, state.incarnation);
+        let planned = plan_lifecycle_transition(
+            state,
+            &event,
+            self.host.usage(),
+            self.host.manifest().manifest().resources.max_restart_attempts,
+        )
+        .map_err(|issues| Failure::Host(format!("native recovery fence denied: {issues:?}")))?;
+        // The callback process validates against the durable instance, not the
+        // dispatcher's in-memory transition. Commit its new incarnation first.
+        let mut next = self.instance()?;
+        next.lifecycle = planned;
+        next.is_accepting_ingress = false;
+        self.replace_instance(next)?;
+        let result = self.host.recover(&checkpoint, logical_tick);
+        self.sync_instance(result.is_ok())?;
+        result.map_err(Failure::from)
     }
 
     // r[impl molten.system_extension.native_host.recovery]

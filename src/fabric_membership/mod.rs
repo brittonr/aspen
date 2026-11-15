@@ -7,6 +7,7 @@
 
 mod adapters;
 mod canonical;
+pub mod persistence;
 mod ports;
 mod shell;
 

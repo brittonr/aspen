@@ -19,7 +19,9 @@ let get = fun field fallback args => std.record.get_or field fallback args in
       capability_rooted = get "capability_rooted" true args,
       owner_only_permissions = get "owner_only_permissions" true args,
     },
-    purposes = get "purposes" Contracts.purposes args,
+    purposes = get "purposes"
+      (if get "backend_class" "capability-file" args == "tpm2-sealed"
+       then ["transport-endpoint"] else Contracts.purposes) args,
     purpose_separation = get "purpose_separation" true args,
     domain = {
       id = "molten.crypto.signature",

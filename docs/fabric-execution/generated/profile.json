@@ -18,7 +18,7 @@
     "component": {
       "license": "AGPL-3.0-or-later",
       "package": "bounded-exec",
-      "repository": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+      "repository": "https://github.com/OnixResearch/bounded-exec.git",
       "revision": "29dac88ecded94457572db3fdfaaaab95fa91525"
     },
     "environment_mode": "clear",
@@ -62,7 +62,7 @@
     "component": {
       "license": "AGPL-3.0-or-later",
       "package": "bounded-exec",
-      "repository": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+      "repository": "https://github.com/OnixResearch/bounded-exec.git",
       "revision": "29dac88ecded94457572db3fdfaaaab95fa91525"
     },
     "environment_mode": "clear",

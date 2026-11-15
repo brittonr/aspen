@@ -1,0 +1,16 @@
+{
+  "command": [
+    "perf",
+    "buildid-list",
+    "--with-hits",
+    "-i",
+    "/build/validation/perf.data"
+  ],
+  "elapsed_seconds": 0.1744424469943624,
+  "max_rss_kib": 20716.0,
+  "returncode": 0,
+  "system_seconds": 0.05,
+  "time_wall_seconds": 0.14,
+  "timeout": false,
+  "user_seconds": 0.03
+}

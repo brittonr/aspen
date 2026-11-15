@@ -1,0 +1,11 @@
+== Running model based tests for mixed_view_guard_replay
+   Generating 1 traces using `5` as random seed ...
+   Replaying traces ...
+   Specification and implementation states diverge
+   [FAIL] mixed_view_guard_replay 
+   Reproduce this error with `QUINT_SEED=5`
+
+
+thread 'mixed_view_guard_replay' (3903161) panicked at tests/fastpathquint.rs:222:1:
+State invariant failed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,11 @@
+                                         /nix/store/3h8493rmrgpflf7yxg9913bn6wmp2mkb-b3sum-1.8.5/bin/b3sum
+f69bd1ec7737f77a4481660609d793fb4ca9155d /nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/ld-linux-x86-64.so.2
+8ae0b698f2d4e727f569f64bb166e08ae30bd077 /nix/store/57iz36553175g3178pvxjij8z5rcsd4n-glibc-2.42-61/lib/libc.so.6
+62cd4765658780a43385ddbd1c31e6f4c82f945f /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/lib/libpython3.13.so.1.0
+                                         /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/lib/python3.13/lib-dynload/_json.cpython-313-x86_64-linux-gnu.so
+                                         /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/lib/python3.13/lib-dynload/_posixsubprocess.cpython-313-x86_64-linux-gnu.so
+                                         /nix/store/60m4rxhg2fldqaak400c0lry96ijrzqn-python3-3.13.13/lib/python3.13/lib-dynload/select.cpython-313-x86_64-linux-gnu.so
+                                         /nix/store/n0wrh3vjfwcqfyswwai0zcxvkpibq34v-time-1.10/bin/time
+ebf971c70e8bc0cb098a0da4e1d42e59beb3d008 /nix/store/pjyj70p6szibqg35y876cpg3bqgdh5vf-rust_molten-0.1.0/bin/molten
+95233abe2fea1bcda1d345f7dd1a64fef84fa7ef /nix/store/y18pnbvfarnilsmgayswvi1khaw9wbsc-openssl-3.6.2/lib/libcrypto.so.3
+                                         /tmp/perf-vdso.so-O6IXzJ

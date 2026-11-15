@@ -12,6 +12,7 @@ EXPECTED = {
     "batch-core": {"molten-orchestrator-core", "serde"},
     "batch-application": {"molten-batch-core", "async-trait"},
     "codec": {"molten-batch-core", "serde", "serde_json", "preserves", "blake3"},
+    "render": {"molten-batch-core", "molten-orchestrator-codec", "serde", "serde_json"},
 }
 BLOCKED = re.compile(r"\b(?:std|core)\s*::\s*(?:fs|net|process|env|thread|time)\b|\b(?:tokio|redb|iroh|wasmtime|cap_std)\s*::")
 
@@ -25,7 +26,7 @@ def check() -> list[str]:
     errors = []
     manifest = tomllib.loads((ROOT / "Cargo.toml").read_text())
     members = manifest["workspace"]["members"]
-    if set(members) != {"core", "application", "batch-core", "batch-application", "codec", "adapters", "cli"}:
+    if set(members) != {"core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render"}:
         errors.append("Unexpected workspace member set")
     names = {}
     for member in members:
@@ -38,6 +39,10 @@ def check() -> list[str]:
                 target = (ROOT / member / dep["path"]).resolve()
                 if not target.is_relative_to(ROOT) or not (target / "Cargo.toml").is_file():
                     errors.append(f"{member}: missing or escaping dependency {name}")
+    bridge = ROOT / "adapters/src/lib.rs"
+    shared = ROOT.parent.parent / "crates/molten-core/src/committed_stream/mod.rs"
+    if not shared.is_file() or '../../../../crates/molten-core/src/committed_stream/mod.rs' not in bridge.read_text():
+        errors.append("Missing authoritative committed-stream source closure/bridge")
     for member in ("core", "batch-core"):
         if "#![no_std]" not in (ROOT / member / "src/lib.rs").read_text():
             errors.append(f"{member}: no_std missing")
@@ -57,5 +62,5 @@ if __name__ == "__main__":
     if problems:
         print("\n".join(problems))
         raise SystemExit(1)
-    print("PASS: seven-crate dependency graph; pure cores/application have no matched ambient imports; no implementation stubs.")
+    print("PASS: eight-crate dependency graph; pure cores/application have no matched ambient imports; no implementation stubs.")
     print("Scope: lexical and manifest checks only. Rust parsing, type checking and runtime behavior are not established.")

@@ -1,3 +1,4 @@
+mod counter;
 mod credentials;
 mod operations;
 mod operator;
@@ -5,7 +6,9 @@ mod service;
 mod source;
 
 #[derive(clap::Parser)]
-#[command(about = "Author an owned experimental native recovery cohort from an independently signed actual Nix output")]
+#[command(
+    about = "Author an Aspen experimental native recovery or addressable-counter cohort from an independently signed actual Nix output"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -17,8 +20,36 @@ pub enum Command {
     Authorize(credentials::Arguments),
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+pub enum Profile {
+    #[default]
+    NativeFixture,
+    Counter,
+}
+
+impl Profile {
+    fn executable(self) -> &'static str {
+        match self {
+            Self::NativeFixture => "bin/molten-native-extension-fixture",
+            Self::Counter => "bin/molten-addressable-counter",
+        }
+    }
+}
+
 #[derive(clap::Args)]
 pub struct Arguments {
+    /// The existing native fixture remains the default; counter selects its measured effect-free
+    /// guest.
+    #[arg(long, value_enum, default_value = "native-fixture")]
+    pub profile: Profile,
+    #[arg(long, required_if_eq("profile", "counter"))]
+    pub actor_namespace_ref: Option<String>,
+    #[arg(long, required_if_eq("profile", "counter"))]
+    pub actor_type: Option<String>,
+    #[arg(long, required_if_eq("profile", "counter"))]
+    pub actor_key: Option<String>,
+    #[arg(long, required_if_eq("profile", "counter"))]
+    pub counter_placement: Option<std::path::PathBuf>,
     #[arg(long)]
     pub source_trust: std::path::PathBuf,
     #[arg(long)]
@@ -43,6 +74,7 @@ pub fn run(cli: Cli) -> molten::error::Result<()> {
 }
 
 fn create(args: Arguments) -> molten::error::Result<()> {
+    let actor_key = counter::selected_key(&args)?;
     let source = source::prepare(&args)?;
     let mut operator = operator::Authority::open(&args.issuer_key, &args.holder_key, &args.policy, &source.root)?;
     let policy_ref =
@@ -55,6 +87,9 @@ fn create(args: Arguments) -> molten::error::Result<()> {
         molten::preserves_rail::string(operator.issuer_did()?),
         molten::preserves_rail::string("explicit-signed-operation-ticks-not-wall-clock"),
     ])?;
+    if let Some(key) = actor_key {
+        return counter::create(&source, &mut operator, &policy_ref, &elapsed_ref, key);
+    }
     let mut definitions = molten::harness::composition::group_definitions()?;
     definitions.group.elapsed_source_ref = elapsed_ref.clone();
     let sibling_group = molten::system_extension::RecoveryGroupDeclaration {

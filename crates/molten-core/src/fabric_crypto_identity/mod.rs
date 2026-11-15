@@ -8,11 +8,13 @@ mod admission;
 mod artifact_auth;
 mod model;
 mod rotation;
+mod tpm2;
 
 pub use admission::*;
 pub use artifact_auth::*;
 pub use model::*;
 pub use rotation::*;
+pub use tpm2::*;
 
 #[cfg(test)]
 mod tests;

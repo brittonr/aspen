@@ -1,5 +1,7 @@
 //! Retained native service-host ownership for the actual node daemon lifetime.
 
+mod actor;
+
 pub struct Owner {
     host: crate::node_service_hosting::Host<
         super::authority::Current<crate::fabric_time::LiveClockAdapter>,
@@ -41,18 +43,57 @@ impl Owner {
         bundle_path: &str,
         logical_tick: u64,
     ) -> crate::error::Result<Self> {
+        Self::open_with_signing(root, gate, bundle_path, logical_tick, None)
+    }
+
+    /// Prepare each exact protected startup request through the supplied credential transport.
+    /// Current still validates every grant, policy, revocation, signature and replay boundary.
+    /// Omitting a credential or refusing a request fails closed; this never falls back to
+    /// admission.
+    pub fn open_interactive(
+        root: &crate::node_state::DirectoryRoot,
+        gate: &crate::node_runtime::ValidatedNodeSourceGate,
+        bundle_path: &str,
+        logical_tick: u64,
+        signing: &mut dyn crate::addressable_actor::native::SigningPort,
+    ) -> crate::error::Result<Self> {
+        Self::open_with_signing(root, gate, bundle_path, logical_tick, Some(signing))
+    }
+
+    fn open_with_signing(
+        root: &crate::node_state::DirectoryRoot,
+        gate: &crate::node_runtime::ValidatedNodeSourceGate,
+        bundle_path: &str,
+        logical_tick: u64,
+        mut signing: Option<&mut dyn crate::addressable_actor::native::SigningPort>,
+    ) -> crate::error::Result<Self> {
         let bytes =
             root.read(&crate::node_state::RelativePath::parse(bundle_path)?, super::codec::MAX_BUNDLE_BYTES as u64)?;
         let bundle_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
         let bundle = super::codec::decode(&bytes, &bundle_ref)?;
         let clock = crate::world_witness::live_clock()?;
         let mut authority = super::authority::Current::open(root, &bundle_ref, clock)?;
-        crate::node_service_hosting::AuthorityPort::admit(
-            &mut authority,
-            &super::command::load_request(&bundle_ref, gate.validation_ref(), logical_tick)?,
-        )?;
+        let load = super::command::load_request(&bundle_ref, gate.validation_ref(), logical_tick)?;
+        if let Some(signing) = signing.as_deref_mut() {
+            signing.prepare(&load)?;
+        }
+        crate::node_service_hosting::AuthorityPort::admit(&mut authority, &load)?;
         let mut materialized = super::runtime::materialize(root, bundle, gate)?;
         let mut observers = std::collections::BTreeMap::new();
+        if let Some(signing) = signing.as_deref_mut() {
+            let selector = crate::node_state::RelativePath::parse(super::effects::config::SELECTOR)?;
+            if root.try_exists(&selector)? {
+                let bytes = root.read(&selector, super::effects::config::MAX_CONFIG_BYTES as u64)?;
+                let reference = crate::preserves_rail::content_ref_from_bytes(&bytes);
+                super::effects::config::decode(&bytes, &reference)?;
+                signing.prepare(&super::effects::authority::install_request(
+                    &bundle_ref,
+                    &reference,
+                    gate.validation_ref(),
+                    logical_tick,
+                )?)?;
+            }
+        }
         super::effects::install(super::effects::InstallInput {
             root,
             bundle_ref: &bundle_ref,
@@ -62,6 +103,9 @@ impl Owner {
             observers: Some(&mut observers),
         })?;
         let mut host = crate::node_service_hosting::Host::open(root, authority, materialized.runtime)?;
+        if let Some(signing) = signing {
+            signing.prepare(&host.preview(crate::node_service_hosting::preview::Input::Status, logical_tick)?)?;
+        }
         let status = host.status(logical_tick)?;
         let ready = crate::preserves_rail::record("node-service-host-ready-v1", vec![
             crate::preserves_rail::string(&bundle_ref),

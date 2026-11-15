@@ -5,12 +5,14 @@ mod canonical;
 #[path = "file/adapter.rs"]
 mod file_adapter;
 mod integration;
+mod tpm2;
 
 pub use artifact_auth::*;
 pub use canonical::*;
 pub use file_adapter::*;
 pub use integration::*;
 pub use molten_core::fabric_crypto_identity::*;
+pub use tpm2::*;
 
 #[cfg(test)]
 mod tests;

@@ -60,10 +60,21 @@ let bound_args = get "bounds" {} args in
       iroh_blobs = profile "iroh-blobs" [
         "streaming-get", "availability", "import", "export", "protection",
       ] ({ live_network_required = true } & get "iroh_blobs" {} args),
-      object_storage = profile "object-storage" [
+      object_storage = (profile "object-storage" [
         "streaming-put", "streaming-get", "availability",
-        "import", "export", "protection",
-      ] ({ live_network_required = true } & get "object_storage" {} args),
+        "import", "export", "protection", "durable-completion",
+      ] ({ live_network_required = true } & get "object_storage" {} args)) & {
+        object_storage_policy = get "object_storage_policy" {
+          max_local_tier_bytes = 68719476736,
+          minimum_verified_bytes_per_second = 1073741824,
+          max_rebuild_seconds = 64,
+          rebuild_path = "refetch-and-reverify-hot-chunks",
+          at_capacity = "verified-remote-only-no-eviction",
+          max_remote_connections = 1,
+          endpoint_resolution = "fixed-numeric-at-admission",
+          credential_refresh = "fixed-at-admission-no-refresh",
+        } args,
+      },
       deterministic_simulation = profile "deterministic-simulation" [
         "streaming-put", "streaming-get", "verified-range", "availability",
         "import", "export", "protection", "durable-completion",

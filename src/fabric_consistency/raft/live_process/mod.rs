@@ -1,6 +1,10 @@
 use super::*;
 
+#[path = "client/mod.rs"]
+mod bounded_client;
 mod child;
+#[path = "client/projection.rs"]
+mod client_projection;
 mod process;
 mod receipt;
 mod recovered;
@@ -11,7 +15,7 @@ const CHILD_NODE_ENV: &str = "MOLTEN_LIVE_RAFT_CHILD_NODE";
 const CHILD_RUN_DIRECTORY_ENV: &str = "MOLTEN_LIVE_RAFT_RUN_DIRECTORY";
 const CHILD_MODE_ENV: &str = "MOLTEN_LIVE_RAFT_CHILD_MODE";
 const CHILD_TEST_FILTER: &str = "fabric_consistency::raft::live_process::distinct_replica_child";
-const CHILD_TIMEOUT_SECONDS: u64 = 30;
+const CHILD_TIMEOUT_SECONDS: u64 = crate::fabric_simulation::bounded_client::CLIENT_CHILD_TIMEOUT_SECONDS;
 const FILE_POLL_MILLISECONDS: u64 = 10;
 const FILE_POLL_LIMIT: usize = 3_000;
 const RECEIPT_FIELD_COUNT: usize = 25;
@@ -29,7 +33,7 @@ const REQUEST_LABEL: &str = "distinct-process-request";
 const APPLICATION_STATE_LABEL: &str = "distinct-process-application-state";
 const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
 const STALE_LEADER_TERM: u64 = 1;
-const EVENT_LOOP_LIMIT: usize = 1_200;
+const EVENT_LOOP_LIMIT: usize = crate::fabric_simulation::bounded_client::CLIENT_EVENT_LOOP_LIMIT;
 const INGRESS_EVENT_CAPACITY: usize = 32;
 const INGRESS_DELIVERY_LIMIT: u64 = 1_024;
 

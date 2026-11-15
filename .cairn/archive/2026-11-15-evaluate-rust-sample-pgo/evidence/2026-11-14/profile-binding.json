@@ -1,0 +1,30 @@
+{
+  "application_samples": 478,
+  "association_sha256": "899f691127fc59075c40a4ff304b525cf28fbf0f701fa084ffef7d7b70eee76d",
+  "baseline": "/nix/store/n7xrnjds1jq2yhbkmmwqjq6cyralw0y9-rust_molten-0.1.0",
+  "baseline_elf_build_id": "9fb80a79926589d89096d8a8f9437076bc5f2972",
+  "baseline_sha256": "64cb441e2fecac5eb84f3ea881b1e2537ac236be114d6130488d9e263a1ab76d",
+  "compiler_revision": "f7d782a3be46d6bb4b9792fe69a61db389ba1769",
+  "compiler_sha256": "a3907fd0dbe224ad08741dce60692e450b7614ab0d156be88bc88ec01f360b17",
+  "converter_sha256": "6d78569b1fb0292b9367df43a2e5d0967eaa2d61850faa825b8f9d145c155ee1",
+  "flags": [
+    "-Copt-level=3",
+    "-Ccodegen-units=1",
+    "-Clto=off",
+    "-Ctarget-cpu=x86-64",
+    "-Ctarget-feature=+sse2",
+    "-Cdebuginfo=line-tables-only",
+    "-Cforce-frame-pointers=yes",
+    "-Clink-arg=-Wl,--build-id=sha1",
+    "-Zunstable-options",
+    "-Zdebuginfo-for-profiling"
+  ],
+  "llvm_revision": "21cf28432798952d942bacc6bcee3a328faa3638",
+  "lock_sha256": "20652e5d429df96913852800ebf8630bd6abc623db82f1cb3228d4bec1544d9c",
+  "plan_sha256": "38c3aea0a88b8edb6507d56517bd057dc1727bbd020eaf7ea220eb63a5f8ef6f",
+  "policy_sha256": "241d5fc9941c9bef24c716c03b467b4f17ace134f2e445b1d0b44055e4470a10",
+  "profile_sha256": "383848d7a39b10f6ac17026233770cf795a118f0d6a3403c2203b552d80d6051",
+  "raw_sha256": "1a0130d3baa95c560e4e7d9406b9e9a1d4eb4d1f559897005f254cbbbd58f786",
+  "schema": "molten.sample-pgo.profile-binding.v1",
+  "source": "/nix/store/ys9rpf8f3lv00fqcjyx4ncn13ypxqxnh-1gp0ya502nxnjpazbycqw13lb7hmfvm5-source"
+}

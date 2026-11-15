@@ -163,6 +163,14 @@ invocation and before any effect is planned. A delayed timer, a pending callback
 from the previous instance are therefore all rejected against the replacement instance, and the lifecycle receipt binds
 the previous and next incarnation so the advance is visible in evidence.
 
+A drained native worker is not terminally stopped. A current, generation- and
+incarnation-fenced process-loss observation may enter the existing failure or
+quarantine path under the unchanged failure class and restart budget. This is
+lifecycle bookkeeping, not permission for application mutation or output from
+the drained worker. Direct recovery from Drained remains denied; the native
+owner records loss first and persists a fresh closed-ingress incarnation before
+any recovery callback.
+
 Durable logical work is not fenced out by the incarnation. It is re-admitted deliberately: the shell presents durable
 work with a fresh delivery claim bound to the current generation and incarnation, and the claim records the current
 incarnation. Runtime-local work presented as durable work is denied, and durable work presented without a current claim

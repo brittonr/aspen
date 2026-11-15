@@ -1,6 +1,6 @@
 # Third-party licensing
 
-The root `LICENSE` applies only to repository-owned Molten source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
+The root `LICENSE` applies only to repository-owned Aspen source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
 
 Historical sparse `vendor/` snapshots record upstream `Cargo.toml.orig` material
 rather than changing its license. They are not tracked in the current Git tree;
@@ -10,7 +10,7 @@ the current source. Current declared families are:
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
 | Cargo packages `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding-core` from `OnixResearch/onix-artifact` revision `5f3962d7471d1547e044f57daeda72f56621fd52`, shared with Valence's authentication dependencies | AGPL-3.0-or-later; prior MIT OR Apache-2.0 grants remain effective for previously granted material |
-| Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx` revision `57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e` | MIT |
+| Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git` revision `57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e` | MIT |
 | Cargo packages `mantle-wasm-consumer-verifier` and `crunch-wasm-component-core` from `OnixResearch/mantle` revision `dd2bebab894688d07e7a29c75c1437f4ecc120df` | AGPL-3.0-or-later |
 | `tests/fixtures/wasm-component-runtime/kamacite-mantle-hello-bundle.json`, copied unchanged from `crates/mantle-wasm-consumer-verifier/tests/fixtures/` at Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` | AGPL-3.0-or-later |
 | `tests/fixtures/wasm-component-runtime/producer-tree-handoff/`, unchanged required publication members and bundle from the actual Mantle pipeline at revision `c99556e5c91dfd13fcc261dc451f471359d47c38`; extracted from retained `producer-snapshot.zip` (BLAKE3 `c701aa6901f614842cb2ec33d7a9b631e31f6471703bc82ee1d1ea9fce7bc7ed`) in `.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff/`; unrelated reports omitted, original bytes/logical paths/digests unchanged | AGPL-3.0-or-later |
@@ -26,6 +26,7 @@ the current source. Current declared families are:
 | `vendor/nickel-lang-core-0.16.1` | MIT; resolved from the crates.io version record for checksum `51647f09e6e385c140226867c62292f23c31241ee2b4986f3f71a40d48e88a60` |
 | `vendor/nostr` (`nostr` 0.44.2) | MIT; resolved from the crates.io version record for checksum `3aa5e3b6a278ed061835fe1ee293b71641e6bf8b401cfe4e1834bbf4ef0a34e1` |
 | `verification/tla-ts/tla-ts-0.0.10.tgz`, unchanged npm publication `tla-ts@0.0.10` with SHA-256 `cf962f00ab297186f919e32c8f5cf28f6e78f1e92703b9a3d8f02044a487c84a` | MIT; upstream `LICENSE` is retained inside the tarball |
+| Development-only Cargo packages `quint-connect` and `quint-connect-macros` from `https://github.com/quint-co/quint-connect.git` revision `4f018f54fc7dd4cef341d10111427bab59d3b307`, version `0.1.2` | Apache-2.0; Copyright 2025 Informal Systems Inc.; upstream LICENSE retained by the source dependency |
 
 Complete common texts are provided under `THIRD_PARTY_LICENSES/`. Copyright notices and license headers in upstream files must be preserved.
 

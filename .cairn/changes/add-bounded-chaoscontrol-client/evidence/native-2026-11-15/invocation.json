@@ -1,0 +1,36 @@
+{
+  "command": [
+    "env",
+    "LD_LIBRARY_PATH=/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/lib/rustlib/x86_64-unknown-linux-gnu/lib:/nix/store/ji36842higmp6b06hbbpmzbd59g1c07c-zlib-1.3.2/lib:/nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib:/nix/store/ls0is10lli2hdyzqfp6kqfj1mvcpmkd7-libpulseaudio-17.0/lib:/nix/store/wfi1i34azyilqvh1q74fbr0p5rc78fmq-pipewire-1.6.9/lib:/etc/sane-libs",
+    "MOLTEN_CHAOSCONTROL_SOURCE_REVISION=nix-source:/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source",
+    "MOLTEN_CHAOSCONTROL_SOURCE_REF=blake3:ba9a881c83206cc3238d871a176e5a99243912cadc7ec8da8d48e40c6c912906",
+    "MOLTEN_CHAOSCONTROL_RETAIN=/dev/shm/aspen-open-issues-20261113/.cairn/changes/add-bounded-chaoscontrol-client/evidence/native-2026-11-15",
+    "/nix/store/241bb55djgk13i4aw0z6d6fs4q99c434-rust_molten-0.1.0-test/tests/molten-26b461e940",
+    "fabric_consistency::raft::live_process::bounded_client::tests",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "source": {
+    "derivation": "/nix/store/xpaqk433a97qg8nm5b686lvv4q6mh836-rust_molten-0.1.0-test.drv",
+    "source": "/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source",
+    "source_revision": "nix-source:/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source",
+    "source_ref": "blake3:ba9a881c83206cc3238d871a176e5a99243912cadc7ec8da8d48e40c6c912906",
+    "source_ref_encoding": "BLAKE3 over the exact Nix NAR serialization of the declared src input",
+    "test_binaries": "/nix/store/241bb55djgk13i4aw0z6d6fs4q99c434-rust_molten-0.1.0-test",
+    "runner_derivation": "/nix/store/n82kqaxm3y5xgwn1zxsl0iaxjnrw8ijg-molten-nextest.drv",
+    "rust_lib_dir": "/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/lib/rustlib/x86_64-unknown-linux-gnu/lib",
+    "scope": "Build recipe and immutable source identity; execution has not yet occurred."
+  },
+  "executable": "/nix/store/241bb55djgk13i4aw0z6d6fs4q99c434-rust_molten-0.1.0-test/tests/molten-26b461e940",
+  "executable_blake3": "blake3:bfdaac104c2571493aa7b1b2c06088f67a4557102b2945b7ff8fd0dc66852737",
+  "selected_tests": [
+    "fabric_consistency::raft::live_process::bounded_client::tests::native_executor_rejects_request_substitution_before_spawning: test",
+    "fabric_consistency::raft::live_process::bounded_client::tests::native_horizon_checker_rejects_late_election_after_earlier_interval: test",
+    "fabric_consistency::raft::live_process::bounded_client::tests::native_precheckpoint_prefixes_remain_incomplete_without_io_abort: test",
+    "fabric_consistency::raft::live_process::bounded_client::tests::native_recovery_horizon_counts_only_after_advancement_and_fault_off: test",
+    "fabric_consistency::raft::live_process::bounded_client::tests::retained_native_healthy_control: test",
+    "fabric_consistency::raft::live_process::bounded_client::tests::retained_native_mutant_repeats_reduces_and_requires_its_property: test"
+  ],
+  "evidence_class": "native-process-crash-only; not a guest, VMM campaign, saved-snapshot replay, machine-loss or release claim"
+}

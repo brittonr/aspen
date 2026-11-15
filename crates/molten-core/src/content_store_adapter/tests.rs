@@ -291,6 +291,41 @@ fn provider_throttle_is_retryable_and_put_disconnect_tracks_remote_acknowledgeme
     assert_eq!(after_acknowledgement.terminal, ContentTerminal::Uncertain);
 }
 
+// r[verify molten.content_store_adapter.streaming_bounds]
+#[test]
+fn tier_recovery_capacity_is_independent_and_fails_closed() {
+    let budget = ContentTierRecoveryBudget {
+        max_local_tier_bytes: 64 * 1024 * 1024 * 1024,
+        minimum_verified_bytes_per_second: 1024 * 1024 * 1024,
+        max_rebuild_seconds: 64,
+    };
+    assert_eq!(budget.validate(), Ok(()));
+    assert_eq!(
+        ContentTierRecoveryBudget {
+            max_rebuild_seconds: 63,
+            ..budget
+        }
+        .validate(),
+        Err(ContentIssue::TotalBytesExceeded)
+    );
+    assert_eq!(
+        ContentTierRecoveryBudget {
+            minimum_verified_bytes_per_second: 0,
+            ..budget
+        }
+        .validate(),
+        Err(ContentIssue::ZeroBound("local-tier-recovery"))
+    );
+    assert_eq!(
+        ContentTierRecoveryBudget {
+            minimum_verified_bytes_per_second: u64::MAX,
+            ..budget
+        }
+        .validate(),
+        Err(ContentIssue::ArithmeticOverflow)
+    );
+}
+
 // r[verify molten.content_store_adapter.identity_boundary]
 #[test]
 fn repeated_chunk_refs_preserve_order_without_changing_manifest_identity() {

@@ -1,120 +1,191 @@
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
+use std::rc::Rc;
 
-use molten_core::world_snapshot::SnapshotCohort;
-use molten_core::world_snapshot::SnapshotComponent;
-use molten_core::world_snapshot::SnapshotComponentKind;
-use molten_core::world_snapshot::SnapshotDescriptor;
-use molten_core::world_snapshot::SnapshotRestoreStep;
+use molten_core::world_commit::WorldCommitRef;
+use molten_core::world_snapshot::*;
 use molten_node_host::node_state::DirectoryRoot;
 use molten_node_host::node_state::NamespaceKind;
 use molten_node_host::node_state::RelativePath;
-use molten_node_host::node_state::Scope;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::CurrentSnapshotAdmissionPort;
-use super::LogicalSnapshotRestorePort;
-use super::SnapshotAdmissionObservation;
-use super::SnapshotHostHandlePort;
-use super::SnapshotMaterializationObservation;
-use super::SnapshotMaterializationPort;
-use super::SnapshotObservationPort;
-use super::SnapshotReceiptPort;
-use super::SnapshotStepObservation;
-use super::localtree::MAX_LOCAL_FILE_BYTES;
-use super::localtree::collect_tree;
-use super::localtree::tree_identity;
+use super::localprofile::LogicalRuntimeImage;
+use super::localprofile::image_descriptor;
+use super::localruntime::RuntimeStore;
+use super::*;
 use crate::error::Failure;
 use crate::error::Result;
 
-const HANDLE_DOMAIN: &str = "onixresearch.molten.world-snapshot.local-handle.v1";
-const ADMISSION_SCHEMA: &str = "molten.local-snapshot-admission.v1";
-const DESTINATION_DOMAIN: &str = "onixresearch.molten.world-snapshot.local-destination.v1";
-
-/// Content-addressed file-tree bundle and restore target under one node storage namespace.
+/// One rooted, explicitly admitted runtime-spine composition. Clones share the
+/// same recreated live store handle and reconstruction, not ambient root paths.
+#[derive(Clone)]
 pub struct LocalLogicalSnapshot {
-    storage: Scope,
-    trusted_signer: ed25519_dalek::VerifyingKey,
-    destination_ref: String,
+    pub(super) root: DirectoryRoot,
+    pub(super) trusted_signer: ed25519_dalek::VerifyingKey,
+    pub(super) destination_ref: String,
+    pub(super) cohort: SnapshotCohort,
+    pub(super) state: Rc<RefCell<RestoreState>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SignedAdmission {
-    schema: String,
-    admission_ref: String,
-    descriptor_ref: String,
-    profile_ref: String,
-    cohort_ref: String,
-    generation: u64,
-    destination_ref: String,
-    signature: String,
+#[derive(Default)]
+pub(super) struct RestoreState {
+    pub descriptor: Option<SnapshotDescriptor>,
+    pub descriptor_ref: String,
+    pub verified: BTreeMap<SnapshotComponentKind, Vec<u8>>,
+    pub restored: BTreeSet<SnapshotComponentKind>,
+    pub store: Option<RuntimeStore>,
+    pub admission_ref: Option<String>,
+    pub activation_attempted: bool,
+    pub activated: bool,
+    pub receipt_attempted: bool,
+    pub runtime: Option<crate::runtime::RuntimeState>,
 }
 
 impl LocalLogicalSnapshot {
     pub fn open(state_root: &Path, trusted_signer: ed25519_dalek::VerifyingKey) -> Result<Self> {
-        Self::from_root(DirectoryRoot::open(state_root)?, trusted_signer)
+        Self::from_root(DirectoryRoot::open_existing(state_root)?, trusted_signer)
     }
 
     pub fn from_root(root: DirectoryRoot, trusted_signer: ed25519_dalek::VerifyingKey) -> Result<Self> {
         let destination_ref = destination_identity(&root)?;
         Ok(Self {
-            storage: root.namespace(NamespaceKind::Storage)?,
+            root,
             trusted_signer,
             destination_ref,
+            cohort: observe_local_logical_cohort()?,
+            state: Rc::new(RefCell::new(RestoreState::default())),
         })
     }
 
     pub fn destination_ref(&self) -> &str {
         &self.destination_ref
     }
-
-    /// Identifies one component's bundle tree. Bytes live under
-    /// `world-snapshot/bundle/<kind>/` before the descriptor is constructed.
-    pub fn component_identity(&self, kind: SnapshotComponentKind) -> Result<String> {
-        let Some(tree) = self.bundle_tree(kind)? else {
-            return Err(Failure::invalid_harness("local snapshot component bundle is absent"));
-        };
-        Ok(tree_identity(&collect_tree(tree)?))
+    pub fn observed_cohort(&self) -> &SnapshotCohort {
+        &self.cohort
     }
 
-    fn bundle_tree(&self, kind: SnapshotComponentKind) -> Result<Option<Scope>> {
-        self.storage
-            .existing_subdir(&RelativePath::parse(&format!("world-snapshot/bundle/{}", kind.as_str()))?)
-    }
-
-    fn admitted(&self, descriptor: &SnapshotDescriptor, descriptor_ref: &str) -> Result<SnapshotAdmissionObservation> {
-        let bytes = self.storage.read(&RelativePath::parse("world-snapshot/admission.json")?, 16_384)?;
-        let signed: SignedAdmission = serde_json::from_slice(&bytes)
-            .map_err(|error| Failure::invalid_harness(format!("local snapshot admission: {error}")))?;
-        if signed.schema != ADMISSION_SCHEMA
-            || signed.destination_ref != self.destination_ref
-            || signed.descriptor_ref != descriptor_ref
-            || signed.profile_ref != descriptor.profile_ref.as_str()
-            || signed.cohort_ref != descriptor.cohort.cohort_ref.as_str()
-        {
-            return Err(Failure::invalid_harness("local snapshot admission is stale or crossed"));
+    /// Capture an already committed runtime state; this grants no restore authority.
+    pub fn prepare_bundle(&self, image: &LogicalRuntimeImage, commit: WorldCommitRef) -> Result<SnapshotDescriptor> {
+        let descriptor = image_descriptor(image, self.cohort.clone(), commit)?;
+        for (kind, bytes) in image.projections(&self.cohort)? {
+            let directory = RelativePath::parse(&format!("storage/world-snapshot/bundle/{}", kind.as_str()))?;
+            self.root.create_dir_all(&directory)?;
+            publish_exact(&self.root, &directory.join("state.preserves")?, &bytes)?;
         }
-        verify_admission_signature(&self.trusted_signer, &signed)?;
-        Ok(SnapshotAdmissionObservation {
-            admission_ref: signed.admission_ref,
-            descriptor_ref: signed.descriptor_ref,
-            profile_ref: signed.profile_ref,
-            cohort_ref: signed.cohort_ref,
-            generation: signed.generation,
-            allowed: true,
-        })
+        Ok(descriptor)
     }
+
+    pub fn component_identity(&self, kind: SnapshotComponentKind) -> Result<String> {
+        Ok(crate::preserves_rail::content_ref_from_bytes(&self.component_payload(kind)?))
+    }
+
+    fn component_payload(&self, kind: SnapshotComponentKind) -> Result<Vec<u8>> {
+        let storage = self.root.namespace(NamespaceKind::Storage)?;
+        let tree = storage
+            .existing_subdir(&RelativePath::parse(&format!("world-snapshot/bundle/{}", kind.as_str()))?)?
+            .ok_or_else(|| Failure::invalid_harness(format!("missing snapshot component {}", kind.as_str())))?;
+        let entries = tree.list_entries()?;
+        if entries.len() != 1
+            || entries[0].name != "state.preserves"
+            || entries[0].kind != crate::node_state::EntryKind::RegularFile
+        {
+            return Err(Failure::invalid_harness("unsupported local snapshot component inventory"));
+        }
+        tree.read_entry(&entries[0], MAX_LOCAL_LOGICAL_IMAGE_BYTES)
+    }
+
+    pub(super) fn verified_image(&self) -> Result<LogicalRuntimeImage> {
+        let state = self.state.borrow();
+        let bytes = state
+            .verified
+            .get(&SnapshotComponentKind::DurableState)
+            .ok_or_else(|| Failure::invalid_harness("runtime image missing"))?;
+        let image = LogicalRuntimeImage::from_bytes(bytes)?;
+        if image.projections(&self.cohort)? != state.verified || image.policy_ref != self.current_policy_ref()? {
+            return Err(Failure::invalid_harness("runtime component semantics/profile/current policy do not match"));
+        }
+        Ok(image)
+    }
+}
+
+#[derive(Debug)]
+pub struct LocalLogicalRestoreOutcome {
+    pub restore: LogicalSnapshotRestoreOutcome,
+    /// The actual reconstructed owner. No unresolved effect has been dispatched.
+    pub runtime: crate::runtime::RuntimeState,
+}
+
+/// Public execution composition. The expected descriptor can only further
+/// constrain the observed process cohort, never establish compatibility.
+// r[impl molten.world_snapshot.runtime_spine_restore]
+// r[impl molten.world_snapshot.runtime_spine_activation]
+pub fn restore_local_logical_snapshot(
+    adapter: LocalLogicalSnapshot,
+    descriptor: &SnapshotDescriptor,
+    expected_destination: &SnapshotCohort,
+) -> Result<LocalLogicalRestoreOutcome> {
+    if descriptor.class != SnapshotClass::Logical
+        || descriptor.profile_ref.as_str() != local_logical_profile_ref()?
+        || expected_destination != &adapter.cohort
+    {
+        return Err(Failure::invalid_harness(
+            "unsupported logical profile or expected destination differs from observed runtime cohort; opaque/VM restore denied",
+        ));
+    }
+    {
+        let mut state = adapter.state.borrow_mut();
+        state.descriptor_ref = canonical_snapshot_descriptor(descriptor)?.artifact_ref;
+        state.descriptor = Some(descriptor.clone());
+    }
+    let mut materialization = adapter.clone();
+    let mut admission = adapter.clone();
+    let mut handles = adapter.clone();
+    let mut runtime = adapter.clone();
+    let mut receipts = adapter.clone();
+    let restore = restore_logical_snapshot(descriptor, &adapter.cohort, LogicalSnapshotPorts {
+        materialization: &mut materialization,
+        admission: &mut admission,
+        handles: &mut handles,
+        runtime: &mut runtime,
+        receipts: &mut receipts,
+    })
+    .map_err(|error| {
+        let state = adapter.state.borrow();
+        let outcome = if state.activated && state.receipt_attempted {
+            "activation=completed receipt-publication=failed"
+        } else if state.activated {
+            "activation=completed post-activation-readback=failed"
+        } else if state.activation_attempted {
+            "activation=uncertain automatic-retry=denied"
+        } else {
+            "activation=inactive reconstruction=partial-or-absent"
+        };
+        Failure::invalid_harness(format!("{outcome} cleanup=retained-for-reconciliation: {error}"))
+    })?;
+    let runtime = adapter
+        .state
+        .borrow_mut()
+        .runtime
+        .take()
+        .ok_or_else(|| Failure::invalid_harness("activation=completed reconstructed-runtime-owner=missing"))?;
+    Ok(LocalLogicalRestoreOutcome { restore, runtime })
 }
 
 impl SnapshotMaterializationPort for LocalLogicalSnapshot {
     fn observe_component(&mut self, component: &SnapshotComponent) -> Result<SnapshotMaterializationObservation> {
-        let identity = self.component_identity(component.kind)?;
+        let bytes = self.component_payload(component.kind)?;
+        let identity = crate::preserves_rail::content_ref_from_bytes(&bytes);
+        let is_verified = identity == component.identity;
+        if is_verified {
+            crate::preserves_rail::strict_canonical_decode(&bytes)?;
+            self.state.borrow_mut().verified.insert(component.kind, bytes);
+        }
         Ok(SnapshotMaterializationObservation {
             component_identity: component.identity.clone(),
-            observation_ref: identity.clone(),
+            observation_ref: identity,
             available: true,
-            identity_verified: identity == component.identity,
+            identity_verified: is_verified,
         })
     }
 }
@@ -124,172 +195,73 @@ impl CurrentSnapshotAdmissionPort for LocalLogicalSnapshot {
         &mut self,
         descriptor: &SnapshotDescriptor,
         descriptor_ref: &str,
-        _destination: &SnapshotCohort,
+        destination: &SnapshotCohort,
     ) -> Result<SnapshotAdmissionObservation> {
-        self.admitted(descriptor, descriptor_ref)
+        if destination != &self.cohort {
+            return Err(Failure::invalid_harness("destination cohort is not observed"));
+        }
+        let admission = self.admitted(descriptor, descriptor_ref)?;
+        let mut state = self.state.borrow_mut();
+        if state.admission_ref.as_ref().is_some_and(|prior| prior != &admission.admission_ref) {
+            return Err(Failure::invalid_harness("current admission changed during reconstruction"));
+        }
+        state.admission_ref = Some(admission.admission_ref.clone());
+        Ok(admission)
     }
 }
 
 impl SnapshotHostHandlePort for LocalLogicalSnapshot {
     fn recreate_handles(&mut self, descriptor_ref: &str) -> Result<String> {
-        let digest = blake3::hash(format!("{HANDLE_DOMAIN}\n{descriptor_ref}").as_bytes()).to_hex().to_string();
-        self.storage.open_subdir(&RelativePath::parse(&format!("world-snapshot/handles/{digest}"))?)?;
-        Ok(format!("blake3:{digest}"))
-    }
-}
-
-impl LogicalSnapshotRestorePort for LocalLogicalSnapshot {
-    fn restore_component(
-        &mut self,
-        step: SnapshotRestoreStep,
-        component: &SnapshotComponent,
-        materialization: &SnapshotMaterializationObservation,
-    ) -> Result<SnapshotStepObservation> {
-        let source = self
-            .bundle_tree(component.kind)?
-            .ok_or_else(|| Failure::invalid_harness("local snapshot component bundle is absent"))?;
-        let files = collect_tree(source)?;
-        if tree_identity(&files) != materialization.observation_ref {
-            return Err(Failure::invalid_harness("local snapshot component changed after materialization"));
-        }
-        let target = self
-            .storage
-            .open_subdir(&RelativePath::parse(&format!("world-snapshot/restored/{}", component.kind.as_str()))?)?;
-        for (path, bytes) in &files {
-            let path = RelativePath::parse(path)?;
-            if let Some((directory, _)) = path.display().rsplit_once('/') {
-                target.create_dir_all(&RelativePath::parse(directory)?)?;
-            }
-            target.write(&path, bytes)?;
-        }
-        Ok(SnapshotStepObservation {
-            step,
-            observation_ref: materialization.observation_ref.clone(),
-        })
-    }
-
-    fn activate(&mut self, descriptor_ref: &str) -> Result<String> {
-        let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema": "molten.local-snapshot-active.v1",
-            "descriptor_ref": descriptor_ref,
-        }))
-        .map_err(|error| Failure::invalid_harness(format!("local snapshot activation: {error}")))?;
-        self.storage.create_dir_all(&RelativePath::parse("world-snapshot")?)?;
-        self.storage.write(&RelativePath::parse("world-snapshot/active.json")?, &bytes)?;
-        Ok(format!("blake3:{}", blake3::hash(&bytes).to_hex()))
-    }
-}
-
-impl SnapshotObservationPort for LocalLogicalSnapshot {
-    fn publish_observation(&mut self, observation: &SnapshotStepObservation) -> Result<()> {
-        let bytes = format!("{}\n{}\n", observation.step.as_str(), observation.observation_ref).into_bytes();
-        let path =
-            RelativePath::parse(&format!("world-snapshot/observations/blake3:{}.json", blake3::hash(&bytes).to_hex()))?;
-        self.storage.create_dir_all(&parent(&path)?)?;
-        if self.storage.try_exists(&path)? {
-            return Ok(());
-        }
-        self.storage.write(&path, &bytes)?;
-        Ok(())
+        self.verified_image()?;
+        self.state
+            .borrow()
+            .store
+            .as_ref()
+            .ok_or_else(|| Failure::invalid_harness("staged live runtime store handle missing"))?
+            .verify_handle()?;
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+            "runtime-spine-recreated-handles-v1",
+            vec![
+                crate::preserves_rail::string(descriptor_ref),
+                crate::preserves_rail::string(&self.destination_ref),
+                crate::preserves_rail::string("capability-derived-ledger/redb"),
+            ],
+        ))
     }
 }
 
 impl SnapshotReceiptPort for LocalLogicalSnapshot {
-    fn publish_receipt(&mut self, receipt_ref: &str, canonical_bytes: &[u8]) -> Result<()> {
-        if !receipt_ref.starts_with("blake3:") || canonical_bytes.is_empty() {
-            return Err(Failure::invalid_harness("local snapshot receipt is malformed"));
+    fn publish_receipt(&mut self, receipt_ref: &str, bytes: &[u8]) -> Result<()> {
+        self.state.borrow_mut().receipt_attempted = true;
+        crate::preserves_rail::validate_content_ref(receipt_ref)?;
+        crate::preserves_rail::strict_canonical_decode(bytes)?;
+        let directory = RelativePath::parse("storage/world-snapshot/receipts")?;
+        self.root.create_dir_all(&directory)?;
+        publish_exact(
+            &self.root,
+            &directory.join(&format!("{}.preserves", receipt_ref.trim_start_matches("blake3:")))?,
+            bytes,
+        )
+    }
+}
+
+pub(super) fn publish_exact(root: &DirectoryRoot, path: &RelativePath, bytes: &[u8]) -> Result<()> {
+    if root.try_exists(path)? {
+        if root.read(path, MAX_LOCAL_LOGICAL_IMAGE_BYTES)? != bytes {
+            return Err(Failure::invalid_harness("snapshot publication conflicts with retained bytes"));
         }
-        let path = RelativePath::parse(&format!(
-            "world-snapshot/receipts/{}.preserves",
-            receipt_ref.trim_start_matches("blake3:")
-        ))?;
-        self.storage.create_dir_all(&parent(&path)?)?;
-        if self.storage.try_exists(&path)? {
-            let existing = self.storage.read(&path, MAX_LOCAL_FILE_BYTES)?;
-            return if existing == canonical_bytes {
-                Ok(())
-            } else {
-                Err(Failure::invalid_harness("stored snapshot receipt does not match its content address"))
-            };
-        }
-        self.storage.write(&path, canonical_bytes)?;
         Ok(())
+    } else {
+        root.write_new(path, bytes)
     }
 }
 
-fn destination_identity(root: &DirectoryRoot) -> Result<String> {
-    let mut hasher = blake3::Hasher::new_derive_key(DESTINATION_DOMAIN);
-    for path in ["config.preserves", "identity.preserves"] {
-        let path = RelativePath::parse(path)?;
-        if root.try_exists(&path)? {
-            let bytes = root.read(&path, 1_048_576)?;
-            hasher.update(&(bytes.len() as u64).to_le_bytes());
-            hasher.update(&bytes);
-        } else {
-            hasher.update(&0_u64.to_le_bytes());
-        }
+pub(super) fn destination_identity(root: &DirectoryRoot) -> Result<String> {
+    let mut values = Vec::with_capacity(2);
+    for name in ["config.preserves", "identity.preserves"] {
+        let bytes = root.read(&RelativePath::parse(name)?, 1_048_576)?;
+        crate::preserves_rail::strict_canonical_decode(&bytes)?;
+        values.push(crate::preserves_rail::string(crate::preserves_rail::content_ref_from_bytes(&bytes)));
     }
-    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
-}
-
-fn parent(path: &RelativePath) -> Result<RelativePath> {
-    match path.display().rsplit_once('/') {
-        Some((parent, _)) => RelativePath::parse(parent),
-        None => RelativePath::parse(""),
-    }
-}
-
-/// Signs one operator admission grant for a local snapshot descriptor.
-pub struct LocalAdmissionInput<'a> {
-    pub signer: &'a ed25519_dalek::SigningKey,
-    pub descriptor_ref: &'a str,
-    pub profile_ref: &'a str,
-    pub cohort_ref: &'a str,
-    pub generation: u64,
-    pub destination_ref: &'a str,
-}
-
-pub fn sign_local_admission(input: LocalAdmissionInput<'_>) -> Result<Vec<u8>> {
-    use ed25519_dalek::Signer;
-    let mut fields = SignedAdmission {
-        schema: ADMISSION_SCHEMA.to_string(),
-        admission_ref: String::new(),
-        descriptor_ref: input.descriptor_ref.to_string(),
-        profile_ref: input.profile_ref.to_string(),
-        cohort_ref: input.cohort_ref.to_string(),
-        generation: input.generation,
-        destination_ref: input.destination_ref.to_string(),
-        signature: String::new(),
-    };
-    let message = admission_message(&fields);
-    fields.admission_ref = format!("blake3:{}", blake3::hash(&message).to_hex());
-    let mut signed_message = message;
-    signed_message.extend_from_slice(fields.admission_ref.as_bytes());
-    fields.signature = hex::encode(input.signer.sign(&signed_message).to_bytes());
-    serde_json::to_vec(&fields).map_err(|error| Failure::invalid_harness(format!("local snapshot admission: {error}")))
-}
-
-fn admission_message(fields: &SignedAdmission) -> Vec<u8> {
-    format!(
-        "{ADMISSION_SCHEMA}\n{}\n{}\n{}\n{}\n{}",
-        fields.descriptor_ref, fields.profile_ref, fields.cohort_ref, fields.generation, fields.destination_ref
-    )
-    .into_bytes()
-}
-
-fn verify_admission_signature(signer: &ed25519_dalek::VerifyingKey, signed: &SignedAdmission) -> Result<()> {
-    use ed25519_dalek::Verifier;
-    let message = admission_message(signed);
-    if signed.admission_ref != format!("blake3:{}", blake3::hash(&message).to_hex()) {
-        return Err(Failure::invalid_harness("local snapshot admission reference is not canonical"));
-    }
-    let signature = hex::decode(&signed.signature)
-        .map_err(|_| Failure::invalid_harness("local snapshot admission signature is not hex"))?;
-    let signature = ed25519_dalek::Signature::from_slice(&signature)
-        .map_err(|_| Failure::invalid_harness("local snapshot admission signature is malformed"))?;
-    let mut signed_message = message;
-    signed_message.extend_from_slice(signed.admission_ref.as_bytes());
-    signer
-        .verify(&signed_message, &signature)
-        .map_err(|_| Failure::invalid_harness("local snapshot admission signature is not trusted"))
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("runtime-spine-destination-v2", values))
 }

@@ -1,10 +1,10 @@
 # Repository Guidelines
 
-AI-assistant guidance for **Molten** in `brittonr/aspen`. Molten contributors maintain this guide alongside the manifests, governing docs, and accepted requirements.
+AI-assistant guidance for **Aspen** in `brittonr/aspen`. Contributors maintain this guide alongside the manifests, governing docs, and accepted requirements. **Molten is an internal codename, not the public product name.** Preserve existing `molten` crate, executable, branch, schema and requirement identifiers unless an explicit migration changes them.
 
 ## Project Overview
 
-Molten is a workload-neutral, policy-gated distributed-systems fabric built around canonical Preserves envelopes. Pure primitives own deterministic laws/plans; capability-rooted adapters perform effects; manifest-installed system extensions own distributed-service semantics.
+Aspen is a workload-neutral, policy-gated distributed-systems fabric built around canonical Preserves envelopes. Pure primitives own deterministic laws/plans; capability-rooted adapters perform effects; manifest-installed system extensions own distributed-service semantics.
 
 Non-negotiable boundaries:
 

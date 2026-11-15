@@ -1,17 +1,6 @@
 {
-  schema = "molten.dependency-audit-policy.v1",
-  allowed_sources = [
-    "registry+https://github.com/rust-lang/crates.io-index",
-    "git+https://github.com/OnixResearch/",
-    "git+https://github.com/brittonr/",
-    "git+https://github.com/hegeldev/",
-    "git+https://github.com/gattaca-com/",
-    "git+https://github.com/nasa/",
-    "git+https://github.com/bytecodealliance/",
-    "git+https://git.onix.computer/",
-    "git+https://seed.radicle.garden/",
-    "git+rad://",
-  ],
+  schema = "molten.dependency-audit-policy.v2",
+  # Exact sources/revisions are owned by config/release-dependencies/profile.ncl.
   allowed_licenses = [
     "MIT",
     "MIT-0",
@@ -37,6 +26,5 @@
     "EUPL-1.2",
   ],
   allowed_exceptions = [ "LLVM-exception" ],
-  workspace_license = "AGPL-3.0-or-later",
   exceptions = [],
 }

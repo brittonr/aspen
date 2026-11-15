@@ -1,0 +1,1 @@
+dependency audit controls passed: closure/SPDX/affected/source/license/exact-review/expired/stale-database/stale-scanner/empty/suppressed/profile/stale-binding/date (fixture observations only)

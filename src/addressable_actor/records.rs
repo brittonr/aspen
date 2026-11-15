@@ -174,6 +174,10 @@ pub fn identify_canonical_status(status: &ActorStatus) -> crate::error::Result<S
     Ok(hash_bytes(ACTOR_STATUS_DOMAIN, &bytes))
 }
 
+pub(crate) fn commit_receipt_ref(bytes: &[u8]) -> String {
+    hash_bytes(ACTOR_RECEIPT_DOMAIN, bytes)
+}
+
 fn hash_bytes(domain: &'static str, bytes: &[u8]) -> String {
     let mut hasher = blake3::Hasher::new_derive_key(domain);
     hasher.update(bytes);

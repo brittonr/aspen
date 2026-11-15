@@ -63,3 +63,25 @@ fn write(
         ))?,
     )
 }
+
+pub(super) fn publish_counter(
+    root: &molten::node_state::DirectoryRoot,
+    actor: &molten::system_extension::RecoveryGroupDeclaration,
+    delivery: &molten::system_extension::RecoveryGroupDeclaration,
+) -> molten::error::Result<()> {
+    write(root, "install-main.preserves", "install", vec![molten::preserves_rail::string(&actor.group_id)])?;
+    write(root, "install-delivery.preserves", "install", vec![molten::preserves_rail::string(
+        &delivery.group_id,
+    )])?;
+    write(root, "status.preserves", "status", Vec::new())?;
+    root.write_new(
+        &molten::node_state::RelativePath::parse("startup-selector.preserves")?,
+        &molten::preserves_rail::canonical_bytes(&molten::preserves_rail::record(
+            "node-service-host-startup-v1",
+            vec![
+                molten::preserves_rail::string("admission.preserves"),
+                molten::preserves_rail::u64_value(1),
+            ],
+        ))?,
+    )
+}

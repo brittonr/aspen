@@ -1,0 +1,8 @@
+{
+  "tool": "TLC 2.19 / TLA+ 1.7.4",
+  "status": "success",
+  "generatedStates": 6312147,
+  "distinctStates": 966147,
+  "queuedStates": 0,
+  "violation": null
+}

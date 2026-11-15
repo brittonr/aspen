@@ -52,6 +52,12 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
         &mut self.adapter
     }
 
+    pub(crate) fn registered_command(&self, request_ref: &str) -> FabricPortResult<&TransportCommand> {
+        self.requests
+            .get(request_ref)
+            .ok_or_else(|| FabricPortError::malformed("transport effect request is not registered"))
+    }
+
     pub(crate) fn execute_effect(
         &mut self,
         binding: &crate::fabric::CanonicalPortBinding,
@@ -74,11 +80,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
                 return Err(FabricPortError::malformed("ambient effect cannot route through a transport port"));
             }
         }
-        let command = self
-            .requests
-            .get(&effect.request_ref)
-            .cloned()
-            .ok_or_else(|| FabricPortError::malformed("transport effect request is not registered"))?;
+        let command = self.registered_command(&effect.request_ref)?.clone();
         self.context
             .admit_command(&self.profile, &command, effect.accounted_bytes)
             .map_err(FabricPortError::from)?;

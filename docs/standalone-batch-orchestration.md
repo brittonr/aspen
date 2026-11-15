@@ -1,18 +1,18 @@
-# Standalone batch orchestration pilot
+# Aspen standalone batch orchestration pilot
 
 <!-- r[impl molten.batch_orchestration.vendor] -->
 <!-- r[impl molten.batch_orchestration.boundary] -->
 
-`pilots/orchestration` is a repository-owned, seven-crate workspace for a
+`pilots/orchestration` is an Aspen-owned, eight-crate workspace for a
 single-controller, multi-worker DAG service. It is independent of the root Cargo
-workspace and does not register a Molten system extension. Its named deployment
+workspace and does not register a system extension in the main runtime. Its named deployment
 profile is `standalone-single-controller-import-free-component-batch-v1`.
 
 The immediate consumer is an operator running bounded, import-free component DAGs
 with a separate controller/worker database and explicit peer enrollment. The
 durable contribution is a repeatable pilot with pure allocation and DAG cores,
 application-owned ports, real Redb/Iroh/Wasmtime adapters, a lockfile, an operator
-CLI and a multi-process exercise. Molten contributors own maintenance under
+CLI and a multi-process exercise. Aspen contributors own maintenance under
 `pilots/orchestration`.
 
 ## Provenance and repairs
@@ -97,3 +97,44 @@ Operator policy is not production admission. Same-host evidence does not qualify
 cross-host networking, controller HA, production isolation, valuable workloads or
 exactly-once external effects. No fixture proves Wasmtime, component, worker,
 transport or whole-system correctness, or release eligibility.
+
+## Durable progress and original scene renderer
+
+The versioned [batch progress contract](../pilots/orchestration/docs/PROGRESS.md)
+projects only controller-accepted durable artifacts and terminal runs. State,
+progress events and cursor position share one immediate-durability Redb
+transaction; snapshots and watermarks share one read transaction. Accepted event
+identities are canonical Preserves/BLAKE3 and bind the exact run/job/task/attempt.
+There is no parallel job ledger or transport, no implied cancellation on
+disconnect, and no promise of permanent content retention.
+
+The [original CPU renderer](../pilots/orchestration/render/README.md) supplies a
+640x360 RGB8 scene, a complete versioned manifest, stable tiled work and checked
+assembly through the existing import-free component ABI. It fits within 64 tasks
+and 4MiB objects without widening execution authority. Existing `molten-*` crate,
+binary and wire names retain Aspen's internal Molten codename.
+
+The standalone package explicitly includes the shared
+`crates/molten-core/src/committed_stream` source, rather than copying its core or
+depending on unrelated private dependencies. A pilot-directory-only source archive
+is not sufficient. After the parent regenerates/reviews the standalone and guest
+Cargo locks through Cargo, the authored entrypoints are:
+
+```sh
+nix-build pilots/orchestration/default.nix
+nix-shell --pure pilots/orchestration/render/shell.nix \
+  --run 'bash pilots/orchestration/scripts/render-demo.sh'
+nix-shell --pure pilots/orchestration/render/shell.nix \
+  --run 'bash pilots/orchestration/scripts/progress-conformance.sh'
+nix-shell --pure pilots/orchestration/render/shell.nix \
+  --run 'bash pilots/orchestration/scripts/render-faults.sh'
+```
+
+The process campaign covers dispatch, output persistence, atomic terminal/progress
+commit, lost notification replies, active worker loss/reconciliation, explicit
+cancellation, fuel/deadline/output exhaustion, peer denial, replay and retention
+overflow. It retains exact source, environment, public projections, accepted bytes
+and actual command outcomes. These fixtures are authored, not recorded passing
+execution. Temporary tmpfs operation proves neither NVMe nor machine-loss
+durability. A separate actual two-host direct-LAN run remains required before any
+cross-host qualification; no such evidence is supplied here.

@@ -1,10 +1,9 @@
-use crate::error::Failure;
-use crate::error::Result;
-
 use super::Client;
 use super::ClientConfig;
 use super::LocalTier;
 use super::TierPut;
+use crate::error::Failure;
+use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadSource {
@@ -36,11 +35,15 @@ pub struct LatencyRecorder {
 }
 
 impl LatencyRecorder {
-    pub fn record(&mut self, read: &TimedRead) {
+    pub fn record(&mut self, read: &TimedRead) -> Result<()> {
+        if self.local.len() + self.remote.len() >= 4096 {
+            return Err(Failure::invalid_harness("latency observation bound exceeded"));
+        }
         match read.source {
             ReadSource::Local => self.local.push(read.elapsed),
             ReadSource::Remote => self.remote.push(read.elapsed),
         }
+        Ok(())
     }
 
     pub fn summary(&self) -> LatencySummary {
@@ -73,31 +76,49 @@ pub struct CachedClient {
 
 impl CachedClient {
     pub fn connect(config: ClientConfig, tier: LocalTier) -> Result<Self> {
-        Ok(Self { remote: Client::connect(config)?, tier })
+        Ok(Self {
+            remote: Client::connect(config)?,
+            tier,
+        })
     }
 
     pub fn connect_with_timeout(config: ClientConfig, tier: LocalTier, timeout: std::time::Duration) -> Result<Self> {
-        Ok(Self { remote: Client::connect_with_timeout(config, timeout)?, tier })
+        Ok(Self {
+            remote: Client::connect_with_timeout(config, timeout)?,
+            tier,
+        })
     }
 
     pub async fn put(&mut self, key: &str, bytes: &[u8]) -> Result<CachedObjectObservation> {
         let object_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
         let remote = self.remote.put(key, bytes).await?;
         let cached = matches!(self.tier.put(&object_ref, bytes)?, TierPut::Cached(_));
-        Ok(CachedObjectObservation { object_ref, bytes: remote.bytes, cached })
+        Ok(CachedObjectObservation {
+            object_ref,
+            bytes: remote.bytes,
+            cached,
+        })
     }
 
     pub async fn get_timed(&mut self, key: &str, expected_ref: &str) -> Result<TimedRead> {
         let started = std::time::Instant::now();
         if let Some(bytes) = self.tier.get(expected_ref)? {
-            return Ok(TimedRead { bytes, source: ReadSource::Local, elapsed: started.elapsed() });
+            return Ok(TimedRead {
+                bytes,
+                source: ReadSource::Local,
+                elapsed: started.elapsed(),
+            });
         }
         let bytes = self.remote.get(key).await?;
         if crate::preserves_rail::content_ref_from_bytes(&bytes) != expected_ref {
             return Err(Failure::invalid_harness("remote object does not match the expected content identity"));
         }
         self.tier.put(expected_ref, &bytes)?;
-        Ok(TimedRead { bytes, source: ReadSource::Remote, elapsed: started.elapsed() })
+        Ok(TimedRead {
+            bytes,
+            source: ReadSource::Remote,
+            elapsed: started.elapsed(),
+        })
     }
 
     pub async fn get(&self, key: &str, expected_ref: &str) -> Result<Vec<u8>> {
@@ -123,13 +144,9 @@ impl CachedClient {
         Ok(bytes)
     }
 
-    pub async fn delete(&mut self, key: &str, expected_ref: &str) -> Result<()> {
+    pub(super) async fn delete(&mut self, key: &str, expected_ref: &str) -> Result<()> {
         self.remote.delete(key).await?;
         self.tier.remove(expected_ref)
-    }
-
-    pub async fn get_raw(&self, key: &str) -> Result<Vec<u8>> {
-        self.remote.get(key).await
     }
 
     pub fn contains(&self, object_ref: &str) -> Result<bool> {
@@ -144,6 +161,63 @@ impl CachedClient {
     pub async fn head(&self, key: &str) -> Result<Option<u64>> {
         self.remote.head(key).await
     }
+
+    pub(super) async fn get_chunk(
+        &self,
+        key: &str,
+        chunk_ref: &str,
+        chunk_size: usize,
+        expected_length: u64,
+    ) -> std::result::Result<Vec<u8>, molten_core::content_store_adapter::ContentFailure> {
+        use molten_core::content_store_adapter::ContentFailure;
+        let raw_ref =
+            key.rsplit('/').next().map(|hex| format!("blake3:{hex}")).ok_or(ContentFailure::AdapterFailure)?;
+        if let Some(bytes) =
+            self.tier.get_bounded(&raw_ref, expected_length).map_err(|_| ContentFailure::AdapterFailure)?
+        {
+            if crate::chunk_store::hash_chunk(&bytes, chunk_size) == chunk_ref {
+                return Ok(bytes);
+            }
+            return Err(ContentFailure::CorruptChunk);
+        }
+        self.remote.get_bounded(key, expected_length).await
+    }
+
+    pub(super) async fn put_classified(
+        &mut self,
+        key: &str,
+        bytes: &[u8],
+    ) -> std::result::Result<CachedObjectObservation, molten_core::content_store_adapter::ContentFailure> {
+        use molten_core::content_store_adapter::ContentFailure;
+        let remote = self.remote.put_classified(key, bytes).await?;
+        let object_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
+        let cached = matches!(
+            self.tier.put(&object_ref, bytes).map_err(|_| ContentFailure::TransportDisconnected)?,
+            TierPut::Cached(_)
+        );
+        Ok(CachedObjectObservation {
+            object_ref,
+            bytes: remote.bytes,
+            cached,
+        })
+    }
+
+    pub fn local_tier_bytes(&self) -> u64 {
+        self.tier.used_bytes()
+    }
+
+    pub fn local_tier_capacity(&self) -> u64 {
+        self.tier.max_bytes()
+    }
+
+    pub fn remote_policy(&self) -> super::RemotePolicyObservation {
+        self.remote.policy()
+    }
+
+    /// Eviction affects residency only; it never deletes the remote copy.
+    pub fn evict_local(&mut self, object_ref: &str) -> Result<()> {
+        self.tier.remove(object_ref)
+    }
 }
 
 fn percentiles(values: &[std::time::Duration]) -> (u64, u64) {
@@ -152,11 +226,10 @@ fn percentiles(values: &[std::time::Duration]) -> (u64, u64) {
     }
     let mut micros = values.iter().map(|value| value.as_micros() as u64).collect::<Vec<_>>();
     micros.sort_unstable();
-    let p50 = micros[(micros.len() - 1) * 50 / 100];
-    let p99 = micros[(micros.len() - 1) * 99 / 100];
+    let p50 = micros[(micros.len() * 50).div_ceil(100) - 1];
+    let p99 = micros[(micros.len() * 99).div_ceil(100) - 1];
     (p50, p99)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -192,19 +265,15 @@ mod tests {
 
     #[tokio::test]
     async fn local_hit_makes_no_remote_request() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let endpoint = format!("http://{}", listener.local_addr().expect("address"));
         let temporary = tempfile::tempdir().expect("tier");
-        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
-        let endpoint = server(vec![
-            b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
-            b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello",
-        ])
-        .await;
-        let mut client = CachedClient::connect(config(endpoint), tier).expect("client");
-        let observation = client.put("objects/hello", b"hello").await.expect("put");
-        assert!(observation.cached);
+        let mut tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
         let expected = crate::preserves_rail::content_ref_from_bytes(b"hello");
-        assert_eq!(client.get("objects/hello", &expected).await.expect("remote get"), b"hello");
+        tier.put(&expected, b"hello").expect("seed local cache");
+        let client = CachedClient::connect(config(endpoint), tier).expect("client");
         assert_eq!(client.get("objects/hello", &expected).await.expect("local get"), b"hello");
+        assert!(tokio::time::timeout(std::time::Duration::from_millis(20), listener.accept()).await.is_err());
     }
 
     #[tokio::test]
@@ -229,6 +298,7 @@ mod tests {
         let observation = client.put("objects/live-roundtrip", b"live").await.expect("put");
         assert_eq!(observation.bytes, 4);
         let expected = crate::preserves_rail::content_ref_from_bytes(b"live");
+        client.evict_local(&expected).expect("force remote roundtrip");
         assert_eq!(client.get("objects/live-roundtrip", &expected).await.expect("get"), b"live");
     }
 
@@ -236,15 +306,16 @@ mod tests {
     async fn latency_summary_separates_local_and_remote_reads() {
         let temporary = tempfile::tempdir().expect("tier");
         let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
-        let endpoint = server(vec![
-            b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello",
-        ])
-        .await;
+        let endpoint = server(vec![b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello"]).await;
         let mut client = CachedClient::connect(config(endpoint), tier).expect("client");
         let expected = crate::preserves_rail::content_ref_from_bytes(b"hello");
         let mut recorder = LatencyRecorder::default();
-        recorder.record(&client.get_timed("objects/hello", &expected).await.expect("remote"));
-        recorder.record(&client.get_timed("objects/hello", &expected).await.expect("local"));
+        recorder
+            .record(&client.get_timed("objects/hello", &expected).await.expect("remote"))
+            .expect("record remote");
+        recorder
+            .record(&client.get_timed("objects/hello", &expected).await.expect("local"))
+            .expect("record local");
         let summary = recorder.summary();
         assert_eq!(summary.remote_count, 1);
         assert_eq!(summary.local_count, 1);
@@ -256,13 +327,25 @@ mod tests {
     async fn corrupt_remote_bytes_are_not_cached() {
         let temporary = tempfile::tempdir().expect("tier");
         let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
-        let endpoint = server(vec![
-            b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nwrong",
-        ])
-        .await;
+        let endpoint = server(vec![b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nwrong"]).await;
         let mut client = CachedClient::connect(config(endpoint), tier).expect("client");
         let expected = crate::preserves_rail::content_ref_from_bytes(b"hello");
         assert!(client.get_and_cache("objects/hello", &expected).await.is_err());
         assert!(client.tier.get(&expected).expect("tier").is_none());
+    }
+
+    #[tokio::test]
+    async fn cold_get_at_capacity_is_verified_remote_only() {
+        let temporary = tempfile::tempdir().expect("tier");
+        let mut tier = LocalTier::open(temporary.path(), 5, false).expect("tier");
+        let first = crate::preserves_rail::content_ref_from_bytes(b"first");
+        tier.put(&first, b"first").expect("fill tier");
+        let endpoint = server(vec![b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello"]).await;
+        let mut client = CachedClient::connect(config(endpoint), tier).expect("client");
+        let second = crate::preserves_rail::content_ref_from_bytes(b"hello");
+        assert_eq!(client.get_and_cache("objects/second", &second).await.expect("cold get"), b"hello");
+        assert_eq!(client.local_tier_bytes(), 5);
+        assert!(client.contains(&first).expect("first resident"));
+        assert!(!client.contains(&second).expect("second remote only"));
     }
 }

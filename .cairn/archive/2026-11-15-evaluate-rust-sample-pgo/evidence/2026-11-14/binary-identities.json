@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "bytes": 517380840,
+    "raw_blake3": "b61700992492c648a8823492dac0897f9e0d5dc1b3e5ef2a4aec8117e4e732dd",
+    "sha256": "64cb441e2fecac5eb84f3ea881b1e2537ac236be114d6130488d9e263a1ab76d"
+  },
+  "candidate": {
+    "bytes": 582102816,
+    "raw_blake3": "f728b7a408195d876513a118a1c99349d6574ebc71506f1bc3e4c17853e95dde",
+    "sha256": "d9ceca5488cebb277b1d31a54861497f55cada5aeb0f5a16bb4bed336034f536"
+  }
+}

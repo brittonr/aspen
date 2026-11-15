@@ -105,6 +105,13 @@ impl Registered {
                 "cross-process transport effect request replay denied",
             ));
         }
+        // The direct profile's OpenStream owns protected socket work, unlike
+        // the control-only setup used by the legacy bounded-frame profiles.
+        if self.profile.profile.profile_id == DIRECT_LAN_STREAM_PROFILE
+            && matches!(self.control.registered_command(&effect.request_ref)?, TransportCommand::OpenStream { .. })
+        {
+            return Err(crate::fabric::FabricPortError::malformed("direct stream effect requires proxy_stream"));
+        }
         let (command, submitted) = self.control.execute_effect(binding, effect)?;
         self.routed_requests.insert(effect.request_ref.clone());
         let TransportCommand::SendFrame {

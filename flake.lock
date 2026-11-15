@@ -107,12 +107,12 @@
         "rev": "e41340bec587b6d049b5cc518ec7db925dde84be",
         "revCount": 13,
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
         "rev": "e41340bec587b6d049b5cc518ec7db925dde84be",
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       }
     },
     "artifact-src": {
@@ -175,12 +175,12 @@
         "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
         "revCount": 3,
         "type": "git",
-        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+        "url": "https://github.com/OnixResearch/bounded-exec.git"
       },
       "original": {
         "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
         "type": "git",
-        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+        "url": "https://github.com/OnixResearch/bounded-exec.git"
       }
     },
     "bun2nix": {
@@ -550,12 +550,12 @@
         "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
         "revCount": 69,
         "type": "git",
-        "url": "rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF"
+        "url": "https://github.com/OnixResearch/choregraph.git"
       },
       "original": {
         "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
         "type": "git",
-        "url": "rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF"
+        "url": "https://github.com/OnixResearch/choregraph.git"
       }
     },
     "crane": {
@@ -871,12 +871,12 @@
         "rev": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
         "revCount": 11,
         "type": "git",
-        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+        "url": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
       },
       "original": {
         "rev": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
         "type": "git",
-        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+        "url": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
       }
     },
     "dylint-src": {
@@ -1142,12 +1142,12 @@
         "rev": "025d9636f0161777710dac37b3c210ca0ad9483f",
         "revCount": 27,
         "type": "git",
-        "url": "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB"
+        "url": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git"
       },
       "original": {
         "rev": "025d9636f0161777710dac37b3c210ca0ad9483f",
         "type": "git",
-        "url": "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB"
+        "url": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git"
       }
     },
     "flake-compat": {
@@ -1780,12 +1780,12 @@
         "rev": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
         "revCount": 66,
         "type": "git",
-        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
+        "url": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git"
       },
       "original": {
         "rev": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
         "type": "git",
-        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
+        "url": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git"
       }
     },
     "hegel-src": {
@@ -2612,6 +2612,23 @@
         "type": "github"
       }
     },
+    "quint-connect-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779729703,
+        "narHash": "sha256-wEX7u3+5hG4unr7doLqksninM8oe3jxyKT4DCzpvGe0=",
+        "owner": "quint-co",
+        "repo": "quint-connect",
+        "rev": "4f018f54fc7dd4cef341d10111427bab59d3b307",
+        "type": "github"
+      },
+      "original": {
+        "owner": "quint-co",
+        "repo": "quint-connect",
+        "rev": "4f018f54fc7dd4cef341d10111427bab59d3b307",
+        "type": "github"
+      }
+    },
     "release-channel-src": {
       "flake": false,
       "locked": {
@@ -2654,6 +2671,7 @@
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
         "onixpkgs": "onixpkgs",
+        "quint-connect-src": "quint-connect-src",
         "release-channel-src": "release-channel-src",
         "rust-overlay": "rust-overlay_18",
         "schema-identity-src": "schema-identity-src",

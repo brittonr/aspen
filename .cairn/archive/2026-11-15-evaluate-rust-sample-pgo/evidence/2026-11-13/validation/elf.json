@@ -1,0 +1,14 @@
+{
+  "command": [
+    "readelf",
+    "-n",
+    "/nix/store/pjyj70p6szibqg35y876cpg3bqgdh5vf-rust_molten-0.1.0/bin/molten"
+  ],
+  "elapsed_seconds": 0.007993217004695907,
+  "max_rss_kib": 1368.0,
+  "returncode": 0,
+  "system_seconds": 0.0,
+  "time_wall_seconds": 0.0,
+  "timeout": false,
+  "user_seconds": 0.0
+}

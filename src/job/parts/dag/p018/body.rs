@@ -115,7 +115,9 @@ fn stage_cache_key_input(
     inputs: &[IoValue],
 ) -> Result<crate::eval_cache::KeyInput> {
     let input_refs = refs_for_values(inputs)?;
-    let stage_artifact_ref = stage_artifact_or_builtin_ref(node)?;
+    let stage_artifact_ref = if dag.version == SELECTED_SEQUENCE_PROFILE {
+        selected_stage_signature(&selected_operation(node)?.0)?
+    } else { stage_artifact_or_builtin_ref(node)? };
     let dependency_capacity = 3usize
         .saturating_add(input_refs.len())
         .saturating_add(node.stage_artifact_ref.iter().count())

@@ -105,7 +105,7 @@ pub fn production_ed25519_profile(profile_ref: String, entropy_profile_ref: Stri
         profile_ref,
         class: CryptoProfileClass::Production,
         algorithm: CryptoAlgorithm::Ed25519Iroh,
-        backend_classes: vec![KeyBackendClass::CapabilityFile, KeyBackendClass::ManagedSecret],
+        backend_classes: vec![KeyBackendClass::CapabilityFile, KeyBackendClass::ManagedSecret, KeyBackendClass::Tpm2Sealed],
         allowed_purposes: vec![
             KeyPurpose::TransportEndpoint,
             KeyPurpose::FederationOrigin,
@@ -259,7 +259,7 @@ fn is_revoked(namespace: &crate::node_state::Scope, purpose: KeyPurpose) -> crat
     }
 }
 
-fn require_not_revoked(
+pub(super) fn require_not_revoked(
     namespace: &crate::node_state::Scope,
     purpose: KeyPurpose,
 ) -> crate::error::Result<()> {

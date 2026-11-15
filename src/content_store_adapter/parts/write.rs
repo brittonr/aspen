@@ -21,6 +21,11 @@ pub fn execute_simulated_put(input: SimulatedStreamInput<'_>) -> crate::error::R
     if command.operation != ContentOperation::Put && command.operation != ContentOperation::Import {
         return Err(crate::error::Failure::invalid_harness("simulated put requires put or import operation"));
     }
+    if input.retained.is_some_and(|state| state.terminal == ContentTerminal::Uncertain) {
+        return Err(crate::error::Failure::invalid_harness(
+            "uncertain put requires explicit reconciliation before retry",
+        ));
+    }
     let mut state = match begin_simulated_state(input)? {
         std::ops::ControlFlow::Continue(state) => state,
         std::ops::ControlFlow::Break(execution) => return Ok(execution),
@@ -29,9 +34,13 @@ pub fn execute_simulated_put(input: SimulatedStreamInput<'_>) -> crate::error::R
     let remaining_chunks = manifest.chunks.len().saturating_sub(resume_position);
     let mut events = Vec::with_capacity(remaining_chunks.saturating_add(1));
     for descriptor in manifest.chunks.iter().skip(resume_position) {
+        if fault == Some(Fault::CancelAt(descriptor.position)) {
+            state = cancel_content_operation(profile, &state).map_err(transition_error)?;
+            events.push(terminal_stream_event(input, &state, Some(descriptor.chunk_ref.clone()), None)?);
+            return finish(profile, manifest, state, events);
+        }
         if let Some(failure) = failure_at(fault, descriptor.position) {
-            state =
-                classify_content_failure(profile, &state, failure, context_for(failure)).map_err(transition_error)?;
+            state = classify_content_failure(profile, &state, failure, context_for(fault)).map_err(transition_error)?;
             events.push(terminal_stream_event(input, &state, Some(descriptor.chunk_ref.clone()), Some(failure))?);
             return finish(profile, manifest, state, events);
         }
@@ -72,6 +81,7 @@ fn failure_at(fault: Option<Fault>, position: usize) -> Option<ContentFailure> {
     match fault {
         Some(Fault::ProviderThrottleAt(at)) if at == position => Some(ContentFailure::ProviderThrottle),
         Some(Fault::TornPutAt(at)) if at == position => Some(ContentFailure::TransportDisconnected),
+        Some(Fault::DisconnectAt(at)) if at == position => Some(ContentFailure::TransportDisconnected),
         Some(Fault::MultipartAbortAt(at)) if at == position => Some(ContentFailure::AdapterFailure),
         Some(
             Fault::CorruptAt(_)
@@ -88,21 +98,11 @@ fn failure_at(fault: Option<Fault>, position: usize) -> Option<ContentFailure> {
     }
 }
 
-fn context_for(failure: ContentFailure) -> ContentFailureContext {
-    match failure {
-        ContentFailure::TransportDisconnected => ACKNOWLEDGED_PUT,
-        ContentFailure::CorruptChunk
-        | ContentFailure::TruncatedChunk
-        | ContentFailure::ReorderedChunk
-        | ContentFailure::UnexpectedChunk
-        | ContentFailure::StaleTicket
-        | ContentFailure::UnsupportedTransform
-        | ContentFailure::RootEscape
-        | ContentFailure::Overload
-        | ContentFailure::ProviderThrottle
-        | ContentFailure::PermissionDenied
-        | ContentFailure::Timeout
-        | ContentFailure::AdapterFailure => UNACKNOWLEDGED_PUT,
+fn context_for(fault: Option<Fault>) -> ContentFailureContext {
+    if matches!(fault, Some(Fault::TornPutAt(_))) {
+        ACKNOWLEDGED_PUT
+    } else {
+        UNACKNOWLEDGED_PUT
     }
 }
 

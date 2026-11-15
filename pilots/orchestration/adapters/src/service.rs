@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use molten_batch_application::*;
 use molten_batch_core::*;
-use tokio::sync::watch;
 use tokio::sync::Mutex;
+use tokio::sync::watch;
 use tokio::task::JoinSet;
 
 use crate::*;
@@ -19,9 +19,14 @@ pub struct Counters {
     reconciliation: AtomicU64,
     admission: AtomicU64,
     errors: AtomicU64,
+    fault: ProcessFault,
 }
 impl ObservabilityPort for Counters {
     fn record(&self, event: Diagnostic) {
+        if let Diagnostic::Boundary(point) = event {
+            self.fault.hit(point);
+            return;
+        }
         let counter = match event {
             Diagnostic::Transport { .. } => &self.transport,
             Diagnostic::PendingReconciliation { .. } => &self.reconciliation,
@@ -47,6 +52,7 @@ pub struct ServiceHandler {
     pub worker: Option<Arc<WorkerService>>,
     config: NodeConfig,
     executions: Mutex<JoinSet<Result<(), Error>>>,
+    fault: ProcessFault,
 }
 impl ServiceHandler {
     async fn dispatch(&self, request: Request) -> Result<Reply, Error> {
@@ -67,7 +73,26 @@ impl ServiceHandler {
                 }
                 Request::Get { id } => Ok(Reply::Content(WireContent::from_content(controller.get_content(id)?)?)),
                 Request::Submit { key, spec } => Ok(Reply::Id(controller.submit(key, spec)?)),
-                Request::Status => Ok(Reply::State(controller.state()?)),
+                Request::Status { run } => {
+                    let mut state = controller.state()?;
+                    Ok(match run {
+                        Some(id) => Reply::Run(state.runs.remove(&id).ok_or(Error::Unavailable)?),
+                        None => Reply::State(state),
+                    })
+                }
+                Request::ProgressSnapshot { run } => Ok(Reply::ProgressSnapshot(controller.progress_snapshot(run)?)),
+                Request::ProgressRead { cursor, limit } => {
+                    let page = controller.progress_read(cursor, limit)?;
+                    if matches!(&page, ProgressPage::Events { events, .. } if !events.is_empty()) {
+                        self.fault.hit("before-progress-reply");
+                    }
+                    Ok(Reply::ProgressPage(page))
+                }
+                Request::ProgressArtifact { id } => match controller.get_content(id) {
+                    Ok(content) => Ok(Reply::Content(WireContent::from_content(content)?)),
+                    Err(Error::Unavailable) => Ok(Reply::ArtifactGap { id }),
+                    Err(error) => Err(error),
+                },
                 Request::CancelRun { run } => {
                     controller.cancel(run)?;
                     Ok(Reply::Ok)
@@ -90,6 +115,11 @@ impl ServiceHandler {
                     Ok(Reply::Id(worker.put_content(&c)?))
                 }
                 Request::Get { id } => Ok(Reply::Content(WireContent::from_content(worker.get_content(id)?)?)),
+                Request::ProgressArtifact { id } => match worker.get_content(id) {
+                    Ok(content) => Ok(Reply::Content(WireContent::from_content(content)?)),
+                    Err(Error::Unavailable) => Ok(Reply::ArtifactGap { id }),
+                    Err(error) => Err(error),
+                },
                 Request::Observe { request } => Ok(Reply::Observation(worker.observe(&request)?.into())),
                 Request::CancelAttempt { request } => Ok(Reply::Observation(worker.cancel(&request)?.into())),
                 Request::Start { request } => {
@@ -129,6 +159,11 @@ impl RequestHandler for ServiceHandler {
             Role::Controller => self.config.operators.contains(&peer),
             Role::Worker => self.config.controller == Some(peer),
             Role::Client => false,
+        }
+    }
+    fn reply_closed(&self, reply: &Reply) {
+        if matches!(reply, Reply::ProgressPage(ProgressPage::Events { events, .. }) if !events.is_empty()) {
+            self.fault.hit("after-progress-ack");
         }
     }
     async fn handle(&self, peer: Id, request: Request) -> Reply {
@@ -172,6 +207,13 @@ pub fn initialize(root: &CapabilityRoot, config: &NodeConfig, policy: &Policy) -
     Ok(id)
 }
 pub async fn open_service(root: CapabilityRoot, resume: bool) -> Result<RunningService, Error> {
+    open_service_with_fault(root, resume, ProcessFault::default()).await
+}
+pub async fn open_service_with_fault(
+    root: CapabilityRoot,
+    resume: bool,
+    fault: ProcessFault,
+) -> Result<RunningService, Error> {
     let config: NodeConfig = root.read_json("config.json")?;
     config.validate()?;
     if config.role == Role::Client {
@@ -182,11 +224,14 @@ pub async fn open_service(root: CapabilityRoot, resume: bool) -> Result<RunningS
     if policy.cluster != config.cluster || policy.generation != config.generation {
         return Err(Error::Denied);
     }
-    let disk = Disk::open(&root)?;
+    let disk = Disk::open_with_fault(&root, fault.clone())?;
     let content = RedbContent::new(disk.clone());
     let identity = Arc::new(CanonicalIdentity);
     let admission = Arc::new(FileAdmission::new(root.clone(), policy_ref)?);
-    let counters = Arc::new(Counters::default());
+    let counters = Arc::new(Counters {
+        fault: fault.clone(),
+        ..Counters::default()
+    });
     let key = secret(&root)?;
     let node = Id(*key.public().as_bytes());
     let endpoint = bind_endpoint(key, config.bind).await?;
@@ -251,6 +296,7 @@ pub async fn open_service(root: CapabilityRoot, resume: bool) -> Result<RunningS
             worker,
             config: config.clone(),
             executions: Mutex::new(JoinSet::new()),
+            fault,
         }),
         counters,
         config,

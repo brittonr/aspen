@@ -32,7 +32,7 @@ The same care applies to malformed evidence after an effect. The shell treats a 
 
 ## What a commit proves here
 
-`Committed` is an outcome of the shell protocol with its chosen ports. The included [`InMemoryAssignmentPersistence`](../../../src/fabric_membership/adapters.rs) stores assignments and receipt references in process memory. Its use demonstrates the interface and failure ordering; it does not provide durable restart recovery or quorum ordering. The [governing documentation](../../fabric-membership-placement.md) explicitly leaves durable stores and stronger authorities to implementations of the ports.
+`Committed` is an outcome of the shell protocol with its chosen ports. The [`persistence::InMemory`](../../../src/fabric_membership/persistence.rs) remains a conformance adapter. The concrete [`persistence::Redb`](../../../src/fabric_membership/persistence.rs) uses the existing capability-rooted local-store owner for canonical assignments, pending intents and the current role-slot index. It refuses current reads while an intent is unresolved, rejects stale whole-state CAS, and retains the exact pending intent across reopening without blind role-effect replay. A released exact predecessor and increasing epoch/token are required for role-slot succession. These are node-local persistence/fencing rules, not quorum or global exclusion claims.
 
 A canonical transition binds evidence about the assignment process. It is neither a substitute for external fencing nor proof of extension service correctness. Signing such evidence would not supply those missing claims either; the [identity documentation](../../fabric-cryptographic-identity.md) keeps verification separate from authority admission.
 
@@ -53,5 +53,6 @@ The planner is not a reservation transaction. The assignment shell is not an exa
 - [Placement implementation](../../../crates/molten-core/src/fabric_membership/mod.rs)
 - [Assignment state machine](../../../crates/molten-core/src/fabric_membership/transition.rs)
 - [Intent/effect/commit shell](../../../src/fabric_membership/shell.rs)
-- [In-memory persistence mechanism](../../../src/fabric_membership/adapters.rs)
+- [In-memory persistence mechanism](../../../src/fabric_membership/persistence.rs)
+- [Capability-rooted durable assignment mechanism](../../../src/fabric_membership/persistence.rs)
 - [Assignment uncertainty regression cases](../../../src/fabric_membership/parts/tests/p001/body.rs)

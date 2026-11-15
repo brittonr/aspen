@@ -1,6 +1,6 @@
 # Consensus fast-path hazard model
 
-Molten includes a bounded crash-fault model for consensus fast-path composition.
+Aspen includes a bounded crash-fault model for consensus fast-path composition.
 The model is not a live engine and cannot select a production profile.
 
 ## Reference cohort
@@ -8,8 +8,8 @@ The model is not a live engine and cannot select a production profile.
 The design reference is `Jetpack: Consensus Made Generally Fast`, OSDI 2026.
 The artifact reference is `stonysystems/jetpack` commit `c03e318ec355b11edd42aac56c68d0765f88d1d2` under MIT terms.
 
-Molten independently expresses its profile, transitions, schedules, and invariants. The bounded TLA+ model is in [`verification/tla/ConsensusFastPath.tla`](../verification/tla/ConsensusFastPath.tla) and is checked by the `consensus-fastpath-tla` flake check. See [the model notes](consensus-fastpath-tla.md).
-External TLA+ results and benchmarks do not prove Molten behavior or performance.
+Aspen independently expresses its profile, transitions, schedules, and invariants. The authoritative bounded TLA+ source is [`verification/tla/ConsensusFastPath.tla`](../verification/tla/ConsensusFastPath.tla). The combined `consensus-fastpath-model-parity` check executes pinned TLC and TLA-ts against the same three-replica/two-command/three-view instance and a deliberate guard mutant; parse-only acceptance is not parity. See [the property/fault mapping, exact commands, integration and evidence status](consensus-fastpath-tla.md).
+External TLA+, Quint or Veil results and benchmarks do not prove Aspen behavior or performance. Internal Rust/CLI/schema names remain `molten`.
 
 ## Profile and quorum boundary
 
@@ -87,6 +87,10 @@ The bounded corpus names these schedules:
 
 The model checks recoverability, conflicting predecessors, committed order, execution order, conflict order, applications, and replies.
 Counterexample reduction keeps the causal prefix through the first violation.
+
+The TLA+ instance and the Rust fault corpus have different finite bounds and are not interchangeable coverage claims. The [model notes](consensus-fastpath-tla.md#hazard-to-property-mapping) map all six profile invariant names and each boundary above to named checks, identifying original-engine ordering, canonical identities, conservative classification, abstract message absence and retained restart state as assumptions/abstractions rather than live-system proofs. Recovery progress is checked only under the stated weak-fairness assumption; permanent-partition liveness is not claimed.
+
+`verification/tla/ConsensusFastPath.qnt` and `tests/fastpathquint.rs` separately replay the real pure recovery, admission and ledger functions, including rejected transitions and a patch-mutated Rust mixed-view guard in an isolated source build. This bounded API-conformance lane does not replace TLC/TLA-ts, establish TLA+/Quint equivalence or implement a second consensus engine. Optional Veil remains unselected; no Lean result is synthesized.
 
 ## Evidence and non-claims
 

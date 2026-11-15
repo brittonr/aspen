@@ -14,3 +14,6 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/fabric_transport/cross_process/iroh/parts/shell/p003/body.rs"
 ));
+
+#[path = "direct.rs"]
+pub mod direct;

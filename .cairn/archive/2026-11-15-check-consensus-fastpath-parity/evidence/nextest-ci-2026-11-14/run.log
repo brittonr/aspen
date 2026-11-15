@@ -1,0 +1,14 @@
+
+ambient Quint absent before the nextest-ci app
+copying path '/nix/store/0iprnlsgyf6kv98rvfjpxr60xqn42hsw-source' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/qpysjwvh23hvn2kfwgqrk2xkp4lhnk9h-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0b29krsqgsa9k6wjxsnld8lsm8si4zgrp97a5sw0bxfpfs3hqjaj.nar?hash=qpysjwvh23hvn2kfwgqrk2xkp4lhnk9h' does not exist in binary cache 'http://100.100.103.95:5000'
+copying path '/nix/store/qpysjwvh23hvn2kfwgqrk2xkp4lhnk9h-source' from 'https://nix-community.cachix.org'...
+this derivation will be built:
+  /nix/store/9rpgbfrrhw5v6cicfsd2va2n0166hwmg-molten-nextest-ci.drv
+building '/nix/store/9rpgbfrrhw5v6cicfsd2va2n0166hwmg-molten-nextest-ci.drv'...
+────────────
+ Nextest run ID 9ce48ea1-774d-46d7-afb5-e5cabeee1a0d with nextest profile: ci
+    Starting 4 tests across 1 binary
+────────────
+     Summary [  11.475s] 4 tests run: 4 passed, 0 skipped

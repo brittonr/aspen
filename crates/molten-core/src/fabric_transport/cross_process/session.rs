@@ -432,13 +432,21 @@ fn transition_receive_frame(
     payload_bytes: u64,
     callback_generation: u64,
 ) -> Result<CrossProcessSessionTransition, Vec<CrossProcessTransportIssue>> {
-    require_session_phase(state, command, &[CrossProcessSessionPhase::Active])?;
+    require_session_phase(state, command, &[
+        CrossProcessSessionPhase::Active,
+        CrossProcessSessionPhase::Queued,
+        CrossProcessSessionPhase::AwaitingAcknowledgement,
+    ])?;
     validate_session_callback(state, callback_generation)?;
     validate_frame_size(state, payload_bytes)?;
     let mut next = state.clone();
     next.frames_received = checked_increment(state.frames_received).map_err(|issue| vec![issue])?;
-    next.delivery = DeliveryOutcome::Delivered;
-    next.retry = RetryDisposition::NotApplicable;
+    // Receiving the opposite direction does not acknowledge an outstanding send.
+    // The existing active-only path remains byte-for-byte unchanged.
+    if state.phase == CrossProcessSessionPhase::Active {
+        next.delivery = DeliveryOutcome::Delivered;
+        next.retry = RetryDisposition::NotApplicable;
+    }
     Ok(CrossProcessSessionTransition {
         next,
         action: SessionShellAction::DeliverFrame,

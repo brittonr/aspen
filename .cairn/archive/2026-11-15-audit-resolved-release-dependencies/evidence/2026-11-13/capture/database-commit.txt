@@ -1,0 +1,6 @@
+tree 58b68ec97e88bade3fd2bc664c949d1d45a82eb7
+parent 4c2255fe17959e0c76b0657c5594f796c8da57c3
+author djc <158471+djc@users.noreply.github.com> 1794573097 +0000
+committer Dirkjan Ochtman <dirkjan@ochtman.nl> 1794573183 +0100
+
+Assigned RUSTSEC-2026-0523 to quinn-proto, RUSTSEC-2026-0524 to quinn-proto, RUSTSEC-2026-0525 to libp2p-quic, RUSTSEC-2026-0526 to libp2p-rendezvous, RUSTSEC-2026-0527 to libp2p-rendezvous, RUSTSEC-2026-0528 to ref-swap and 13 more

@@ -2,19 +2,19 @@
 
 r[impl molten.fabric_execution.component_pin] r[impl molten.fabric_execution.port_contract] r[impl molten.fabric_execution.authority] r[impl molten.fabric_execution.request] r[impl molten.fabric_execution.environment] r[impl molten.fabric_execution.lifecycle] r[impl molten.fabric_execution.output] r[impl molten.fabric_execution.generation] r[impl molten.fabric_execution.uncertainty] r[impl molten.fabric_execution.simulation] r[impl molten.fabric_execution.validation] r[impl molten.fabric_execution.nonclaims]
 
-Molten exposes bounded process execution as one application-owned fabric port. It does not treat process execution as transport, scheduling, or supervision.
+Aspen exposes bounded process execution as one application-owned fabric port. It does not treat process execution as transport, scheduling, or supervision.
 
 ## Component cohort
 
 The live adapter uses `bounded-exec` revision `29dac88ecded94457572db3fdfaaaab95fa91525`.
 
-Cargo and Nix use the canonical read-only source:
+Cargo and Nix use the catalog-advertised anonymous GitHub source at that exact pin:
 
 ```text
-https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git
+https://github.com/OnixResearch/bounded-exec.git
 ```
 
-The source uses `AGPL-3.0-or-later`. Molten records the repository, revision, package, license, platform, and non-claims in one canonical source cohort.
+The source uses `AGPL-3.0-or-later`. Aspen records the repository, revision, package, license, platform, and non-claims in one canonical source cohort. The transport-only cutover retained the exact provider tree; it does not qualify a build or grant authority.
 
 A mutable sibling path is not release evidence. The Nix gate rejects a path dependency for `bounded-exec`.
 

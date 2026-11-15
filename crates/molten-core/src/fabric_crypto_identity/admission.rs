@@ -80,6 +80,9 @@ pub fn admit_key_generation(
     if !profile.backend_classes.contains(&request.backend_class) {
         issues.push(CryptoIdentityIssue::UnsupportedBackend(request.backend_class));
     }
+    if request.backend_class == KeyBackendClass::Tpm2Sealed && request.purpose != KeyPurpose::TransportEndpoint {
+        issues.push(CryptoIdentityIssue::UnsupportedPurpose(request.purpose));
+    }
     if profile.entropy_profile_ref.as_deref() != Some(request.entropy_profile_ref.as_str()) {
         issues.push(CryptoIdentityIssue::MissingEntropyProfile);
     }
@@ -190,6 +193,9 @@ fn validate_handle(profile: &CryptoAdapterProfile, handle: &OpaqueKeyHandle, iss
         issues.push(CryptoIdentityIssue::UnsupportedBackend(handle.backend_class));
     }
     if !profile.allowed_purposes.contains(&handle.purpose) {
+        issues.push(CryptoIdentityIssue::UnsupportedPurpose(handle.purpose));
+    }
+    if handle.backend_class == KeyBackendClass::Tpm2Sealed && handle.purpose != KeyPurpose::TransportEndpoint {
         issues.push(CryptoIdentityIssue::UnsupportedPurpose(handle.purpose));
     }
     if handle.secret_material_exposed {

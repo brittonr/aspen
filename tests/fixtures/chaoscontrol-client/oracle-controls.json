@@ -1,0 +1,78 @@
+[
+  {
+    "scenario": "healthy-local",
+    "expected": "pass"
+  },
+  {
+    "scenario": "peer-repair",
+    "expected": "pass"
+  },
+  {
+    "scenario": "global-absence",
+    "expected": "fail"
+  },
+  {
+    "scenario": "no-op",
+    "expected": "incomplete"
+  },
+  {
+    "scenario": "missing-participant",
+    "expected": "incomplete"
+  },
+  {
+    "scenario": "unreached-fault",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "short-horizon",
+    "expected": "incomplete"
+  },
+  {
+    "scenario": "stalled-participant",
+    "expected": "fail"
+  },
+  {
+    "scenario": "missing-end",
+    "expected": "incomplete"
+  },
+  {
+    "scenario": "missing-readiness",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "unavailable-recovery",
+    "expected": "incomplete"
+  },
+  {
+    "scenario": "mismatched-receipt",
+    "expected": "invalid"
+  },
+  {
+    "scenario": "fabricated-receipt",
+    "expected": "invalid"
+  },
+  {
+    "scenario": "unsynced-machine-loss",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "observed-sync",
+    "expected": "pass"
+  },
+  {
+    "scenario": "unknown-storage",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "corrupt-storage",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "retry-does-not-reconcile",
+    "expected": "not-evaluated"
+  },
+  {
+    "scenario": "unsupported-fault",
+    "expected": "unsupported"
+  }
+]

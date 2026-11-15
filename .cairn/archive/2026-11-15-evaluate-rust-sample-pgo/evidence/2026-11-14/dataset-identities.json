@@ -1,0 +1,27 @@
+{
+  "denied": {
+    "bytes": 338,
+    "raw_blake3": "382995378c497c7e1a347504cf3e92e28d97ff4edb1311e874cbde2592e3455a",
+    "sha256": "9ea4325ed3d5c20bc7dd1bea2fdde37f7384358ab3e2c8e6365c2ee73efcc087"
+  },
+  "error": {
+    "bytes": 444,
+    "raw_blake3": "3df72da0706c848329b618cff79aafa4607dbd6a0f9c2478b2ef174f9cb3c19b",
+    "sha256": "3184b338c2d38a0684509b9c1b7e1065e6ec95170e10f7d27fbeb81049a6cabc"
+  },
+  "exhausted": {
+    "bytes": 518,
+    "raw_blake3": "f92e703e93137aa6307dbdea30b62dae9e9c0944262cd10e08da4c572f89604b",
+    "sha256": "b48d9e39bb79ae8b824b1a78ad138e964b4502e42adcf0e9539e1ec6b61b109e"
+  },
+  "success": {
+    "bytes": 3695,
+    "raw_blake3": "6bd35f7afa1c3b82296fb47574a654109b4f113aca7ad5c766353f7fc55a15aa",
+    "sha256": "7cd36f5dce603155f210a81fa6a8b106bd18e5929980226e7a4e11c276ca89ba"
+  },
+  "training": {
+    "bytes": 2317,
+    "raw_blake3": "89e9f8b753dee62d5010876842d7fc6cf27ff8a05e3457977b3a697cf8fe89da",
+    "sha256": "97049b23bfdc02be135380f85823af0285fe2819244a6893e6fc084b7df47027"
+  }
+}

@@ -3,3 +3,6 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/state
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/state/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/state/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/state/p004/body.rs"));
+
+#[path = "restore.rs"]
+mod restore;

@@ -1,0 +1,32 @@
+# Durable progress design
+
+The controller Redb CAS writes canonical state and the progress projection/stream position atomically under the same exclusive database owner. Derive immutable output records only from newly accepted Succeeded task states and exact terminal attempts. Canonical Preserves/BLAKE3 payload identities bind cluster, generation, run, job, task, assignment, epoch, request, result, and artifact. Run terminal records derive from the complete required task set. Recover an existing database by a one-time transaction projecting all already accepted outputs and terminal runs.
+
+Reuse crates/molten-core/src/committed_stream as a source-mounted bridge, keeping the standalone workspace independent of unrelated private dependencies. Persist a versioned Serde DTO, reconstruct core values, validate invariants, and never infer durable atomicity from commit_transition alone. Cap retention at 256 records, page size at 64 and encoded replies at 256KiB. Polling creates no persistent subscriber queue; transport ingress is already bounded. Snapshot one selected run plus watermark is read from one Redb read transaction; snapshots distinguish unknown attempts, active attempts, pending, failed, blocked, cancelled, accepted.
+
+Output bytes are persisted before state/progress. Crashes before state commit may leave bounded unreferenced content; retries use the existing accepted attempt. Crashes after commit/before reply expose the same event identities on replay. No progress acknowledgement deletes events or artifacts. Existing content has no GC; missing referenced bytes are explicit and progress does not promise permanent storage. Observation disconnect has no cancellation effect.
+
+## State-only commits and retained-history work
+
+The retained same-host diagnostic campaign reached progress revision 253, 250 stopped successes, two dispatching attempts and four pending tasks, with no failed attempt or retry. The failure occurred before the 256-event retention boundary. This is execution evidence of insufficient progress within the existing deadline, not evidence of a retention-gap decision error. The current implementation also revalidates and rewrites the complete journal for every Tick/ObserveNode/Schedule transition solely to update its state reference, amplifying retained-history work.
+
+Keep the journal immutable between projected transitions. A small canonical `controller-progress-owner.v1` record binds the current state reference, the state reference at the last projected transition, and both exact journal canonical/reconstruction digests. Every controller CAS checks the owner and journal pair and advances current-state ownership in the same Redb transaction. Only a nonempty progress delta decodes, validates, appends and rewrites the journal. A snapshot reads state, owner and journal in one transaction and reports the current state reference with that journal's watermark. No state-only transition can silently change retained history, and no cache or second ledger is authoritative.
+
+On legacy databases without the owner record, initialization must first prove the existing journal binds the exact current state before installing the owner. Partial owner pairs or crossed journal/state references deny. Existing bounds, epochs, IDs, task resources, work count and observation deadline remain unchanged. Parent must rerun the genuine process campaign to establish the correction's executed sufficiency.
+
+## Retained follow-on failure and causal diagnostics
+
+The owner-head correction is independently justified by eliminating unchanged-journal serialization, but the subsequent full process suite still failed the unchanged retention campaign. In its retained cuts, task tile-51 moved from Dispatching at controller revision 749 to a stopped success at revision 750; task tile-50 remained dispatching. The retained stderr contained no per-assignment launch/response or storage-duration witness. These observations do not establish a permanent protocol stall or prove hashing is the sole cause.
+
+A temporary bounded `serve --trace` diagnostic recorded actual RPC frame sizes, per-phase elapsed time, response classifications, worker launch/execute errors and storage stages; its logs remain under `/dev/shm/aspen-batch-traced-retention-20261113/`. That instrumentation is no longer shipped and is not a current CLI promise. It changed no admission, retry, deadline, retention or workload bounds and emitted no authoritative completion. Historical traces do not qualify the current source or establish a permanent stall.
+
+## Run-scoped status transport
+
+The exact-source follow-on campaign retained 56 accepted outputs, two dispatching attempts and six pending tasks in its fourth run at the unchanged observation deadline. It did not establish a permanent worker deadlock. A one-off observation of that retained 250-attempt state measured approximately 59 ms to frame the full state and 5 ms to frame the selected run. The existing CLI selected `--run` only after receiving, verifying and decoding every retained run and attempt. Eliminate that unrelated transport work rather than increase the deadline or shrink the workload.
+
+Status requests carry an optional run selector. The controller still validates the authoritative state, but moves only the selected run into a scoped reply; raw state and planning retain the complete-state query. Operator enrollment, run phase calculation, CLI JSON, task resources, event identities and all bounds remain unchanged. Because the request/reply DTOs change, cut the RPC schemas and ALPN over to v2 and migrate every local caller together; do not accept or alias v1 carriers. Durable state, workload and progress schemas remain v1 and need no data rewrite. The unchanged process campaign must prove the correction; the cost observation alone is not acceptance or a sole-cause claim.
+
+## Delta composition
+
+The delta modifies the existing `committed-change-stream` capability; the batch service does not own a second copy of the accepted stream/cursor requirements. Its final cursor block also includes the partial-revision retention and inclusive-boundary scenarios from `detect-partial-revision-retention-gap`. Both pending changes carry the same combined cursor block, so either native sync order preserves both refinements. The failed diagnostic checkpoints above remain historical evidence, not current claims that the recorded parent process acceptance is unexecuted.
+

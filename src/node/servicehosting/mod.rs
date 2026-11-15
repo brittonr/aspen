@@ -33,6 +33,7 @@ pub enum RuntimeAction {
     Stop,
     Fence,
     Restart,
+    Recover,
     Drain,
     Checkpoint,
     Upgrade { admission_ref: String },

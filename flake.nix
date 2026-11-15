@@ -1,5 +1,5 @@
 {
-  description = "molten — Rust project";
+  description = "Aspen — policy-gated distributed-systems fabric";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
@@ -31,15 +31,15 @@
       flake = false;
     };
     bounded-exec-src = {
-      url = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525";
+      url = "git+https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525";
       flake = false;
     };
     durable-file-publication-src = {
-      url = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab";
+      url = "git+https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab";
       flake = false;
     };
     hardened-wasmtime-src = {
-      url = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e";
+      url = "git+https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e";
       flake = false;
     };
     mantle-wasm-verifier-src = {
@@ -51,7 +51,7 @@
       flake = false;
     };
     choregraph-src = {
-      url = "git+rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+      url = "git+https://github.com/OnixResearch/choregraph.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
       flake = false;
     };
     chaoscontrol-src = {
@@ -63,12 +63,13 @@
       flake = false;
     };
     executable-extent-src = {
-      url = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
+      url = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
     };
     executable-extent-octet = {
       url = "github:OnixResearch/octet/cf04e894e53eb0947230118a086ef6066ddba38c";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.cairn.inputs.artifact.url = "git+https://github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be";
     };
     mantle-executable-extent-src = {
       url = "git+rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb?rev=2c636b1b25353a1b0befa5af48dc68615cd686dd";
@@ -130,6 +131,10 @@
       url = "git+https://github.com/bytecodealliance/wrpc?rev=aa01409ed38bf7a978570ff567c4475376925df6&submodules=1";
       flake = false;
     };
+    quint-connect-src = {
+      url = "github:quint-co/quint-connect/4f018f54fc7dd4cef341d10111427bab59d3b307";
+      flake = false;
+    };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
@@ -166,6 +171,7 @@
       schema-migration-core-src,
       transactional-reconciliation-src,
       release-channel-src,
+      quint-connect-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -254,7 +260,7 @@
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
         boundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525";
-        boundedExecRepository = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git";
+        boundedExecRepository = "https://github.com/OnixResearch/bounded-exec.git";
         boundedExecDependency = artifactRootDependencies."bounded-exec";
         boundedExecExpectedLockSource = "git+${boundedExecRepository}?rev=${boundedExecRevision}#${boundedExecRevision}";
         boundedExecLockPackages = builtins.filter (
@@ -285,7 +291,7 @@
           ) "Molten Bounded Exec Cargo/Nix source identity, package set, workspace, or license drifted";
           bounded-exec-src;
         durableFilePublicationRevision = "8e05e74e24b45f752d77145c4455385daaf6d6ab";
-        durableFilePublicationRepository = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git";
+        durableFilePublicationRepository = "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git";
         durableFilePublicationDependency = artifactRootDependencies."durable-file-publication";
         durableFilePublicationExpectedLockSource = "git+${durableFilePublicationRepository}?rev=${durableFilePublicationRevision}#${durableFilePublicationRevision}";
         durableFilePublicationLockPackages = builtins.filter (
@@ -306,7 +312,7 @@
           ) "Molten Durable File Publication Cargo/Nix source identity, package, or license drifted";
           durable-file-publication-src;
         hardenedWasmtimeRevision = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e";
-        hardenedWasmtimeRepository = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx";
+        hardenedWasmtimeRepository = "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git";
         hardenedWasmtimeDependencies = [
           artifactRootDependencies.hardened-wasmtime-runtime
           artifactRootDependencies.hardened-wasmtime-shell
@@ -377,7 +383,7 @@
             "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";
           mantle-wasm-verifier-src;
         choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
-        choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
+        choregraphRepository = "https://github.com/OnixResearch/choregraph.git";
         choregraphHistoryDependencies = [
           artifactRootDependencies."choregraph-history"
           moltenCoreDependencies."choregraph-history"
@@ -453,7 +459,7 @@
             vmCohort = vm-cohort-src;
           };
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
-        executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
+        executableExtentRepository = "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git";
         executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
         executableExtentOctetAdmitted =
           assert pkgs.lib.assertMsg (
@@ -611,6 +617,8 @@
             maybeCleanLocalGitSource release-channel-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
             maybeCleanLocalGitSource hegel-src;
+          "https://github.com/quint-co/quint-connect.git#4f018f54fc7dd4cef341d10111427bab59d3b307" =
+            maybeCleanLocalGitSource quint-connect-src;
           "${schemaIdentityRepository}#${schemaIdentityRevision}" =
             maybeCleanLocalGitSource schemaIdentitySource;
           "${schemaMigrationRepository}#${schemaMigrationRevision}" =
@@ -727,6 +735,17 @@
             cargo = unit2nixRust;
             rustc = unit2nixRust;
           };
+        workspaceCrateOverrides = {
+          # nickel-lang-core's Nix FFI is disabled in this workspace.
+          nickel-lang-core = attrs: { };
+          # verus_prettyplease vendors its implementation; no native library is needed.
+          verus_prettyplease = attrs: { };
+          # Keep the full immutable producer tree for governed adapter/Wasm fixtures.
+          kamacite-core = attrs: {
+            src = kamaciteSource;
+            sourceRoot = "source/crates/kamacite-core";
+          };
+        };
         mkUnit2nixWorkspace =
           {
             enableKache ? false,
@@ -746,27 +765,29 @@
               "warnings"
             ];
             buildRustCrateForPkgs = mkBuildRustCrateForPkgs { inherit enableKache cacheDir keySalt; };
-            extraCrateOverrides = {
-              # nickel-lang-core declares links="nix", but the Nix FFI is behind
-              # the disabled nix-experimental feature in this workspace.
-              nickel-lang-core = attrs: { };
-              # verus_prettyplease declares links="prettyplease-verus02" but
-              # vendors its implementation; no native libraries are required.
-              verus_prettyplease = attrs: { };
-              # kamacite-core includes governed adapter and Wasm fixtures from
-              # the producer workspace root. Keep that full immutable source
-              # while compiling from the crate subdirectory.
-              kamacite-core = attrs: {
-                src = kamaciteSource;
-                sourceRoot = "source/crates/kamacite-core";
-              };
-            };
+            extraCrateOverrides = workspaceCrateOverrides;
           };
 
         ws = mkUnit2nixWorkspace { enableKache = false; };
         releasePolicyWs = mkUnit2nixWorkspace {
           enableKache = false;
           resolvedJson = ./release-policy-build-plan.json;
+        };
+        samplePgo = if system == "x86_64-linux" then import ./nix/sample-pgo-experiment.nix {
+          pkgs = unit2nixPkgsBase;
+          inherit unit2nix;
+          source = ./.;
+          extraCrateOverrides = workspaceCrateOverrides;
+        } else null;
+        dependencyAudit = import ./nix/dependency-audit.nix {
+          inherit pkgs rustToolchain releasePolicyPkg;
+        };
+        fastpathQuint = import ./nix/consensus-fastpath-quint.nix { inherit pkgs; };
+        fastpathMutantWs = mkUnit2nixWorkspace {
+          src = fastpathQuint.mutateSource sourceForConfigChecks;
+        };
+        fastpathMutantTests = (fastpathMutantWs.test.workspaceMembers."molten".build).override {
+          buildTests = true;
         };
         kacheWs = mkUnit2nixWorkspace { enableKache = true; };
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
@@ -837,6 +858,7 @@
           runtimeInputs = [
             rustToolchain
             pkgs.cargo-nextest
+            fastpathQuint.quint
           ];
           text = ''
             exec cargo nextest run --profile ci "$@"
@@ -1240,6 +1262,10 @@
           molten = import ./nix/modules/molten.nix;
         };
 
+        legacyPackages = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          sample-pgo = samplePgo;
+        };
+
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
@@ -1350,7 +1376,7 @@
                     src/test/parts/support/p001/body.rs \
                     src/test/parts/support/p002/body.rs \
                     src/main/tests/ops/helpers.rs \
-                    src/local_store_tests.rs \
+                    src/local_store/tests.rs \
                     src/chunk/parts/store/tests/m000/p002/body.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
                     src/retention/parts/mod/tests/m000/p009/body.rs \
@@ -1704,6 +1730,8 @@
                   generated=docs/fabric-cryptographic-identity/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
+                  nickel export docs/fabric-cryptographic-identity/fixtures/positive/tpm2-sealed.ncl \
+                    --format json > "$TMPDIR/tpm2-sealed.json"
                   for fixture in docs/fabric-cryptographic-identity/fixtures/negative/*.ncl
                   do
                     if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
@@ -2657,12 +2685,8 @@
                     tests/fixtures/executable-extent/executable-extent-producer-receipt.valid.json \
                     ${mantleExecutableExtentSource}/schemas/machine-contracts/fixtures/executable-extent-producer-receipt.valid.json
 
-                  rg -Fq '${executableExtentRepository}' Cargo.toml crates/molten-core/Cargo.toml flake.nix
-                  rg -Fq '${executableExtentRevision}' Cargo.toml crates/molten-core/Cargo.toml Cargo.lock flake.nix
-                  rg -Fq '${mantleExecutableExtentRevision}' src/executable_extent/mod.rs flake.nix
-                  rg -Fq '${executableExtentRepository}' checks/executable-extent-octet/Cargo.toml
-                  rg -Fq '${executableExtentRevision}' checks/executable-extent-octet/Cargo.toml
-                  rg -Fq '${executableExtentOctetRevision}' flake.nix flake.lock
+                  # Product source identities are admitted from parsed manifests and lockfiles above.
+                  # The focused Octet snapshot retains its own vendored source carrier.
                   if rg -n '/home/|\.\./\.\./executable-extent' \
                     checks/executable-extent-octet; then
                     echo 'focused Octet source contains an ambient sibling path' >&2
@@ -3255,6 +3279,13 @@
             native-system-extension-host-profile = nativeSystemExtensionHostProfileCheck;
             fabric-membership-placement-profile = fabricMembershipPlacementProfileCheck;
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
+            dependency-audit-scanner-fixture = dependencyAudit.fixtureCheck;
+            consensus-fastpath-quint = fastpathQuint.mkConformanceCheck {
+              src = sourceForConfigChecks;
+              normalTests = moltenTestBinaries;
+              mutantTests = fastpathMutantTests;
+              inherit rustLibDir;
+            };
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
@@ -3295,35 +3326,6 @@
                   test "${toString moduleEval.services.molten.maxTicks}" = "3600"
                   test "${moduleEval.systemd.services.molten.serviceConfig.User}" = "molten"
                   touch "$out"
-                '';
-            consensus-fastpath-tla =
-              pkgs.runCommand "molten-consensus-fastpath-tla"
-                {
-                  nativeBuildInputs = [ pkgs.tlaplus ];
-                  src = sourceForConfigChecks;
-                }
-                ''
-                  set -euo pipefail
-                  cp -R $src source
-                  chmod -R u+w source
-                  cd source/verification/tla
-                  mkdir -p "$TMPDIR/tlc"
-                  tlc -metadir "$TMPDIR/tlc" -config ConsensusFastPath.cfg ConsensusFastPath.tla > "$out"
-                '';
-            consensus-fastpath-tla-ts =
-              pkgs.runCommand "molten-consensus-fastpath-tla-ts"
-                {
-                  nativeBuildInputs = [ pkgs.nodejs ];
-                  src = sourceForConfigChecks;
-                }
-                ''
-                  set -euo pipefail
-                  cp -R $src source
-                  chmod -R u+w source
-                  tar -xzf source/verification/tla-ts/tla-ts-0.0.10.tgz -C "$TMPDIR"
-                  node source/verification/tla-ts/check.mjs \
-                    source/verification/tla/ConsensusFastPath.tla "$TMPDIR" > "$out"
-                  grep -q 'tla-ts parsed module ConsensusFastPath' "$out"
                 '';
             atlas-current =
               pkgs.runCommand "molten-atlas-current"
@@ -4138,6 +4140,7 @@
                   nativeBuildInputs = [
                     rustToolchain
                     pkgs.cargo-nextest
+                    fastpathQuint.quint
                     pkgs.perl
                     moltenPkg
                   ];
@@ -4506,12 +4509,33 @@
                   touch $out
                 '';
           }
+          // import ./nix/consensus-fastpath-model.nix {
+            inherit pkgs;
+            src = sourceForConfigChecks;
+          }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
             dev-function-profiling = fluxProfilerCli;
             verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
+            tpm2-sealed-identity = import ./nix/tpm2-identity.nix {
+              inherit pkgs rustLibDir;
+              testBinaries = moltenTestBinaries;
+            };
           };
 
-        apps = {
+        apps = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          sample-pgo-experiment = {
+            type = "app";
+            program = "${samplePgo.app}/bin/molten-sample-pgo-experiment";
+          };
+        } // {
+          dependency-audit = {
+            type = "app";
+            program = "${dependencyAudit.app}/bin/molten-dependency-audit";
+          };
+          dependency-audit-controls = {
+            type = "app";
+            program = "${dependencyAudit.controlsApp}/bin/molten-dependency-audit-controls";
+          };
           # Opt-in: the signed startup rail against real NixOS VMs. It is deliberately not a
           # check; a two-core VM needs far longer than a flake check's budget to measure the
           # source closure, and it proves the gate's mechanism with a VM-local signer, not
@@ -4527,14 +4551,14 @@
             type = "app";
             program = "${moltenPkg}/bin/molten";
             meta = {
-              description = "Run the Molten CLI";
+              description = "Run the Aspen CLI (molten)";
             };
           };
           molten = {
             type = "app";
             program = "${moltenPkg}/bin/molten";
             meta = {
-              description = "Run the Molten CLI";
+              description = "Run the Aspen CLI (molten)";
             };
           };
           nixos-vm-molten-module = {
@@ -4544,7 +4568,7 @@
               exec nix build -L --no-link '${vmMoltenModule.drvPath}'
             ''}";
             meta = {
-              description = "Boot the exported Molten NixOS module in a VM (opt-in; not a flake check)";
+              description = "Boot the exported Aspen NixOS module in a VM (opt-in; not a flake check)";
             };
           };
           nextest-ci = {
@@ -4576,9 +4600,11 @@
             # scripts/git-source-hashes.sh binds metadata-free git source hashes for unit2nix.
             pkgs.nix-prefetch-git
             pkgs.jq
+            fastpathQuint.quint
             # Octet lint evidence comes from the catalogued octet-toolchain pin, never an ambient install.
             octet-toolchain.packages.${system}.cargo-octet
           ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.util-linux ]
           ++ pkgs.lib.optional (system == "x86_64-linux") fluxProfilerCli;
 
         };

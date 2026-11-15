@@ -1,6 +1,6 @@
-# Molten Architecture
+# Aspen Architecture
 
-Molten is a workload-neutral, policy-gated distributed-systems fabric built around a canonical, evidence-bearing envelope spine. The core design rules are simple:
+Aspen is a workload-neutral, policy-gated distributed-systems fabric built around a canonical, evidence-bearing envelope spine. Molten is its internal codename; existing crate, CLI, branch and schema identifiers remain unchanged. The core design rules are simple:
 
 > Effects happen only through admitted adapters; all communication and evidence has a canonical Preserves boundary.
 
@@ -19,13 +19,20 @@ The bounded execution port keeps executable policy in the pure core and process 
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
 The [standalone batch pilot](standalone-batch-orchestration.md) under
-`pilots/orchestration` is a separate seven-crate workspace with its own explicit
+`pilots/orchestration` is a separate workspace with its own explicit
 operator policy and Redb databases. Its controller/worker application ports compose
 Iroh and import-free Wasmtime adapters, but are not installed in the admitted
-Molten runtime. Adoption does not change dispatcher, fabric-port or ALPN
+Aspen runtime. Adoption does not change dispatcher, fabric-port or ALPN
 registries, system-tier manifests, root workspace membership, or Basalt/Cairn
 authority. Native integration requires the separate per-port gates in the pilot's
 integration plan; successful same-host DAG execution grants no system authority.
+
+The standalone pilot's RPC v2 selects a requested run on the controller before
+framing status, rather than transferring every unrelated run and attempt to the
+CLI. Raw inspection and planning still request complete validated state. This
+carrier cutover changes neither operator enrollment nor durable-state, workload,
+progress-event or cursor identities; every pilot peer upgrades together, with no
+v1 carrier fallback. It is separate from the admitted Aspen fabric's ALPN registry.
 
 ## Executable system-extension tier
 
@@ -36,6 +43,29 @@ The pure core plans generation-fenced lifecycle transitions, callback admission,
 The public `node service-host` boundary loads bounded canonical native admission bundles through `node_service_host`, validates the opaque startup source gate before effects, verifies a current holder-signed UCAN/Basalt load request against independently provisioned operator trust, and reconstructs durable native supervisors before host orchestration. Measured executable/workspace handles stay alive across callbacks. Exact operation authority remains separate from source/bundle admission; public status does not project credential or payload material. See [public service-host admission](system-extension-runtime.md#public-node-service-host-admission).
 
 Installed native collaboration effects use the separately governed [admitted native effect runtime](native-effect-runtime.md): explicit exact service/port/group/generation/policy/resource configuration, independent current install/route grants, a retained real scope replica/application, native intent recording, actual committed-state observation and materialized completion callbacks. Queue acceptance and callback success are not commits. Missing configuration and any post-effect uncertainty remain fail-closed/unresolved without implicit retries; definite pre-effect scope authority failures surface as canonical scope denial classes rather than opaque uncertainty. Source trust never grants effect authority.
+
+The public keyed-counter composition connects the existing addressable-actor,
+native-host, membership-persistence and coordination-delivery owners. Delivery
+stays running while the actor checkpoints and drains; wake uses the existing
+loss/recover transition with a fresh incarnation. Callback or queue success
+alone is not semantic completion. The existing actor `Local` retains the original
+successful canonical completion receipt and exact acknowledgement request;
+readback requires that evidence as well as the native durable proof and exact
+terminal delivery. Later independent acknowledgements cannot repair an original
+refusal. Known pending native completion projects unknown without another effect;
+corrupt or failed evidence reads remain errors. Required proof references are
+order-independent without relaxing original-request identity. FIFO request
+preview leaves older ready work unclaimed under a newer request's authority;
+an exact retained ready payload resumes without another enqueue. Preparation
+failures before any mutating owner call remain definite, while failures after
+an attempted call preserve uncertainty. See
+[addressable actors](addressable-actor-runtime.md) for the exact command, admission
+and survival boundary.
+
+The native lifecycle treats Drained as nonterminal: a fenced observed process
+loss follows the existing failure policy before checkpoint recovery. Direct
+recovery from Drained still denies; fresh-incarnation publication precedes
+callback intent and ingress reopening.
 
 Recovery-group supervision is admitted per system extension: an ordered member set with restart classes, an elapsed-time window and source ref, backoff, and member/group budgets. The pure planner returns an ordered stop/restart/quarantine/escalate plan over supplied bounded history. Permanent members restart within budget, transient members stop on success and restart only abnormal retryable exits, and temporary members stop on success. Supplied history keeps windowed budgets across supervisor replacement; planning is advisory and does not prove restart success.
 
@@ -269,9 +299,11 @@ callback. A cursor identifies a position by service identity, stream epoch,
 revision, and event ordinal. Where one storage owner controls the state and the
 event, the owner advances the state, the event, and the stream position
 together; the stream never implies an atomicity across independent stores. A
-subscription is bounded, a cursor behind the retained window reports an
-explicit retention gap, and a cursor from a prior epoch is rejected rather than
-remapped. A snapshot plus its watermark cannot miss a committed change. A
+subscription is bounded. A cursor before the oldest retained event reports an
+explicit retention gap, including an evicted ordinal within a partially retained
+revision; the first retained ordinal remains inclusive. An empty or untrimmed
+stream accepts its start cursor. A cursor from a prior epoch is rejected rather
+than remapped. A snapshot plus its watermark cannot miss a committed change. A
 replayed event keeps one stable identity, so a resumed subscriber deduplicates
 it exactly. Possessing an event, a cursor, or a stream position authorizes
 nothing: reading the content an event references still requires the existing
@@ -282,6 +314,14 @@ before acknowledgement using the committed-stream APIs. It retains only the
 acknowledged cursor, requires complete bounded replay and exact identity dedup,
 and binds the observations into the canonical fault receipt. This deterministic
 in-process exercise does not establish OS-crash or storage-durability behavior.
+
+The `runtime-spine-committed-turn-v1` logical restore composes the existing
+`RuntimeState` owner with capability-derived ledger/Redb stores, measured process
+cohorts, current-admission fencing and activation-last records. It restores
+committed facets/assertions/observers, pending-message scheduling, logical time,
+RNG and effect sequence without dispatching unresolved requests. It does not
+resume the daemon, system extensions or the separate fabric scheduler. See
+[logical execution snapshots](world-execution-snapshots.md).
 
 ## Vat/object layer: Goblins-inspired
 
@@ -400,7 +440,7 @@ An unknown outcome, corruption, a snapshot payload whose BLAKE3 identity does no
 
 The adapter serves again only after a fresh transaction rewrites the reconciled content and observes its own synchronization, because a same-boot read-back may come from page cache rather than the medium. A local repair stays recorded after reconciliation.
 
-Snapshot payloads are published through the pinned [Durable File Publication](https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git) contract. The payload is staged, synchronized, published without replacement under its content-addressed name, and its parent directory synchronized before the snapshot metadata commits. A failed parent synchronization leaves the payload visible with unknown durability; the metadata is withheld and the adapter quarantines until reconciliation. A retry then verifies the existing destination's identity before committing metadata.
+Snapshot payloads are published through the pinned [Durable File Publication](https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git) contract. The payload is staged, synchronized, published without replacement under its content-addressed name, and its parent directory synchronized before the snapshot metadata commits. A failed parent synchronization leaves the payload visible with unknown durability; the metadata is withheld and the adapter quarantines until reconciliation. A retry then verifies the existing destination's identity before committing metadata.
 
 Local database repair restores structure; it does not prove that a Raft replica retained committed history. The pure `consensus_recovery` core makes several decisions from Raft facts keyed by term and index:
 
@@ -445,7 +485,23 @@ Resource governance is separate from data authority. `<resource-grant-v1 "molten
 
 Scoped chain hashing adds tamper-evident continuity only where an evidence profile asks for it. A `<chain-link-v1 "molten.evidence.chain-link.v1" ...>` commits to a specific `(scope, id, epoch)`, previous link ref, payload ref, context refs, producer ref, Trellis predicate ref, and checks; its ref is the Blake3 hash of the canonical Preserves link bytes. Payload refs are not rewritten by linking. Append, verify, and checkpoint receipts now bind canonical `<chain-predicate-receipt-v1 "molten.evidence.chain-predicate-receipt.v1" ...>` artifacts for bounded Trellis predicates covering genesis/append validity, no-gap segments, no-fork policy, anchor descent, and checkpoint range coverage. Harness pass gate receipts embed a scoped local chain evidence bundle that binds the report ref, suite ref, final state ref, chain verify receipt, range predicate, anchor descent, and checkpoint freshness before emitting pass evidence. They also embed actor-scoped turn journals: one local chain per primary actor/session, binding each turn observation to step/input, admission, effect-log, trace, before-state, and after-state refs without introducing a global actor-message head. Chunk-store publication lineage uses the same scoped model: `<chunk-lineage-v1 "molten.chunk-store.lineage.v1" ...>` binds manifest refs, chunk-root refs, chunk-store receipts, Iroh publish/fetch ticket evidence, chain links, verify receipts, and predicate receipts per manifest/root. Iroh chain exchange wraps scoped segments and checkpoint artifacts in `<chain-segment-bundle-v1 "molten.evidence.chain-segment-bundle.v1" ...>` values; fetch/import verifies canonical refs, continuity, predicates, checkpoint bindings, and fork policy locally before any ledger import. Multiple scoped chains can advance independently for evidence ledgers, turn journals, artifact publication, or control-plane checkpoints; this is not a cryptocurrency, fork-choice system, or global total order for actor messages.
 
+The [capability qualification report](capability-qualification-report.md) validates
+actual source/build/profile-bound artifacts separately from implementation
+coverage. Its executable harness-simulation family cannot qualify live Raft,
+durability or cross-host families; missing evidence remains visible. Report
+readback invokes the independently admitted selected binary, not caller-written
+success fields, and grants no operation or release authority.
+
 ## Remote and storage adapters
+
+The explicit [direct-stream profile](direct-lan-streaming.md) composes the
+existing cross-process Iroh shell and registered transport effect port. The
+pure core owns source budgeting and binding/bounds validation; the
+application-owned protected-socket port resolves current operation authority.
+Streaming uses bounded buffers, explicit acknowledgement/uncertainty and
+observed cleanup without granting membership, scheduling, storage or VM
+resume authority. Separate-process fixtures do not qualify two-host or
+Kiln/Cloud Hypervisor operation.
 
 Iroh is the first remote substrate:
 
@@ -662,7 +718,7 @@ their own runtime cohorts; neither is default or production-admitted.
 
 ## Roadmap Cairn changes
 
-Active production-readiness work lives under `cairn/changes/`. Accepted requirements are recorded under `cairn/specs/`, and completed architectural slices are preserved under `cairn/archive/`. The drained/archived roadmap includes:
+Active production-readiness work lives under `.cairn/changes/`. Accepted requirements are recorded under `.cairn/specs/`, and completed architectural slices are preserved under `.cairn/archive/`. Historical `cairn/archive/` records remain retained. The drained/archived roadmap includes:
 
 - `runtime-spine` — canonical envelope, Preserves boundary, adapters, policy/evidence/storage gates.
 - `synit-sam-runtime` — dataspace assertions, Observe patterns, turn semantics, service dependency assertions, tracing.

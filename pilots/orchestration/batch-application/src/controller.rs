@@ -16,6 +16,12 @@ impl Controller {
     pub fn state(&self) -> Result<State, Error> {
         self.ports.store.load()
     }
+    pub fn progress_snapshot(&self, run: Id) -> Result<ProgressSnapshot, Error> {
+        self.ports.store.progress_snapshot(run)
+    }
+    pub fn progress_read(&self, cursor: ProgressCursor, limit: u32) -> Result<ProgressPage, Error> {
+        self.ports.store.progress_read(cursor, limit)
+    }
     pub fn submit(&self, key: String, spec: JobSpec) -> Result<Id, Error> {
         validate_job(&spec)?;
         let state = self.state()?;
@@ -170,6 +176,7 @@ impl Controller {
                 return Err(Error::Unknown);
             }
         }
+        self.ports.observations.record(Diagnostic::Boundary("before-dispatch"));
         let id = request.fence.assignment;
         let current = self.state()?;
         let observation = if current.runs[&request.fence.run].cancel_requested
@@ -180,6 +187,7 @@ impl Controller {
         } else {
             self.ports.workers.start(request.clone()).await
         };
+        self.ports.observations.record(Diagnostic::Boundary("after-dispatch"));
         let attempt = &next.attempts[&id];
         match observation {
             Ok(value) => self.accept_observation(attempt, value).await,
@@ -226,16 +234,20 @@ impl Controller {
                     }
                     // The DAG cannot publish a successful stage before its output
                     // is durably available from the controller's content port.
+                    self.ports.observations.record(Diagnostic::Boundary("before-output-persist"));
                     if self.ports.content.put(&content)? != output {
                         return Err(Error::Invalid("output identity".into()));
                     }
+                    self.ports.observations.record(Diagnostic::Boundary("after-output-persist"));
                 }
                 let result_ref = self.ports.identity.result(&result)?;
+                self.ports.observations.record(Diagnostic::Boundary("before-terminal-commit"));
                 self.commit(&Command::Terminal {
                     attempt: id,
                     result_ref,
                     result,
                 })?;
+                self.ports.observations.record(Diagnostic::Boundary("after-terminal-commit"));
             }
         }
         Ok(())

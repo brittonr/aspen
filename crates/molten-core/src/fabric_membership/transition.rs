@@ -167,6 +167,8 @@ pub enum AssignmentIssue {
     PredecessorFieldsIncomplete,
     SuccessorEpochNotAdvanced,
     AssignmentIdentityMismatch,
+    RoleOwnershipMismatch,
+    PredecessorAssignmentMismatch,
     StaleServiceGeneration {
         expected: u64,
         actual: u64,
@@ -319,6 +321,49 @@ pub fn propose_assignment(proposal: &AssignmentProposal) -> Result<RoleAssignmen
         uncertain_old_owner: false,
         transition_refs: Vec::new(),
     })
+}
+
+/// Validate a successor against the exact committed predecessor for one ownership slot.
+/// The reference is supplied by the canonical shell; this function performs no hashing or I/O.
+/// A predecessor must complete release before its slot can move to another assignment ID.
+pub fn validate_assignment_successor(
+    predecessor: &RoleAssignment,
+    predecessor_ref: &str,
+    successor: &RoleAssignment,
+) -> Vec<AssignmentIssue> {
+    let mut issues = validate_assignment(predecessor);
+    issues.extend(validate_assignment(successor));
+    if predecessor.extension_id != successor.extension_id
+        || predecessor.service_id != successor.service_id
+        || predecessor.role_id != successor.role_id
+        || predecessor.assignment_id == successor.assignment_id
+    {
+        issues.push(AssignmentIssue::RoleOwnershipMismatch);
+    }
+    if successor.predecessor_assignment_ref.as_deref() != Some(predecessor_ref)
+        || successor.predecessor_epoch != Some(predecessor.assignment_epoch)
+    {
+        issues.push(AssignmentIssue::PredecessorAssignmentMismatch);
+    }
+    if predecessor.state != AssignmentState::Released {
+        issues.push(AssignmentIssue::AssignmentNotReleased(predecessor.state));
+    }
+    if successor.service_generation < predecessor.service_generation {
+        issues.push(AssignmentIssue::StaleServiceGeneration {
+            expected: predecessor.service_generation,
+            actual: successor.service_generation,
+        });
+    }
+    if successor.assignment_epoch <= predecessor.assignment_epoch {
+        issues.push(AssignmentIssue::SuccessorEpochNotAdvanced);
+    }
+    if successor.fencing_token <= predecessor.fencing_token {
+        issues.push(AssignmentIssue::StaleFencingToken {
+            expected: predecessor.fencing_token,
+            actual: successor.fencing_token,
+        });
+    }
+    issues
 }
 
 // r[impl molten.modularity.fabric_boundary.core]

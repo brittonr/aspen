@@ -4,3 +4,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/p00
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/p005/body.rs"));
+#[cfg(test)]
+mod tests {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixos/vm/parts/validation/tests/m000/p001/body.rs"));
+}
