@@ -1,9 +1,17 @@
 # Contributing to Aspen
 
-Read the [contributor handbook](docs/handbook/README.md) and the repository
-[agent and workflow notes](AGENTS.md) before changing behavior. The
-[documentation map](docs/README.md) distinguishes governing documents from the
-source-linked handbook and technical companion.
+<a id="contributing-to-molten"></a>
+
+Start with the [README](README.md) for Aspen's purpose, current status, and first
+local workflow. The [contributor handbook](docs/handbook/README.md) covers setup,
+focused checks, and preparing a change. Read the repository's
+[workflow notes](AGENTS.md) before changing behavior; the
+[documentation map](docs/README.md) points to the governing subsystem contracts.
+
+Use **Aspen** as the project name in new documentation. **Molten** is an
+implementation codename still used in branch, executable, crate, and protocol
+identifiers. Keep those literal names intact unless the change explicitly
+addresses compatibility.
 
 Aspen is the public project name. Molten is its internal codename; the current
 `molten` branch, crates, executable and canonical schema names remain unchanged.
@@ -57,7 +65,7 @@ received under them. For third-party or vendored material, preserve the original
 license and attribution, identify the immutable upstream revision and local
 modifications, include the required texts, and update
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Do not present an upstream
-author's work as an original Molten contribution. Licensing metadata is
+author's work as an original Aspen contribution. Licensing metadata is
 distribution evidence, not legal advice.
 
 ## Security and conduct

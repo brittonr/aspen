@@ -1,5 +1,5 @@
 #[derive(Debug, clap::Parser)]
-#[command(name = "molten", version, about = "Aspen runtime (internal codename: Molten)")]
+#[command(name = "molten", version, about = "Aspen distributed runtime (development preview)")]
 pub(super) struct Cli {
     #[command(subcommand)]
     pub(super) command: Option<Top>,

@@ -1,4 +1,6 @@
-# Molten world commits
+# Aspen world commits
+
+<a id="molten-world-commits"></a>
 
 <!-- r[impl molten.world_commit.core] -->
 <!-- r[impl molten.world_commit.typed_roots] -->
@@ -6,7 +8,7 @@
 <!-- r[impl molten.world_commit.restore] -->
 <!-- r[impl molten.world_commit.detached_evidence] -->
 
-A Molten world commit identifies one coherent, profile-relative runtime snapshot.
+An Aspen world commit identifies one coherent, profile-relative runtime snapshot.
 It composes existing subsystem roots without taking ownership from those subsystems.
 
 The first protocol is product-owned and has the schema `molten.world-commit.v1`.

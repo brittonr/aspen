@@ -1,10 +1,12 @@
 # Repository Guidelines
 
-AI-assistant guidance for **Aspen** in `brittonr/aspen`. Contributors maintain this guide alongside the manifests, governing docs, and accepted requirements. **Molten is an internal codename, not the public product name.** Preserve existing `molten` crate, executable, branch, schema and requirement identifiers unless an explicit migration changes them.
+AI-assistant guidance for **Aspen** in `brittonr/aspen`. Contributors maintain this guide alongside the manifests, governing docs, and accepted requirements.
+
+Aspen is the project and release name. Molten is an implementation codename retained in the `molten` branch, executable, crates, and protocol identifiers. Use **Aspen** in project descriptions and public-facing prose. Preserve literal identifiers, commands, paths, and historical records unless a separate compatibility change explicitly renames them.
 
 ## Project Overview
 
-Aspen is a workload-neutral, policy-gated distributed-systems fabric built around canonical Preserves envelopes. Pure primitives own deterministic laws/plans; capability-rooted adapters perform effects; manifest-installed system extensions own distributed-service semantics.
+Aspen is a runtime for building distributed systems with explicit authority, bounded effects, and deterministic replay. Canonical Preserves envelopes carry data and evidence across subsystem boundaries. Pure primitives own deterministic laws/plans; capability-rooted adapters perform effects; manifest-installed system extensions own distributed-service semantics.
 
 Non-negotiable boundaries:
 
@@ -113,7 +115,7 @@ Start with [docs/README.md](docs/README.md). Read `docs/architecture.md`, `docs/
 ## Runtime/Tooling Preferences
 
 - **Pinned tools:** Rust edition 2024/resolver 3, `nightly-2026-05-26`; nextest ≥ `0.9.136`; Nickel CLI `1.17.0` plus the embedded cohort in `docs/nickel-toolchain.md`. Use the Nix shell for tests/lints. Octet has a separately pinned producer toolchain; ambient `cargo-octet` is not provenance evidence.
-- **Hosted Wasm:** Wasmtime 45 and `wit/molten-component-runtime/`; do not add `wasm32-unknown-unknown` cross-builds or assume shell CLI versions equal library versions.
+- **Hosted Wasm:** use the manifest-selected Wasmtime cohort and `wit/molten-component-runtime/`; do not add `wasm32-unknown-unknown` cross-builds or assume shell CLI versions equal library versions.
 - **Optional features:** `doltlite-oracle`, `executable-extents`, `profiler*`, `world-snapshot-vm-cohort`. No unqualified `--all-features` baseline; defaults do not cover optional backends. Profiling is platform-scoped and diagnostic-only.
 - **Dependency updates:** coordinate the release profile, Cargo manifest/lock, Nix input/lock, `crate-hashes.json`, and both unit2nix plans (`build-plan.json`, `release-policy-build-plan.json`). Follow [the pin procedure](docs/reproducible-dependencies.md#updating-pins): hash with `scripts/git-source-hashes.sh` before regenerating plans; never hand-edit locks or let unit2nix invent Git-source hashes. Private inputs need authentication; sibling overrides are development-only, not release identities.
 - **Upstream inputs:** follow `THIRD_PARTY_LICENSES.md`/`license-policy.tsv`, preserve notices, and re-review changed vendor versions/checksums. Aspen `main` is a clean-room requirements/conformance reference, not permission to copy implementation, comments, or fixtures without compatible relicensing.

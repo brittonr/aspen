@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the Molten system atlas from its single Nickel-sourced JSON value."""
+"""Render the Aspen system atlas from its single Nickel-sourced JSON value."""
 
 from __future__ import annotations
 

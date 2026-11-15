@@ -1,8 +1,10 @@
-# Security policy
+# Aspen security policy
+
+<a id="security-policy"></a>
 
 ## Support boundary
 
-Molten has no production-supported release at present. The current branch is
+Aspen has no production-supported release at present. The current branch is
 `molten`; the `v0.1.0` tag records the August limited internal pilot, not a
 general-purpose security or production qualification.
 

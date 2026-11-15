@@ -1,6 +1,15 @@
-# Molten workflow handbook
+# Aspen workflow handbook
 
-One hundred task-oriented documents for contributors, integrators, and operators. This collection complements the [technical companion](../technical/README.md), which explains implementation laws and boundaries. Use the [documentation map](../README.md) to distinguish governing documents from these source-linked explanations.
+<a id="molten-workflow-handbook"></a>
+
+Practical guides for contributing to Aspen, inspecting a recorded workflow, and
+diagnosing failures. Each guide names its prerequisites, points to the relevant
+source, and explains what its observations establish.
+
+New to the project? Start with the [README](../../README.md). For implementation
+details, use the [technical companion](../technical/README.md). The
+[documentation map](../README.md) explains which documents define the governing
+contracts and which provide guidance for working with them.
 
 ## Choose a document mode
 

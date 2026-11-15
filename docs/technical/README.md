@@ -1,6 +1,17 @@
-# Molten technical companion
+# Aspen technical companion
 
-One hundred advanced reading notes on Molten's implementation boundaries. These articles complement—not replace—the [architecture](../architecture.md), [fabric ownership law](../distributed-system-fabric.md), [modularity boundaries](../modularity-boundaries.md), accepted Cairn requirements, and subsystem documentation linked in each article. They explain existing contracts; they do not introduce new requirements or certify production readiness.
+<a id="molten-technical-companion"></a>
+
+Source-linked explanations of Aspen's execution model, authority, storage,
+transport, and evidence. Use them to trace a behavior to its implementation,
+understand an invariant, or review how a subsystem handles failure.
+
+The [architecture](../architecture.md),
+[fabric ownership law](../distributed-system-fabric.md),
+[modularity boundaries](../modularity-boundaries.md), accepted Cairn
+requirements, and linked subsystem documents define the governing contracts.
+These articles explain those contracts; they do not introduce new requirements
+or certify production readiness.
 
 Looking for a concrete workflow, command reference, or diagnostic procedure? Use the [workflow handbook](../handbook/README.md). The [documentation map](../README.md) explains how both collections relate to governing subsystem documents.
 

@@ -1,6 +1,6 @@
 # Aspen system atlas
 
-A bounded map of Aspen's runtime, storage, networking and evidence boundaries. Molten remains the internal codename and schema namespace. This map does not replace governing documents or execution qualification.
+A bounded map of the current Aspen runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.
 
 <!-- Generated from docs/atlas.ncl by scripts/generate-atlas.py. Do not edit by hand. -->
 
@@ -20,8 +20,8 @@ Messages:
 - `dataspaces` → `runtime`: assertion or retraction turn plan
 
 Questions:
-- **open** Which runtime transitions are replay-visible for the selected profile? ([ref](docs/world-replay-capsules.md))
-- **open** How does the selected adapter classify an effect that may have happened? ([ref](docs/fabric-port-ownership.md))
+- **open** Which runtime transitions are replay-visible for the selected profile? ([ref](world-replay-capsules.md))
+- **open** How does the selected adapter classify an effect that may have happened? ([ref](fabric-port-ownership.md))
 
 ### Storage and world state
 
@@ -39,8 +39,8 @@ Messages:
 - `world` → `prolly`: active-head and reservation publication
 
 Questions:
-- **open** What work does an incremental Prolly edit bound actually avoid? ([ref](docs/prolly-semantic-state-map.md))
-- **blocked** Which logical restore profile has exact current-admission and restart qualification? ([ref](docs/world-execution-snapshots.md))
+- **open** What work does an incremental Prolly edit bound actually avoid? ([ref](prolly-semantic-state-map.md))
+- **blocked** Which logical restore profile has exact current-admission and restart qualification? ([ref](world-execution-snapshots.md))
 
 ### Networking and admission
 
@@ -55,8 +55,8 @@ Messages:
 - `admission` → `effects`: admitted operation scope, never ambient authority
 
 Questions:
-- **answered** Is a per-source rate limit applied before inbound admission? ([ref](docs/inbound-admission-rate-limit-review.md))
-- **blocked** Which cross-host transport profile has actual two-host evidence? ([ref](docs/fabric-transport-session-runtime.md))
+- **answered** Is a per-source rate limit applied before inbound admission? ([ref](inbound-admission-rate-limit-review.md))
+- **blocked** Which cross-host transport profile has actual two-host evidence? ([ref](fabric-transport-session-runtime.md))
 
 ### Evidence and qualification
 
@@ -69,7 +69,7 @@ Messages:
 - `runtime` → `qualification`: canonical profile-scoped execution observations, never ambient authority
 
 Questions:
-- **open** Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. ([ref](docs/capability-qualification-report.md))
+- **open** Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. ([ref](capability-qualification-report.md))
 
 ## Components
 
@@ -103,10 +103,10 @@ Questions:
 
 | Status | Question | Reference |
 |---|---|---|
-| open | Which runtime transitions are replay-visible for the selected profile? | [`docs/world-replay-capsules.md`](docs/world-replay-capsules.md) |
-| open | How does the selected adapter classify an effect that may have happened? | [`docs/fabric-port-ownership.md`](docs/fabric-port-ownership.md) |
-| open | What work does an incremental Prolly edit bound actually avoid? | [`docs/prolly-semantic-state-map.md`](docs/prolly-semantic-state-map.md) |
-| blocked | Which logical restore profile has exact current-admission and restart qualification? | [`docs/world-execution-snapshots.md`](docs/world-execution-snapshots.md) |
-| answered | Is a per-source rate limit applied before inbound admission? | [`docs/inbound-admission-rate-limit-review.md`](docs/inbound-admission-rate-limit-review.md) |
-| blocked | Which cross-host transport profile has actual two-host evidence? | [`docs/fabric-transport-session-runtime.md`](docs/fabric-transport-session-runtime.md) |
-| open | Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. | [`docs/capability-qualification-report.md`](docs/capability-qualification-report.md) |
+| open | Which runtime transitions are replay-visible for the selected profile? | [`world-replay-capsules.md`](world-replay-capsules.md) |
+| open | How does the selected adapter classify an effect that may have happened? | [`fabric-port-ownership.md`](fabric-port-ownership.md) |
+| open | What work does an incremental Prolly edit bound actually avoid? | [`prolly-semantic-state-map.md`](prolly-semantic-state-map.md) |
+| blocked | Which logical restore profile has exact current-admission and restart qualification? | [`world-execution-snapshots.md`](world-execution-snapshots.md) |
+| answered | Is a per-source rate limit applied before inbound admission? | [`inbound-admission-rate-limit-review.md`](inbound-admission-rate-limit-review.md) |
+| blocked | Which cross-host transport profile has actual two-host evidence? | [`fabric-transport-session-runtime.md`](fabric-transport-session-runtime.md) |
+| open | Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. | [`capability-qualification-report.md`](capability-qualification-report.md) |

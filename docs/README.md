@@ -1,11 +1,24 @@
 # Aspen documentation map
 
-Choose the documentation by the question you need to answer. The two companion collections add 200 source-linked articles; they supplement the governing documents rather than replace them.
+<a id="molten-documentation-map"></a>
+
+Start with the [project README](../README.md) for what Aspen does, its current
+status, and the first local workflow. Use this map to find a task guide, understand
+a subsystem, or inspect the evidence behind a claim.
+
+**Aspen** is the project and release name. **Molten** is its implementation
+codename; existing commands, crates, the default branch, and protocol identifiers
+still use `molten`. Copy those identifiers as written.
+
+The workflow handbook explains how to work with Aspen. The technical companion
+explains how it works. Both link to source and supplement the governing
+architecture and subsystem documents.
 
 ## Start with your task
 
 | Question | Entry point |
 | --- | --- |
+| Where do I find commands, build checks, and release limits? | [Runtime and CLI reference](runtime-reference.md), [development reference](development.md), and [release status](release-status.md). |
 | How do I contribute, inspect a workflow, or diagnose a failure? | [Workflow handbook](handbook/README.md): 100 walkthroughs, how-to guides, references, troubleshooting articles, and review checklists. |
 | Why does a subsystem work this way, and where do its guarantees stop? | [Technical companion](technical/README.md): 100 implementation-focused articles on invariants, failure cases, and evidence boundaries. |
 | What is the architecture and ownership model? | [Architecture](architecture.md), [distributed-system fabric](distributed-system-fabric.md), [modularity boundaries](modularity-boundaries.md), and the [system atlas](atlas.md). |

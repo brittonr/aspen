@@ -75,7 +75,7 @@ acceptance threshold was relaxed.
 
 Molten's direct-transport, capability-qualification and source-policy maintainers
 own these reusable controls. Repeat the direct-stream suite, the
-[ordered source gate](handbook/contributing/workspace-and-toolchain-reference.md#strict-octet-source-gate-sequence)
+[ordered source gate](development.md#strict-octet-source-gate-sequence)
 and `checks.x86_64-linux.inherited-tracey-debt` for the changed surface. The
 full flake acceptance result and blocked external qualification remain separate;
 this checkpoint alone does not authorize release or close those issues.
