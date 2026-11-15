@@ -1,0 +1,66 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 113 and seed 8151359676279634884 with 2 workers on 2 cores with 1785MB heap and 64MB offheap memory (Linux 6.18.44-fc-v470 amd64, Oracle Corporation 1.8.0_504 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /build/models/WorldReleaseAttempt.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Sequences.tla
+Parsing file /tmp/FiniteSets.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module WorldReleaseAttempt
+Starting... (2026-11-15 08:43:50)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-15 08:43:50.
+Progress(7) at 2026-11-15 08:43:50: 25 states generated, 25 distinct states found, 0 states left on queue.
+Checking temporal properties for the complete state space with 25 total distinct states at (2026-11-15 08:43:50)
+Error: Temporal properties were violated.
+
+Error: The following behavior constitutes a counter-example:
+
+State 1: <Initial predicate>
+/\ inFlight = FALSE
+/\ state = "Committed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 2: <Claim line 66, col 5 to line 68, col 72 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Claimed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 3: <BeginDispatch line 71, col 5 to line 76, col 52 of module WorldReleaseAttempt>
+/\ inFlight = TRUE
+/\ state = "Attempting"
+/\ world = "none"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 4: <ExternalEffect line 81, col 5 to line 84, col 72 of module WorldReleaseAttempt>
+/\ inFlight = TRUE
+/\ state = "Attempting"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 5: <DispatchErrors line 106, col 5 to line 109, col 62 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Attempting"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 6: Stuttering
+Finished checking temporal properties in 00s at 2026-11-15 08:43:50
+25 states generated, 25 distinct states found, 0 states left on queue.
+Finished in 00s at (2026-11-15 08:43:50)

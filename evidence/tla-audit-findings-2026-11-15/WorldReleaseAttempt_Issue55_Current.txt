@@ -1,0 +1,54 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 32 and seed -7609670678932120690 with 2 workers on 2 cores with 1785MB heap and 64MB offheap memory (Linux 6.18.44-fc-v470 amd64, Oracle Corporation 1.8.0_504 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /build/models/WorldReleaseAttempt.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Sequences.tla
+Parsing file /tmp/FiniteSets.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module WorldReleaseAttempt
+Starting... (2026-11-15 08:43:49)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-15 08:43:49.
+Error: Invariant NoStuckReservation is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ inFlight = FALSE
+/\ state = "Committed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 2: <Claim line 66, col 5 to line 68, col 72 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Claimed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 3: <BeginDispatch line 71, col 5 to line 76, col 52 of module WorldReleaseAttempt>
+/\ inFlight = TRUE
+/\ state = "Attempting"
+/\ world = "none"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 4: <DispatchErrors line 106, col 5 to line 109, col 62 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Attempting"
+/\ world = "none"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+8 states generated, 8 distinct states found, 4 states left on queue.
+The depth of the complete state graph search is 4.
+The average outdegree of the complete state graph is 1 (minimum is 1, the maximum 1 and the 95th percentile is 1).
+Finished in 00s at (2026-11-15 08:43:49)

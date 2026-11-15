@@ -1,0 +1,77 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 79 and seed 9160568192872012354 with 2 workers on 2 cores with 1785MB heap and 64MB offheap memory (Linux 6.18.44-fc-v470 amd64, Oracle Corporation 1.8.0_504 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /build/models/WorldReleaseAttempt.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Sequences.tla
+Parsing file /tmp/FiniteSets.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module WorldReleaseAttempt
+Starting... (2026-11-15 08:43:47)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-15 08:43:48.
+Error: Invariant RecordedOnlyIfApplied is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ inFlight = FALSE
+/\ state = "Committed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 2: <Claim line 66, col 5 to line 68, col 72 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Claimed"
+/\ world = "none"
+/\ attempts = 0
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 3: <BeginDispatch line 71, col 5 to line 76, col 52 of module WorldReleaseAttempt>
+/\ inFlight = TRUE
+/\ state = "Attempting"
+/\ world = "none"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 4: <ExternalEffect line 81, col 5 to line 84, col 72 of module WorldReleaseAttempt>
+/\ inFlight = TRUE
+/\ state = "Attempting"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 5: <DispatchReturns line 88, col 5 to line 101, col 53 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Observed"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 6: <Acknowledge line 112, col 5 to line 115, col 72 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Acknowledged"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = FALSE
+
+State 7: <RecordEffect line 137, col 5 to line 140, col 55 of module WorldReleaseAttempt>
+/\ inFlight = FALSE
+/\ state = "Recorded"
+/\ world = "failed"
+/\ attempts = 1
+/\ outcome = "none"
+/\ recordedApplied = TRUE
+
+26 states generated, 23 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 7.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 4 and the 95th percentile is 3).
+Finished in 00s at (2026-11-15 08:43:48)

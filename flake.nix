@@ -4513,6 +4513,10 @@
             inherit pkgs;
             src = sourceForConfigChecks;
           }
+          // import ./nix/audit-findings-tla.nix {
+            inherit pkgs;
+            src = sourceForConfigChecks;
+          }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
             dev-function-profiling = fluxProfilerCli;
             verified-node-replication-pilot = verifiedNodeReplicationPilot.check;

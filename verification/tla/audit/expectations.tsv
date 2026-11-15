@@ -1,0 +1,24 @@
+# config	module	expected	issue	meaning
+RaftReadIndex_Current.cfg	RaftReadIndex	invariant:ReadLinearizable	44	current code: stale linearizable read after leader change
+RaftReadIndex_NoopOnly.cfg	RaftReadIndex	invariant:ReadLinearizable	44	a leader no-op alone does not fix the stale read
+RaftReadIndex_GuardOnly.cfg	RaftReadIndex	pass	44	current-term commit guard alone is safe
+RaftReadIndex_GuardOnly_Witness.cfg	RaftReadIndex	invariant:NoPostElectionRead	44	witness: GuardOnly reaches post-election reads
+RaftReadIndex_Fixed.cfg	RaftReadIndex	pass	44	guard plus no-op is safe
+RaftReadIndex_Fixed_Witness.cfg	RaftReadIndex	invariant:NoPostElectionRead	44	witness: Fixed reaches post-election reads
+WorldReleaseAttempt_Issue54_Current.cfg	WorldReleaseAttempt	invariant:RecordedOnlyIfApplied	54	current code: failed effect recorded as completed
+WorldReleaseAttempt_Issue55_Current.cfg	WorldReleaseAttempt	invariant:NoStuckReservation	55	current code: dispatcher error leaves Attempting
+WorldReleaseAttempt_Issue55_Current_Liveness.cfg	WorldReleaseAttempt	temporal	55	current code: reservation never reaches a terminal state
+WorldReleaseAttempt_Fixed.cfg	WorldReleaseAttempt	pass	54,55	outcome carried and errors become Uncertain
+KeyFileCrash_inplace_WholeKeyAfterCrash.cfg	KeyFileCrash	invariant:WholeKeyAfterCrash	46	current code: crash after truncate leaves an empty key
+KeyFileCrash_inplace_ReportedRotationDurable.cfg	KeyFileCrash	invariant:ReportedRotationDurable	46	current code: reported rotation lost on crash
+KeyFileCrash_atomic_WholeKeyAfterCrash.cfg	KeyFileCrash	pass	46	temp file, sync, rename, directory sync
+KeyFileCrash_atomic_ReportedRotationDurable.cfg	KeyFileCrash	pass	46	temp file, sync, rename, directory sync
+RaftLogCapacity_Reliability.cfg	RaftLogCapacity	temporal	56	reliability service today: writes denied forever
+RaftLogCapacity_Snapshotting.cfg	RaftLogCapacity	invariant:DedupBounded	56	snapshotting services today: dedup map exceeds bound
+RaftLogCapacity_Snapshotting_Liveness.cfg	RaftLogCapacity	pass	56	compaction keeps writes flowing
+RaftLogCapacity_Fixed.cfg	RaftLogCapacity	pass	56	compaction plus dedup eviction
+CoordinationRate_Current.cfg	CoordinationRate	temporal	57	current code: lifetime quota never admits again
+CoordinationRate_Fixed.cfg	CoordinationRate	pass	57	logical window
+RaftIngressPump_LifetimeLimit.cfg	RaftIngressPump	temporal	59	current code: lifetime delivery limit stops serving
+RaftIngressPump_StopOnMalformed.cfg	RaftIngressPump	invariant:NeverExits	59	current code: one malformed frame ends the host
+RaftIngressPump_Fixed.cfg	RaftIngressPump	pass	59	windowed budget, malformed frames dropped

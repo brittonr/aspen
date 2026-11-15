@@ -1,0 +1,88 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 35 and seed -3640457099219025364 with 2 workers on 2 cores with 1785MB heap and 64MB offheap memory (Linux 6.18.44-fc-v470 amd64, Oracle Corporation 1.8.0_504 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /build/models/RaftLogCapacity.tla
+Parsing file /tmp/Naturals.tla
+Semantic processing of module Naturals
+Semantic processing of module RaftLogCapacity
+Starting... (2026-11-15 08:43:58)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-15 08:43:58.
+Error: Invariant DedupBounded is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ uncommitted = 0
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 0
+
+State 2: <Propose line 46, col 5 to line 50, col 64 of module RaftLogCapacity>
+/\ uncommitted = 1
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 0
+
+State 3: <Propose line 46, col 5 to line 50, col 64 of module RaftLogCapacity>
+/\ uncommitted = 2
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 0
+
+State 4: <Propose line 46, col 5 to line 50, col 64 of module RaftLogCapacity>
+/\ uncommitted = 3
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 0
+
+State 5: <Commit line 55, col 5 to line 59, col 23 of module RaftLogCapacity>
+/\ uncommitted = 2
+/\ committedInLog = 1
+/\ denied = FALSE
+/\ dedup = 1
+
+State 6: <Commit line 55, col 5 to line 59, col 23 of module RaftLogCapacity>
+/\ uncommitted = 1
+/\ committedInLog = 2
+/\ denied = FALSE
+/\ dedup = 2
+
+State 7: <Commit line 55, col 5 to line 59, col 23 of module RaftLogCapacity>
+/\ uncommitted = 0
+/\ committedInLog = 3
+/\ denied = FALSE
+/\ dedup = 3
+
+State 8: <Snapshot line 62, col 5 to line 66, col 40 of module RaftLogCapacity>
+/\ uncommitted = 0
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 3
+
+State 9: <Propose line 46, col 5 to line 50, col 64 of module RaftLogCapacity>
+/\ uncommitted = 1
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 3
+
+State 10: <Propose line 46, col 5 to line 50, col 64 of module RaftLogCapacity>
+/\ uncommitted = 2
+/\ committedInLog = 0
+/\ denied = FALSE
+/\ dedup = 3
+
+State 11: <Commit line 55, col 5 to line 59, col 23 of module RaftLogCapacity>
+/\ uncommitted = 1
+/\ committedInLog = 1
+/\ denied = FALSE
+/\ dedup = 4
+
+State 12: <Commit line 55, col 5 to line 59, col 23 of module RaftLogCapacity>
+/\ uncommitted = 0
+/\ committedInLog = 2
+/\ denied = FALSE
+/\ dedup = 5
+
+113 states generated, 62 distinct states found, 8 states left on queue.
+The depth of the complete state graph search is 12.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).
+Finished in 00s at (2026-11-15 08:43:58)
