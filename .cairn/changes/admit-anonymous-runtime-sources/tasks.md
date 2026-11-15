@@ -8,6 +8,7 @@
 - [x] [serial] Resolve Durable File Publication's exact anonymous source without changing its revision/license and migrate all current bindings through owning generators. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Acquire every current required default Git cohort and primary default Nix source anonymously; enumerate the complete fixed Nix input inventory, migrate its verified nested Artifact SSH source without changing the revision/NAR, and retain the two actual unavailable optional-source outcomes without inferring a clean full build. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Run focused positive/negative source checks and available candidate build rails, documenting exact remaining public-build blockers before review/sync/archive. r[molten.project.reproducible_dependencies.exact_pins]
+- [ ] [serial] Isolate the existing storage CI command set from unrelated producer tooling, preserve all dependency/test/receipt gates, and retain an actual hosted outcome with its artifacts without claiming a clean default/full public build. r[molten.project.reproducible_dependencies.exact_pins]
 
 ## Parent observation (2026-11-13)
 

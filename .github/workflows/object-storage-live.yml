@@ -38,7 +38,7 @@ jobs:
           bash docs/content-store-adapter/endpoint-fixture.sh bucket "$RUNNER_TEMP/object-storage"
       - name: Check dependency policy and command parity
         run: |
-          nix develop -c bash -euo pipefail -c '
+          nix develop --no-update-lock-file .#object-storage-ci -c bash -euo pipefail -c '
             python3 docs/content-store-adapter/dependency-guard.py
             cargo test --locked -p molten-core content_store_adapter::
             cargo test --locked -p molten --lib --features content-store-object-storage content_store_adapter::

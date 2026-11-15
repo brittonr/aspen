@@ -33,7 +33,7 @@ mkdir -p "$RECEIPT_DIR"
 export MOLTEN_CONTENT_RECEIPT_DIR="$RECEIPT_DIR"
 ```
 
-The CI workflow uses this checksum-pinned fixture, the dependency guard, the focused mock/core arm and the local endpoint command arm, and retains actual canonical artifacts. Wiring the workflow is not a recorded passing CI run.
+The CI workflow selects the explicit `object-storage-ci` Nix shell with the existing pinned Rust compiler, compiler/linker support, Git and Python. It uses this checksum-pinned endpoint fixture, the unchanged dependency guard, focused mock/core arm and local endpoint command arm, and retains actual canonical artifacts. It does not execute or qualify the unrelated proof producers in the default development shell. Wiring the workflow is not a recorded passing CI run.
 
 ## Parent verification commands
 
@@ -74,3 +74,5 @@ cargo test -p molten --lib --features content-store-object-storage qualify_actua
 `nvme-path.preserves` binds observed device major/minor and a BLAKE3 ref of the actual sysfs device together with the tested cap. It proves scoped path/capacity/reopen behavior only, not controller durability, performance or machine-loss recovery. The [parent execution record](../../.cairn/archive/2026-11-15-complete-object-storage-bounds/tasks.md#parent-execution-2026-11-13) retains the completed local S3/cache controls, actual `nvme1n1p3` path control and canonical object/NVMe receipts; these are bounded observations of their recorded cohorts, not unexecuted endpoint placeholders.
 
 A passing local-S3 CI run with its uploaded canonical conformance artifacts is still required. Cloud-provider behavior, physical power loss, machine loss, measured sustained throughput and exact new-source qualification remain separate. Issue #14's classifier and before/after-ack fixtures and issue #13's producer source do not establish a negative-case execution or receipt merely by existing.
+
+The first hosted [storage run 43693265859](https://github.com/brittonr/aspen/actions/runs/43693265859) at `2c4631bc88537d6d6323f738e8374683d7706cb4` failed during default-shell source resolution, before any guard or conformance test executed. Its uploaded artifact contains only the endpoint log, not `object-conformance.preserves` or `put-faults.preserves`. The [source/tool boundary and retained observation](../reproducible-dependencies.md) record that failure; selecting the tool-scoped shell does not itself satisfy the passing-CI criterion.

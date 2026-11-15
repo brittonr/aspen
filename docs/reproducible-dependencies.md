@@ -4,8 +4,8 @@ Aspen release dependency identity is authored in the typed Nickel profile at
 [`config/release-dependencies/profile.ncl`](../config/release-dependencies/profile.ncl).
 The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
-transport policy. Public GitHub dependencies use immutable HTTPS pins so a fresh
-checkout builds without GitHub SSH credentials. The Artifact packages use one
+transport policy. Public GitHub runtime dependencies use immutable HTTPS pins;
+that does not qualify every transitive development-tool source. The Artifact packages use one
 exact HTTPS Git pin and one non-flake Nix input. Private Radicle sources remain
 explicit and require the documented public seed or a local Radicle profile.
 Bounded Exec uses the catalog-advertised anonymous GitHub source
@@ -73,6 +73,10 @@ Fresh public source publication for those unchanged bindings remains required.
 Source acquisition does not qualify optional features, a clean full public Nix
 build, legal distribution, runtime behavior, current authority or release
 eligibility.
+
+Hosted storage [run 43693265859](https://github.com/brittonr/aspen/actions/runs/43693265859) and full-flake [run 43693265823](https://github.com/brittonr/aspen/actions/runs/43693265823) at `2c4631bc88537d6d6323f738e8374683d7706cb4` failed before conformance. The pinned Octet CLI `3f7abb641ee604f54629da415bc7686f89662065` selects a separate Bounded Exec `44eb74eb639194665ee820562d5b2ce2c3ff6a94` through SSH in its Cargo manifest. The fixed Nix-input inventory above does not include this producer's internal Cargo sources. Full-flake evaluation also retained the unresolved VM Cohort and Mantle routes.
+
+The storage workflow selects `nix develop .#object-storage-ci`: the unchanged pinned Rust compiler plus compiler/linker support, Git and Python, without unrelated proof-producer packages. Its dependency guard, tests, optional feature and canonical receipt requirements are unchanged. This is an explicit storage-profile boundary, not a source rewrite, a new Octet cohort or a qualification of the unchanged default development shell. The [retained hosted observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261115.json) keeps failure and artifact evidence separate from any subsequent pass. Aspen's workflow maintainers own this shell and repeatability through the existing hosted workflow; issue #23 remains open for the full public graph.
 
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`

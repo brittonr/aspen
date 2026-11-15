@@ -1,0 +1,65 @@
+{
+  "observed_source_commit": "2c4631bc88537d6d6323f738e8374683d7706cb4",
+  "observations": [
+    {
+      "run_id": 43693265859,
+      "url": "https://github.com/brittonr/aspen/actions/runs/43693265859",
+      "workflow": "Object storage live",
+      "conclusion": "failure",
+      "failed_phase": "nix develop before guard or conformance execution",
+      "observed_error": "Failed to fetch git repository 'ssh://git@github.com/OnixResearch/bounded-exec.git'",
+      "artifact": {
+        "id": 14153196236,
+        "node_id": "MDg6QXJ0aWZhY3QxNDE1MzE5NjIzNg==",
+        "name": "object-storage-2c4631bc88537d6d6323f738e8374683d7706cb4-43693265859",
+        "size_in_bytes": 3077,
+        "url": "https://api.github.com/repos/brittonr/aspen/actions/artifacts/14153196236",
+        "archive_download_url": "https://api.github.com/repos/brittonr/aspen/actions/artifacts/14153196236/zip",
+        "expired": false,
+        "digest": "sha256:7e12b4ae91ae6787ca9e24972ecb18d2992daaa7caa286761aaa2bc9fb466ab6",
+        "created_at": "2026-11-15T08:11:32Z",
+        "updated_at": "2026-11-15T08:11:32Z",
+        "expires_at": "2027-02-13T08:10:34Z",
+        "workflow_run": {
+          "id": 43693265859,
+          "repository_id": 816931615,
+          "head_repository_id": 816931615,
+          "head_branch": "molten",
+          "head_sha": "2c4631bc88537d6d6323f738e8374683d7706cb4"
+        }
+      },
+      "retained_members": [
+        "_temp/object-storage/weed.log"
+      ],
+      "canonical_conformance_receipts_present": false
+    },
+    {
+      "run_id": 43693265823,
+      "url": "https://github.com/brittonr/aspen/actions/runs/43693265823",
+      "workflow": "Reproducible dependencies",
+      "conclusion": "failure",
+      "observed_fetch_failures": [
+        "ssh://git@github.com/OnixResearch/bounded-exec.git",
+        "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb",
+        "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
+      ]
+    }
+  ],
+  "producer": {
+    "repository": "https://github.com/OnixResearch/octet",
+    "revision": "3f7abb641ee604f54629da415bc7686f89662065",
+    "manifest": "cargo-octet/Cargo.toml",
+    "bounded_exec_revision": "44eb74eb639194665ee820562d5b2ce2c3ff6a94",
+    "source_route": "ssh://git@github.com/OnixResearch/bounded-exec.git"
+  },
+  "retained_log_normalization": "Node stripVTControlCharacters; rendered diagnostic logs, not canonical conformance or authority receipts",
+  "retained_log_blake3": [
+    "9dfbdddb04e81ce0940cdf3689a668878065c019f536de385967d6c4fb83c913  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43693265859-failure.log",
+    "6c5c5893a7e825db5995f3070881c085f938add8c5549709365012952a47531c  .cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-43693265823-failure.log"
+  ],
+  "non_claims": [
+    "No hosted conformance test ran in the failed storage job.",
+    "The artifact upload is not conformance success.",
+    "A scoped storage shell does not qualify the default development shell, full public build, optional sources or release."
+  ]
+}

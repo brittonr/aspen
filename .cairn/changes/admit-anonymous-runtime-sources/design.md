@@ -32,6 +32,14 @@ The executable-extent verifier's pinned Cairn input selects Artifact `e41340bec5
 
 The retained bounded closure observation records all 21 selected default/development Git source cohorts and all 78 distinct fixed Nix source byte cohorts. Actual anonymous acquisitions match all 21 selected Git cohorts and 76 fixed Nix cohorts. VM Cohort `31f1696ba9391bfda8577a58af84f72361d5573e` and Mantle producer `2c636b1b25353a1b0befa5af48dc68615cd686dd` remain unavailable at the attempted public paths; neither is replaced, repinned or marked qualified. All raw duplicate observations remain retained, while summary coverage counts distinct locked source NARs. The updated Artifact lock retains its exact original NAR.
 
+### Decision: Qualify storage with its declared tools, not unrelated proof producers
+
+Hosted storage run `43693265859` at `2c4631bc88537d6d6323f738e8374683d7706cb4` failed during `nix develop`, before executing its dependency guard or Rust tests. Pinned Octet `3f7abb641ee604f54629da415bc7686f89662065` declares Bounded Exec `44eb74eb639194665ee820562d5b2ce2c3ff6a94` through SSH in `cargo-octet/Cargo.toml`; this is not Aspen's separately pinned runtime dependency. The uploaded artifact contains endpoint diagnostics, not canonical conformance receipts.
+
+The storage job does not execute Octet. Add an explicit `object-storage-ci` shell containing the existing pinned Rust toolchain, compiler/linker support, Git and Python. Select that shell for the existing job without removing or changing its dependency guard, tests, features, endpoint, or required canonical receipt files. Do not patch the frozen producer, change its revision, add credentials or redirect Git globally. The default development shell remains unchanged.
+
+A passing actual hosted run and its uploaded canonical receipts qualify only this storage profile. They do not satisfy the default development shell, full-flake, cold-cache or optional-source acceptance criteria. Preserve the failed runs and keep the source-admission change active while the producer-owned default-tool route and unavailable VM Cohort/Mantle sources remain unresolved.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.

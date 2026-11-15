@@ -4580,6 +4580,18 @@
           };
         };
 
+        # Storage conformance does not execute the separately pinned proof producers.
+        devShells.object-storage-ci = pkgs.mkShell {
+          nativeBuildInputs = [
+            rustToolchain
+            pkgs.pkg-config
+            pkgs.clang
+            pkgs.mold
+            pkgs.git
+            pkgs.python3
+          ];
+        };
+
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = [
             rustToolchain
