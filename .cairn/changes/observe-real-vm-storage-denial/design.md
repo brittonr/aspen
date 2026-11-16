@@ -28,6 +28,8 @@ The first retained signed run exhausted the test driver's 3,600-second aggregate
 
 The 8-vCPU/8-GiB signed attempt also failed the individual 3,600-second startup wait, before integration assertions. The next profile uses NixOS's `virtualisation.useNixStoreImage` for a complete local read-only store instead of the host-store 9p transport. Exact store paths, retained bytes, signature checks, source-closure measurement, operation deadlines and all fault predicates remain unchanged. The pinned NixOS option recommends this backing for read-heavy workloads; the failed run does not prove a transport root cause, and only actual new execution can establish an outcome.
 
+The initial store-image module run failed before source admission: Nix boot registration and the signing fixture could not create `/nix/store/.links` on the read-only filesystem. NixOS defaults `writableStore` to `mountHostNixStore`, which the image disables. Both image fixtures therefore explicitly enable the private writable overlay, restoring the original 9p fixture's writable-store behavior while retaining the immutable lower image. Signature verification and complete source measurements operate on the actual resulting guest store view; this is not a cached-verdict or trust bypass.
+
 ## Risks / Trade-offs
 
 - A permission error after a successful file open could follow a partial mutation; only the typed failed-open phase qualifies.

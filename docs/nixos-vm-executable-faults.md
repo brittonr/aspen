@@ -37,6 +37,11 @@ The opt-in `nix run .#nixos-vm-multinode-signed` rail uses the signed source-bin
 
 The signed campaign declares 8 vCPUs and 8 GiB per VM and a four-hour aggregate driver budget for its multiple source-admission/scenario phases. The complete closure is copied into a local read-only Nix store image instead of using host-store 9p; source verification is unchanged. Individual startup waits and the service's startup deadline remain 3,600 seconds; no admission predicate or operation deadline is relaxed. The earlier [one-hour-driver attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/signed-vm-timeout-2026-11-16.json) exhausted the aggregate budget, and the later [8-vCPU/8-GiB attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/signed-vm-eight-cpu-timeout-2026-11-16.json) exhausted the individual startup wait. Neither reached a storage-denial result. The store-image profile still requires actual execution; a profile edit is not a passing rerun or a production startup-latency claim.
 
+The read-only store image has an explicit private writable overlay for guest
+Nix registration and signature bookkeeping. This preserves the original
+fixture's writable-store behavior without mounting the host store; admission
+still measures the actual guest store contents.
+
 ## Operator inspection
 
 Inspect the realized VM check output for descriptor, receipt, validation, support-matrix, topology, node evidence, and test-run artifacts. Logs are diagnostic-only and cannot override canonical deny receipts.

@@ -1,0 +1,23 @@
+{
+  "schema": "aspen.module-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_base_commit": "aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4",
+  "test_derivation": "/nix/store/bliww6hp0gcn1px1g6wx0zrn8pn01bm0-vm-test-run-molten-module.drv",
+  "test_output": "/nix/store/czvbchdbjiix98dfjc77zlfi5vrpbzzc-vm-test-run-molten-module",
+  "source_binding_derivation": "/nix/store/35i3jc1jfpnkgc0hgzhpk93bppnbnmkg-molten-node-source-binding-v1.drv",
+  "source_binding_output": "/nix/store/zj4an9k483g3adx8n4c4cydmswywcbc1-molten-node-source-binding-v1",
+  "resources": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "private_writable_store_overlay": true},
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 7200,
+  "shutdown_deadline_seconds": 30,
+  "outer_wall_seconds": 2344.59,
+  "driver_script_wall_seconds": 864.38,
+  "exit_code": 0,
+  "result": "complete-module-fixture-passed",
+  "positive_controls": ["initial source admission and startup", "restart and repeated source admission", "shutdown receipt, successful systemd result and inactive unit"],
+  "negative_controls": ["absent trust", "stale binding selection", "wrong signer key", "wrong selected output", "altered executing binary", "privately bind-mounted altered retained policy"],
+  "negative_artifact_boundary": "Each rejected startup left no new startup artifact.",
+  "raw_log_blake3": "d2f4540d16fe075d401bfa725c14a09c8ccb33894e74b85581f9b3bad8a246ac",
+  "evidence_scope": "Nix driver exit and assertion log bound to the exact test and selected output. This fixture does not export the guest's canonical receipt contents.",
+  "non_claim": "No independent producer/operator selection, other source/build/profile qualification, signed multinode storage-fault result, production startup latency or release authority. Outer/driver durations are not product startup measurements."
+}

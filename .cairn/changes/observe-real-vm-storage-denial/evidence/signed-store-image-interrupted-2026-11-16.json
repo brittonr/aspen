@@ -1,0 +1,11 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "test_derivation": "/nix/store/i2kgai5r7vidw68pxhmazjcrbv1v6gaa-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "source_binding_derivation": "/nix/store/0zj3wzsc2vwx4a90pd7x3g6s1cdlgi9n-molten-node-source-binding-v1.drv",
+  "resources_per_vm": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "writable_store_overlay": false},
+  "result": "owner-cancelled-superseded-profile",
+  "reason": "The module image attempt established that guest Nix registration/signing requires an explicit private writable overlay. Stop this independently running obsolete image configuration rather than wait for a verdict from the known-invalid profile.",
+  "raw_log_blake3": "c4a06e01831d2a1504d26bf286e39edf04ef1b23e57814e0034cdb57190d2071",
+  "non_claim": "No completed signed campaign, startup-timeout result, observed storage-denial verdict, producer/operator independence or qualification is claimed from this cancelled attempt."
+}

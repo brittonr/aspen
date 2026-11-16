@@ -1,0 +1,21 @@
+{
+  "schema": "aspen.module-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_commit": "aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4",
+  "test_derivation": "/nix/store/zihbdi6hc5wp38i595h4kg3yhadqmni0-vm-test-run-molten-module.drv",
+  "resources": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "writable_store_overlay": false},
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 7200,
+  "wall_seconds": 947.33,
+  "exit_code": 1,
+  "result": "guest-nix-registration-and-trust-fixture-failed-before-admission",
+  "observed": [
+    "The VM booted from the local store-image profile.",
+    "register-nix-paths.service failed because creating /nix/store/.links returned Read-only file system.",
+    "molten-trust-fixture.service failed with the same error during signing, and molten.service did not start.",
+    "The driver failed its trust-fixture unit assertion rather than exhausting a startup deadline."
+  ],
+  "raw_log_blake3": "96cea10b83b030fd0ecc4b792a307fae7453ff750fe82c278f643cad948c0391",
+  "correction": "Explicitly enable the private writable store overlay for Nix metadata while retaining the read-only lower image, complete source measurements and all existing trust checks and deadlines.",
+  "non_claim": "No passing source admission, lifecycle, negative trust assertion, storage-denial result or independent operator qualification. The correction still requires actual execution."
+}

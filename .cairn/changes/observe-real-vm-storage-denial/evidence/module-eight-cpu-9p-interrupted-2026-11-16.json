@@ -1,0 +1,17 @@
+{
+  "schema": "aspen.module-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "test_derivation": "/nix/store/jwfi07m4abiq9fp9vnrmmnnv8hygw40g-vm-test-run-molten-module.drv",
+  "source_binding_derivation": "/nix/store/yvhsq6kqmxw4jvmg0qlgfbfmw0m6pasm-molten-node-source-binding-v1.drv",
+  "resources": {"vcpus": 8, "memory_mib": 8192, "store_transport": "host-9p"},
+  "result": "owner-cancelled-superseded-profile",
+  "reason": "Replace the superseded host-9p module attempt with the committed store-image fixture without adding another concurrent eight-GiB VM reservation.",
+  "observed_before_cancellation": [
+    "Initial source admission completed; the active-unit wait finished in 2616.01 seconds.",
+    "The startup and node-config artifact existence checks passed.",
+    "The restart command began, shutdown/control receipts were emitted, and systemd reported the initial service deactivated successfully.",
+    "The second source-admission startup began. No completed restart or trust-denial campaign result is retained."
+  ],
+  "raw_log_blake3": "9e2f04fc9143a2b9478fd7f4690e2d4caff1ea8399ab9b4d05650be32de94146",
+  "non_claim": "This is an explicitly interrupted partial observation, not a timeout, a passing module run, a completed restart/denial result, or a comparison proving a timeout root cause."
+}

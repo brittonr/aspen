@@ -1,0 +1,15 @@
+{
+  "schema": "aspen.hosted-workflow-metadata-observation.v1",
+  "observed_on": "2026-11-16",
+  "repository": "brittonr/aspen",
+  "source_commit": "aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4",
+  "workflow": "Object storage live",
+  "run_id": 43925657985,
+  "run_url": "https://github.com/brittonr/aspen/actions/runs/43925657985",
+  "status": "completed",
+  "conclusion": "success",
+  "job": {"name": "live-s3", "id": 133504276192, "started_at": "2026-11-16T18:08:21Z", "completed_at": "2026-11-16T18:18:24Z", "conclusion": "success"},
+  "observed_successful_steps": ["Install checksum-pinned SeaweedFS fixture", "Start disposable S3 endpoint", "Create the explicit receipt directory", "Check dependency policy and command parity", "Retain actual conformance observations"],
+  "original_metadata_blake3": "09754b51fe918e98de8e178137e042b53727174142589643ddc05f4cecbc3c89",
+  "non_claim": "This captures provider-reported workflow/job/step completion, not an independent inspection of canonical artifact contents. It does not establish a passing default public build, cloud-provider faults, physical NVMe durability, cross-host behavior or release qualification."
+}

@@ -4,17 +4,18 @@
 # full-closure admission needs an explicit aggregate campaign budget and VM resources. Individual
 # startup deadlines stay unchanged; the VM-local signer is not producer/operator independence.
 # Keep the exact closure, but serve read-heavy admission from a local read-only store image.
+# A private writable upper layer permits guest Nix registration and signature bookkeeping.
 pkgs.testers.runNixOSTest {
   name = "molten-nixos-vm-multinode-signed";
   globalTimeout = 4 * 60 * 60;
   nodes = {
     node_a = {
       imports = [ (moltenVmNodeModule true "node-a") ];
-      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; };
+      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; writableStore = true; };
     };
     node_b = {
       imports = [ (moltenVmNodeModule true "node-b") ];
-      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; };
+      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; writableStore = true; };
     };
   };
   testScript = ''

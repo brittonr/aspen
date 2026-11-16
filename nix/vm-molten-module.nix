@@ -20,6 +20,8 @@ pkgs.testers.runNixOSTest {
         memorySize = 8192;
         # Admission still hashes every retained member; avoid host-store 9p I/O.
         useNixStoreImage = true;
+        # Boot registration/signing needs Nix bookkeeping in a private upper layer.
+        writableStore = true;
       };
       environment.systemPackages = [
         pkgs.nix
