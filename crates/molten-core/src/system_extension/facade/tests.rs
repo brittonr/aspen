@@ -18,6 +18,7 @@ use crate::fabric::validate_extension_tier;
 use crate::system_extension::AdmittedSystemExtensionManifest;
 use crate::system_extension::ExecutionProfile;
 use crate::system_extension::INITIAL_SYSTEM_EXTENSION_GENERATION;
+use crate::system_extension::Incarnation;
 use crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS;
 use crate::system_extension::ResourceEnvelope;
 use crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA;
@@ -180,7 +181,7 @@ fn admitted_state_machine() -> AdmittedFacadeManifest {
 fn runtime_state(phase: &str) -> FacadeRuntimeState {
     FacadeRuntimeState {
         generation: INITIAL_SYSTEM_EXTENSION_GENERATION,
-        incarnation: 0,
+        incarnation: Incarnation::new(0),
         phase: phase.to_string(),
         state_ref: Some(HASH_C.to_string()),
         turn_sequence: 1,
@@ -277,13 +278,13 @@ fn stale_state_timer_cannot_transition_a_replacement() {
     }));
 
     let replacement = FacadeRuntimeState {
-        incarnation: 1,
+        incarnation: Incarnation::new(1),
         ..state.clone()
     };
     let earlier_incarnation = FacadeTimerDelivery {
         timer_ref: "timer-early-incarnation".to_string(),
         phase: "idle".to_string(),
-        incarnation: 0,
+        incarnation: Incarnation::new(0),
         logical_tick: 10,
     };
     let issues = admit_facade_timer(&facade, &replacement, &earlier_incarnation)
@@ -291,7 +292,7 @@ fn stale_state_timer_cannot_transition_a_replacement() {
     assert!(issues.contains(&FacadeTurnIssue::StaleTimer {
         timer_ref: "timer-early-incarnation".to_string(),
         phase: "idle".to_string(),
-        incarnation: 0,
+        incarnation: Incarnation::new(0),
     }));
 
     let current = FacadeTimerDelivery {
@@ -450,7 +451,7 @@ fn running_lifecycle_state() -> crate::system_extension::LifecycleState {
         &crate::system_extension::LifecycleEvent::simple(
             LifecycleEventKind::Install,
             INITIAL_SYSTEM_EXTENSION_GENERATION,
-            0,
+            Incarnation::new(0),
         ),
         crate::system_extension::ResourceUsage::default(),
         2,
@@ -507,7 +508,7 @@ fn the_state_timeout_is_fenced_by_phase_and_incarnation() {
     assert_eq!(intent.deadline_tick, 40);
 
     let replacement = FacadeRuntimeState {
-        incarnation: 1,
+        incarnation: Incarnation::new(1),
         ..state.clone()
     };
     let issues = admit_facade_timer(&facade, &replacement, &FacadeTimerDelivery {

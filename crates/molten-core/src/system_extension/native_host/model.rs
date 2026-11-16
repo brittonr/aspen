@@ -1,3 +1,4 @@
+use super::super::Generation;
 use super::super::LifecycleState;
 use super::super::ResourceUsage;
 
@@ -161,7 +162,7 @@ pub struct NativeOperationRecord {
     pub operation_ref: String,
     pub parent_ref: String,
     pub kind: NativeOperationKind,
-    pub generation: u64,
+    pub generation: Generation,
     pub state: NativeOperationState,
     pub terminal_ref: Option<String>,
     pub is_retry_permitted: bool,
@@ -208,7 +209,7 @@ pub struct NativeIngressEnvelope {
     pub peer_ref: String,
     pub service_id: String,
     pub manifest_ref: String,
-    pub generation: u64,
+    pub generation: Generation,
     pub authority_ref: String,
     pub policy_ref: String,
     pub resource_ref: String,
@@ -222,7 +223,7 @@ pub struct NativeIngressEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeIngressAdmission {
     pub request_ref: String,
-    pub generation: u64,
+    pub generation: Generation,
     pub acknowledgement_ref: String,
 }
 
@@ -233,12 +234,12 @@ pub struct NativeEffectCompletionInput {
     pub effect_ref: String,
     pub operation_ref: String,
     pub port_binding_ref: String,
-    pub generation: u64,
+    pub generation: Generation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeCompletionCallbackPlan {
     pub completion_ref: String,
     pub payload_ref: String,
-    pub generation: u64,
+    pub generation: Generation,
 }

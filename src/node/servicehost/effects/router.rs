@@ -33,7 +33,7 @@ impl crate::node_service_hosting::NativeEffectRouter for Scope {
         if !self.pending.is_empty()
             || instance.service_id != self.configuration.service_id
             || instance.manifest_ref != self.configuration.manifest_ref
-            || instance.lifecycle.generation != self.configuration.generation
+            || instance.lifecycle.generation.get() != self.configuration.generation
             || instance.lifecycle.phase != crate::system_extension::LifecyclePhase::Running
             || instance
                 .unresolved
@@ -52,7 +52,7 @@ impl crate::node_service_hosting::NativeEffectRouter for Scope {
             return Err(super::super::invalid("scope callback has no admitted effects"));
         }
         for effect in &input.callback.approved_effects {
-            if effect.generation != self.configuration.generation
+            if effect.generation.get() != self.configuration.generation
                 || effect.incarnation != instance.lifecycle.incarnation
             {
                 return Err(super::super::invalid(

@@ -68,7 +68,7 @@ impl<A: DurableCommandShell> crate::system_extension::FabricEffectPort for Regis
         if binding.binding.key.port_id != command.port_id() {
             return Err(FabricPortError::malformed("durable effect command does not match its bound port"));
         }
-        if effect.generation != command.generation() {
+        if effect.generation.get() != command.generation() {
             return Err(FabricPortError::malformed("durable effect generation does not match its registered command"));
         }
         let transition = self.adapter.execute_command(&command)?;

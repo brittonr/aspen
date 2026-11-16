@@ -95,6 +95,28 @@ impl Wire for u64 {
     }
 }
 
+// r[impl molten.system_extension.lifecycle]
+impl Wire for molten_core::system_extension::Generation {
+    fn encode(&self) -> crate::error::Result<preserves::IOValue> {
+        self.get().encode()
+    }
+
+    fn decode(value: &preserves::IOValue) -> crate::error::Result<Self> {
+        Ok(Self::new(u64::decode(value)?))
+    }
+}
+
+// r[impl molten.system_extension.lifecycle]
+impl Wire for molten_core::system_extension::Incarnation {
+    fn encode(&self) -> crate::error::Result<preserves::IOValue> {
+        self.get().encode()
+    }
+
+    fn decode(value: &preserves::IOValue) -> crate::error::Result<Self> {
+        Ok(Self::new(u64::decode(value)?))
+    }
+}
+
 impl Wire for usize {
     fn encode(&self) -> crate::error::Result<preserves::IOValue> {
         u64::try_from(*self).map_err(|_| error("integer overflow"))?.encode()

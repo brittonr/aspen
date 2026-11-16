@@ -132,7 +132,7 @@ fn admit_extension(
         state_schema: "molten.federation.callback-state.v1".to_string(),
         compatible_state_schemas: vec!["molten.federation.callback-state.v1".to_string()],
         evidence_profile_ref: evidence.to_string(),
-        initial_generation: 1,
+        initial_generation: molten_core::system_extension::Generation::new(1),
         non_claims: crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     };
     crate::system_extension::admit_manifest(&input, descriptors, &tier, &[

@@ -128,8 +128,8 @@ fn callback_envelope(callback: crate::system_extension::CallbackKind) -> Vec<u8>
     };
     let invocation = crate::system_extension::CallbackInvocation {
         callback,
-        generation: 1,
-        incarnation: 0,
+        generation: molten_core::system_extension::Generation::new(1),
+        incarnation: molten_core::system_extension::Incarnation::new(0),
         sequence: 1,
         event_ref: reference,
         payload_ref: Some(payload.value_ref.clone()),

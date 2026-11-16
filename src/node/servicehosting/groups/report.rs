@@ -31,8 +31,8 @@ impl<A: super::super::AuthorityPort, R: super::super::RuntimePort> super::super:
             && group.pending.is_empty();
         Ok(crate::preserves_rail::record("host-member-status-v1", vec![
             crate::preserves_rail::string(&observed.service_id),
-            crate::preserves_rail::u64_value(observed.lifecycle.generation),
-            crate::preserves_rail::u64_value(observed.lifecycle.incarnation),
+            crate::preserves_rail::u64_value(observed.lifecycle.generation.get()),
+            crate::preserves_rail::u64_value(observed.lifecycle.incarnation.get()),
             crate::preserves_rail::string(observed.lifecycle.phase.as_str()),
             crate::preserves_rail::bool_value(is_accepting),
             super::super::codec::optional(observed.state_ref.as_deref()),
@@ -57,16 +57,16 @@ fn work_status(work: &super::super::Work) -> preserves::IOValue {
         super::super::codec::optional(work.claim.as_ref().map(|claim| claim.claim_ref.as_str())),
         super::super::codec::optional(work.receipt_ref.as_deref()),
         crate::preserves_rail::string(work.presentation.class.as_str()),
-        crate::preserves_rail::u64_value(work.presentation.generation),
-        crate::preserves_rail::u64_value(work.presentation.incarnation),
+        crate::preserves_rail::u64_value(work.presentation.generation.get()),
+        crate::preserves_rail::u64_value(work.presentation.incarnation.get()),
         crate::preserves_rail::string(&work.payload.value_ref),
         crate::preserves_rail::sequence(
             work.migrations
                 .iter()
                 .map(|migration| {
                     crate::preserves_rail::record("host-work-lineage-v1", vec![
-                        crate::preserves_rail::u64_value(migration.source.generation),
-                        crate::preserves_rail::u64_value(migration.source.incarnation),
+                        crate::preserves_rail::u64_value(migration.source.generation.get()),
+                        crate::preserves_rail::u64_value(migration.source.incarnation.get()),
                         crate::preserves_rail::string(&migration.source_payload_ref),
                         crate::preserves_rail::string(&migration.migration_ref),
                         crate::preserves_rail::string(&migration.admission_ref),

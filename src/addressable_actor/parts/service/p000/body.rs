@@ -256,8 +256,8 @@ fn validate_host_binding(service: &Request<'_>, state: &ActorState) -> Result<()
         return Err(Error::Host(ActorIssue::AdmissionDenied));
     }
     let extension = molten_core::system_extension::LifecycleState {
-        incarnation: 0,
-        generation: host.system_extension_generation,
+        incarnation: molten_core::system_extension::Incarnation::new(0),
+        generation: crate::system_extension::Generation::new(host.system_extension_generation),
         phase: host.system_extension_phase,
         restart_attempts: 0,
         health: molten_core::system_extension::HealthState::Unknown,
@@ -270,7 +270,7 @@ fn validate_host_binding(service: &Request<'_>, state: &ActorState) -> Result<()
         && matches!(service.request.operation, ActorOperation::RecoverySucceeded { .. });
     if (is_completed_start || is_completed_recovery)
         && extension.phase == molten_core::system_extension::LifecyclePhase::Running
-        && extension.generation == state.extension_generation
+        && extension.generation.get() == state.extension_generation
         && extension.checkpoint_ref == state.checkpoint_ref
     {
         return Ok(());

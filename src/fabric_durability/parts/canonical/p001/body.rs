@@ -27,7 +27,7 @@ impl ExtensionContext {
         }
         Ok(Self {
             service_id: host.manifest().manifest().service_id.clone(),
-            generation: host.state().generation,
+            generation: host.state().generation.get(),
             profile_id: profile.profile.profile_id.clone(),
             max_operation_bytes: profile.profile.max_operation_bytes,
             bound_ports,

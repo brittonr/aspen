@@ -109,7 +109,7 @@ impl CommitPort {
         if binding.binding.key.port_id != COMMIT_PORT_ID
             || binding.binding.key.version != COMMIT_PORT_VERSION
             || effect.operation != COMMIT_OPERATION
-            || effect.generation != self.generation
+            || effect.generation.get() != self.generation
             || effect.input_schema_ref != COMMIT_INPUT_SCHEMA
             || effect.output_schema_ref != COMMIT_OUTPUT_SCHEMA
         {

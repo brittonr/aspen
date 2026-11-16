@@ -33,8 +33,8 @@ pub fn probe_stale_delivery_after_restart(
     };
     let denial = host.dispatch(stale_event).err().map(|error| error.to_string());
     Ok(StaleDeliveryProbe {
-        stale_incarnation,
-        active_incarnation,
+        stale_incarnation: stale_incarnation.get(),
+        active_incarnation: active_incarnation.get(),
         denial,
     })
 }

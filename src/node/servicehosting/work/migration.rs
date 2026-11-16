@@ -72,7 +72,7 @@ fn validate_receipt(
         || text_field(&fields[2], "extension-id")? != current.extension_id
         || text_field(&fields[3], "service-id")? != current.service_id
         || text_field(&fields[5], "next-manifest-ref")? != current.manifest_ref
-        || number_field(&fields[9], "generation")? != current.lifecycle.generation
+        || number_field(&fields[9], "generation")? != current.lifecycle.generation.get()
     {
         return Err(super::super::invalid("durable migration receipt does not bind the executing replacement"));
     }

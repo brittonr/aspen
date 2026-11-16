@@ -126,7 +126,7 @@ impl SystemExtensionExecutor for ServiceExecutor {
         let effects = transition
             .required_ports
             .iter()
-            .map(|class| self.effect_for(*class, payload_ref, invocation.generation, invocation.incarnation))
+            .map(|class| self.effect_for(*class, payload_ref, invocation.generation.get(), invocation.incarnation.get()))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         self.state = transition.next.clone();
         let state_ref = reference_state_ref(&transition.next);
@@ -156,7 +156,7 @@ impl ServiceExecutor {
             .ok_or_else(|| format!("reference service has no deterministic {} port profile", class.as_str()))?;
         let request_material = format!("{payload_ref}:{}:{generation}", class.as_str());
         Ok(crate::system_extension::TypedEffectRequest {
-            incarnation,
+            incarnation: molten_core::system_extension::Incarnation::new(incarnation),
             target: crate::system_extension::EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                 port_id: profile.port_id.clone(),
                 version: profile.version.clone(),
@@ -165,7 +165,7 @@ impl ServiceExecutor {
             input_schema_ref: profile.command_schema_ref.clone(),
             output_schema_ref: profile.event_schema_ref.clone(),
             request_ref: blake3_ref(request_material.as_bytes()),
-            generation,
+            generation: molten_core::system_extension::Generation::new(generation),
             accounted_bytes: REFERENCE_EFFECT_BYTES,
         })
     }
@@ -278,7 +278,7 @@ pub fn reference_manifest_input(
         state_schema: format!("molten.reference.{service}.state.v1"),
         compatible_state_schemas: vec![format!("molten.reference.{service}.state.v1")],
         evidence_profile_ref: blake3_ref(format!("evidence:{service}").as_bytes()),
-        initial_generation: REFERENCE_INITIAL_GENERATION,
+        initial_generation: molten_core::system_extension::Generation::new(REFERENCE_INITIAL_GENERATION),
         non_claims: crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     })
 }

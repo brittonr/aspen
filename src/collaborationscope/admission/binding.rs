@@ -43,7 +43,7 @@ impl Installation {
         }
         if group.extension_id != manifest.extension_id
             || group.service_id != manifest.service_id
-            || group.service_generation != host.state().generation
+            || group.service_generation != host.state().generation.get()
             || group.application_manifest_ref != host.manifest().manifest_ref()
             || group.lifecycle != crate::fabric_consistency::GroupLifecycle::Active
         {
@@ -67,7 +67,7 @@ impl Installation {
             .find(|binding| binding.binding.class == crate::fabric::FabricPortClass::Time)
             .ok_or_else(|| denied(Denial::Missing))?;
         Ok(Self {
-            generation: host.state().generation,
+            generation: host.state().generation.get(),
             service: manifest.service_id.clone(),
             group: group.binding_ref.clone(),
             manifest: host.manifest().manifest_ref().to_string(),

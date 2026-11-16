@@ -53,7 +53,7 @@ fn stage_durable_work(
     dormant: &molten::system_extension::NativeInstanceRecord,
     gate: &Gate,
 ) -> TestResult<molten::node_service_hosting::DeliveryInput> {
-    let retained_ingress = ingress(dormant.lifecycle.generation, &dormant.manifest_ref)?;
+    let retained_ingress = ingress(dormant.lifecycle.generation.get(), &dormant.manifest_ref)?;
     let presentation = molten::system_extension::WorkPresentation {
         work_ref: retained_ingress.payload.value_ref.clone(),
         class: molten::system_extension::WorkClass::Durable,
@@ -68,7 +68,7 @@ fn stage_durable_work(
     runtime_local.class = molten::system_extension::WorkClass::RuntimeLocal;
     assert!(host.actor_submit_dormant_preview(member, &runtime_local, &retained_ingress.payload, 5).is_err());
     let mut stale = presentation.clone();
-    stale.incarnation += 1;
+    stale.incarnation = stale.incarnation.checked_add(1).expect("incarnation increment");
     assert!(host.actor_submit_dormant_preview(member, &stale, &retained_ingress.payload, 5).is_err());
     let mut substituted = retained_ingress.payload.clone();
     substituted.bytes.push(0);
@@ -115,7 +115,7 @@ fn assert_rewake_readmission(
     let presentation = &delivery.presentation;
     let retained_ingress = &delivery.ingress;
     let running = host.actor_rewake(member, 6)?;
-    assert_eq!(running.lifecycle.incarnation, dormant.lifecycle.incarnation + 1);
+    assert_eq!(running.lifecycle.incarnation, dormant.lifecycle.incarnation.checked_add(1).expect("incarnation increment"));
     assert_eq!(running.lifecycle.generation, dormant.lifecycle.generation);
     assert_eq!(running.lifecycle.restart_attempts, dormant.lifecycle.restart_attempts);
     assert!(

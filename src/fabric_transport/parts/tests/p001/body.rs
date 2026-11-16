@@ -88,8 +88,8 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
         input_schema_ref: TRANSPORT_COMMAND_SCHEMA.to_string(),
         output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),
         request_ref: REQUEST_REF.to_string(),
-        generation: GENERATION,
-        incarnation: 0,
+        generation: molten_core::system_extension::Generation::new(GENERATION),
+        incarnation: molten_core::system_extension::Incarnation::new(0),
         accounted_bytes: 0,
     };
     let output = port.route(&binding, &effect).expect("route transport effect");
@@ -97,7 +97,7 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
     assert_eq!(port.adapter().state().protocols.len(), 1);
 
     let mut stale = effect.clone();
-    stale.generation = STALE_GENERATION;
+    stale.generation = molten_core::system_extension::Generation::new(STALE_GENERATION);
     assert!(port.route(&binding, &stale).is_err());
     let mut unknown = effect;
     unknown.request_ref = OPERATION_REF.to_string();

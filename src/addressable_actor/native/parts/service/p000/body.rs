@@ -66,7 +66,7 @@ impl<'a, C: crate::fabric_time::TimerClockAdapter> super::Consumer<'a, C> {
             identify_addressable_actor_profile(&self.configuration.profile),
             &observed.instance.manifest_ref,
             &observed.assignment.assignment_ref,
-            observed.instance.lifecycle.generation,
+            observed.instance.lifecycle.generation.get(),
         );
         state.checkpoint_ref = Some(checkpoint.value_ref.clone());
         state.durable_state_ref = Some(checkpoint.value_ref);
@@ -110,7 +110,7 @@ impl<'a, C: crate::fabric_time::TimerClockAdapter> super::Consumer<'a, C> {
             actor_key_ref: key,
             placement_ref: current.state.placement_ref,
             generation: current.state.extension_generation,
-            incarnation: observed.instance.lifecycle.incarnation,
+            incarnation: observed.instance.lifecycle.incarnation.get(),
             lifecycle_sequence: current.state.lifecycle_sequence,
             expected: crate::addressable_actor::ExpectedState {
                 state_ref: Some(current.state_ref),
@@ -132,7 +132,7 @@ impl<'a, C: crate::fabric_time::TimerClockAdapter> super::Consumer<'a, C> {
                 logical_tick,
             },
         )?;
-        if observed.instance.lifecycle.incarnation != fence.incarnation {
+        if observed.instance.lifecycle.incarnation.get() != fence.incarnation {
             return Err(super::invalid("stale native actor incarnation"));
         }
         if let ActorOperation::IdleSleep {

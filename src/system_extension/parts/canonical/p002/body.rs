@@ -202,7 +202,7 @@ fn effect_value(effect: &super::TypedEffectRequest) -> preserves::IOValue {
         field("input-schema-ref", crate::preserves_rail::string(&effect.input_schema_ref)),
         field("output-schema-ref", crate::preserves_rail::string(&effect.output_schema_ref)),
         field("request-ref", crate::preserves_rail::string(&effect.request_ref)),
-        field("generation", crate::preserves_rail::u64_value(effect.generation)),
+        field("generation", crate::preserves_rail::u64_value(effect.generation.get())),
         field("accounted-bytes", crate::preserves_rail::u64_value(effect.accounted_bytes)),
     ])
 }

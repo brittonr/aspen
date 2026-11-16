@@ -5,8 +5,8 @@
 fn node_and_extension_health_project_to_scoped_canonical_readiness_and_operator_snapshot() {
     let profile = profile();
     let extension_state = crate::system_extension::LifecycleState {
-        generation: GENERATION_ONE,
-        incarnation: 0,
+        generation: crate::system_extension::Generation::new(GENERATION_ONE),
+        incarnation: crate::system_extension::Incarnation::new(0),
         phase: crate::system_extension::LifecyclePhase::Running,
         restart_attempts: 0,
         health: crate::system_extension::HealthState::Healthy,
@@ -86,8 +86,8 @@ fn assert_failed_health_inputs(
             ClaimScope::SystemExtension,
         ),
         &crate::system_extension::LifecycleState {
-            generation: GENERATION_TWO,
-            incarnation: 0,
+            generation: crate::system_extension::Generation::new(GENERATION_TWO),
+            incarnation: crate::system_extension::Incarnation::new(0),
             phase: crate::system_extension::LifecyclePhase::Running,
             restart_attempts: 1,
             health: crate::system_extension::HealthState::Failed,

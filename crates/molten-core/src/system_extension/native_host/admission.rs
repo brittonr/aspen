@@ -210,8 +210,8 @@ pub fn admit_native_ingress(
     }
     if ingress.generation != instance.lifecycle.generation {
         issues.push(NativeHostIssue::StaleGeneration {
-            actual: ingress.generation,
-            active: instance.lifecycle.generation,
+            actual: ingress.generation.get(),
+            active: instance.lifecycle.generation.get(),
         });
     }
     let payload_bytes = u64::try_from(ingress.payload.bytes.len());

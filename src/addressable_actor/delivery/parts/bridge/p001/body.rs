@@ -48,7 +48,7 @@ impl<C: TimerClockAdapter> Bridge<C> {
         if active.token != *token || token.queue_id != request.queue_id {
             return Err(invalid("actor delivery token is not the exact current claim"));
         }
-        commit.validate(actor_host, &active.item.content_ref, actor_host.state().generation)?;
+        commit.validate(actor_host, &active.item.content_ref, actor_host.state().generation.get())?;
         if !request.evidence_refs.iter().any(|reference| reference == commit.event_ref())
             || !request.evidence_refs.iter().any(|reference| reference == commit.commit_ref())
             || !request.evidence_refs.contains(&commit.state().value_ref)
@@ -84,7 +84,7 @@ impl<C: TimerClockAdapter> Bridge<C> {
     ) -> crate::error::Result<crate::coordination_delivery::BindingFacts> {
         crate::coordination_delivery::project_binding(
             native.manifest(),
-            native.state().generation,
+            native.state().generation.get(),
             native.state().phase == crate::system_extension::LifecyclePhase::Running,
             &self.manifest,
         )

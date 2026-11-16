@@ -1,3 +1,4 @@
+use super::super::Generation;
 use super::super::LifecyclePhase;
 use super::*;
 
@@ -21,7 +22,7 @@ pub struct NativeRecoveryInventory {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeRemovalPlan {
     pub instance_id: String,
-    pub generation: u64,
+    pub generation: Generation,
 }
 
 // r[impl molten.system_extension.native_host.recovery]
@@ -48,7 +49,7 @@ pub fn admit_native_instance_recovery(
             issues.push(NativeHostIssue::IdentityMismatch(field));
         }
     }
-    if instance.lifecycle.generation == 0 {
+    if instance.lifecycle.generation == Generation::new(0) {
         issues.push(NativeHostIssue::StaleGeneration { actual: 0, active: 1 });
     }
     if matches!(
@@ -87,8 +88,8 @@ pub fn commit_native_operation_intent(
     }
     if operation.generation != instance.lifecycle.generation {
         issues.push(NativeHostIssue::StaleGeneration {
-            actual: operation.generation,
-            active: instance.lifecycle.generation,
+            actual: operation.generation.get(),
+            active: instance.lifecycle.generation.get(),
         });
     }
     if operation.state != NativeOperationState::IntentCommitted || operation.is_retry_permitted {
@@ -177,8 +178,8 @@ pub fn admit_native_effect_completion(
     }
     if input.generation != instance.lifecycle.generation || operation.generation != input.generation {
         issues.push(NativeHostIssue::StaleGeneration {
-            actual: input.generation,
-            active: instance.lifecycle.generation,
+            actual: input.generation.get(),
+            active: instance.lifecycle.generation.get(),
         });
     }
     for (field, reference) in [

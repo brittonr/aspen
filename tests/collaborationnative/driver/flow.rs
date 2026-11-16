@@ -117,8 +117,8 @@ pub fn submit(
     let work = molten::system_extension::WorkPresentation {
         work_ref,
         class: molten::system_extension::WorkClass::Durable,
-        generation: member.generation,
-        incarnation: member.incarnation,
+        generation: molten::system_extension::Generation::new(member.generation),
+        incarnation: molten::system_extension::Incarnation::new(member.incarnation),
     };
     let operation = super::operations::wire::operation("submit", vec![
         molten::preserves_rail::string(crate::producer::SERVICE),
@@ -181,8 +181,8 @@ pub fn prepare_delivery(
         input_schema_ref: molten::collaboration_scope::COMMIT_INPUT_SCHEMA.to_string(),
         output_schema_ref: molten::collaboration_scope::COMMIT_OUTPUT_SCHEMA.to_string(),
         request_ref: work.payload.value_ref.clone(),
-        generation: member.generation,
-        incarnation: member.incarnation,
+        generation: molten::system_extension::Generation::new(member.generation),
+        incarnation: molten::system_extension::Incarnation::new(member.incarnation),
         accounted_bytes: work.payload.bytes.len() as u64,
     };
     let binding = fixture.effects.bindings.first().ok_or("effect configuration binding")?;

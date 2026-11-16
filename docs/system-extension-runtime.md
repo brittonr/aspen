@@ -153,6 +153,12 @@ absent -> installed -> admitted -> initializing -> initialized
 
 Every event and callback names the active generation. Upgrade and rollback create exactly the next generation. Old-generation callbacks, effects, completions, timers, and messages are denied before executor invocation.
 
+Internal system-extension transition fields use distinct `Generation` and `Incarnation` newtypes: a caller cannot
+interchange them without an explicit conversion. Both intentionally retain the full `u64` domain, including values
+above `2^63-1`; checked increments deny overflow at `u64::MAX`. Numeric API, journal and canonical Preserves
+boundaries explicitly unwrap or construct these values. Existing record names, field order, packed bytes and BLAKE3
+content references remain unchanged. This type distinction does not grant authority or fence another wire domain.
+
 ### Incarnation fencing
 
 Generation names the implementation; it does not name the running instance. A restart or recovery replaces the

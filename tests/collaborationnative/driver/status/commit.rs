@@ -98,7 +98,7 @@ fn matches_completion(
         operation.kind == molten::system_extension::NativeOperationKind::Effect
             && operation.operation_ref == operation_ref
             && operation.parent_ref == effect
-            && operation.generation == generation
+            && operation.generation.get() == generation
             && operation.terminal_ref.as_deref() == Some(output)
             && operation.state == molten::system_extension::NativeOperationState::Terminal
     }) {

@@ -247,7 +247,7 @@ where
         request.service_id = envelope.context.service_id.clone();
         request.callback_ref = envelope.invocation.event_ref.clone();
         request.effect_ref = envelope.envelope_ref.clone();
-        request.generation = envelope.invocation.generation;
+        request.generation = envelope.invocation.generation.get();
         request.executable_artifact_ref = self.template.executable.executable.executable_ref.clone();
         request.executable_identity_ref = self.template.executable.executable.executable_bytes_ref.clone();
         request.workspace_ref = self.template.resolved.workspace_ref.clone();

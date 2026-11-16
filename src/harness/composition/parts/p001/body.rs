@@ -120,7 +120,7 @@ pub(crate) fn idle_usage() -> ResourceUsage {
 pub(crate) fn running_state() -> Result<LifecycleState, crate::error::Failure> {
     let installed = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_GENERATION, 0),
+        &LifecycleEvent::simple(LifecycleEventKind::Install, molten_core::system_extension::Generation::new(INITIAL_GENERATION), molten_core::system_extension::Incarnation::new(0)),
         idle_usage(),
         MAX_RESTART_ATTEMPTS,
     )
@@ -188,8 +188,8 @@ pub(crate) fn restart(state: &LifecycleState) -> Result<LifecycleState, crate::e
 
 pub(crate) fn facade_state(phase: &str, incarnation: u64) -> FacadeRuntimeState {
     FacadeRuntimeState {
-        generation: INITIAL_GENERATION,
-        incarnation,
+        generation: molten_core::system_extension::Generation::new(INITIAL_GENERATION),
+        incarnation: molten_core::system_extension::Incarnation::new(incarnation),
         phase: phase.to_string(),
         state_ref: Some(HASH_C.to_string()),
         turn_sequence: 1,

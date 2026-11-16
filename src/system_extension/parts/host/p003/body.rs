@@ -69,7 +69,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
             source_schema: &source_schema,
             target_schema: &target_schema,
             checkpoint_ref,
-            generation: next_generation,
+            generation: next_generation.get(),
         })?;
         self.record_evidence(Evidence::Migration(migration.clone()))?;
         self.admitted = next;
@@ -113,7 +113,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
             .ok_or_else(|| crate::error::Failure::invalid_harness("system-extension callback deadline overflow"))?;
         let value = super::callback_event_value(super::CallbackEventInput {
             callback,
-            generation: self.state.generation,
+            generation: self.state.generation.get(),
             sequence: event_sequence,
             payload_ref,
             logical_tick,

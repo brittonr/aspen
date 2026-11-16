@@ -178,7 +178,7 @@ pub fn validate_system_extension_binding(
     extension: &crate::system_extension::LifecycleState,
 ) -> Vec<ActorIssue> {
     let mut issues = Vec::new();
-    if actor.extension_generation != extension.generation {
+    if actor.extension_generation != extension.generation.get() {
         issues.push(ActorIssue::SystemExtensionGenerationMismatch);
     }
     if !actor_phase_matches_system_extension(actor.phase, extension.phase) {

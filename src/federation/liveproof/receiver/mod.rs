@@ -127,8 +127,8 @@ pub(super) fn effect(
         input_schema_ref: crate::dag_sync::dag_sync_request_schema_ref()?,
         output_schema_ref: crate::dag_sync::dag_sync_receipt_schema_ref()?,
         request_ref: canonical.record_ref,
-        generation: 1,
-        incarnation: 1,
+        generation: molten_core::system_extension::Generation::new(1),
+        incarnation: molten_core::system_extension::Incarnation::new(1),
         accounted_bytes: u64::try_from(canonical.bytes.len()).map_err(|_| super::invalid("DAG bytes overflow"))?,
     })
 }

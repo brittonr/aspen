@@ -224,8 +224,8 @@ fn effect_request(
         input_schema_ref: TRANSPORT_COMMAND_SCHEMA.to_string(),
         output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),
         request_ref: request_ref.to_string(),
-        generation: GENERATION,
-        incarnation: 0,
+        generation: molten_core::system_extension::Generation::new(GENERATION),
+        incarnation: molten_core::system_extension::Incarnation::new(0),
         accounted_bytes,
     }
 }

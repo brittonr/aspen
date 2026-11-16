@@ -54,8 +54,8 @@ impl super::twin::Live {
         let work = molten::system_extension::WorkPresentation {
             work_ref,
             class,
-            generation: active.generation,
-            incarnation: active.incarnation,
+            generation: molten::system_extension::Generation::new(active.generation),
+            incarnation: molten::system_extension::Incarnation::new(active.incarnation),
         };
         self.require(
             "submit",

@@ -10,8 +10,8 @@ fn observation() -> crate::system_extension::HostedObservation {
     let reference = value("reference").value_ref;
     let invocation = crate::system_extension::CallbackInvocation {
         callback: crate::system_extension::CallbackKind::Request,
-        generation: 1,
-        incarnation: 0,
+        generation: molten_core::system_extension::Generation::new(1),
+        incarnation: molten_core::system_extension::Incarnation::new(0),
         sequence: 1,
         event_ref: reference.clone(),
         payload_ref: None,

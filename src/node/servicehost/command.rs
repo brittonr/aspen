@@ -213,8 +213,8 @@ fn claim_value(claim: crate::system_extension::DeliveryClaim) -> preserves::IOVa
     crate::preserves_rail::record("node-service-host-claim-v1", vec![
         crate::preserves_rail::string(claim.claim_ref),
         crate::preserves_rail::string(claim.class.as_str()),
-        crate::preserves_rail::u64_value(claim.generation),
-        crate::preserves_rail::u64_value(claim.incarnation),
+        crate::preserves_rail::u64_value(claim.generation.get()),
+        crate::preserves_rail::u64_value(claim.incarnation.get()),
     ])
 }
 

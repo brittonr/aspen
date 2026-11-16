@@ -130,7 +130,7 @@ impl DeterministicPortRouter {
             destination: self.dispatching_node.clone(),
             port_id: profile.port_id.clone(),
             request_ref: effect.request_ref.clone(),
-            generation: effect.generation,
+            generation: effect.generation.get(),
             submitted_at_tick: self.current_virtual_tick,
             eligible_at_tick,
         };

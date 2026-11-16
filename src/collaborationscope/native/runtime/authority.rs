@@ -16,7 +16,7 @@ pub(super) async fn restage(
         || effect.input_schema_ref != crate::collaboration_scope::COMMIT_INPUT_SCHEMA
         || effect.output_schema_ref != crate::collaboration_scope::COMMIT_OUTPUT_SCHEMA
         || !matches!(&effect.target, crate::system_extension::EffectTarget::FabricPort(key) if key == &binding.binding.key)
-        || effect.generation != runtime.installation.generation()
+        || effect.generation.get() != runtime.installation.generation()
     {
         return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain));
     }

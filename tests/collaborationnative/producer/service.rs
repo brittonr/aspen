@@ -152,7 +152,7 @@ fn manifest(
         state_schema: molten::collaboration_scope::SCHEMA.into(),
         compatible_state_schemas: vec![molten::collaboration_scope::SCHEMA.into()],
         evidence_profile_ref: source.validation.selected_output_validation_ref.clone(),
-        initial_generation: 1,
+        initial_generation: molten::system_extension::Generation::new(1),
         non_claims: molten::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     }
 }

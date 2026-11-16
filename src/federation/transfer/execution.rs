@@ -162,7 +162,7 @@ pub(crate) fn require_supervised_effect(
     request_ref: &str,
     generation: u64,
 ) -> crate::error::Result<()> {
-    if effect.request_ref != request_ref || effect.generation != generation {
+    if effect.request_ref != request_ref || effect.generation.get() != generation {
         return Err(invalid("supervised effect does not match receiver DAG request"));
     }
     Ok(())
@@ -251,7 +251,7 @@ where
             .ok_or_else(|| crate::fabric::FabricPortError::capability("federation DAG effect cannot execute twice"))?;
         if binding.binding_ref != self.binding_ref
             || effect.request_ref != self.request_ref
-            || effect.generation != request.generation
+            || effect.generation.get() != request.generation
         {
             return Err(crate::fabric::FabricPortError::capability(
                 "federation DAG effect binding or generation drifted",

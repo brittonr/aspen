@@ -37,8 +37,8 @@ impl crate::system_extension::SystemExtensionExecutor for Executor {
         }
         let value = crate::preserves_rail::record("federation-callback-state-v1", vec![
             crate::preserves_rail::string(&self.state_ref),
-            crate::preserves_rail::u64_value(invocation.generation),
-            crate::preserves_rail::u64_value(invocation.incarnation),
+            crate::preserves_rail::u64_value(invocation.generation.get()),
+            crate::preserves_rail::u64_value(invocation.incarnation.get()),
             crate::preserves_rail::u64_value(invocation.sequence),
         ]);
         let state_ref = crate::preserves_rail::canonical_hash(&value).map_err(|error| error.to_string())?;

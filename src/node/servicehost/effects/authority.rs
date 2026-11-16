@@ -114,8 +114,8 @@ pub fn route_request(
             crate::preserves_rail::string(&effect.input_schema_ref),
             crate::preserves_rail::string(&effect.output_schema_ref),
             crate::preserves_rail::string(&effect.request_ref),
-            crate::preserves_rail::u64_value(effect.generation),
-            crate::preserves_rail::u64_value(effect.incarnation),
+            crate::preserves_rail::u64_value(effect.generation.get()),
+            crate::preserves_rail::u64_value(effect.incarnation.get()),
             crate::preserves_rail::u64_value(effect.accounted_bytes),
             crate::preserves_rail::u64_value(tick),
         ],
@@ -141,7 +141,7 @@ fn validate_route(input: &RouteInput<'_>) -> crate::error::Result<()> {
         || key.port_id != configured.port_id
         || key.version != configured.port_version
         || effect.operation != configured.operation
-        || effect.generation != configured.generation
+        || effect.generation.get() != configured.generation
         || key.port_id != crate::collaboration_scope::COMMIT_PORT_ID
         || key.version != crate::collaboration_scope::COMMIT_PORT_VERSION
         || effect.operation != crate::collaboration_scope::COMMIT_OPERATION

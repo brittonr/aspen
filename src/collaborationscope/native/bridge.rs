@@ -21,22 +21,24 @@ impl HostState {
                 Err(denied(Denial::Missing))
             }
             None => Ok(Self {
-                generation: invocation.generation,
-                incarnation: invocation.incarnation,
+                generation: invocation.generation.get(),
+                incarnation: invocation.incarnation.get(),
                 sequence: invocation.sequence,
                 last_intent: None,
             }),
             Some(mut state) => {
                 if invocation.callback != crate::system_extension::CallbackKind::Recover {
-                    if state.generation != invocation.generation || state.incarnation != invocation.incarnation {
+                    if state.generation != invocation.generation.get()
+                        || state.incarnation != invocation.incarnation.get()
+                    {
                         return Err(denied(Denial::Stale));
                     }
                     if invocation.sequence <= state.sequence {
                         return Err(denied(Denial::Replay));
                     }
                 }
-                state.generation = invocation.generation;
-                state.incarnation = invocation.incarnation;
+                state.generation = invocation.generation.get();
+                state.incarnation = invocation.incarnation.get();
                 state.sequence = invocation.sequence;
                 Ok(state)
             }

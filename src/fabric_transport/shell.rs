@@ -84,7 +84,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
         self.context
             .admit_command(&self.profile, &command, effect.accounted_bytes)
             .map_err(FabricPortError::from)?;
-        if effect.generation != command.generation() {
+        if effect.generation.get() != command.generation() {
             return Err(FabricPortError::malformed(
                 "transport effect generation does not match its registered command",
             ));

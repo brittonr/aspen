@@ -169,8 +169,8 @@ fn bridge_envelope(
     let reference = |label: &str| crate::preserves_rail::content_ref_from_bytes(label.as_bytes());
     let invocation = crate::system_extension::CallbackInvocation {
         callback,
-        generation: 1,
-        incarnation,
+        generation: molten_core::system_extension::Generation::new(1),
+        incarnation: molten_core::system_extension::Incarnation::new(incarnation),
         sequence,
         event_ref: reference(&format!("{}-{}", callback.as_str(), sequence)),
         payload_ref: None,

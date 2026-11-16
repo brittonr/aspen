@@ -93,7 +93,7 @@ fn native(session: &mut super::Session, input: &serde_json::Value) -> crate::err
     let canonical = crate::system_extension::canonical_instance_record(&record)?;
     session.retain(&canonical.value)?;
     Ok(serde_json::json!({"record_ref":canonical.record_ref, "phase":record.lifecycle.phase.as_str(),
-        "generation":record.lifecycle.generation, "incarnation":record.lifecycle.incarnation,
+        "generation":record.lifecycle.generation.get(), "incarnation":record.lifecycle.incarnation.get(),
         "callback_sequence":record.callback_sequence, "event_sequence":record.event_sequence,
         "state_ref":record.state_ref, "checkpoint_ref":record.checkpoint_ref, "unresolved":record.unresolved.len(), "semantic_outcome":"progress"}))
 }

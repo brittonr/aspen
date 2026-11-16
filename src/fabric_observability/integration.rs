@@ -19,10 +19,10 @@ pub fn system_extension_health_input(
     state: &crate::system_extension::LifecycleState,
 ) -> HealthInput {
     let mut context = projection_context(&input);
-    context.generation = state.generation;
+    context.generation = state.generation.get();
     HealthInput {
         schema: HEALTH_INPUT_SCHEMA.to_string(),
-        health_ref: health_projection_ref(&input, state.generation, state.health.as_str()),
+        health_ref: health_projection_ref(&input, state.generation.get(), state.health.as_str()),
         context,
         state: match state.health {
             crate::system_extension::HealthState::Healthy => HealthState::Healthy,

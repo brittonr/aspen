@@ -6,8 +6,8 @@ pub(super) fn encode(work: &super::super::Work) -> preserves::IOValue {
         .map(|claim| {
             crate::preserves_rail::record("host-claim-v1", vec![
                 crate::preserves_rail::string(&claim.claim_ref),
-                crate::preserves_rail::u64_value(claim.generation),
-                crate::preserves_rail::u64_value(claim.incarnation),
+                crate::preserves_rail::u64_value(claim.generation.get()),
+                crate::preserves_rail::u64_value(claim.incarnation.get()),
             ])
         })
         .into_iter()
@@ -16,8 +16,8 @@ pub(super) fn encode(work: &super::super::Work) -> preserves::IOValue {
         crate::preserves_rail::string(&work.member),
         crate::preserves_rail::string(&presentation.work_ref),
         crate::preserves_rail::string(presentation.class.as_str()),
-        crate::preserves_rail::u64_value(presentation.generation),
-        crate::preserves_rail::u64_value(presentation.incarnation),
+        crate::preserves_rail::u64_value(presentation.generation.get()),
+        crate::preserves_rail::u64_value(presentation.incarnation.get()),
         crate::preserves_rail::string(&work.payload.value_ref),
         crate::preserves_rail::sequence(
             work.payload.bytes.iter().map(|byte| crate::preserves_rail::u64_value(u64::from(*byte))).collect(),
@@ -56,8 +56,8 @@ pub(super) fn decode(value: &preserves::IOValue) -> crate::error::Result<super::
             Ok(crate::system_extension::DeliveryClaim {
                 claim_ref: super::reference(&fields[0])?,
                 class: crate::system_extension::WorkClass::Durable,
-                generation: super::number(&fields[1])?,
-                incarnation: super::number(&fields[2])?,
+                generation: molten_core::system_extension::Generation::new(super::number(&fields[1])?),
+                incarnation: molten_core::system_extension::Incarnation::new(super::number(&fields[2])?),
             })
         })
         .transpose()?;
@@ -73,8 +73,8 @@ pub(super) fn decode(value: &preserves::IOValue) -> crate::error::Result<super::
         presentation: crate::system_extension::WorkPresentation {
             work_ref: super::reference(&fields[1])?,
             class,
-            generation: super::number(&fields[3])?,
-            incarnation: super::number(&fields[4])?,
+            generation: molten_core::system_extension::Generation::new(super::number(&fields[3])?),
+            incarnation: molten_core::system_extension::Incarnation::new(super::number(&fields[4])?),
         },
         payload: crate::system_extension::NativeCallbackValue {
             value_ref: super::reference(&fields[5])?,
@@ -93,8 +93,8 @@ pub(super) fn decode(value: &preserves::IOValue) -> crate::error::Result<super::
 fn encode_migration(migration: &super::super::WorkMigration) -> preserves::IOValue {
     crate::preserves_rail::record("host-work-migration-v1", vec![
         crate::preserves_rail::string(&migration.source.work_ref),
-        crate::preserves_rail::u64_value(migration.source.generation),
-        crate::preserves_rail::u64_value(migration.source.incarnation),
+        crate::preserves_rail::u64_value(migration.source.generation.get()),
+        crate::preserves_rail::u64_value(migration.source.incarnation.get()),
         crate::preserves_rail::string(&migration.source_payload_ref),
         crate::preserves_rail::string(&migration.migration_ref),
         crate::preserves_rail::string(&migration.admission_ref),
@@ -108,8 +108,8 @@ fn decode_migration(value: &preserves::Value<preserves::IOValue>) -> crate::erro
         source: crate::system_extension::WorkPresentation {
             work_ref: super::reference(&fields[0])?,
             class: crate::system_extension::WorkClass::Durable,
-            generation: super::number(&fields[1])?,
-            incarnation: super::number(&fields[2])?,
+            generation: molten_core::system_extension::Generation::new(super::number(&fields[1])?),
+            incarnation: molten_core::system_extension::Incarnation::new(super::number(&fields[2])?),
         },
         source_payload_ref: super::reference(&fields[3])?,
         migration_ref: super::reference(&fields[4])?,

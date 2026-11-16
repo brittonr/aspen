@@ -116,7 +116,7 @@ impl Service {
 
     pub fn require_running(&self) -> crate::error::Result<()> {
         if self.host.state().phase != crate::system_extension::LifecyclePhase::Running
-            || self.host.state().generation != self.manifest.generation()
+            || self.host.state().generation.get() != self.manifest.generation()
             || self.host.manifest().manifest_ref() != self.manifest.extension().manifest_ref()
         {
             return Err(invalid("federation service is not running under its admitted generation"));
@@ -131,7 +131,7 @@ impl Service {
     ) -> crate::error::Result<String> {
         self.require_running()?;
         let value = status::session_value(session)?;
-        if session.generation != self.host.state().generation || self.manifest.bounds().retained_status == 0 {
+        if session.generation != self.host.state().generation.get() || self.manifest.bounds().retained_status == 0 {
             return Err(invalid("status generation or retention bound is invalid"));
         }
         let next = self.status_sequence.checked_add(1).ok_or_else(|| invalid("status sequence overflow"))?;

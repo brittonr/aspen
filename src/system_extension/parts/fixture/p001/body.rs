@@ -1,6 +1,6 @@
 
 /// The admitted fixture manifest, its upgraded successor, and the rollback manifest, in that order.
-fn fixture_manifests(
+pub(crate) fn fixture_manifests(
     profile: super::ExecutionProfile,
 ) -> crate::error::Result<[super::AdmittedManifest; 3]> {
     let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
@@ -115,7 +115,7 @@ fn manifest_input(profile: super::ExecutionProfile) -> super::SystemExtensionMan
         state_schema: STATE_SCHEMA.to_string(),
         compatible_state_schemas: vec![STATE_SCHEMA.to_string()],
         evidence_profile_ref: HASH_E.to_string(),
-        initial_generation: INITIAL_GENERATION,
+        initial_generation: molten_core::system_extension::Generation::new(INITIAL_GENERATION),
         non_claims: super::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     }
 }
@@ -212,8 +212,8 @@ mod tests {
     fn recovered(generation: u64, phase: super::super::LifecyclePhase) -> super::super::RecoveredState {
         super::super::RecoveredState {
             state: super::super::LifecycleState {
-                generation,
-                incarnation: 0,
+                generation: molten_core::system_extension::Generation::new(generation),
+                incarnation: molten_core::system_extension::Incarnation::new(0),
                 phase,
                 restart_attempts: 0,
                 health: super::super::HealthState::Unknown,
@@ -234,13 +234,13 @@ mod tests {
         let profile = super::super::ExecutionProfile::InProcessNative;
         let [admitted, _, _] = fixture_manifests(profile).expect("fixture manifests");
         let generation = admitted.manifest().initial_generation;
-        let installed = recovered(generation, super::super::LifecyclePhase::Installed);
+        let installed = recovered(generation.get(), super::super::LifecyclePhase::Installed);
         let executor = EchoExecutor::new(profile).expect("executor");
         let mut host = super::super::Dispatcher::from_recovered_state(admitted.clone(), executor, installed)
             .expect("journaled installation");
         host.activate(START_TICK).expect("a journaled installation resumes at admission");
         assert_eq!(host.state().phase, super::super::LifecyclePhase::Running);
-        let running = recovered(generation, super::super::LifecyclePhase::Running);
+        let running = recovered(generation.get(), super::super::LifecyclePhase::Running);
         let executor = EchoExecutor::new(profile).expect("executor");
         let mut host = super::super::Dispatcher::from_recovered_state(admitted, executor, running)
             .expect("journaled running host");

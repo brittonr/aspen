@@ -13,7 +13,7 @@ fn drained_native_checkpoint_keeps_ingress_closed() -> TestResult<()> {
     let instance = service.instance().or_fail("checkpointed native instance")?;
     assert!(instance.checkpoint_ref.is_some());
     assert!(!instance.is_accepting_ingress, "checkpoint must not reopen a drained member");
-    let delivery = ingress(instance.lifecycle.generation, &instance.manifest_ref)?;
+    let delivery = ingress(instance.lifecycle.generation.get(), &instance.manifest_ref)?;
     assert!(service.ingress(&delivery, 4).is_err(), "drained checkpoint must not admit subsequent ingress");
     Ok(())
 }
@@ -60,16 +60,16 @@ fn native_replacement_executes_materialized_recovery_and_rejects_old_generation(
         .or_fail("materialize actual transformed recovery state")?;
     let expected = [
         after.instance_id.as_bytes(),
-        &after.lifecycle.generation.to_le_bytes(),
+        &after.lifecycle.generation.get().to_le_bytes(),
         &after.callback_sequence.to_le_bytes(),
         prior.bytes.as_slice(),
     ]
     .concat();
     assert_eq!(transformed.bytes, expected, "Recover must execute and publish its transformed materialized state");
     assert_eq!(after.lifecycle.phase, molten::system_extension::LifecyclePhase::Running);
-    let stale = ingress(before.lifecycle.generation, &before.manifest_ref)?;
+    let stale = ingress(before.lifecycle.generation.get(), &before.manifest_ref)?;
     assert!(service.ingress(&stale, 5).is_err(), "pre-upgrade ingress must lose influence");
-    let current = ingress(after.lifecycle.generation, &after.manifest_ref)?;
+    let current = ingress(after.lifecycle.generation.get(), &after.manifest_ref)?;
     let result = service.ingress(&current, 6).or_fail("replacement accepts current-generation request")?;
     assert!(matches!(result.dispatch, molten::system_extension::DispatchResult::Executed { .. }));
     Ok(())
@@ -128,7 +128,7 @@ fn dormant_native_actor_recovery_commits_fresh_incarnation_before_callback() -> 
     let running = service.instance().or_fail("recovered actor")?;
     assert_eq!(running.lifecycle.phase, molten::system_extension::LifecyclePhase::Running);
     assert_eq!(running.lifecycle.generation, dormant.lifecycle.generation);
-    assert_eq!(running.lifecycle.incarnation, dormant.lifecycle.incarnation + 1);
+    assert_eq!(running.lifecycle.incarnation, dormant.lifecycle.incarnation.checked_add(1).expect("incarnation increment"));
     assert_eq!(running.lifecycle.restart_attempts, dormant.lifecycle.restart_attempts);
     assert_eq!(running.checkpoint_ref, dormant.checkpoint_ref);
     assert!(running.is_accepting_ingress);

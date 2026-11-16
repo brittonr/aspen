@@ -15,7 +15,7 @@ where
             crate::preserves_rail::string(CLAIM_LEVEL),
             crate::preserves_rail::string(&instance.instance_id),
             crate::preserves_rail::string(&operator.status_ref),
-            crate::preserves_rail::u64_value(instance.lifecycle.generation),
+            crate::preserves_rail::u64_value(instance.lifecycle.generation.get()),
             crate::preserves_rail::string(instance.lifecycle.phase.as_str()),
             crate::preserves_rail::u64_value(
                 u64::try_from(recovery.len())
@@ -226,7 +226,7 @@ fn initial_instance(
         state_schema_ref: executable.executable.state_schema_ref.clone(),
         lifecycle: LifecycleState {
             generation: admitted.manifest().initial_generation,
-            incarnation: 0,
+            incarnation: molten_core::system_extension::Incarnation::new(0),
             phase: LifecyclePhase::Installed,
             restart_attempts: 0,
             health: HealthState::Unknown,

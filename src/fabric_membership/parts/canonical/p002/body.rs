@@ -27,7 +27,7 @@ impl ExtensionPlacementContext {
         }
         Ok(Self {
             service_id: host.manifest().manifest().service_id.clone(),
-            generation: host.state().generation,
+            generation: host.state().generation.get(),
             profile_id: profile.profile.profile_id.clone(),
             source_profile_ref: profile.profile.profile_ref.clone(),
             bound_ports,

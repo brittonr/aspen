@@ -117,7 +117,7 @@ fn retain_work(session: &super::Session, work: &crate::node_service_hosting::Del
         crate::preserves_rail::string(&i.peer_ref),
         crate::preserves_rail::string(&i.service_id),
         crate::preserves_rail::string(&i.manifest_ref),
-        crate::preserves_rail::u64_value(i.generation),
+        crate::preserves_rail::u64_value(i.generation.get()),
         crate::preserves_rail::string(&i.authority_ref),
         crate::preserves_rail::string(&i.policy_ref),
         crate::preserves_rail::string(&i.resource_ref),
@@ -131,8 +131,8 @@ fn retain_work(session: &super::Session, work: &crate::node_service_hosting::Del
         crate::preserves_rail::record("node-service-host-work-v1", vec![
             crate::preserves_rail::string(&work.presentation.work_ref),
             crate::preserves_rail::string("durable"),
-            crate::preserves_rail::u64_value(work.presentation.generation),
-            crate::preserves_rail::u64_value(work.presentation.incarnation),
+            crate::preserves_rail::u64_value(work.presentation.generation.get()),
+            crate::preserves_rail::u64_value(work.presentation.incarnation.get()),
         ]),
         crate::preserves_rail::record("node-service-host-delivery-v1", vec![
             crate::preserves_rail::sequence(work.claim_ref.iter().map(crate::preserves_rail::string).collect()),

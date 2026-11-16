@@ -342,8 +342,8 @@ fn generic_system_extension_binding_is_explicit() {
     actor.phase = ActorPhase::Dormant;
     actor.checkpoint_ref = Some(reference("checkpoint"));
     let extension = LifecycleState {
-        generation: actor.extension_generation,
-        incarnation: 0,
+        generation: crate::system_extension::Generation::new(actor.extension_generation),
+        incarnation: crate::system_extension::Incarnation::new(0),
         phase: LifecyclePhase::Drained,
         restart_attempts: 0,
         health: HealthState::Stopped,
@@ -352,7 +352,7 @@ fn generic_system_extension_binding_is_explicit() {
     assert!(validate_system_extension_binding(&actor, &extension).is_empty());
 
     let mut stale = extension;
-    stale.generation = stale.generation.saturating_add(1);
+    stale.generation = stale.generation.checked_add(1).expect("generation increment");
     stale.phase = LifecyclePhase::Running;
     let issues = validate_system_extension_binding(&actor, &stale);
     assert!(issues.contains(&ActorIssue::SystemExtensionGenerationMismatch));

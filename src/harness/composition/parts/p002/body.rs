@@ -77,7 +77,7 @@ fn delayed_delivery(
     };
     let is_admitted = admit_facade_timer(
         &definitions.stateful_facade,
-        &facade_state("idle", after.incarnation),
+        &facade_state("idle", after.incarnation.get()),
         &delivery,
     )
     .is_ok();

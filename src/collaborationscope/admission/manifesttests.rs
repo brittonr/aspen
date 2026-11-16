@@ -126,7 +126,7 @@ fn input(ports: &[Port]) -> crate::system_extension::SystemExtensionManifestInpu
         state_schema: SCHEMA.to_string(),
         compatible_state_schemas: vec![SCHEMA.to_string()],
         evidence_profile_ref: fixtures::reference("collaboration-evidence-profile"),
-        initial_generation: 1,
+        initial_generation: molten_core::system_extension::Generation::new(1),
         non_claims: crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     }
 }
@@ -165,7 +165,7 @@ fn valid_manifest_admits_one_generation_without_fabric_membership_ports() {
     let admitted = admitted();
     let manifest = admitted.manifest();
     assert_eq!((manifest.extension_id.as_str(), manifest.state_schema.as_str()), (EXTENSION_ID, SCHEMA));
-    assert_eq!(manifest.initial_generation, 1);
+    assert_eq!(manifest.initial_generation, molten_core::system_extension::Generation::new(1));
     let classes: Vec<_> = admitted.required_port_bindings().iter().map(|binding| binding.binding.class).collect();
     assert_eq!(classes.len(), ports.len());
     assert!(ports.iter().all(|port| classes.contains(&port.class)), "exactly the declared ports are bound");

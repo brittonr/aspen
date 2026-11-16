@@ -156,7 +156,7 @@ fn transition(state: &LifecycleState, kind: LifecycleEventKind) -> LifecycleStat
 fn running_state() -> LifecycleState {
     let installed = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, 0),
+        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, Incarnation::new(0)),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -172,7 +172,7 @@ fn request_event() -> CallbackEvent {
     CallbackEvent {
         callback: CallbackKind::Request,
         generation: INITIAL_SYSTEM_EXTENSION_GENERATION,
-        incarnation: 0,
+        incarnation: Incarnation::new(0),
         event_ref: HASH_B.to_string(),
         payload_ref: Some(HASH_C.to_string()),
         accounted_bytes: REQUEST_BYTES,
@@ -256,33 +256,33 @@ fn lifecycle_is_explicit_and_rejects_delayed_old_generation_work() {
         kind: LifecycleEventKind::BeginUpgrade,
         generation: running.generation,
         incarnation: running.incarnation,
-        next_generation: Some(running.generation + 1),
+        next_generation: running.generation.checked_add(1),
         checkpoint_ref: None,
         failure_class: None,
     };
     let upgrading =
         plan_lifecycle_transition(&running, &upgrade, ResourceUsage::default(), resources().max_restart_attempts)
             .expect("sequential generation upgrade");
-    assert_eq!(upgrading.generation, running.generation + 1);
+    assert_eq!(upgrading.generation, running.generation.checked_add(1).expect("generation increment"));
 
     let mut delayed = request_event();
     delayed.generation = running.generation;
     let issues = plan_callback_dispatch(&admitted_manifest(), &upgrading, ResourceUsage::default(), &delayed, 0)
         .expect_err("old generation callback must deny before invocation");
     assert!(issues.contains(&DispatchIssue::StaleGeneration {
-        actual: running.generation,
-        active: upgrading.generation,
+        actual: running.generation.get(),
+        active: upgrading.generation.get(),
     }));
 
     let mut exhausted = running;
-    exhausted.generation = u64::MAX;
+    exhausted.generation = Generation::new(u64::MAX);
     let overflow = plan_lifecycle_transition(
         &exhausted,
         &LifecycleEvent {
             kind: LifecycleEventKind::BeginUpgrade,
-            generation: u64::MAX,
+            generation: Generation::new(u64::MAX),
             incarnation: exhausted.incarnation,
-            next_generation: Some(0),
+            next_generation: Some(Generation::new(0)),
             checkpoint_ref: None,
             failure_class: None,
         },
@@ -376,7 +376,7 @@ fn ambient_and_unbound_effects_are_denied() {
         output_schema_ref: OUTPUT_SCHEMA.to_string(),
         request_ref: HASH_A.to_string(),
         generation: INITIAL_SYSTEM_EXTENSION_GENERATION,
-        incarnation: 0,
+        incarnation: Incarnation::new(0),
         accounted_bytes: REQUEST_BYTES,
     };
     let mut unbound = ambient.clone();
@@ -386,7 +386,9 @@ fn ambient_and_unbound_effects_are_denied() {
     });
     unbound.request_ref = HASH_B.to_string();
 
-    let issues = validate_typed_effects(&manifest, INITIAL_SYSTEM_EXTENSION_GENERATION, 0, &[ambient, unbound]);
+    let issues = validate_typed_effects(&manifest, INITIAL_SYSTEM_EXTENSION_GENERATION, Incarnation::new(0), &[
+        ambient, unbound,
+    ]);
 
     assert!(issues.contains(&EffectIssue::AmbientEffectDenied(AmbientEffect::Filesystem)));
     assert!(
@@ -483,7 +485,7 @@ fn failed_checkpoint_and_recovery_take_explicit_failure_paths() {
 
     let illegal = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::BeginStart, 0, 0),
+        &LifecycleEvent::simple(LifecycleEventKind::BeginStart, Generation::new(0), Incarnation::new(0)),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -655,4 +657,113 @@ fn recovery_group_manifest_accepts_valid_and_rejects_invalid_declarations() {
         issue,
         ManifestIssue::RecoveryGroup(RecoveryGroupIssue::DuplicateMember(value)) if value == "primary"
     )));
+}
+
+// r[verify molten.system_extension.lifecycle]
+#[test]
+fn generation_and_incarnation_boundaries_are_explicit() {
+    let absent = LifecycleState::absent();
+    assert_eq!(absent.generation, Generation::new(0));
+    assert_eq!(absent.incarnation, Incarnation::new(0));
+
+    let installed = plan_lifecycle_transition(
+        &absent,
+        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, Incarnation::new(0)),
+        ResourceUsage::default(),
+        resources().max_restart_attempts,
+    )
+    .expect("first activation");
+    assert_eq!(installed.generation, INITIAL_SYSTEM_EXTENSION_GENERATION);
+    assert_eq!(installed.incarnation, Incarnation::new(0));
+
+    let running = running_state();
+    let failed = plan_lifecycle_transition(
+        &running,
+        &LifecycleEvent {
+            kind: LifecycleEventKind::Failure,
+            generation: running.generation,
+            incarnation: running.incarnation,
+            next_generation: None,
+            checkpoint_ref: None,
+            failure_class: Some(FailureClass::Retryable),
+        },
+        ResourceUsage::default(),
+        resources().max_restart_attempts,
+    )
+    .expect("failure");
+    let restarting = transition(&failed, LifecycleEventKind::BeginRestart);
+    let starting = transition(&restarting, LifecycleEventKind::BeginStart);
+    let restarted = transition(&starting, LifecycleEventKind::StartSucceeded);
+    assert_eq!(restarted.generation, running.generation);
+    assert_eq!(restarted.incarnation, Incarnation::new(1));
+
+    // stale generation
+    let stale_gen = plan_lifecycle_transition(
+        &installed,
+        &LifecycleEvent::simple(LifecycleEventKind::Admit, Generation::new(0), Incarnation::new(0)),
+        ResourceUsage::default(),
+        resources().max_restart_attempts,
+    )
+    .expect_err("stale generation");
+    assert!(stale_gen.iter().any(|issue| matches!(issue, LifecycleIssue::StaleGeneration { .. })));
+
+    // stale incarnation
+    let stale_inc = plan_lifecycle_transition(
+        &installed,
+        &LifecycleEvent::simple(LifecycleEventKind::Admit, installed.generation, Incarnation::new(9)),
+        ResourceUsage::default(),
+        resources().max_restart_attempts,
+    )
+    .expect_err("stale incarnation");
+    assert!(stale_inc.iter().any(|issue| matches!(issue, LifecycleIssue::StaleIncarnation { .. })));
+
+    // checked overflow at u64::MAX, including a value above 2^63
+    let high = Generation::new(u64::MAX);
+    assert_eq!(high.get(), u64::MAX);
+    assert!(high.get() > (1u64 << 63));
+    let mut exhausted = installed;
+    exhausted.generation = Generation::new(u64::MAX);
+    let overflow = plan_lifecycle_transition(
+        &exhausted,
+        &LifecycleEvent {
+            kind: LifecycleEventKind::BeginUpgrade,
+            generation: Generation::new(u64::MAX),
+            incarnation: Incarnation::new(0),
+            next_generation: Some(Generation::new(0)),
+            checkpoint_ref: None,
+            failure_class: None,
+        },
+        ResourceUsage::default(),
+        resources().max_restart_attempts,
+    )
+    .expect_err("generation overflow");
+    assert!(overflow.iter().any(|issue| matches!(issue, LifecycleIssue::GenerationOverflow)));
+}
+
+// r[verify molten.system_extension.lifecycle]
+#[test]
+fn full_width_generation_and_incarnation_increment_without_wraparound() {
+    let mut running = running_state();
+    running.generation = Generation::new(u64::MAX - 1);
+    let event = LifecycleEvent {
+        next_generation: Some(Generation::new(u64::MAX)),
+        ..LifecycleEvent::simple(LifecycleEventKind::BeginUpgrade, running.generation, running.incarnation)
+    };
+    let upgraded = plan_lifecycle_transition(&running, &event, ResourceUsage::default(), 3)
+        .expect("full-width generation accepted");
+    assert_eq!(upgraded.generation.get(), u64::MAX);
+
+    let mut failed = running;
+    failed.phase = LifecyclePhase::Failed;
+    failed.incarnation = Incarnation::new(u64::MAX - 1);
+    let restart = LifecycleEvent::simple(LifecycleEventKind::BeginRestart, failed.generation, failed.incarnation);
+    let restarted = plan_lifecycle_transition(&failed, &restart, ResourceUsage::default(), 3)
+        .expect("full-width incarnation accepted");
+    assert_eq!(restarted.incarnation.get(), u64::MAX);
+
+    failed.incarnation = Incarnation::new(u64::MAX);
+    let restart = LifecycleEvent::simple(LifecycleEventKind::BeginRestart, failed.generation, failed.incarnation);
+    let issues = plan_lifecycle_transition(&failed, &restart, ResourceUsage::default(), 3)
+        .expect_err("incarnation increment at maximum must not wrap");
+    assert!(issues.contains(&LifecycleIssue::IncarnationOverflow));
 }

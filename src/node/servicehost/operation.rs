@@ -134,8 +134,8 @@ fn work(value: &Field) -> crate::error::Result<crate::system_extension::WorkPres
     Ok(crate::system_extension::WorkPresentation {
         work_ref: reference(&fields[0])?,
         class,
-        generation: number(&fields[2])?,
-        incarnation: number(&fields[3])?,
+        generation: molten_core::system_extension::Generation::new(number(&fields[2])?),
+        incarnation: molten_core::system_extension::Incarnation::new(number(&fields[3])?),
     })
 }
 
@@ -169,7 +169,7 @@ fn ingress(value: &Field) -> crate::error::Result<crate::system_extension::Nativ
         peer_ref: reference(&fields[2])?,
         service_id: text(&fields[3])?,
         manifest_ref: reference(&fields[4])?,
-        generation: number(&fields[5])?,
+        generation: molten_core::system_extension::Generation::new(number(&fields[5])?),
         authority_ref: reference(&fields[6])?,
         policy_ref: reference(&fields[7])?,
         resource_ref: reference(&fields[8])?,

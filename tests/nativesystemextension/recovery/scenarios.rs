@@ -47,7 +47,11 @@ pub(super) fn crash_readmission(
         && retained.claim_ref.as_deref() == Some(fresh_claim.as_str())
         && retained.receipt_ref.is_some();
     facts.durable_work_lost = retained.payload_ref != payload.value_ref;
-    assert_eq!(retained.incarnation, durable.incarnation, "restart readmission must retain logical-work provenance");
+    assert_eq!(
+        retained.incarnation,
+        durable.incarnation.get(),
+        "restart readmission must retain logical-work provenance"
+    );
     assert!(matches!(retained.disposition.as_str(), "unknown" | "completed"));
     facts.sibling_progressed = has_sibling_progressed_before && twin.progress_sibling(16)?;
     Ok(facts)
@@ -215,8 +219,8 @@ fn migrate_and_deliver(
     let work = molten::system_extension::WorkPresentation {
         work_ref: source.work_ref.clone(),
         class: source.class,
-        generation: active.generation,
-        incarnation: active.incarnation,
+        generation: molten::system_extension::Generation::new(active.generation),
+        incarnation: molten::system_extension::Incarnation::new(active.incarnation),
     };
     let sequence = active.sequence;
     let was_delivered = twin.deliver_work(&work, &payload, Some(&claim), 14)?;

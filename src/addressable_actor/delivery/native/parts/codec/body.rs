@@ -73,7 +73,7 @@ fn completed(
     generation: u64,
 ) -> bool {
     operation.kind == kind
-        && operation.generation == generation
+        && operation.generation.get() == generation
         && operation.state == crate::system_extension::NativeOperationState::Terminal
         && operation.terminal_ref.is_some()
 }

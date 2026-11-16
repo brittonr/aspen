@@ -8,8 +8,8 @@ pub(super) fn work(value: &molten::system_extension::WorkPresentation) -> preser
     molten::preserves_rail::record("node-service-host-work-v1", vec![
         molten::preserves_rail::string(&value.work_ref),
         molten::preserves_rail::string(value.class.as_str()),
-        molten::preserves_rail::u64_value(value.generation),
-        molten::preserves_rail::u64_value(value.incarnation),
+        molten::preserves_rail::u64_value(value.generation.get()),
+        molten::preserves_rail::u64_value(value.incarnation.get()),
     ])
 }
 

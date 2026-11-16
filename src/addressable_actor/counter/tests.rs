@@ -81,8 +81,8 @@ fn envelope(callback: crate::system_extension::CallbackKind) -> crate::system_ex
     crate::system_extension::DecodedCallbackEnvelope {
         invocation: crate::system_extension::CallbackInvocation {
             callback,
-            generation: 1,
-            incarnation: 2,
+            generation: molten_core::system_extension::Generation::new(1),
+            incarnation: molten_core::system_extension::Incarnation::new(2),
             sequence: 3,
             event_ref: reference("event"),
             payload_ref: None,

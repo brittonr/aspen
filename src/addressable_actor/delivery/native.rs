@@ -81,7 +81,8 @@ impl Commit {
         let receipt_value = values.materialize(callback_receipt_ref, MAX_VALUE_BYTES).map_err(super::problem)?;
         crate::system_extension::admit_callback_value(&receipt_value, MAX_VALUE_BYTES).map_err(super::problem)?;
         let receipt = read_receipt(&receipt_value)?;
-        if receipt.manifest_ref != host.manifest().manifest_ref() || receipt.generation != host.state().generation {
+        if receipt.manifest_ref != host.manifest().manifest_ref() || receipt.generation != host.state().generation.get()
+        {
             return Err(super::invalid(
                 "native actor original callback receipt belongs to another manifest or generation",
             ));
@@ -159,8 +160,8 @@ impl Commit {
                 .map_err(|_| super::invalid("native actor instance lock poisoned"))?;
             if instance.instance_id != self.instance_id
                 || instance.manifest_ref != host.manifest().manifest_ref()
-                || instance.lifecycle.generation != generation
-                || host.state().generation != generation
+                || instance.lifecycle.generation.get() != generation
+                || host.state().generation.get() != generation
             {
                 return Err(super::invalid("native actor semantic commit belongs to another admitted instance"));
             }
@@ -185,7 +186,7 @@ impl Commit {
         generation: u64,
     ) -> crate::error::Result<()> {
         if record.instance_id != self.instance_id
-            || record.lifecycle.generation != generation
+            || record.lifecycle.generation.get() != generation
             || self.generation != generation
             || record.state_ref.as_deref() != Some(self.state.value_ref.as_str())
             || self.content_ref != content_ref

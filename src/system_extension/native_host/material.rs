@@ -47,7 +47,7 @@ where
             next_manifest_ref: replacement.admission.admitted.manifest_ref(),
             source_schema: &self.host.manifest().manifest().state_schema,
             target_schema: &replacement.admission.admitted.manifest().state_schema,
-            checkpoint_ref: &checkpoint, generation,
+            checkpoint_ref: &checkpoint, generation: generation.get(),
         })?;
         let mut executor = Process::new(
             replacement.port, self.journal.clone(), replacement.values,

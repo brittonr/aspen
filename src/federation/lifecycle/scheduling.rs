@@ -22,7 +22,7 @@ pub fn tick<T: crate::fabric_time::TimerClockAdapter, P: InventoryPort>(
     input: TickInput<'_>,
 ) -> crate::error::Result<Vec<String>> {
     service.require_running()?;
-    if input.generation != service.host.state().generation
+    if input.generation != service.host.state().generation.get()
         || !service
             .manifest
             .extension()

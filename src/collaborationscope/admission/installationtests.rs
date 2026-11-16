@@ -112,14 +112,14 @@ fn denial(result: crate::error::Result<Installation>) -> String {
 fn installation_binds_only_a_running_host_and_its_exact_active_group() {
     let mut host = host();
     let generation = host.manifest().manifest().initial_generation;
-    let group = active(&declared_group(&host, generation));
+    let group = active(&declared_group(&host, generation.get()));
     assert!(denial(Installation::from_host(&host, &group)).ends_with("collaboration-scope/stale"), "not running");
     host.activate(1).expect("initialize and start");
     assert_eq!(host.state().generation, generation, "activation keeps the admitted generation");
     let installation = Installation::from_host(&host, &group).expect("running host and exact active group");
-    assert_eq!(installation.generation(), generation);
-    let foreign_generation = active(&declared_group(&host, generation + 1));
+    assert_eq!(installation.generation(), generation.get());
+    let foreign_generation = active(&declared_group(&host, generation.get() + 1));
     assert!(denial(Installation::from_host(&host, &foreign_generation)).ends_with("collaboration-scope/stale"));
-    let declared_only = declared_group(&host, generation);
+    let declared_only = declared_group(&host, generation.get());
     assert!(denial(Installation::from_host(&host, &declared_only)).ends_with("collaboration-scope/stale"));
 }

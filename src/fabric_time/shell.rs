@@ -59,7 +59,7 @@ impl ExtensionTimeContext {
         let manifest = host.manifest().manifest();
         Self {
             service_id: manifest.service_id.clone(),
-            generation: host.state().generation,
+            generation: host.state().generation.get(),
             max_timers: manifest.resources.max_timers,
             max_runnables: manifest.resources.max_queued_events,
             max_concurrency: manifest.resources.max_concurrent_callbacks,

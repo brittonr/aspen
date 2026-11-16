@@ -250,7 +250,7 @@ pub fn ingress(generation: u64, manifest_ref: &str) -> TestResult<NativeIngressE
         peer_ref: HASH_C.to_string(),
         service_id: "molten.fixture.native.service".to_string(),
         manifest_ref: manifest_ref.to_string(),
-        generation,
+        generation: molten::system_extension::Generation::new(generation),
         authority_ref: HASH_D.to_string(),
         policy_ref: HASH_E.to_string(),
         resource_ref: HASH_F.to_string(),

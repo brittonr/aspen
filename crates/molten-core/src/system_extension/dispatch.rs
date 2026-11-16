@@ -1,7 +1,9 @@
 use super::AdmissionDecision;
 use super::AdmittedSystemExtensionManifest;
 use super::CallbackKind;
+use super::Generation;
 use super::HealthState;
+use super::Incarnation;
 use super::LifecyclePhase;
 use super::LifecycleState;
 use super::MAX_SYSTEM_EXTENSION_ITEMS;
@@ -17,8 +19,8 @@ use crate::fabric::FabricPortRequirement;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallbackEvent {
     pub callback: CallbackKind,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub event_ref: String,
     pub payload_ref: Option<String>,
     pub accounted_bytes: u64,
@@ -30,8 +32,8 @@ pub struct CallbackEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallbackInvocation {
     pub callback: CallbackKind,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub sequence: u64,
     pub event_ref: String,
     pub payload_ref: Option<String>,
@@ -136,14 +138,14 @@ fn validate_callback_event(
     }
     if event.generation != state.generation {
         issues.push(DispatchIssue::StaleGeneration {
-            actual: event.generation,
-            active: state.generation,
+            actual: event.generation.get(),
+            active: state.generation.get(),
         });
     }
     if event.incarnation != state.incarnation {
         issues.push(DispatchIssue::StaleIncarnation {
-            actual: event.incarnation,
-            active: state.incarnation,
+            actual: event.incarnation.get(),
+            active: state.incarnation.get(),
         });
     }
     if !valid_ref(&event.event_ref) {
@@ -229,8 +231,8 @@ pub struct TypedEffectRequest {
     pub input_schema_ref: String,
     pub output_schema_ref: String,
     pub request_ref: String,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub accounted_bytes: u64,
 }
 
@@ -238,8 +240,8 @@ pub struct TypedEffectRequest {
 pub enum EffectIssue {
     TooManyEffects { actual: usize, maximum: usize },
     DuplicateRequestRef(String),
-    StaleGeneration { actual: u64, active: u64 },
-    StaleIncarnation { actual: u64, active: u64 },
+    StaleGeneration { actual: Generation, active: Generation },
+    StaleIncarnation { actual: Incarnation, active: Incarnation },
     AmbientEffectDenied(AmbientEffect),
     PortNotBound(FabricPortKey),
     OperationNotAdmitted { key: FabricPortKey, operation: String },
@@ -254,8 +256,8 @@ pub enum EffectIssue {
 // r[impl molten.system_extension.typed_effects]
 pub fn validate_typed_effects(
     manifest: &AdmittedSystemExtensionManifest,
-    active_generation: u64,
-    active_incarnation: u64,
+    active_generation: Generation,
+    active_incarnation: Incarnation,
     effects: &[TypedEffectRequest],
 ) -> Vec<EffectIssue> {
     let mut issues = Vec::new();
@@ -282,8 +284,8 @@ pub fn validate_typed_effects(
 
 fn validate_effect(
     manifest: &AdmittedSystemExtensionManifest,
-    active_generation: u64,
-    active_incarnation: u64,
+    active_generation: Generation,
+    active_incarnation: Incarnation,
     effect: &TypedEffectRequest,
     issues: &mut Vec<EffectIssue>,
 ) {
@@ -391,8 +393,8 @@ pub enum CallbackOutcomeIssue {
     MalformedRef { field: &'static str, value: String },
     MissingCheckpointRef,
     MissingStateRef,
-    StaleGeneration { actual: u64, active: u64 },
-    StaleIncarnation { actual: u64, active: u64 },
+    StaleGeneration { actual: Generation, active: Generation },
+    StaleIncarnation { actual: Incarnation, active: Incarnation },
     Effect(EffectIssue),
 }
 
@@ -400,8 +402,8 @@ pub enum CallbackOutcomeIssue {
 // r[impl molten.system_extension.typed_effects]
 pub fn validate_callback_outcome(
     manifest: &AdmittedSystemExtensionManifest,
-    active_generation: u64,
-    active_incarnation: u64,
+    active_generation: Generation,
+    active_incarnation: Incarnation,
     invocation: &CallbackInvocation,
     outcome: &CallbackOutcome,
 ) -> Vec<CallbackOutcomeIssue> {

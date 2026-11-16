@@ -34,7 +34,7 @@ fn ingress_binds_transport_values_and_service_acceptance_separately() {
     assert!(admitted.acknowledgement_ref.starts_with("blake3:"));
 
     let mut stale = ingress();
-    stale.generation = STALE_GENERATION;
+    stale.generation = Generation::new(STALE_GENERATION);
     let issues = admit_native_ingress(&profile, &instance(), &stale).expect_err("stale ingress must deny");
     assert!(issues.iter().any(|issue| matches!(issue, NativeHostIssue::StaleGeneration { .. })));
 

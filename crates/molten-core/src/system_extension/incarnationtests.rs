@@ -174,7 +174,7 @@ fn failure_event(state: &LifecycleState) -> LifecycleEvent {
 fn running_instance() -> LifecycleState {
     let installed = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, 0),
+        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, Incarnation::new(0)),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -320,18 +320,21 @@ fn restart_fencing_trace_rejects_every_delayed_runtime_local_delivery() {
         "the replacement instance accepted stale runtime-local deliveries: {accepted:?}"
     );
     assert!(verdict.timer_issues.contains(&DispatchIssue::StaleIncarnation { actual: 0, active: 1 }));
-    assert!(verdict.completion_issues.contains(&CallbackOutcomeIssue::StaleIncarnation { actual: 0, active: 1 }));
+    assert!(verdict.completion_issues.contains(&CallbackOutcomeIssue::StaleIncarnation {
+        actual: Incarnation::new(0),
+        active: Incarnation::new(1)
+    }));
     assert!(verdict.failure_issues.contains(&LifecycleIssue::StaleIncarnation { actual: 0, active: 1 }));
 }
 
 #[test]
 fn restart_entry_advances_the_incarnation_and_preserves_the_generation() {
     let instance_a = running_instance();
-    assert_eq!(instance_a.incarnation, 0);
+    assert_eq!(instance_a.incarnation, Incarnation::new(0));
 
     let instance_b = restarted_instance(&instance_a);
     assert_eq!(instance_b.generation, instance_a.generation);
-    assert_eq!(instance_b.incarnation, instance_a.incarnation + 1);
+    assert_eq!(instance_b.incarnation, instance_a.incarnation.checked_add(1).expect("incarnation increment"));
 
     let recovering = transition(&instance_b, LifecycleEventKind::BeginDrain);
     assert_eq!(recovering.incarnation, instance_b.incarnation);
@@ -416,16 +419,16 @@ fn durable_work_presented_as_a_live_callback_is_rejected() {
 fn future_incarnation_work_is_rejected() {
     let instance = running_instance();
     let mut future_timer = timer_event(&instance);
-    future_timer.incarnation = instance.incarnation + 1;
+    future_timer.incarnation = instance.incarnation.checked_add(1).expect("future incarnation");
     let issues = plan_callback_dispatch(&admitted_manifest(), &instance, ResourceUsage::default(), &future_timer, 0)
         .expect_err("work from a future incarnation must be denied");
     assert!(issues.contains(&DispatchIssue::StaleIncarnation {
-        actual: instance.incarnation + 1,
-        active: instance.incarnation,
+        actual: instance.incarnation.checked_add(1).expect("future incarnation").get(),
+        active: instance.incarnation.get(),
     }));
 
     let mut future_failure = failure_event(&instance);
-    future_failure.incarnation = instance.incarnation + 1;
+    future_failure.incarnation = instance.incarnation.checked_add(1).expect("future incarnation");
     let lifecycle_issues = plan_lifecycle_transition(
         &instance,
         &future_failure,
@@ -434,7 +437,7 @@ fn future_incarnation_work_is_rejected() {
     )
     .expect_err("a failure notification from a future incarnation must be denied");
     assert!(lifecycle_issues.contains(&LifecycleIssue::StaleIncarnation {
-        actual: instance.incarnation + 1,
-        active: instance.incarnation,
+        actual: instance.incarnation.checked_add(1).expect("future incarnation").get(),
+        active: instance.incarnation.get(),
     }));
 }

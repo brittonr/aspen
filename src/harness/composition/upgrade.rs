@@ -20,7 +20,7 @@ pub(super) fn run(variant: ScenarioVariant) -> Result<ScenarioFacts, crate::erro
         kind: LifecycleEventKind::BeginUpgrade,
         generation: before.generation,
         incarnation: before.incarnation,
-        next_generation: Some(before.generation + 1),
+        next_generation: before.generation.checked_add(1),
         checkpoint_ref: None,
         failure_class: None,
     })?;

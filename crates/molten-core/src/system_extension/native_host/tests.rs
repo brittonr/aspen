@@ -1,4 +1,6 @@
+use super::super::Generation;
 use super::super::HealthState;
+use super::super::Incarnation;
 use super::super::LifecyclePhase;
 use super::super::ResourceUsage;
 // r[impl molten.system_extension.native_host.validation]
@@ -78,8 +80,8 @@ fn instance() -> NativeInstanceRecord {
         profile_ref: HASH_A.to_string(),
         state_schema_ref: HASH_A.to_string(),
         lifecycle: super::super::LifecycleState {
-            generation: GENERATION,
-            incarnation: 0,
+            generation: Generation::new(GENERATION),
+            incarnation: Incarnation::new(0),
             phase: LifecyclePhase::Running,
             restart_attempts: 0,
             health: HealthState::Healthy,
@@ -104,7 +106,7 @@ fn operation(kind: NativeOperationKind) -> NativeOperationRecord {
         operation_ref: HASH_D.to_string(),
         parent_ref: HASH_E.to_string(),
         kind,
-        generation: GENERATION,
+        generation: Generation::new(GENERATION),
         state: NativeOperationState::IntentCommitted,
         terminal_ref: None,
         is_retry_permitted: false,
@@ -122,7 +124,7 @@ fn ingress() -> NativeIngressEnvelope {
         peer_ref: HASH_C.to_string(),
         service_id: "fixture-service".to_string(),
         manifest_ref: HASH_F.to_string(),
-        generation: GENERATION,
+        generation: Generation::new(GENERATION),
         authority_ref: HASH_D.to_string(),
         policy_ref: HASH_E.to_string(),
         resource_ref: HASH_F.to_string(),
@@ -195,13 +197,13 @@ fn linked_effect_completion_passes_and_stale_or_duplicate_completion_denies() {
         effect_ref: HASH_E.to_string(),
         operation_ref: HASH_D.to_string(),
         port_binding_ref: HASH_B.to_string(),
-        generation: GENERATION,
+        generation: Generation::new(GENERATION),
     };
     let plan = admit_native_effect_completion(&pending, &input).expect("linked completion");
     assert_eq!(plan.payload_ref, HASH_C);
 
     let mut stale = input.clone();
-    stale.generation = STALE_GENERATION;
+    stale.generation = Generation::new(STALE_GENERATION);
     assert!(admit_native_effect_completion(&pending, &stale).is_err());
     let terminal = observe_native_operation(&pending, HASH_D, NativeOperationState::Terminal, Some(HASH_C.to_string()))
         .expect("terminal effect");
@@ -227,7 +229,7 @@ fn startup_inventory_classifies_every_unresolved_operation_state_without_retry()
         operation_ref: native_identity_ref(&[label]),
         parent_ref: HASH_E.to_string(),
         kind: NativeOperationKind::Callback,
-        generation,
+        generation: Generation::new(generation),
         state,
         terminal_ref: (state == NativeOperationState::Terminal).then(|| HASH_C.to_string()),
         is_retry_permitted: false,

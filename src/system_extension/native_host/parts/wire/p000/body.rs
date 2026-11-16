@@ -98,8 +98,8 @@ pub fn canonical_callback_envelope(
         crate::preserves_rail::string(&context.instance_id),
         crate::preserves_rail::string(&context.extension_id),
         crate::preserves_rail::string(&context.service_id),
-        crate::preserves_rail::u64_value(invocation.generation),
-        crate::preserves_rail::u64_value(invocation.incarnation),
+        crate::preserves_rail::u64_value(invocation.generation.get()),
+        crate::preserves_rail::u64_value(invocation.incarnation.get()),
         crate::preserves_rail::string(invocation.callback.as_str()),
         crate::preserves_rail::u64_value(invocation.sequence),
         crate::preserves_rail::string(&invocation.event_ref),
@@ -152,8 +152,8 @@ pub fn decode_callback_envelope(
     require_item_bound(payload.iter().count() + state.iter().count(), maximum_items, "callback input values")?;
     let invocation = CallbackInvocation {
         callback,
-        generation: required_u64(&fields[6], "callback generation")?,
-        incarnation: required_u64(&fields[7], "callback incarnation")?,
+        generation: crate::system_extension::Generation::new(required_u64(&fields[6], "callback generation")?),
+        incarnation: crate::system_extension::Incarnation::new(required_u64(&fields[7], "callback incarnation")?),
         sequence: required_u64(&fields[9], "callback sequence")?,
         event_ref: crate::preserves_rail::required_content_ref_string(&fields[10], "callback event ref")?,
         payload_ref: payload.as_ref().map(|value| value.value_ref.clone()),
@@ -259,8 +259,8 @@ fn effect_value(effect: &MaterializedEffectRequest) -> preserves::IOValue {
         crate::preserves_rail::string(&effect.effect.input_schema_ref),
         crate::preserves_rail::string(&effect.effect.output_schema_ref),
         value_value(&effect.request),
-        crate::preserves_rail::u64_value(effect.effect.generation),
-        crate::preserves_rail::u64_value(effect.effect.incarnation),
+        crate::preserves_rail::u64_value(effect.effect.generation.get()),
+        crate::preserves_rail::u64_value(effect.effect.incarnation.get()),
         crate::preserves_rail::u64_value(effect.effect.accounted_bytes),
         crate::preserves_rail::string(NATIVE_CALLBACK_OUTCOME_SCHEMA),
     ])

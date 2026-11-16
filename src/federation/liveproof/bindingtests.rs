@@ -63,10 +63,11 @@ fn supervised_dag_effect_denies_stale_generation_and_foreign_request() {
         super::setup::dagports::request(&head, &session, schema.as_str(), 64).expect("receiver DAG request");
     let effect = super::receiver::effect(&request).expect("supervised effect");
     let exact = crate::dag_sync::canonical_dag_request(&request).expect("canonical request").record_ref;
-    crate::mesh::transfer::execution::require_supervised_effect(&effect, &exact, effect.generation)
+    crate::mesh::transfer::execution::require_supervised_effect(&effect, &exact, effect.generation.get())
         .expect("exact request at the session generation dispatches");
     assert!(
-        crate::mesh::transfer::execution::require_supervised_effect(&effect, &exact, effect.generation + 1).is_err(),
+        crate::mesh::transfer::execution::require_supervised_effect(&effect, &exact, effect.generation.get() + 1)
+            .is_err(),
         "an effect from an earlier generation must not dispatch"
     );
     let other = super::setup::transport::reference("binding-denial-other-session");
@@ -74,7 +75,8 @@ fn supervised_dag_effect_denies_stale_generation_and_foreign_request() {
     let foreign = crate::dag_sync::canonical_dag_request(&foreign).expect("canonical foreign request").record_ref;
     assert_ne!(foreign, exact);
     assert!(
-        crate::mesh::transfer::execution::require_supervised_effect(&effect, &foreign, effect.generation).is_err(),
+        crate::mesh::transfer::execution::require_supervised_effect(&effect, &foreign, effect.generation.get())
+            .is_err(),
         "an effect naming a different receiver request must not dispatch"
     );
 }

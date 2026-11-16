@@ -46,7 +46,7 @@ pub(super) fn observe(
         || role.role_id != configuration.role_id
         || role.service_id != actor_key_ref
         || role.extension_id != instance.extension_id
-        || role.service_generation != instance.lifecycle.generation
+        || role.service_generation != instance.lifecycle.generation.get()
         || manifest.manifest_ref() != instance.manifest_ref
         || manifest.manifest().service_id != actor_key_ref
         || instance.profile_ref != configuration.profile.system_extension_profile_ref
@@ -83,8 +83,8 @@ impl Observation {
             profile_ref,
             system_extension_manifest_ref: native.manifest_ref.clone(),
             placement_ref: self.assignment.assignment_ref.clone(),
-            extension_generation: native.lifecycle.generation,
-            system_extension_generation: native.lifecycle.generation,
+            extension_generation: native.lifecycle.generation.get(),
+            system_extension_generation: native.lifecycle.generation.get(),
             system_extension_phase: native.lifecycle.phase,
             system_extension_checkpoint_ref: native.checkpoint_ref.clone(),
             delivery_profile_ref: configuration.profile.delivery_profile_ref.clone(),

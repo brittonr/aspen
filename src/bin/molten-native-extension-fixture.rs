@@ -54,7 +54,7 @@ fn run(has_inherited_home: bool) -> Result<(), String> {
     let prior_state = envelope.inputs.state.as_ref().map_or(&[][..], |value| value.bytes.as_slice());
     let state_bytes = [
         envelope.context.instance_id.as_bytes(),
-        &envelope.invocation.generation.to_le_bytes(),
+        &envelope.invocation.generation.get().to_le_bytes(),
         &envelope.invocation.sequence.to_le_bytes(),
         prior_state,
     ]

@@ -1,7 +1,9 @@
 use super::super::AdmittedSystemExtensionManifest;
 use super::super::CallbackOutcome;
 use super::super::EffectTarget;
+use super::super::Generation;
 use super::super::HealthState;
+use super::super::Incarnation;
 use super::super::TypedEffectRequest;
 use super::AdmittedFacadeManifest;
 use super::FacadePhaseEntry;
@@ -27,8 +29,8 @@ pub struct FacadePostponedEvent {
 /// The committed facade state handed to a turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FacadeRuntimeState {
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub phase: String,
     pub state_ref: Option<String>,
     pub turn_sequence: u64,
@@ -53,7 +55,7 @@ pub struct FacadeEffectIntent {
 pub struct FacadeTimerRequest {
     pub timer_ref: String,
     pub phase: String,
-    pub incarnation: u64,
+    pub incarnation: Incarnation,
     pub logical_tick: u64,
     pub ticks: u64,
 }
@@ -63,7 +65,7 @@ pub struct FacadeTimerRequest {
 pub struct FacadeTimerIntent {
     pub timer_ref: String,
     pub phase: String,
-    pub incarnation: u64,
+    pub incarnation: Incarnation,
     pub logical_tick: u64,
     pub deadline_tick: u64,
 }
@@ -113,7 +115,7 @@ pub enum FacadeTurnIssue {
     StaleTimer {
         timer_ref: String,
         phase: String,
-        incarnation: u64,
+        incarnation: Incarnation,
     },
     UnfencedTimer {
         timer_ref: String,
@@ -197,7 +199,7 @@ pub fn admit_facade_event(
 pub struct FacadeTimerDelivery {
     pub timer_ref: String,
     pub phase: String,
-    pub incarnation: u64,
+    pub incarnation: Incarnation,
     pub logical_tick: u64,
 }
 

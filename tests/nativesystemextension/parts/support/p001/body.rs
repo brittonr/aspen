@@ -248,7 +248,7 @@ fn admitted_manifest() -> TestResult<AdmittedManifest> {
             state_schema: "molten.fixture.native.state.v1".to_string(),
             compatible_state_schemas: vec!["molten.fixture.native.state.v1".to_string()],
             evidence_profile_ref: HASH_E.to_string(),
-            initial_generation: GENERATION,
+            initial_generation: molten::system_extension::Generation::new(GENERATION),
             non_claims: REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
         },
         &[effect_descriptor()],

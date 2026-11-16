@@ -20,7 +20,7 @@ pub(super) fn save(
     let sessions = before.chain((!is_terminal).then_some(session)).chain(after);
     let value = crate::preserves_rail::record("federation-recovery-v1", vec![
         crate::preserves_rail::string(service.manifest.manifest_ref()),
-        crate::preserves_rail::u64_value(service.host.state().generation),
+        crate::preserves_rail::u64_value(service.host.state().generation.get()),
         crate::preserves_rail::u64_value(sequence),
         crate::preserves_rail::sequence(sessions.map(super::checkpoint::encode).collect()),
     ]);
@@ -40,7 +40,7 @@ pub(super) fn restore(service: &mut super::Service, scope: &crate::node_state::S
         .collect_simple_record("federation-recovery-v1", Some(4))
         .ok_or_else(|| invalid("malformed federation checkpoint"))?;
     if super::checkpoint::string(&fields[0])? != service.manifest.manifest_ref()
-        || super::checkpoint::integer(&fields[1])? != service.host.state().generation
+        || super::checkpoint::integer(&fields[1])? != service.host.state().generation.get()
     {
         return Err(invalid("checkpoint manifest or generation is fenced"));
     }
@@ -48,7 +48,7 @@ pub(super) fn restore(service: &mut super::Service, scope: &crate::node_state::S
     for value in super::checkpoint::items(&fields[3], service.manifest.bounds().concurrent_sessions)? {
         let session =
             super::checkpoint::decode(&crate::preserves_rail::value_to_iovalue(&value), service.manifest.bounds())?;
-        if session.generation != service.host.state().generation
+        if session.generation != service.host.state().generation.get()
             || matches!(
                 session.phase,
                 molten_core::federation::SessionPhase::Committed | molten_core::federation::SessionPhase::Denied

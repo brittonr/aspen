@@ -40,7 +40,7 @@ fn validate_host_scope<E: SystemExtensionExecutor>(
             "live Raft host manifest ref does not match the consistency application manifest",
         ));
     }
-    if host.state().generation != group.service_generation {
+    if host.state().generation.get() != group.service_generation {
         return Err(crate::error::Failure::invalid_harness("live Raft host uses a stale service generation"));
     }
     if !group.policy_refs.iter().all(|reference| admitted.policy_refs.contains(reference)) {

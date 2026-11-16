@@ -1,8 +1,8 @@
 #[test]
 fn drained_members_can_checkpoint_before_generation_replacement() {
     let running = super::LifecycleState {
-        generation: 4,
-        incarnation: 9,
+        generation: super::Generation::new(4),
+        incarnation: super::Incarnation::new(9),
         phase: super::LifecyclePhase::Running,
         restart_attempts: 1,
         health: super::HealthState::Healthy,
@@ -62,7 +62,7 @@ fn drained_members_can_checkpoint_before_generation_replacement() {
             kind: super::LifecycleEventKind::BeginUpgrade,
             generation: completed.generation,
             incarnation: completed.incarnation,
-            next_generation: Some(completed.generation + 1),
+            next_generation: completed.generation.checked_add(1),
             checkpoint_ref: None,
             failure_class: None,
         },

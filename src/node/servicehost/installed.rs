@@ -153,7 +153,7 @@ impl Owner {
     ) -> crate::error::Result<crate::node_service_hosting::OperationRequest> {
         let observer = self.observers.get(service).ok_or_else(|| super::invalid("scope observer unavailable"))?;
         let actual = self.host.active_instance(service, logical_tick)?;
-        if actual.manifest_ref != observer.manifest_ref || actual.lifecycle.generation != observer.generation {
+        if actual.manifest_ref != observer.manifest_ref || actual.lifecycle.generation.get() != observer.generation {
             return Err(super::invalid("scope effect runtime is stale, uncertain, or bound to another native service"));
         }
         let input_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
@@ -163,8 +163,8 @@ impl Owner {
                 crate::preserves_rail::string(&observer.config_ref),
                 crate::preserves_rail::string(&observer.binding_ref),
                 crate::preserves_rail::string(&actual.instance_id),
-                crate::preserves_rail::u64_value(actual.lifecycle.generation),
-                crate::preserves_rail::u64_value(actual.lifecycle.incarnation),
+                crate::preserves_rail::u64_value(actual.lifecycle.generation.get()),
+                crate::preserves_rail::u64_value(actual.lifecycle.incarnation.get()),
                 crate::preserves_rail::string(read.as_str()),
             ],
         ))?;

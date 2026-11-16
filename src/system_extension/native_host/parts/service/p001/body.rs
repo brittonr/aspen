@@ -202,7 +202,7 @@ where
             effect_ref: completion.request_ref.clone(),
             operation_ref,
             port_binding_ref: completion.binding_ref.clone(),
-            generation: completion.generation,
+            generation: molten_core::system_extension::Generation::new(completion.generation),
         };
         let plan = admit_native_effect_completion(&self.instance()?, &input).map_err(Failure::Admission)?;
         let completion_bytes = crate::preserves_rail::canonical_bytes(&completion.value)?;

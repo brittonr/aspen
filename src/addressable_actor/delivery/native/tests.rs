@@ -9,8 +9,8 @@ fn receipt(
 ) -> crate::system_extension::NativeCallbackValue {
     let invocation = crate::system_extension::CallbackInvocation {
         callback: crate::system_extension::CallbackKind::Request,
-        generation: 1,
-        incarnation: 0,
+        generation: crate::system_extension::Generation::new(1),
+        incarnation: crate::system_extension::Incarnation::new(0),
         sequence: 2,
         event_ref: reference("counter-event"),
         payload_ref: Some(reference("counter-request")),
@@ -118,7 +118,7 @@ fn completed_operations(proof: &Commit) -> Vec<crate::system_extension::NativeOp
             operation_ref,
             parent_ref,
             kind,
-            generation: 1,
+            generation: crate::system_extension::Generation::new(1),
             state: crate::system_extension::NativeOperationState::Terminal,
             terminal_ref: Some(terminal_ref),
             is_retry_permitted: false,
@@ -163,8 +163,8 @@ fn instance_record(proof: &Commit) -> crate::system_extension::NativeInstanceRec
         profile_ref: reference("profile"),
         state_schema_ref: reference("schema"),
         lifecycle: crate::system_extension::LifecycleState {
-            generation: 1,
-            incarnation: 0,
+            generation: crate::system_extension::Generation::new(1),
+            incarnation: crate::system_extension::Incarnation::new(0),
             phase: crate::system_extension::LifecyclePhase::Running,
             restart_attempts: 0,
             health: crate::system_extension::HealthState::Healthy,

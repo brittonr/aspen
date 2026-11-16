@@ -27,7 +27,7 @@ impl<C: crate::fabric_time::TimerClockAdapter> crate::addressable_actor::ActorEf
         })
         .map_err(|error| super::port_error(error, false))?;
         let host = observed.host(self.configuration);
-        self.prepared_incarnation = Some(observed.instance.lifecycle.incarnation);
+        self.prepared_incarnation = Some(observed.instance.lifecycle.incarnation.get());
         Ok(crate::addressable_actor::EffectAdmissionObservation {
             admission_ref: observed.authority_ref,
             actor_key_ref: host.actor_key_ref,
@@ -38,7 +38,7 @@ impl<C: crate::fabric_time::TimerClockAdapter> crate::addressable_actor::ActorEf
             policy_current: host.policy_current,
             capability_current: host.capability_current,
             placement_current: host.placement_current,
-            generation_current: observed.instance.lifecycle.generation == effect.extension_generation,
+            generation_current: observed.instance.lifecycle.generation.get() == effect.extension_generation,
             resources_admitted: host.resources_admitted,
             adapter_admitted: host.adapter_admitted,
         })
@@ -74,8 +74,8 @@ impl<C: crate::fabric_time::TimerClockAdapter> crate::addressable_actor::ActorEf
             .owner
             .actor_instance(&member, self.logical_tick)
             .map_err(|error| super::port_error(error, false))?;
-        if self.prepared_incarnation != Some(native.lifecycle.incarnation)
-            || native.lifecycle.generation != effect.extension_generation
+        if self.prepared_incarnation != Some(native.lifecycle.incarnation.get())
+            || native.lifecycle.generation.get() != effect.extension_generation
             || native.manifest_ref != effect.system_extension_manifest_ref
         {
             return Err(super::port_error("actor native generation changed before effect", false));

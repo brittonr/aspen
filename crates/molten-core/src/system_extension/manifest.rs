@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use super::CallbackKind;
 use super::ExecutionProfile;
+use super::Generation;
 use super::INITIAL_SYSTEM_EXTENSION_GENERATION;
 use super::MAX_SYSTEM_EXTENSION_ITEMS;
 use super::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS;
@@ -54,7 +55,7 @@ pub struct SystemExtensionManifestInput {
     pub state_schema: String,
     pub compatible_state_schemas: Vec<String>,
     pub evidence_profile_ref: String,
-    pub initial_generation: u64,
+    pub initial_generation: Generation,
     pub non_claims: Vec<SystemExtensionNonClaim>,
 }
 
@@ -77,7 +78,7 @@ pub struct AdmittedSystemExtensionManifest {
     pub state_schema: String,
     pub compatible_state_schemas: Vec<String>,
     pub evidence_profile_ref: String,
-    pub initial_generation: u64,
+    pub initial_generation: Generation,
     pub non_claims: Vec<SystemExtensionNonClaim>,
 }
 
@@ -140,8 +141,8 @@ pub enum ManifestIssue {
     ExecutionProfileNotAdmitted(ExecutionProfile),
     StateSchemaNotSelfCompatible(String),
     InitialGenerationMismatch {
-        actual: u64,
-        expected: u64,
+        actual: Generation,
+        expected: Generation,
     },
     Resource(ResourceIssue),
     RecoveryGroup(RecoveryGroupIssue),

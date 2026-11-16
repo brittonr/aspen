@@ -98,7 +98,7 @@ fn validate_supervisor(
         .ok_or_else(|| super::invalid("scope effect port was not admitted by actual native host"))?;
     if instance.service_id != binding.service_id
         || instance.manifest_ref != binding.manifest_ref
-        || instance.lifecycle.generation != binding.generation
+        || instance.lifecycle.generation.get() != binding.generation
         || instance.lifecycle.phase != crate::system_extension::LifecyclePhase::Running
         || actual.binding_ref != binding.port_binding_ref
         || !manifest.manifest().policy_refs.contains(&binding.policy_ref)

@@ -6,6 +6,8 @@
 //! Durable work is never treated as a still-valid callback of a previous
 //! instance.
 
+use super::Generation;
+use super::Incarnation;
 use super::LifecycleState;
 use super::valid_ref;
 
@@ -30,8 +32,8 @@ impl WorkClass {
 pub struct DeliveryClaim {
     pub claim_ref: String,
     pub class: WorkClass,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
 }
 
 /// The work presented for admission.
@@ -39,8 +41,8 @@ pub struct DeliveryClaim {
 pub struct WorkPresentation {
     pub work_ref: String,
     pub class: WorkClass,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,8 +51,8 @@ pub enum ReadmissionIssue {
     MalformedClaimRef(String),
     MissingClaim,
     ClassMismatch { presented: WorkClass, claimed: WorkClass },
-    StaleGeneration { actual: u64, active: u64 },
-    StaleIncarnation { actual: u64, active: u64 },
+    StaleGeneration { actual: Generation, active: Generation },
+    StaleIncarnation { actual: Incarnation, active: Incarnation },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,8 +60,8 @@ pub struct ReadmissionAdmission {
     pub work_ref: String,
     pub claim_ref: Option<String>,
     pub class: WorkClass,
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
 }
 
 /// Admit one presented work item against the executing instance.

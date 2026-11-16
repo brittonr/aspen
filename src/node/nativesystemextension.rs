@@ -67,14 +67,14 @@ impl NativeNodeServiceRegistry {
         }
         if instance.lifecycle.generation < current.lifecycle.generation {
             return Err(NativeNodeRegistryIssue::StaleGeneration {
-                actual: instance.lifecycle.generation,
-                active: current.lifecycle.generation,
+                actual: instance.lifecycle.generation.get(),
+                active: current.lifecycle.generation.get(),
             });
         }
         if instance.lifecycle.incarnation < current.lifecycle.incarnation {
             return Err(NativeNodeRegistryIssue::StaleIncarnation {
-                actual: instance.lifecycle.incarnation,
-                active: current.lifecycle.incarnation,
+                actual: instance.lifecycle.incarnation.get(),
+                active: current.lifecycle.incarnation.get(),
             });
         }
         self.instances.insert(instance.instance_id.clone(), instance);
@@ -149,8 +149,8 @@ mod tests {
             profile_ref: HASH.to_string(),
             state_schema_ref: HASH.to_string(),
             lifecycle: LifecycleState {
-                generation: GENERATION,
-                incarnation: 0,
+                generation: Generation::new(GENERATION),
+                incarnation: Incarnation::new(0),
                 phase: LifecyclePhase::Stopped,
                 restart_attempts: 0,
                 health: HealthState::Stopped,
@@ -186,7 +186,7 @@ mod tests {
         assert!(registry.install(stopped("two")).is_err());
         assert!(registry.remove("missing").is_err());
         let mut stale = stopped("one");
-        stale.lifecycle.generation = 0;
+        stale.lifecycle.generation = Generation::new(0);
         assert!(registry.replace_recovered(stale).is_err());
     }
 }

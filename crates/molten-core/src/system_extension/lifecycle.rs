@@ -1,6 +1,8 @@
 use super::FailureClass;
+use super::Generation;
 use super::HealthState;
 use super::INITIAL_SYSTEM_EXTENSION_GENERATION;
+use super::Incarnation;
 use super::ResourceUsage;
 use super::SupervisionDecision;
 use super::plan_supervision;
@@ -59,8 +61,8 @@ impl LifecyclePhase {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleState {
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub phase: LifecyclePhase,
     pub restart_attempts: u64,
     pub health: HealthState,
@@ -70,8 +72,8 @@ pub struct LifecycleState {
 impl LifecycleState {
     pub const fn absent() -> Self {
         Self {
-            generation: 0,
-            incarnation: 0,
+            generation: Generation::new(0),
+            incarnation: Incarnation::new(0),
             phase: LifecyclePhase::Absent,
             restart_attempts: 0,
             health: HealthState::Unknown,
@@ -144,15 +146,15 @@ impl LifecycleEventKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleEvent {
     pub kind: LifecycleEventKind,
-    pub generation: u64,
-    pub incarnation: u64,
-    pub next_generation: Option<u64>,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
+    pub next_generation: Option<Generation>,
     pub checkpoint_ref: Option<String>,
     pub failure_class: Option<FailureClass>,
 }
 
 impl LifecycleEvent {
-    pub const fn simple(kind: LifecycleEventKind, generation: u64, incarnation: u64) -> Self {
+    pub const fn simple(kind: LifecycleEventKind, generation: Generation, incarnation: Incarnation) -> Self {
         Self {
             kind,
             generation,
@@ -176,15 +178,15 @@ pub enum LifecycleIssue {
     },
     IncarnationOverflow,
     InitialGenerationMismatch {
-        actual: u64,
-        expected: u64,
+        actual: Generation,
+        expected: Generation,
     },
     MissingNextGeneration,
-    UnexpectedNextGeneration(u64),
+    UnexpectedNextGeneration(Generation),
     GenerationOverflow,
     NonSequentialGeneration {
-        actual: u64,
-        expected: u64,
+        actual: Generation,
+        expected: Generation,
     },
     IllegalTransition {
         phase: LifecyclePhase,
@@ -215,7 +217,7 @@ pub fn plan_lifecycle_transition(
     let next = match (state.phase, event.kind) {
         (LifecyclePhase::Absent, LifecycleEventKind::Install) => LifecycleState {
             generation: event.generation,
-            incarnation: 0,
+            incarnation: Incarnation::new(0),
             phase: LifecyclePhase::Installed,
             restart_attempts: 0,
             health: HealthState::Stopped,
@@ -375,14 +377,14 @@ fn validate_event_shape(state: &LifecycleState, event: &LifecycleEvent) -> Vec<L
         }
     } else if event.generation != state.generation {
         issues.push(LifecycleIssue::StaleGeneration {
-            actual: event.generation,
-            active: state.generation,
+            actual: event.generation.get(),
+            active: state.generation.get(),
         });
     }
     if event.incarnation != state.incarnation {
         issues.push(LifecycleIssue::StaleIncarnation {
-            actual: event.incarnation,
-            active: state.incarnation,
+            actual: event.incarnation.get(),
+            active: state.incarnation.get(),
         });
     }
 

@@ -217,7 +217,7 @@ fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::Dispa
             state_schema: TEST_STATE_SCHEMA.to_string(),
             compatible_state_schemas: vec![TEST_STATE_SCHEMA.to_string()],
             evidence_profile_ref: test_ref("evidence-profile"),
-            initial_generation: SERVICE_GENERATION,
+            initial_generation: molten_core::system_extension::Generation::new(SERVICE_GENERATION),
             non_claims: crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
         },
         &descriptors,

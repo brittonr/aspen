@@ -185,7 +185,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
             extension_id: self.admitted.manifest().extension_id.clone(),
             service_id: self.admitted.manifest().service_id.clone(),
             manifest_ref: self.admitted.manifest_ref().to_string(),
-            generation: self.state.generation,
+            generation: self.state.generation.get(),
             phase: self.state.phase,
             execution_profile: self.admitted.manifest().execution_profile,
             port_binding_refs,

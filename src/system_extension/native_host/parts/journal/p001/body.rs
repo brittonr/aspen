@@ -14,7 +14,7 @@ fn parse_operation(value: &preserves::Value<preserves::IOValue>) -> crate::error
             &fields[3],
             "native operation kind",
         )?)?,
-        generation: required_u64(&fields[4], "native operation generation")?,
+        generation: crate::system_extension::Generation::new(required_u64(&fields[4], "native operation generation")?),
         state: parse_operation_state(&crate::preserves_rail::required_string_field(
             &fields[5],
             "native operation state",

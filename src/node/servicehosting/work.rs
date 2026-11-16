@@ -147,7 +147,7 @@ pub(super) fn ingress_ref(input: &super::DeliveryInput) -> crate::error::Result<
         crate::preserves_rail::string(&ingress.peer_ref),
         crate::preserves_rail::string(&ingress.service_id),
         crate::preserves_rail::string(&ingress.manifest_ref),
-        crate::preserves_rail::u64_value(ingress.generation),
+        crate::preserves_rail::u64_value(ingress.generation.get()),
         crate::preserves_rail::string(&ingress.authority_ref),
         crate::preserves_rail::string(&ingress.policy_ref),
         crate::preserves_rail::string(&ingress.resource_ref),
@@ -170,8 +170,8 @@ pub(super) fn claim_for(
         crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("host-current-claim-v1", vec![
             crate::preserves_rail::string(work_ref),
             crate::preserves_rail::string(member),
-            crate::preserves_rail::u64_value(lifecycle.generation),
-            crate::preserves_rail::u64_value(lifecycle.incarnation),
+            crate::preserves_rail::u64_value(lifecycle.generation.get()),
+            crate::preserves_rail::u64_value(lifecycle.incarnation.get()),
             crate::preserves_rail::u64_value(state.revision),
             crate::preserves_rail::string(receipt),
         ]))?;
@@ -190,8 +190,8 @@ pub(super) fn submission_ref(
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("host-work-submit-v1", vec![
         crate::preserves_rail::string(&presentation.work_ref),
         crate::preserves_rail::string(presentation.class.as_str()),
-        crate::preserves_rail::u64_value(presentation.generation),
-        crate::preserves_rail::u64_value(presentation.incarnation),
+        crate::preserves_rail::u64_value(presentation.generation.get()),
+        crate::preserves_rail::u64_value(presentation.incarnation.get()),
         crate::preserves_rail::string(&payload.value_ref),
     ]))
 }

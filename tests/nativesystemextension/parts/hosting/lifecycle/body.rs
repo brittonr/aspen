@@ -54,7 +54,7 @@ fn failed_native_actor_recovery_materialization_keeps_fresh_incarnation_closed()
     let mut recovered = cohort.recovered(before.clone())?;
     assert!(recovered.recover(4).is_err());
     let after = recovered.instance().or_fail("failed recovery durable actor")?;
-    assert_eq!(after.lifecycle.incarnation, before.lifecycle.incarnation + 1);
+    assert_eq!(after.lifecycle.incarnation, before.lifecycle.incarnation.checked_add(1).expect("incarnation increment"));
     assert_eq!(after.lifecycle.generation, before.lifecycle.generation);
     assert!(!after.is_accepting_ingress, "failed recovery must not reopen ingress");
     assert_ne!(after.lifecycle.phase, molten::system_extension::LifecyclePhase::Running);
@@ -76,7 +76,7 @@ fn successful_native_ingress_persists_exact_callback_receipt_before_terminal_ing
     let mut service = cohort.install()?;
     service.start(1).or_fail("start actual native service")?;
     let current = service.instance().or_fail("current native instance")?;
-    let request = ingress(current.lifecycle.generation, &current.manifest_ref)?;
+    let request = ingress(current.lifecycle.generation.get(), &current.manifest_ref)?;
     let result = service.ingress(&request, 2).or_fail("actual native ingress")?;
     let molten::system_extension::DispatchResult::Executed { receipt, .. } = result.dispatch else {
         return Err("native request callback did not execute".into());

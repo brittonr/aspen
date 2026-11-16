@@ -180,7 +180,7 @@ fn validated_effect_port(
     if binding.binding.implementation_profile != session.membership.profile.profile_id
         || current.assignment.service_id != session.member()
         || current.assignment.extension_id != native.extension_id
-        || current.assignment.service_generation != native.lifecycle.generation
+        || current.assignment.service_generation != native.lifecycle.generation.get()
         || !native.unresolved.is_empty()
     {
         return Err(super::invalid("placement native identity, profile or generation fence differs"));
@@ -252,7 +252,7 @@ impl ExtensionRoleLifecyclePort for Lifecycle<'_> {
             .actor_rewake(&assignment.service_id, self.tick)
             .map_err(|error| role_failure(error, true))?;
         if observed.lifecycle.phase != crate::system_extension::LifecyclePhase::Running
-            || observed.lifecycle.generation != assignment.service_generation
+            || observed.lifecycle.generation.get() != assignment.service_generation
         {
             return Err(role_failure("native role activation did not reach exact Running generation", true));
         }
