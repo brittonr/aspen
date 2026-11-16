@@ -8,6 +8,8 @@
     "tools",
     "docs",
     "scripts",
+    "pilots",
+    "nix",
     "flake.nix"
   ],
   "non_claims": [
@@ -18,9 +20,9 @@
     "whole-system-correctness"
   ],
   "observed_date": "2026-11-13",
-  "referenced": 1110,
+  "referenced": 1124,
   "requirement_root": ".cairn/specs",
-  "requirements": 3043,
+  "requirements": 3057,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v1",
   "uncovered": 1933,
