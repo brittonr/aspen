@@ -1,4 +1,4 @@
-{ pkgs, startupSourceBinding }:
+{ pkgs, startupSourceBinding, moltenModule }:
 
 pkgs.testers.runNixOSTest {
   name = "molten-module";
@@ -9,7 +9,7 @@ pkgs.testers.runNixOSTest {
   nodes.machine =
     { ... }:
     {
-      imports = [ ./modules/molten.nix ];
+      imports = [ moltenModule ];
       # The test VM has no route to the operator binary cache. Disabling
       # substituters keeps the source-gate Nix evaluation offline and bounded
       # instead of retrying an unreachable cache for tens of minutes.

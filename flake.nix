@@ -132,6 +132,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       nickel-cli,
       flux-src,
@@ -1226,6 +1227,7 @@
 
         vmMoltenModule = import ./nix/vm-molten-module.nix {
           inherit pkgs startupSourceBinding;
+          moltenModule = self.nixosModules.molten;
         };
 
         moltenVmNodeModule =
@@ -1339,9 +1341,6 @@
           };
       in
       {
-        nixosModules = {
-          molten = import ./nix/modules/molten.nix;
-        };
 
         legacyPackages = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           sample-pgo = samplePgo;
@@ -3408,7 +3407,7 @@
                 evaluateService = supplied: builtins.tryEval (nixpkgs.lib.nixosSystem {
                   system = system;
                   modules = [
-                    (import ./nix/modules/molten.nix)
+                    self.nixosModules.molten
                     {
                       boot.isContainer = true;
                       services.molten = {
@@ -4837,5 +4836,7 @@
 
         formatter = pkgs.nixpkgs-fmt;
       }
-    );
+    ) // {
+      nixosModules.molten = import ./nix/modules/molten.nix;
+    };
 }

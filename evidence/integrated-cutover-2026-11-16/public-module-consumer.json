@@ -1,0 +1,26 @@
+{
+  "schema": "aspen.public-module-consumer-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_base_commit": "0f75c99b8af3b55b6b0a87e92778d1ec4c0e7bc0",
+  "correction": "Move nixosModules.molten outside eachDefaultSystem and make configuration admission plus the VM fixture consume that public export. The physical module body is unchanged.",
+  "before_module_exports": ["aarch64-darwin", "aarch64-linux", "x86_64-darwin", "x86_64-linux"],
+  "after_module_exports": ["molten"],
+  "consumer": {
+    "operation": "nix eval --impure --json --expr using builtins.getFlake, its public nixosModules.molten and pinned nixpkgs.lib.nixosSystem",
+    "system": "x86_64-linux",
+    "package_attribute": "packages.x86_64-linux.molten-startup-source-binding",
+    "operator_trust_file": "/run/secrets/molten-source-gate-trust.json",
+    "node_id": "node:example",
+    "system_derivation": "/nix/store/8wj172vrfpj9c4hfscip4jbxm6ks0n7n-nixos-system-nixos-26.11.20260525.f9d8b65.drv",
+    "supervised_command": "/nix/store/2gl4ly9q2z1a02d94rx7z17jhrjlzcdb-molten-bounded-loop",
+    "exit_code": 0
+  },
+  "existing_admission_check": {
+    "attribute": "checks.x86_64-linux.molten-module-eval",
+    "output": "/nix/store/6wdwc1gf60a07bhiwlmxwnxwygdsgxai-molten-module-eval",
+    "controls": ["complete configuration with explicit package and trust", "missing package rejected", "missing trust rejected"],
+    "exit_code": 0
+  },
+  "vm_application_evaluation": {"attribute": "apps.x86_64-linux.nixos-vm-molten-module.program", "program": "/nix/store/v1mghvd73ia2sn7r7vg7849cms6zif6p-molten-module-vm", "exit_code": 0},
+  "non_claim": "Configuration and existing positive/negative admission controls, not a new VM execution or independent operator trust. The separate complete VM result remains bound to its own exact test/binding; only export and fixture injection changed here."
+}

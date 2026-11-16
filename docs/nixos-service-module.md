@@ -65,9 +65,13 @@ The selected trust file must name this exact output, its signer, binding, policy
 
 ## Validation boundary
 
-`checks.x86_64-linux.molten-module-eval` forces complete NixOS configuration
-admission with both explicit package/trust inputs, and rejects either missing
-input. It does not assert incidental defaults, boot a VM or prove live behavior.
+`checks.x86_64-linux.molten-module-eval` consumes the public, system-independent
+`nixosModules.molten` export and forces complete NixOS configuration admission
+with both explicit package/trust inputs, rejecting either missing input. The VM
+fixture consumes that same export. Evaluation does not prove a boot or service.
+The [external-consumer readback](../evidence/integrated-cutover-2026-11-16/public-module-consumer.json)
+also evaluates the example's exported module into a complete NixOS system
+derivation, separately from the retained VM execution below.
 
 The opt-in `apps.x86_64-linux.nixos-vm-molten-module` builds a NixOS VM test using the selected binding output. It boots the module, checks startup, restarts and stops the service, then checks absent, stale-binding, wrong-key and wrong-output trust, an altered executing binary, and a privately bind-mounted altered retained policy before new startup evidence. Its fixture signer stays root-only under `/var/lib/molten-trust-fixture`, outside the service state root; only the public trust selection is made accessible to the service. This VM-local signer does not establish independent operator selection. The VM rail is deliberately not a flake check because its cold closure is large.
 
