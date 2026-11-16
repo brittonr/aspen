@@ -244,10 +244,8 @@ fn validate_config(config: &ClientConfig) -> Result<()> {
     }
     let endpoint =
         reqwest::Url::parse(&config.endpoint).map_err(|_| Failure::invalid_harness("s3 endpoint is malformed"))?;
-    if endpoint
-        .host_str()
-        .and_then(|host| host.trim_matches(['[', ']']).parse::<std::net::IpAddr>().ok())
-        .is_none()
+    let address = endpoint.host_str().and_then(|host| host.trim_matches(['[', ']']).parse::<std::net::IpAddr>().ok());
+    if address.is_none()
         || !endpoint.username().is_empty()
         || endpoint.password().is_some()
         || endpoint.query().is_some()
@@ -257,7 +255,14 @@ fn validate_config(config: &ClientConfig) -> Result<()> {
     {
         return Err(Failure::invalid_harness("s3 requires a fixed numeric endpoint and canonical bucket"));
     }
-    if !(config.endpoint.starts_with("http://") || config.endpoint.starts_with("https://"))
+    let is_https = endpoint.scheme() == "https";
+    let is_http = endpoint.scheme() == "http";
+    // r[impl molten.content_store_adapter.streaming_bounds]
+    // SigV4 protects the credential, not the payload: plain HTTP must not leave the host.
+    if is_http && !address.is_some_and(|address| address.is_loopback()) {
+        return Err(Failure::invalid_harness("s3 plain-HTTP endpoint must be loopback"));
+    }
+    if !(is_http || is_https)
         || config.region.is_empty()
         || config.bucket.is_empty()
         || config.access_key.is_empty()
@@ -392,6 +397,64 @@ mod tests {
             session_token: None,
         };
         assert!(Client::connect(config).is_err());
+    }
+
+    // r[verify molten.content_store_adapter.streaming_bounds]
+    #[test]
+    fn plain_http_is_admitted_only_for_loopback_endpoints() {
+        for (endpoint, is_admitted) in [
+            ("http://127.0.0.1:9000", true),
+            ("http://[::1]:9000", true),
+            ("http://10.0.0.1:9000", false),
+            ("http://[2001:db8::1]:9000", false),
+            ("https://10.0.0.1:9000", true),
+            ("https://[2001:db8::1]:9000", true),
+        ] {
+            let config = ClientConfig {
+                endpoint: endpoint.to_string(),
+                region: "us-east-1".to_string(),
+                bucket: "bucket".to_string(),
+                access_key: "access".to_string(),
+                secret_key: "secret".to_string(),
+                session_token: None,
+            };
+            assert_eq!(Client::connect(config).is_ok(), is_admitted, "{endpoint}");
+        }
+    }
+
+    // r[verify molten.content_store_adapter.streaming_bounds]
+    #[tokio::test]
+    async fn chunked_get_without_content_length_stops_at_the_bound() {
+        const MAX_BYTES: u64 = 8;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            for body in [
+                &b"4\r\nabcd\r\n4\r\nefgh\r\n0\r\n\r\n"[..],
+                &b"4\r\nabcd\r\n5\r\nefghi\r\n0\r\n\r\n"[..],
+            ] {
+                let (mut socket, _) = listener.accept().await.expect("accept get");
+                assert!(read_request(&mut socket).await.contains("GET /bucket/objects/one"));
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\nconnection: close\r\n\r\n")
+                    .await
+                    .expect("headers");
+                // A server may keep sending; the client must stop reading once the bound is crossed.
+                let _ = socket.write_all(body).await;
+            }
+        });
+        let client = Client::connect(ClientConfig {
+            endpoint: format!("http://{address}"),
+            region: "us-east-1".to_string(),
+            bucket: "bucket".to_string(),
+            access_key: "access".to_string(),
+            secret_key: "secret".to_string(),
+            session_token: None,
+        })
+        .expect("client");
+        assert_eq!(client.get_bounded("objects/one", MAX_BYTES).await, Ok(b"abcdefgh".to_vec()));
+        assert_eq!(client.get_bounded("objects/one", MAX_BYTES).await, Err(ContentFailure::TruncatedChunk));
+        server.await.expect("server");
     }
 
     #[tokio::test]
