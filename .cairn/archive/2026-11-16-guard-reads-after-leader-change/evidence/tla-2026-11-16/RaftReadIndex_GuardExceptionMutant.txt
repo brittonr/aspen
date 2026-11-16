@@ -1,0 +1,224 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 20 and seed -9163735047820214569 with 32 workers on 32 cores with 27305MB heap and 64MB offheap memory (Linux 6.18.60 amd64, Oracle Corporation 1.8.0_502 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/.cairn/changes/guard-reads-after-leader-change/evidence/tla-2026-11-16/RaftReadIndex.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/Sequences.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/TLC.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module RaftReadIndex
+Starting... (2026-11-15 23:28:23)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-15 23:28:23.
+Error: Invariant ReadLinearizable is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = (n1 :> <<>> @@ n2 :> <<>> @@ n3 :> <<>>)
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ votes = (n1 :> {} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "follower" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> "nil" @@ n2 :> "nil" @@ n3 :> "nil")
+
+State 2: <Timeout line 87, col 5 to line 93, col 63 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = (n1 :> <<>> @@ n2 :> <<>> @@ n3 :> <<>>)
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ votes = (n1 :> {n1} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "candidate" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> "nil" @@ n3 :> "nil")
+
+State 3: <GrantVote line 97, col 5 to line 108, col 63 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = (n1 :> <<>> @@ n2 :> <<>> @@ n3 :> <<>>)
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 1 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "candidate" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n1 @@ n3 :> "nil")
+
+State 4: <BecomeLeader line 112, col 5 to line 120, col 76 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = (n1 :> <<>> @@ n2 :> <<>> @@ n3 :> <<>>)
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 1 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "leader" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n1 @@ n3 :> "nil")
+
+State 5: <ClientWrite line 124, col 5 to line 127, col 94 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = (n1 :> <<[term |-> 1, kind |-> "write"]>> @@ n2 :> <<>> @@ n3 :> <<>>)
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 1 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "leader" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n1 @@ n3 :> "nil")
+
+State 6: <AppendEntries line 131, col 5 to line 140, col 40 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 1 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {}
+/\ role = (n1 :> "leader" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n1 @@ n3 :> "nil")
+
+State 7: <AdvanceCommit line 147, col 5 to line 153, col 79 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 1 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "leader" @@ n2 :> "follower" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n1 @@ n3 :> "nil")
+
+State 8: <Timeout line 87, col 5 to line 93, col 63 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 1 @@ n2 :> 2 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "leader" @@ n2 :> "candidate" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n1 @@ n2 :> n2 @@ n3 :> "nil")
+
+State 9: <GrantVote line 97, col 5 to line 108, col 63 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 2 @@ n2 :> 2 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n1, n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "follower" @@ n2 :> "candidate" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n2 @@ n2 :> n2 @@ n3 :> "nil")
+
+State 10: <BecomeLeader line 112, col 5 to line 120, col 76 of module RaftReadIndex>
+/\ reads = {}
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 2 @@ n2 :> 2 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n1, n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "follower" @@ n2 :> "leader" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n2 @@ n2 :> n2 @@ n3 :> "nil")
+
+State 11: <ReadStart line 158, col 5 to line 165, col 92 of module RaftReadIndex>
+/\ reads = { [ term |-> 2,
+    node |-> n2,
+    requiredIndex |-> 0,
+    mustObserve |-> 1,
+    acks |-> {n2},
+    done |-> FALSE,
+    viaException |-> TRUE ] }
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 2 @@ n2 :> 2 @@ n3 :> 0)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n1, n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "follower" @@ n2 :> "leader" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n2 @@ n2 :> n2 @@ n3 :> "nil")
+
+State 12: <Next line 193, col 8 to line 193, col 73 of module RaftReadIndex>
+/\ reads = { [ term |-> 2,
+    node |-> n2,
+    requiredIndex |-> 0,
+    mustObserve |-> 1,
+    acks |-> {n2, n3},
+    done |-> FALSE,
+    viaException |-> TRUE ] }
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 2 @@ n2 :> 2 @@ n3 :> 2)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n1, n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "follower" @@ n2 :> "leader" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n2 @@ n2 :> n2 @@ n3 :> "nil")
+
+State 13: <Next line 193, col 8 to line 193, col 73 of module RaftReadIndex>
+/\ reads = { [ term |-> 2,
+    node |-> n2,
+    requiredIndex |-> 0,
+    mustObserve |-> 1,
+    acks |-> {n2, n3},
+    done |-> TRUE,
+    viaException |-> TRUE ] }
+/\ matchIndex = ( n1 :> (n1 :> 0 @@ n2 :> 1 @@ n3 :> 0) @@
+  n2 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) @@
+  n3 :> (n1 :> 0 @@ n2 :> 0 @@ n3 :> 0) )
+/\ log = ( n1 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n2 :> <<[term |-> 1, kind |-> "write"]>> @@
+  n3 :> <<>> )
+/\ commitIndex = (n1 :> 1 @@ n2 :> 0 @@ n3 :> 0)
+/\ currentTerm = (n1 :> 2 @@ n2 :> 2 @@ n3 :> 2)
+/\ votes = (n1 :> {n1, n2} @@ n2 :> {n1, n2} @@ n3 :> {})
+/\ acked = {1}
+/\ role = (n1 :> "follower" @@ n2 :> "leader" @@ n3 :> "follower")
+/\ votedFor = (n1 :> n2 @@ n2 :> n2 @@ n3 :> "nil")
+
+456786 states generated, 180977 distinct states found, 96388 states left on queue.
+The depth of the complete state graph search is 16.
+The average outdegree of the complete state graph is 2 (minimum is 0, the maximum 8 and the 95th percentile is 4).
+Finished in 02s at (2026-11-15 23:28:25)

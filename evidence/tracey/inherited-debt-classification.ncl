@@ -48,20 +48,20 @@ let metadata | ClassificationMetadata = {
   classification_base_revision = "9842cc6453a00ed943a866549bb4307c8502d575",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "d11a255ff1d1bc7c0ae7c0a2288524614d4d9e27404571f2825f5905f20eaebe",
-    entries = 1931,
+    blake3 = "eea83e5d920a104628677f2ca8ca66033c43af957e8841cc42c7506d7d70d7d6",
+    entries = 1930,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "46b508722448c548b7ce7581d4338909fc0f31c4efd4b25927f2ba91ae389eb9",
+    blake3 = "dbcb648281f2e8d359a45134bff526cfb3f70d743ce523a3893548cd78949793",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "855cd2628ea8c50bad10f9e929fa5b25e9b4241443b643e9ab9561f287d37d41",
-    entries = 1931,
+    summary_blake3 = "a4bff7ab168209653925e657e1b098b36a28eb4557729d6194e3fabeee689d88",
+    entries = 1930,
     specification_groups = 38,
     source_area_groups = 109,
   },
   classes = {
-    accepted_implementation_unestablished = 1931,
+    accepted_implementation_unestablished = 1930,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,
@@ -96,6 +96,11 @@ let metadata | ClassificationMetadata = {
       requirement_id = "molten.testing.receipt_driven_traceability.stale_receipt_denial",
       implementation_path = "src/testing/traceability/parts/p008/body.rs",
       verification_path = "src/testing/traceability/parts/tests/p001/body.rs",
+    },
+    {
+      requirement_id = "molten.consensus.linearizable_reads",
+      implementation_path = "src/fabric_consistency/raft/transition/client.rs",
+      verification_path = "src/fabric_consistency/raft/parts/tests/p002/body.rs",
     },
   ],
   direct_repair_manifests = [

@@ -172,7 +172,6 @@ specification	source_area	class	requirement_id
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.durable_store
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.group_manifest
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.integration_tests
-.cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.linearizable_reads
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.log_admission
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.membership_changes
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.observability

@@ -20,8 +20,8 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 36 | `.cairn/specs/confidentiality/spec.md` |
 | 36 | `.cairn/specs/local-artifact-registry/spec.md` |
 | 36 | `.cairn/specs/local-schema-identity/spec.md` |
-| 35 | `.cairn/specs/consensus/spec.md` |
 | 35 | `.cairn/specs/coordination/spec.md` |
+| 34 | `.cairn/specs/consensus/spec.md` |
 | 34 | `.cairn/specs/job-dag/spec.md` |
 | 33 | `.cairn/specs/runtime-patterns/spec.md` |
 | 32 | `.cairn/specs/authority-identity-revocation/spec.md` |
@@ -69,11 +69,11 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 23 | `resources` |
 | 22 | `artifacts` |
 | 22 | `upgrades` |
-| 21 | `consensus` |
 | 21 | `local_catalog` |
 | 21 | `peer_bootstrap` |
 | 21 | `remote_sync` |
 | 21 | `transcripts` |
+| 20 | `consensus` |
 | 20 | `eval_cache` |
 | 20 | `job_dag` |
 | 20 | `local_artifacts` |

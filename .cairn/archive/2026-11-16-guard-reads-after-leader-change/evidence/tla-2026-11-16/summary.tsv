@@ -1,0 +1,5 @@
+GuardOnly	exit=0	22s	Model checking completed. No error has been found.	4319902 distinct states found
+GuardException	exit=0	56s	Model checking completed. No error has been found.	11153290 distinct states found
+GuardException_Witness	exit=12	4s	Invariant NoExceptionPostElectionRead is violated	500470 distinct states found
+GuardExceptionMutant	exit=12	2s	Invariant ReadLinearizable is violated	180977 distinct states found
+GuardException_Log3	exit=0	19s	Model checking completed. No error has been found.	3551442 distinct states found

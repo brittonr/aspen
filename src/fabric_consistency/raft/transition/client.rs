@@ -54,6 +54,12 @@ pub(super) fn handle_read(
         crate::fabric_consistency::ReadMode::Linearizable if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
+        // r[impl molten.consensus.linearizable_reads]
+        // An earlier leader may have committed and acknowledged an index above this leader's commit
+        // index, so a read index taken now could miss that write.
+        crate::fabric_consistency::ReadMode::Linearizable if !support::is_commit_index_current(state) => {
+            read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+        }
         crate::fabric_consistency::ReadMode::Linearizable => begin_linearizable_read(state, request_ref),
     }
 }

@@ -1,0 +1,28 @@
+Derived from verification/tla/audit/RaftReadIndex.tla at 8482a82c78df991c43bed21ab3f9f23c1ad22aad
+(branch change/audit-finding-tla-models-20261115, the model cited in issue #44).
+
+Changes: the CommittedLogException constant admits a read when the leader's commit index
+reaches its last log index; ExceptionSlack > 0 is a deliberately loose mutant of that bound;
+reads record viaException; NoExceptionPostElectionRead is a reachability witness. With
+CommittedLogException = FALSE and ExceptionSlack = 0 the model is the published one
+(RaftReadIndex_GuardOnly reproduces the published 4,319,902 distinct states).
+
+Checker: TLC 1.7.4, /nix/store/1gvxsv5mxv2jknqbb6f2nrlmpw1x7nqi-tlaplus-1.7.4/bin/tlc
+(nixpkgs#tlaplus from this repository's flake lock, the version nix/audit-findings-tla.nix asserts).
+Command per configuration: tlc -workers auto -metadir <tmp> -config RaftReadIndex_<name>.cfg RaftReadIndex.tla
+Bounded model: atomic message steps, no loss or reordering. A pass holds only within the
+configured bounds; it is not a proof of the Rust engine.
+
+BLAKE3:
+72434866762124a965dc0fc8b3ce9dd8023e596783b279666d7866cc9ca1c12d  RaftReadIndex.tla
+d541f9a88b7c647f15adedd34bfd53a33b3282cd1d2ffc5b7529cbf9e44c8c11  RaftReadIndex_GuardException.cfg
+82fdb0ba3afb46cbaaed8863001ee31d49a47d94766e41a3ce4e6a05a951ad8d  RaftReadIndex_GuardExceptionMutant.cfg
+42648683f6388c44ac9f80607d7504ad6696b0fe953deceb1831770f43adafd5  RaftReadIndex_GuardException_Log3.cfg
+600e8a73202616d637833fc6575fc5be92ff07467472886e156ea4cade2c5320  RaftReadIndex_GuardException_Witness.cfg
+da4fcc6ac557d4e10cb99409fd27cadcbbded9e3e0bd99c95f6f927fecce9322  RaftReadIndex_GuardOnly.cfg
+e47fe9c35d42a8017748e2263969fc51855ba6bba9468aedc36fe0fdd2ea2ed7  RaftReadIndex_GuardException.txt
+d394dff2a06b5e15b3f752ddcb90cf584756b17cb45f3d490086022615cc88d5  RaftReadIndex_GuardExceptionMutant.txt
+9268c8a9a2c3b3c0d3a66ae4a5d6e921199d77705eea17d1b347a998d96dee65  RaftReadIndex_GuardException_Log3.txt
+0d494c2de27fcedf468804f9aa5f4673d0d2982294422e4dce505a0fdfc92586  RaftReadIndex_GuardException_Witness.txt
+d3418b00bf31f394e2bd3696f51b3f3349171e946faa767a67c99c5841b01f92  RaftReadIndex_GuardOnly.txt
+e94c47d515c75a8d2ef0839d68d7ef852a4f242d3f74e47ca42f44c2f25791c7  summary.tsv

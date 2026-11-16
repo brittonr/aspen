@@ -76,3 +76,122 @@ fn live_ignores_out_of_order_append_failure_after_success() {
     assert_eq!(after.next.next_index.get(NODE_B), Some(&NEXT_INDEX_AFTER_FIRST_ENTRY));
     assert!(after.effects.is_empty());
 }
+
+// r[verify molten.consensus.linearizable_reads]
+#[test]
+fn live_does_not_complete_stale_read_after_leader_change() {
+    let (initial_leader, follower_b) = elect_node_a();
+    let proposal = apply_replica_event(&initial_leader, ReplicaEvent::Propose {
+        request_ref: test_ref("stale-read-request"),
+        command_ref: test_ref("stale-read-command"),
+        command_schema_ref: test_ref("stale-read-schema"),
+    })
+    .expect("initial proposal");
+    let append = sent_envelope_to(&proposal, NODE_B);
+    let replicated =
+        apply_replica_event(&follower_b, ReplicaEvent::Message { envelope: append }).expect("follower replication");
+    let response = sent_envelope_to(&replicated, NODE_A);
+
+    let b_timeout = apply_replica_event(&replicated.next, ReplicaEvent::ElectionTimeout {
+        timer_ref: replicated.next.active_election_timer_ref.clone(),
+    })
+    .expect("challenger timeout");
+
+    let committed = apply_replica_event(&proposal.next, ReplicaEvent::Message { envelope: response })
+        .expect("initial leader commit");
+    assert_eq!(committed.next.commit_index, INITIAL_LOG_INDEX);
+
+    let vote_request = sent_envelope_to(&b_timeout, NODE_A);
+    let voted = apply_replica_event(&committed.next, ReplicaEvent::Message { envelope: vote_request })
+        .expect("initial leader votes for challenger");
+
+    let vote_response = sent_envelope_to(&voted, NODE_B);
+    let new_leader = apply_replica_event(&b_timeout.next, ReplicaEvent::Message { envelope: vote_response })
+        .expect("challenger leadership");
+    assert_eq!(new_leader.next.role, ReplicaRole::Leader);
+    assert_eq!(new_leader.next.commit_index, INITIAL_COMMIT_INDEX);
+
+    let stale_read_ref = test_ref("stale-read");
+    let read = apply_replica_event(&new_leader.next, ReplicaEvent::Read {
+        request_ref: stale_read_ref.clone(),
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
+    })
+    .expect("stale read handling");
+    assert!(read.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
+        request_ref: read_ref,
+        disposition: ReadDisposition::Retryable,
+        ..
+    } if read_ref == &stale_read_ref)));
+    assert!(!read.next.pending_reads.contains_key(&stale_read_ref));
+
+    // Once a current-term entry commits, the read index covers the write the old leader acknowledged.
+    let current_term_write = apply_replica_event(&read.next, ReplicaEvent::Propose {
+        request_ref: test_ref("current-term-request"),
+        command_ref: test_ref("current-term-command"),
+        command_schema_ref: test_ref("current-term-schema"),
+    })
+    .expect("new leader proposal");
+    let append = sent_envelope_to(&current_term_write, NODE_A);
+    let replicated_a =
+        apply_replica_event(&voted.next, ReplicaEvent::Message { envelope: append }).expect("old leader replication");
+    let response = sent_envelope_to(&replicated_a, NODE_B);
+    let caught_up = apply_replica_event(&current_term_write.next, ReplicaEvent::Message { envelope: response })
+        .expect("current-term commit");
+    let current_read_ref = test_ref("current-read");
+    let current_read = apply_replica_event(&caught_up.next, ReplicaEvent::Read {
+        request_ref: current_read_ref.clone(),
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
+    })
+    .expect("current read handling");
+    let pending = current_read.next.pending_reads.get(&current_read_ref).expect("read-index read begins");
+    assert!(pending.required_index >= committed.next.commit_index);
+}
+
+// r[verify molten.consensus.linearizable_reads]
+#[test]
+fn live_new_leader_whose_commit_index_reaches_its_log_serves_read_index_reads() {
+    let (initial_leader, follower_b) = elect_node_a();
+    let proposal = apply_replica_event(&initial_leader, ReplicaEvent::Propose {
+        request_ref: test_ref("caught-up-request"),
+        command_ref: test_ref("caught-up-command"),
+        command_schema_ref: test_ref("caught-up-schema"),
+    })
+    .expect("initial proposal");
+    let append = sent_envelope_to(&proposal, NODE_B);
+    let replicated =
+        apply_replica_event(&follower_b, ReplicaEvent::Message { envelope: append }).expect("follower replication");
+    let response = sent_envelope_to(&replicated, NODE_A);
+    let committed = apply_replica_event(&proposal.next, ReplicaEvent::Message { envelope: response })
+        .expect("initial leader commit");
+    let heartbeat = apply_replica_event(&committed.next, ReplicaEvent::HeartbeatTimeout).expect("commit heartbeat");
+    let informed = apply_replica_event(&replicated.next, ReplicaEvent::Message {
+        envelope: sent_envelope_to(&heartbeat, NODE_B),
+    })
+    .expect("follower learns the commit index");
+    assert_eq!(informed.next.commit_index, INITIAL_LOG_INDEX);
+
+    let b_timeout = apply_replica_event(&informed.next, ReplicaEvent::ElectionTimeout {
+        timer_ref: informed.next.active_election_timer_ref.clone(),
+    })
+    .expect("challenger timeout");
+    let voted = apply_replica_event(&heartbeat.next, ReplicaEvent::Message {
+        envelope: sent_envelope_to(&b_timeout, NODE_A),
+    })
+    .expect("initial leader votes for challenger");
+    let new_leader = apply_replica_event(&b_timeout.next, ReplicaEvent::Message {
+        envelope: sent_envelope_to(&voted, NODE_B),
+    })
+    .expect("challenger leadership");
+    assert_eq!(new_leader.next.role, ReplicaRole::Leader);
+    // No current-term entry has committed, but every entry the new leader holds is known committed.
+    assert_eq!(new_leader.next.commit_index, INITIAL_LOG_INDEX);
+
+    let read_ref = test_ref("caught-up-read");
+    let read = apply_replica_event(&new_leader.next, ReplicaEvent::Read {
+        request_ref: read_ref.clone(),
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
+    })
+    .expect("caught-up read handling");
+    assert_eq!(read.next.pending_reads.get(&read_ref).map(|pending| pending.required_index), Some(INITIAL_LOG_INDEX));
+    assert!(!read.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome { .. })));
+}

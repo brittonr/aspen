@@ -133,6 +133,15 @@ pub(super) fn last_log_term(state: &ReplicaState) -> u64 {
         .map_or_else(|| state.snapshot.as_ref().map_or(0, |snapshot| snapshot.last_included_term), |entry| entry.term)
 }
 
+/// Whether this leader's commit index covers every index an earlier leader may have committed.
+///
+/// Every committed entry is in the leader's log (leader completeness), so the commit index covers
+/// them once a current-term entry commits (Raft §5.4.2, dissertation §6.4) or once the commit index
+/// reaches the last entry the leader holds.
+pub(super) fn is_commit_index_current(state: &ReplicaState) -> bool {
+    term_at(state, state.commit_index) == Some(state.current_term) || state.commit_index >= last_log_index(state)
+}
+
 pub(super) fn next_conflict_index(state: &ReplicaState) -> crate::error::Result<u64> {
     last_log_index(state)
         .checked_add(NEXT_LOG_INDEX_STEP)

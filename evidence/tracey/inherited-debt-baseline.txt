@@ -159,7 +159,6 @@ molten.consensus.deterministic_state_machine
 molten.consensus.durable_store
 molten.consensus.group_manifest
 molten.consensus.integration_tests
-molten.consensus.linearizable_reads
 molten.consensus.log_admission
 molten.consensus.membership_changes
 molten.consensus.observability
