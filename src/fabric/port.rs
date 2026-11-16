@@ -7,6 +7,7 @@
 )]
 
 use crate::error::Failure;
+use crate::error::FailureClass;
 
 /// Infrastructure failures that can cross a maintained fabric port boundary.
 // r[impl molten.modularity.fabric_boundary.errors]
@@ -52,6 +53,30 @@ impl FabricPortError {
         }
     }
 
+    pub fn class(&self) -> FailureClass {
+        match self {
+            Self::CapabilityUnavailable { .. } => FailureClass::CapabilityUnavailable,
+            Self::MalformedObservation { .. } => FailureClass::MalformedObservation,
+            Self::Timeout { .. } => FailureClass::Timeout,
+            Self::Cancelled { .. } => FailureClass::Cancelled,
+            Self::StorageFailure { .. } => FailureClass::StorageFailure,
+            Self::TransportFailure { .. } => FailureClass::TransportFailure,
+            Self::UncertainExternalOutcome { .. } => FailureClass::UncertainExternalOutcome,
+        }
+    }
+
+    fn from_class(class: FailureClass, message: String) -> Self {
+        match class {
+            FailureClass::CapabilityUnavailable => Self::CapabilityUnavailable { message },
+            FailureClass::MalformedObservation => Self::MalformedObservation { message },
+            FailureClass::Timeout => Self::Timeout { message },
+            FailureClass::Cancelled => Self::Cancelled { message },
+            FailureClass::StorageFailure => Self::StorageFailure { message },
+            FailureClass::TransportFailure => Self::TransportFailure { message },
+            FailureClass::UncertainExternalOutcome => Self::UncertainExternalOutcome { message },
+        }
+    }
+
     pub fn contains(&self, pattern: &str) -> bool {
         self.message().contains(pattern)
     }
@@ -71,16 +96,7 @@ impl FabricPortError {
 
 impl std::fmt::Display for FabricPortError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let class = match self {
-            Self::CapabilityUnavailable { .. } => "capability unavailable",
-            Self::MalformedObservation { .. } => "malformed observation",
-            Self::Timeout { .. } => "timeout",
-            Self::Cancelled { .. } => "cancelled",
-            Self::StorageFailure { .. } => "storage failure",
-            Self::TransportFailure { .. } => "transport failure",
-            Self::UncertainExternalOutcome { .. } => "uncertain external outcome",
-        };
-        write!(formatter, "{class}: {}", self.message())
+        write!(formatter, "{}: {}", self.class().as_str(), self.message())
     }
 }
 
@@ -88,13 +104,27 @@ impl std::error::Error for FabricPortError {}
 
 impl From<Failure> for FabricPortError {
     fn from(error: Failure) -> Self {
-        Self::capability(error.to_string())
+        match error {
+            Failure::Classified { class, message } => Self::from_class(class, message),
+            other => Self::capability(other.to_string()),
+        }
     }
 }
 
+// r[impl molten.modularity.fabric_boundary.errors]
 impl From<FabricPortError> for Failure {
+    /// Keeps the port's class, including uncertainty, instead of flattening it into harness text.
     fn from(error: FabricPortError) -> Self {
-        Self::invalid_harness(error.to_string())
+        let class = error.class();
+        match error {
+            FabricPortError::CapabilityUnavailable { message }
+            | FabricPortError::MalformedObservation { message }
+            | FabricPortError::Timeout { message }
+            | FabricPortError::Cancelled { message }
+            | FabricPortError::StorageFailure { message }
+            | FabricPortError::TransportFailure { message }
+            | FabricPortError::UncertainExternalOutcome { message } => Failure::classified(class, message),
+        }
     }
 }
 
@@ -125,5 +155,36 @@ mod tests {
         assert!(matches!(error, FabricPortError::MalformedObservation { .. }));
         assert!(molten.to_string().contains("malformed observation"));
         assert!(!molten.to_string().contains("policy denied"));
+    }
+
+    // r[verify molten.modularity.fabric_boundary.errors]
+    #[test]
+    fn every_port_class_survives_conversion_both_ways() {
+        for error in [
+            FabricPortError::capability("capability"),
+            FabricPortError::malformed("malformed"),
+            FabricPortError::Timeout {
+                message: "timeout".to_string(),
+            },
+            FabricPortError::Cancelled {
+                message: "cancelled".to_string(),
+            },
+            FabricPortError::storage("storage"),
+            FabricPortError::transport("transport"),
+            FabricPortError::uncertain("uncertain"),
+        ] {
+            let failure = Failure::from(error.clone());
+            assert_eq!(failure.class(), Some(error.class()));
+            assert!(!matches!(failure, Failure::InvalidHarness(_)));
+            assert_eq!(failure.to_string(), error.to_string());
+            assert_eq!(FabricPortError::from(failure), error);
+        }
+    }
+
+    #[test]
+    fn unclassified_failures_stay_unclassified() {
+        let failure = Failure::invalid_harness("uncertain external outcome: looks classified");
+        assert_eq!(failure.class(), None);
+        assert!(matches!(FabricPortError::from(failure), FabricPortError::CapabilityUnavailable { .. }));
     }
 }

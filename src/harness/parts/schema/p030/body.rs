@@ -106,6 +106,7 @@ fn error_kind(error: &MoltenError) -> String {
         MoltenError::Io(_) => "io".to_string(),
         MoltenError::Preserves(_) => "preserves".to_string(),
         MoltenError::InvalidHarness(_) => "invalid-harness".to_string(),
+        MoltenError::Classified { class, .. } => class.code().to_string(),
         MoltenError::HarnessDivergence(divergence) => divergence.kind.clone(),
     }
 }
@@ -122,7 +123,10 @@ fn error_diagnostics(error: &MoltenError) -> Vec<IoValue> {
             diagnostics.push(record("detail", vec![string(&divergence.detail)]));
             diagnostics
         }
-        MoltenError::Io(_) | MoltenError::Preserves(_) | MoltenError::InvalidHarness(_) => Vec::new(),
+        MoltenError::Io(_)
+        | MoltenError::Preserves(_)
+        | MoltenError::InvalidHarness(_)
+        | MoltenError::Classified { .. } => Vec::new(),
     }
 }
 

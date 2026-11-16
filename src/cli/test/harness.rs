@@ -110,7 +110,10 @@ fn read_preserves_file_with_failure(
 fn run_failure_phase(error: &MoltenError) -> &'static str {
     match error {
         MoltenError::InvalidHarness(_) => "preflight",
-        MoltenError::Io(_) | MoltenError::Preserves(_) | MoltenError::HarnessDivergence(_) => "execute",
+        MoltenError::Io(_)
+        | MoltenError::Preserves(_)
+        | MoltenError::HarnessDivergence(_)
+        | MoltenError::Classified { .. } => "execute",
     }
 }
 

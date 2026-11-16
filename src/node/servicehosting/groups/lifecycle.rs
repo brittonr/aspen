@@ -144,7 +144,11 @@ fn require_postcondition(
         }
     };
     if !is_completed {
-        return Err(super::super::invalid("native lifecycle intent remains uncertain; callback is not repeated"));
+        // The callback may already have taken effect; report uncertainty as a class, not harness text.
+        return Err(crate::error::Failure::classified(
+            crate::error::FailureClass::UncertainExternalOutcome,
+            "native lifecycle intent remains uncertain; callback is not repeated",
+        ));
     }
     Ok(())
 }

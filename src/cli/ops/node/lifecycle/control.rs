@@ -86,15 +86,18 @@ impl Request {
 pub(super) fn failure_detail(error: &molten::error::Failure) -> &'static str {
     // Only exact existing public diagnostics known not to contain operator material are disclosed.
     match error {
+        molten::error::Failure::Classified {
+            class: molten::error::FailureClass::UncertainExternalOutcome,
+            message,
+        } if message == "native lifecycle intent remains uncertain; callback is not repeated" => {
+            "uncertain external outcome: native lifecycle intent remains uncertain; callback is not repeated"
+        }
         molten::error::Failure::InvalidHarness(message) => match message.as_str() {
             "service host current authority denied" => {
                 "invalid harness artifact: service host current authority denied"
             }
             "service host concrete effect authority denied" => {
                 "invalid harness artifact: service host concrete effect authority denied"
-            }
-            "native lifecycle intent remains uncertain; callback is not repeated" => {
-                "invalid harness artifact: native lifecycle intent remains uncertain; callback is not repeated"
             }
             "scope effect runtime is stale, uncertain, or bound to another native service" => {
                 "invalid harness artifact: scope effect runtime is stale, uncertain, or bound to another native service"
@@ -108,9 +111,10 @@ pub(super) fn failure_detail(error: &molten::error::Failure) -> &'static str {
 }
 
 fn scope_failure_detail(message: &str) -> Option<&'static str> {
-    let code = message.strip_prefix(
-        "native hosting lifecycle failed or remains uncertain: Host(\"invalid harness artifact: malformed observation: ",
-    ).and_then(|message| message.strip_suffix("\")")).unwrap_or(message);
+    let code = message
+        .strip_prefix("native hosting lifecycle failed or remains uncertain: Host(\"malformed observation: ")
+        .and_then(|message| message.strip_suffix("\")"))
+        .unwrap_or(message);
     [
         "collaboration-scope/bound",
         "collaboration-scope/domain",
@@ -231,7 +235,7 @@ mod tests {
     fn canonical_denial_codes_never_disclose_appended_material() {
         let wrap = |code| {
             molten::error::Failure::invalid_harness(format!(
-                "native hosting lifecycle failed or remains uncertain: Host(\"invalid harness artifact: malformed observation: {code}\")"
+                "native hosting lifecycle failed or remains uncertain: Host(\"malformed observation: {code}\")"
             ))
         };
         assert_eq!(failure_detail(&wrap("collaboration-scope/stale")), "collaboration-scope/stale");
@@ -241,5 +245,19 @@ mod tests {
         assert_eq!(failure_detail(&diagnostic), "collaboration-scope/stale");
         let injected = molten::error::Failure::invalid_harness("collaboration-scope/stale/private-token");
         assert_eq!(failure_detail(&injected), failure_detail(&opaque));
+    }
+
+    #[test]
+    fn lifecycle_uncertainty_is_selected_by_class_not_message_text() {
+        const MESSAGE: &str = "native lifecycle intent remains uncertain; callback is not repeated";
+        let uncertain =
+            molten::error::Failure::classified(molten::error::FailureClass::UncertainExternalOutcome, MESSAGE);
+        assert_eq!(
+            failure_detail(&uncertain),
+            "uncertain external outcome: native lifecycle intent remains uncertain; callback is not repeated"
+        );
+        let same_text = molten::error::Failure::invalid_harness(MESSAGE);
+        let opaque = molten::error::Failure::invalid_harness("unknown backend failure");
+        assert_eq!(failure_detail(&same_text), failure_detail(&opaque));
     }
 }
