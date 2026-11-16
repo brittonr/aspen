@@ -64,6 +64,8 @@ fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     Ok(parsed)
 }
 
+/// Requires check names only: this establishes record shape, not verification. Statuses, including a
+/// constant `pass` on a denial label, are producer-described; admission uses the decision and bound refs.
 fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())

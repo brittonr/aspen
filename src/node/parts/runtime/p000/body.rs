@@ -272,6 +272,7 @@ pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
         record("capability", vec![refs_sequence(input.capability_refs)]),
         record("resource", vec![refs_sequence(input.resource_refs)]),
         record("effects", vec![refs_sequence(input.effect_profile_refs)]),
+        // Descriptive labels for the config shape validated above, not an independent authority audit.
         checks_value(&[
             ("explicit-state-root", "pass"),
             ("explicit-adapter-profiles", "pass"),

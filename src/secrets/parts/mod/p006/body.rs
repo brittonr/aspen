@@ -1,4 +1,7 @@
 
+// These check lists label the path that produced each receipt; every status is the constant `pass`,
+// including on denial paths such as `commitment-mismatch` and `cleanup-denied`. The decision field carries
+// the outcome.
 fn redaction_transform_checks(decision: &str, is_gate_preserving: bool) -> [(&'static str, &'static str); 4] {
     if decision == "pass" && is_gate_preserving {
         [
@@ -174,6 +177,8 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     }
 }
 
+/// Requires check names only: this establishes record shape, not verification. Statuses, including a
+/// constant `pass` on a denial label, are producer-described; admission uses the decision and bound refs.
 fn require_checks(value: &Value<IoValue>, expected: &[&str]) -> Result<()> {
     let value = value_to_iovalue(value);
     let check_record = simple_record(&value, "checks", 1)?;

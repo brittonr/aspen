@@ -361,3 +361,33 @@
         assert!(std::fs::read_dir(&outside).expect("outside entries").next().is_none(), "outside stays empty");
     }
 
+    // r[verify molten.preserves_rail_toolkit.check_sets]
+    #[test]
+    fn a_denied_task_receipt_with_every_label_passing_never_completes_the_task() {
+        let root = temp_dir("upgrade-labels-do-not-override-denial");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
+        let old = test_ref("old");
+        let new = test_ref("new");
+        let plan_value = cutover_plan_value(&old, &new, vec![transcript_task_input("transcript", true)]);
+        let created = create_session(&store, &plan_value).expect("create session");
+        let denied = upgrade_receipt_value(&UpgradeReceiptValueInput {
+            operation: "task-complete",
+            decision: "deny",
+            session_id: &created.plan.session_id,
+            plan_ref: &created.plan.plan_ref,
+            task_id: Some("transcript"),
+            refs: &[],
+            diagnostics: &["transcript replay failed".to_string()],
+            checks: &[("transcript-replay", "pass"), ("no-mutation-on-deny", "pass")],
+        })
+        .expect("denied receipt with passing labels");
+        let receipt = parse_upgrade_receipt(&denied).expect("labels satisfy the receipt shape");
+        store_receipt(&store, &denied).expect("store denied receipt");
+        let status_locator = status_path(&created.plan.session_id, "transcript").expect("status path");
+        store.root().publish(&status_locator, receipt.receipt_ref.as_bytes()).expect("point status at the receipt");
+        let status = status(&store, &created.plan.plan_ref).expect("status");
+        assert!(status.tasks.iter().any(|task| task.task_id == "transcript" && !task.done), "denial wins over labels");
+        let cutover = execute_task(&store, &root.join("ledger"), &created.plan.plan_ref, "cutover").expect("cutover");
+        assert_eq!(cutover.receipt.decision, "deny");
+    }
+

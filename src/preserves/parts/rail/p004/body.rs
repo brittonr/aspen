@@ -101,6 +101,9 @@ pub fn parse_checks_record(
     Ok(checks)
 }
 
+/// Requires check names only: this establishes record shape, not verification. Statuses, including a
+/// constant `pass` on a denial label, are producer-described; admission uses the decision and bound refs.
+// r[impl molten.preserves_rail_toolkit.check_sets]
 pub fn require_checks_present(checks: &[ParsedCheck], expected: &[&str], context: &str) -> Result<()> {
     for expected in expected {
         if !checks.iter().any(|check| check.name == *expected) {
