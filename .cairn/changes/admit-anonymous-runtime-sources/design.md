@@ -67,6 +67,12 @@ This satisfies the storage CI observation only. The default `Reproducible depend
 
 The clean hosted workflow explicitly runs the locked Cargo build, default `nix build`, and full flake checks, then executes the README fixture and cleanup blocks unchanged through `scripts/readme-quickstart.py --cargo`. This mode runs in the checkout; the README's own `mktemp` creates the isolated output. The existing `--molten` mode remains the sandboxed packaged-binary smoke in a temporary working directory. Its result cannot substitute for the verbatim Cargo or cold-source result. Retain actual hosted outcomes before claiming either #23 or #25's clean-runner acceptance.
 
+### Decision: Preserve the frozen tree artifact without a live API dependency
+
+Hosted run `43925658138` at `aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4` completed the locked Cargo build and default Nix build, then full flake checks failed fetching the frozen verified-node-replication tree API response with HTTP 403. The README workflow step did not execute. Preserve those separate outcomes; the response does not establish the HTTP denial's cause.
+
+The previously admitted 29,256-byte tree response for upstream `eb8e27244a4f1b7714defe55aa495c6173a1c330` already has an exact fixed-output `tree_api_hash`. Ship precisely those bytes in the pilot profile directory through `scripts/import-node-replication-tree.py`, which checks the unchanged hash before replacing the artifact. Nix consumes the local file under that same hash and retains its actual Verus-gitlink validation. No runtime source, source hash, frozen profile, verifier identity, expected decision, lock or build plan is changed; anonymous default checks no longer need a live GitHub tree API response. Only a new actual hosted result can complete public-check acceptance.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.

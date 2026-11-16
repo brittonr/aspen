@@ -1,0 +1,105 @@
+{
+  "schema": "aspen.hosted-bootstrap-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_commit": "aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4",
+  "run_id": 43925658138,
+  "run_url": "https://github.com/brittonr/aspen/actions/runs/43925658138",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "completedAt": "2026-11-16T19:22:14Z",
+      "conclusion": "failure",
+      "databaseId": 133504277227,
+      "name": "flake-check",
+      "startedAt": "2026-11-16T18:08:21Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-16T18:08:24Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-16T18:08:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T18:08:32Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-11-16T18:08:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T18:08:38Z",
+          "conclusion": "success",
+          "name": "Run DeterminateSystems/nix-installer-action@v19",
+          "number": 3,
+          "startedAt": "2026-11-16T18:08:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T18:49:36Z",
+          "conclusion": "success",
+          "name": "Run nix develop --command cargo build --locked",
+          "number": 4,
+          "startedAt": "2026-11-16T18:08:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:15:39Z",
+          "conclusion": "success",
+          "name": "Run nix build --no-link",
+          "number": 5,
+          "startedAt": "2026-11-16T18:49:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:22:11Z",
+          "conclusion": "failure",
+          "name": "Run nix flake check",
+          "number": 6,
+          "startedAt": "2026-11-16T19:15:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:22:11Z",
+          "conclusion": "skipped",
+          "name": "Run nix develop --command python3 scripts/readme-quickstart.py --cargo",
+          "number": 7,
+          "startedAt": "2026-11-16T19:22:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:22:13Z",
+          "conclusion": "success",
+          "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+          "number": 13,
+          "startedAt": "2026-11-16T19:22:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:22:13Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 14,
+          "startedAt": "2026-11-16T19:22:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-16T19:22:13Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-11-16T19:22:13Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/brittonr/aspen/actions/runs/43925658138/job/133504277227"
+    }
+  ],
+  "failed_fixed_output_url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/eb8e27244a4f1b7714defe55aa495c6173a1c330?recursive=1",
+  "observed_fetch_status": 403,
+  "failed_step_log_blake3": "2200e925aecfbd89d4fbfd73aa528c695d26e84472476f8434773d5b72518d07",
+  "non_claim": "Locked Cargo and default Nix builds passed; full flake checks failed and the README Cargo workflow step was skipped. No HTTP-denial root cause, passing full check, verbatim workflow or release qualification is inferred."
+}

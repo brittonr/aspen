@@ -1,0 +1,727 @@
+{
+  "sha": "eb8e27244a4f1b7714defe55aa495c6173a1c330",
+  "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/eb8e27244a4f1b7714defe55aa495c6173a1c330",
+  "tree": [
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "765e7da5864787b4f956d066e4d7c966edc0cebc",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/765e7da5864787b4f956d066e4d7c966edc0cebc"
+    },
+    {
+      "path": ".github/workflows",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "18d443f84b97ecb60844ca29a563d8480f1a171a",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/18d443f84b97ecb60844ca29a563d8480f1a171a"
+    },
+    {
+      "path": ".github/workflows/build-benchmarks.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "489458f3d3a9d0a8715207903af4f0cee49d5511",
+      "size": 2102,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/489458f3d3a9d0a8715207903af4f0cee49d5511"
+    },
+    {
+      "path": ".github/workflows/format.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "397e8d3f6e065f3abe0d9531a2f5f247f1a6184d",
+      "size": 624,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/397e8d3f6e065f3abe0d9531a2f5f247f1a6184d"
+    },
+    {
+      "path": ".github/workflows/verify-and-build.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "37a87d018668d15429b3d4b449519dfaa76f9ec5",
+      "size": 2105,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/37a87d018668d15429b3d4b449519dfaa76f9ec5"
+    },
+    {
+      "path": ".gitmodules",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3a12aaa77725b1bd7c392d5a9452290681a84b67",
+      "size": 386,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/3a12aaa77725b1bd7c392d5a9452290681a84b67"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aba5c732b57ca70c5642c6517f63b934db46959a",
+      "size": 1103,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/aba5c732b57ca70c5642c6517f63b934db46959a"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d757e6eb82d582b516ce11b60ab4a59e57ba53ac",
+      "size": 2003,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/d757e6eb82d582b516ce11b60ab4a59e57ba53ac"
+    },
+    {
+      "path": "benchmarks",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e4b3c7602e933e5929f0c0796a6a0d6a2da36144",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/e4b3c7602e933e5929f0c0796a6a0d6a2da36144"
+    },
+    {
+      "path": "benchmarks/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0dc994d05fd06f1c1c502890959d0564b9629ca2",
+      "size": 123,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/0dc994d05fd06f1c1c502890959d0564b9629ca2"
+    },
+    {
+      "path": "benchmarks/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a775b9cfde60074eeb6086a139ca56572ab3b009",
+      "size": 1228,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/a775b9cfde60074eeb6086a139ca56572ab3b009"
+    },
+    {
+      "path": "benchmarks/bench.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "25f9f47f39fbfea1a51f3bb92ea133dba65dea8f",
+      "size": 3402,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/25f9f47f39fbfea1a51f3bb92ea133dba65dea8f"
+    },
+    {
+      "path": "benchmarks/ironsync",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b7777a81fb2b701fa1de19ed71de6236c84254ab",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/b7777a81fb2b701fa1de19ed71de6236c84254ab"
+    },
+    {
+      "path": "benchmarks/ironsync/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4c71c72de4a3b7d10817975a177a6454c9be2cf7",
+      "size": 12,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/4c71c72de4a3b7d10817975a177a6454c9be2cf7"
+    },
+    {
+      "path": "benchmarks/ironsync/Cargo.lock",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9dfbf5f63b49b02e9d3459ce0f593f60d2f59d52",
+      "size": 3802,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/9dfbf5f63b49b02e9d3459ce0f593f60d2f59d52"
+    },
+    {
+      "path": "benchmarks/ironsync/Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a86b8fa6af13ebc395fd8424f49a30211aa5d4dd",
+      "size": 320,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/a86b8fa6af13ebc395fd8424f49a30211aa5d4dd"
+    },
+    {
+      "path": "benchmarks/ironsync/benches",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "04587a33ec545db466d6bb3a787fcde791b0a3a3",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/04587a33ec545db466d6bb3a787fcde791b0a3a3"
+    },
+    {
+      "path": "benchmarks/ironsync/benches/ironsync_counter",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a1d212841b8826232c6666967bff4ee6509d4ab2",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/a1d212841b8826232c6666967bff4ee6509d4ab2"
+    },
+    {
+      "path": "benchmarks/ironsync/benches/ironsync_counter/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "03bd682341850f40cbff27d1a67704237b3c164d",
+      "size": 7395,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/03bd682341850f40cbff27d1a67704237b3c164d"
+    },
+    {
+      "path": "benchmarks/ironsync/ironsync-osdi2023",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "da87ace38edbffd8217383664e12a81e5ad2f668"
+    },
+    {
+      "path": "benchmarks/lib",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "abdeab9fde9c71222ff3a70732fc8b599243e409",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/abdeab9fde9c71222ff3a70732fc8b599243e409"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "8cf797e233a8e83f8e67a0c5ff0800ecd45cf64f",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/8cf797e233a8e83f8e67a0c5ff0800ecd45cf64f"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9746cc1a515d6e10eb9fa83866b52de54c338a2",
+      "size": 1223,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/d9746cc1a515d6e10eb9fa83866b52de54c338a2"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ccb1187cf3488c6cc6af76f61eb0037ec1d90c1a",
+      "size": 198,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/ccb1187cf3488c6cc6af76f61eb0037ec1d90c1a"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "87ac4e84453ae5287e4b97e3a6ab6241af85a25a",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/87ac4e84453ae5287e4b97e3a6ab6241af85a25a"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/src/benchmark.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "00c054b7f7e1fd038ea01b4003512c7d7e7c72fd",
+      "size": 5254,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/00c054b7f7e1fd038ea01b4003512c7d7e7c72fd"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/src/lib.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "769eb9b36808e0883f343eb3a598dcbd4bf8c8e1",
+      "size": 2189,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/769eb9b36808e0883f343eb3a598dcbd4bf8c8e1"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/src/mkbench.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20f7740f9307053b8cf83fe399f2cd16c190874a",
+      "size": 34524,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/20f7740f9307053b8cf83fe399f2cd16c190874a"
+    },
+    {
+      "path": "benchmarks/lib/bench_utils/src/topology.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f2c15bedaab0f78d8c738f5dd4f4bee9e869ad1",
+      "size": 9740,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/2f2c15bedaab0f78d8c738f5dd4f4bee9e869ad1"
+    },
+    {
+      "path": "benchmarks/lib/node-replication",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "57075c3ddaaab1098d3ec0c2b7d01cb3b57e1ac7"
+    },
+    {
+      "path": "benchmarks/plot.py",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "e59a9ad70e98f5856bc84cc6e96ad7536d44124a",
+      "size": 9259,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/e59a9ad70e98f5856bc84cc6e96ad7536d44124a"
+    },
+    {
+      "path": "benchmarks/plot_throughput.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e57589550ae6aac1e23b558b563abf71bd9778b8",
+      "size": 11572,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/e57589550ae6aac1e23b558b563abf71bd9778b8"
+    },
+    {
+      "path": "benchmarks/run_benchmarks.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f1a07e7ab81a4453ba0bcd2f0a096e200bf4b66",
+      "size": 977,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/3f1a07e7ab81a4453ba0bcd2f0a096e200bf4b66"
+    },
+    {
+      "path": "benchmarks/upstream",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "da29136e99510e8c2097d70d7180cd9c6a139e78",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/da29136e99510e8c2097d70d7180cd9c6a139e78"
+    },
+    {
+      "path": "benchmarks/upstream/Cargo.lock",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f95083467d8c8ad14a4d7fada9323591d1ef4ef9",
+      "size": 30029,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/f95083467d8c8ad14a4d7fada9323591d1ef4ef9"
+    },
+    {
+      "path": "benchmarks/upstream/Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "265a349fef9488c3636e3584926962be868d695b",
+      "size": 901,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/265a349fef9488c3636e3584926962be868d695b"
+    },
+    {
+      "path": "benchmarks/upstream/benches",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "abeceacb1fe316bd1956fd490285d5b2866c719d",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/abeceacb1fe316bd1956fd490285d5b2866c719d"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_counter",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "2803728dd3a2720ebc6de7e445c530f267bdc419",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/2803728dd3a2720ebc6de7e445c530f267bdc419"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_counter/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ce1db5fffbf2a588c82cb4f5cd21acf738fb3670",
+      "size": 5482,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/ce1db5fffbf2a588c82cb4f5cd21acf738fb3670"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_hashmap",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9d0f3b633dd881b62288423615bee33189c6ccbc",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/9d0f3b633dd881b62288423615bee33189c6ccbc"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_hashmap/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9924739843efecfb55caac15a2238cc7bb8a107f",
+      "size": 6310,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/9924739843efecfb55caac15a2238cc7bb8a107f"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_vspace",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "640f2526f9ebb8d4a9b8e20e9449af51adf55dc8",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/640f2526f9ebb8d4a9b8e20e9449af51adf55dc8"
+    },
+    {
+      "path": "benchmarks/upstream/benches/nr_vspace/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "83fa39b5630cb07d0ca723a7de55e6cf54b43036",
+      "size": 26223,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/83fa39b5630cb07d0ca723a7de55e6cf54b43036"
+    },
+    {
+      "path": "benchmarks/upstream/rust-toolchain",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "00063e38034f2646d738cc91847abb8d83595a93",
+      "size": 134,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/00063e38034f2646d738cc91847abb8d83595a93"
+    },
+    {
+      "path": "benchmarks/upstream/scaleout_benchmarks.csv",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1ebccbe6a7b45a2e6cedfbf415a2952cd5de3826",
+      "size": 765,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/1ebccbe6a7b45a2e6cedfbf415a2952cd5de3826"
+    },
+    {
+      "path": "benchmarks/upstream/src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "8a85dfb79fbf75d355ee1c2fb1b49ae1e40a934b",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/8a85dfb79fbf75d355ee1c2fb1b49ae1e40a934b"
+    },
+    {
+      "path": "benchmarks/upstream/src/nr_vspace.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "83fa39b5630cb07d0ca723a7de55e6cf54b43036",
+      "size": 26223,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/83fa39b5630cb07d0ca723a7de55e6cf54b43036"
+    },
+    {
+      "path": "benchmarks/verified",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "10fa9e520a644890193fdc23330ff86929c5f9db",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/10fa9e520a644890193fdc23330ff86929c5f9db"
+    },
+    {
+      "path": "benchmarks/verified/Cargo.lock",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d1d478c0264073982805a21c57b04bdad57f2147",
+      "size": 33859,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/d1d478c0264073982805a21c57b04bdad57f2147"
+    },
+    {
+      "path": "benchmarks/verified/Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c510cc70d30808e3127c6913a15bb9745383ac5",
+      "size": 998,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/5c510cc70d30808e3127c6913a15bb9745383ac5"
+    },
+    {
+      "path": "benchmarks/verified/benches",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9fc36c81fb4ce344fb01b795459f90ba5a63ccbf",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/9fc36c81fb4ce344fb01b795459f90ba5a63ccbf"
+    },
+    {
+      "path": "benchmarks/verified/benches/vnr_counter",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "aab1bb4aadc7a084db846f8bfe9b4ce704370a54",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/aab1bb4aadc7a084db846f8bfe9b4ce704370a54"
+    },
+    {
+      "path": "benchmarks/verified/benches/vnr_counter/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "14797a9ccfa32879a62b86e8ee1208ef064ffe88",
+      "size": 7956,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/14797a9ccfa32879a62b86e8ee1208ef064ffe88"
+    },
+    {
+      "path": "benchmarks/verified/benches/vnr_vspace",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "61d8693bbbb4f2f76e57bfa656b9a89ca173111b",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/61d8693bbbb4f2f76e57bfa656b9a89ca173111b"
+    },
+    {
+      "path": "benchmarks/verified/benches/vnr_vspace/main.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ecff071252932afd1eafba1f21378c6d461d9013",
+      "size": 34664,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/ecff071252932afd1eafba1f21378c6d461d9013"
+    },
+    {
+      "path": "benchmarks/verified/rust-toolchain",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8103a4481b0504f20f0d284643cec4c8ba5583aa",
+      "size": 120,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/8103a4481b0504f20f0d284643cec4c8ba5583aa"
+    },
+    {
+      "path": "benchmarks/verified/scaleout_benchmarks.csv",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a495c58202bce49c7c6d294f207f06907c04f4a9",
+      "size": 37383,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/a495c58202bce49c7c6d294f207f06907c04f4a9"
+    },
+    {
+      "path": "benchmarks/verified/src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4fc15b81daa7f0a8b0fcccdda758f04bed61a5d3",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/4fc15b81daa7f0a8b0fcccdda758f04bed61a5d3"
+    },
+    {
+      "path": "benchmarks/verified/src/vnr_vspace.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e32ac0e86ecbda8f9057f3ff51740bf70fef9a60",
+      "size": 28623,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/e32ac0e86ecbda8f9057f3ff51740bf70fef9a60"
+    },
+    {
+      "path": "tools",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "eaaec9172749a54b5e4b4fff645266ea139bdd7f",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/eaaec9172749a54b5e4b4fff645266ea139bdd7f"
+    },
+    {
+      "path": "tools/build-verus.sh",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "afb0ce404966466824d809ba764746953510e8cb",
+      "size": 1053,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/afb0ce404966466824d809ba764746953510e8cb"
+    },
+    {
+      "path": "tools/format.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7aa0d37d49a546c496c185b0620685bd93f4c79b",
+      "size": 325,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/7aa0d37d49a546c496c185b0620685bd93f4c79b"
+    },
+    {
+      "path": "tools/setup-verus.sh",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "88ddde2619eccd23167c43058062880ba91d3b7a",
+      "size": 829,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/88ddde2619eccd23167c43058062880ba91d3b7a"
+    },
+    {
+      "path": "tools/verify-node-replication.sh",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "8c3cd0ccb6e4b9d4eb64c316790bc21fb32e4b18",
+      "size": 550,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/8c3cd0ccb6e4b9d4eb64c316790bc21fb32e4b18"
+    },
+    {
+      "path": "verified-node-replication",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a4edd8a957e8a94382f540d4caabcaaab96889d7",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/a4edd8a957e8a94382f540d4caabcaaab96889d7"
+    },
+    {
+      "path": "verified-node-replication/.gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "eb5a316cbd195d26e3f768c7dd8e1b47299e17f8",
+      "size": 7,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/eb5a316cbd195d26e3f768c7dd8e1b47299e17f8"
+    },
+    {
+      "path": "verified-node-replication/Cargo.lock",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4a2af455ca3e41833a175ae16b9c02370f03898d",
+      "size": 2907,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/4a2af455ca3e41833a175ae16b9c02370f03898d"
+    },
+    {
+      "path": "verified-node-replication/Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dc395afea1458f61f82d2b45c5f1aa4654f2cfbe",
+      "size": 432,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/dc395afea1458f61f82d2b45c5f1aa4654f2cfbe"
+    },
+    {
+      "path": "verified-node-replication/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "521f93c3ae94646252b041e77a90b68deb99eea7",
+      "size": 668,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/521f93c3ae94646252b041e77a90b68deb99eea7"
+    },
+    {
+      "path": "verified-node-replication/examples",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a94be494c1712aa7a85f58108b617ba2472dc738",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/a94be494c1712aa7a85f58108b617ba2472dc738"
+    },
+    {
+      "path": "verified-node-replication/examples/counter.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6f728ea2c960a546b4539f9872086793ecd26d6f",
+      "size": 8371,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/6f728ea2c960a546b4539f9872086793ecd26d6f"
+    },
+    {
+      "path": "verified-node-replication/rust-toolchain.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "624eb0ea6390148c78963eaabe3e18c7fdcf2999",
+      "size": 31,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/624eb0ea6390148c78963eaabe3e18c7fdcf2999"
+    },
+    {
+      "path": "verified-node-replication/src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6adbf512d6835bb1059c48e9b70b6df0713a1b07",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/6adbf512d6835bb1059c48e9b70b6df0713a1b07"
+    },
+    {
+      "path": "verified-node-replication/src/constants.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "413c133aaaf0c4d3f4bbe23a10b4133edc0b4b46",
+      "size": 2086,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/413c133aaaf0c4d3f4bbe23a10b4133edc0b4b46"
+    },
+    {
+      "path": "verified-node-replication/src/exec",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "2d420d2feffb680e101405e6267ac0d8c89079f0",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/2d420d2feffb680e101405e6267ac0d8c89079f0"
+    },
+    {
+      "path": "verified-node-replication/src/exec/context.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5f4ed87699961f3c2a522523191f2a01bec09494",
+      "size": 20854,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/5f4ed87699961f3c2a522523191f2a01bec09494"
+    },
+    {
+      "path": "verified-node-replication/src/exec/log.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1e0eb8c012d10af61dcda427e3ad326efc65856a",
+      "size": 88633,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/1e0eb8c012d10af61dcda427e3ad326efc65856a"
+    },
+    {
+      "path": "verified-node-replication/src/exec/mod.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f1e1ecb9e9b2f0ea199d46ace4218d2564120503",
+      "size": 12670,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/f1e1ecb9e9b2f0ea199d46ace4218d2564120503"
+    },
+    {
+      "path": "verified-node-replication/src/exec/replica.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "af3c46b902f95b5d8d6d750472afe6e2f52e65cb",
+      "size": 62373,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/af3c46b902f95b5d8d6d750472afe6e2f52e65cb"
+    },
+    {
+      "path": "verified-node-replication/src/exec/rwlock.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a2b52a857c9213cd9964899f079288f028c79ac4",
+      "size": 19919,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/a2b52a857c9213cd9964899f079288f028c79ac4"
+    },
+    {
+      "path": "verified-node-replication/src/exec/utils.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "33065561476f66345eab5102862abbb2db58bb9e",
+      "size": 5575,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/33065561476f66345eab5102862abbb2db58bb9e"
+    },
+    {
+      "path": "verified-node-replication/src/lib.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3e75dc11f4918ca783e012818e4290ba4dc92236",
+      "size": 27739,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/3e75dc11f4918ca783e012818e4290ba4dc92236"
+    },
+    {
+      "path": "verified-node-replication/src/spec",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e5ae60c2c5af832b9ddebb0d6c0d5e4b809d9621",
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/e5ae60c2c5af832b9ddebb0d6c0d5e4b809d9621"
+    },
+    {
+      "path": "verified-node-replication/src/spec/cyclicbuffer.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d44b6923348218c378cdb7a70bdaefecb2985178",
+      "size": 35420,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/d44b6923348218c378cdb7a70bdaefecb2985178"
+    },
+    {
+      "path": "verified-node-replication/src/spec/flat_combiner.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6938aecc50e418a098477c11d26371c754c8df67",
+      "size": 13599,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/6938aecc50e418a098477c11d26371c754c8df67"
+    },
+    {
+      "path": "verified-node-replication/src/spec/linearization.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0220555467c4a7745b48e84c73de8c9be1ba88f6",
+      "size": 36147,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/0220555467c4a7745b48e84c73de8c9be1ba88f6"
+    },
+    {
+      "path": "verified-node-replication/src/spec/mod.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9a4ae23a717021e7f8c543728997be2f4fda43c7",
+      "size": 480,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/9a4ae23a717021e7f8c543728997be2f4fda43c7"
+    },
+    {
+      "path": "verified-node-replication/src/spec/rwlock.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "22ba2c67b67a861a099a8e39559087d9b1a088c6",
+      "size": 10392,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/22ba2c67b67a861a099a8e39559087d9b1a088c6"
+    },
+    {
+      "path": "verified-node-replication/src/spec/simple_log.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "54a969f25059d5d1be40b98092d939566d0ce95a",
+      "size": 13037,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/54a969f25059d5d1be40b98092d939566d0ce95a"
+    },
+    {
+      "path": "verified-node-replication/src/spec/types.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8f026231260daa7dcc780afd31cd1b7d6e723b66",
+      "size": 853,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/8f026231260daa7dcc780afd31cd1b7d6e723b66"
+    },
+    {
+      "path": "verified-node-replication/src/spec/unbounded_log.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bb6de9880ce6b4eb53e958e13526375a987cce74",
+      "size": 80232,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/bb6de9880ce6b4eb53e958e13526375a987cce74"
+    },
+    {
+      "path": "verified-node-replication/src/spec/unbounded_log_refines_simplelog.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "483a24064260c1d03d1b6d42d5f20ac8ee65dd7c",
+      "size": 19320,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/483a24064260c1d03d1b6d42d5f20ac8ee65dd7c"
+    },
+    {
+      "path": "verified-node-replication/src/spec/utils.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "73e1511e147cd965365301e758a2a1577171bb00",
+      "size": 4941,
+      "url": "https://api.github.com/repos/verus-lang/verified-node-replication/git/blobs/73e1511e147cd965365301e758a2a1577171bb00"
+    },
+    {
+      "path": "verus",
+      "mode": "160000",
+      "type": "commit",
+      "sha": "d8f073f31d72a5df2113b4ab9c011c1a27b38abf"
+    }
+  ],
+  "truncated": false
+}

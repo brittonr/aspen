@@ -141,6 +141,16 @@ The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evi
 binds that result and the original diagnostic log digest. It establishes neither the cancellation
 cause nor a successful cold build, passing tests, or a passing full flake check; #23 remains open.
 
+At `aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4`, hosted
+[run 43925658138](https://github.com/brittonr/aspen/actions/runs/43925658138)
+completed both the locked Cargo build and default Nix build. Full flake checks
+then failed fetching the frozen verifier pilot's GitHub tree API response with
+HTTP 403, so the README workflow step was skipped. The exact, already-hashed
+tree artifact now ships with the [frozen pilot](verified-node-replication-pilot.md#exact-inputs)
+and is restored through its checked import script; source/verifier revisions,
+hashes and expected decisions are unchanged. This removes that live API fetch,
+but successful full checks and the verbatim workflow still require a new run.
+
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`
 rows for direct crates.io pins. Each row binds the manifest dependency, package

@@ -15,6 +15,15 @@ The typed source of truth is [`verification/verified-node-replication-pilot/prof
 
 The dedicated `verified-node-replication-octet` flake input preserves this exact historical provider and its complete locked dependency closure. Current linting uses the independent `octet-toolchain` input; advancing that cohort does not rebind or relabel the frozen verifier replay. Neither input is a fallback for the other.
 
+The exact upstream Git tree API response ships as
+[`upstream-tree.json`](../verification/verified-node-replication-pilot/upstream-tree.json).
+Nix verifies its original `tree_api_hash` and still checks the Verus gitlink;
+the default check does not call the rate-limited GitHub tree API. The frozen
+profile, source hashes, verifier cohort and decision remain unchanged.
+To restore that artifact from an exported copy, run
+`python3 scripts/import-node-replication-tree.py TREE_JSON`. The importer rejects
+bytes that do not match the existing profile hash before replacing the copy.
+
 Run the reproducible pilot with:
 
 ```bash

@@ -17,7 +17,7 @@ let
     hash = profile.upstream.source_hash;
   };
   sourceTreeEvidence = pkgs.fetchurl {
-    url = "https://api.github.com/repos/verus-lang/verified-node-replication/git/trees/${profile.upstream.revision}?recursive=1";
+    url = "file://${profileDir}/upstream-tree.json";
     hash = profile.upstream.tree_api_hash;
   };
   historicalVerusSource = pkgs.fetchzip {
