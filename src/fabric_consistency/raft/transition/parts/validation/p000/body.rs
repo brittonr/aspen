@@ -14,7 +14,7 @@ pub(super) fn validate_incoming_entries(
     let mut expected_index = prev_log_index
         .checked_add(NEXT_LOG_INDEX_STEP)
         .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append index overflow"))?;
-    let mut request_refs = std::collections::BTreeSet::new();
+    let mut request_refs = std::collections::BTreeMap::new();
     for entry in entries {
         validate_incoming_entry(state, entry, expected_index, leader_term, &mut request_refs)?;
         expected_index = expected_index
@@ -24,38 +24,7 @@ pub(super) fn validate_incoming_entries(
     Ok(())
 }
 
-pub(super) fn validate_message_envelope(
-    state: &ReplicaState,
-    envelope: &ReplicaMessageEnvelope,
-) -> crate::error::Result<()> {
-    validate_content_ref(&envelope.group_binding_ref, "Raft message group binding ref")?;
-    if envelope.group_binding_ref != state.profile.group_binding_ref {
-        return Err(crate::error::Failure::invalid_harness("Raft message uses a substituted group binding"));
-    }
-    if envelope.service_generation != state.profile.service_generation {
-        return Err(crate::error::Failure::invalid_harness("Raft message uses a stale service generation"));
-    }
-    if envelope.to != state.node_id || envelope.from == state.node_id {
-        return Err(crate::error::Failure::invalid_harness("Raft message endpoint identity is invalid"));
-    }
-    if !state.membership.voters.contains(&envelope.from) || !state.membership.voters.contains(&envelope.to) {
-        return Err(crate::error::Failure::invalid_harness("Raft message endpoint is outside admitted membership"));
-    }
-    if envelope.message.term() == 0
-        && !matches!(envelope.message, Message::RecoveryQuery { .. } | Message::RecoveryReport { .. })
-    {
-        return Err(crate::error::Failure::invalid_harness("Raft protocol message cannot use term zero"));
-    }
-    if envelope.message.config_epoch() != state.membership.config_epoch
-        || envelope.message.fencing_epoch() != state.profile.fencing_epoch
-    {
-        return Err(crate::error::Failure::invalid_harness(
-            "Raft message uses a stale configuration or fencing epoch",
-        ));
-    }
-    validate_message_sender(envelope)?;
-    validate_message_request_ref(&envelope.message)
-}
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/transition/parts/validation/p000/message.rs"));
 
 pub(super) fn validate_replica_state(state: &ReplicaState) -> crate::error::Result<()> {
     if !matches!(state.rejoin, ReplicaRejoin::Voter) && state.role != ReplicaRole::Follower {
@@ -85,21 +54,34 @@ pub(super) fn validate_replica_state(state: &ReplicaState) -> crate::error::Resu
     Ok(())
 }
 
+/// The idempotency map must equal the deterministic window of the applied prefix: the snapshot's
+/// retained refs plus the applied log entries, restricted to (last_applied - W, last_applied].
+// r[impl molten.consensus.bounded_request_dedup]
 fn validate_completed_requests(state: &ReplicaState) -> crate::error::Result<()> {
-    for (request_ref, index) in &state.completed_requests {
-        validate_content_ref(request_ref, "Raft completed request ref")?;
-        if *index == INITIAL_COMMIT_INDEX || *index > state.commit_index {
-            return Err(crate::error::Failure::invalid_harness(
-                "Raft completed request index is outside the committed range",
-            ));
-        }
+    let floor = request_window_floor(state.last_applied, state.profile.request_retention_entries);
+    let mut expected = std::collections::BTreeMap::new();
+    if let Some(snapshot) = &state.snapshot {
+        expected.extend(
+            snapshot
+                .completed_requests
+                .iter()
+                .filter(|(_request_ref, index)| **index > floor)
+                .map(|(request_ref, index)| (request_ref.as_str(), *index)),
+        );
     }
-    for entry in state.log.iter().filter(|entry| entry.index <= state.commit_index) {
-        if state.completed_requests.get(&entry.request_ref) != Some(&entry.index) {
-            return Err(crate::error::Failure::invalid_harness(
-                "Raft committed log entry is absent from idempotency state",
-            ));
-        }
+    expected.extend(
+        state
+            .log
+            .iter()
+            .filter(|entry| entry.index > floor && entry.index <= state.last_applied)
+            .map(|entry| (entry.request_ref.as_str(), entry.index)),
+    );
+    let is_equal = expected.len() == state.completed_requests.len()
+        && expected.iter().all(|(request_ref, index)| state.completed_requests.get(*request_ref) == Some(index));
+    if !is_equal {
+        return Err(crate::error::Failure::invalid_harness(
+            "Raft idempotency state differs from the applied request window",
+        ));
     }
     Ok(())
 }
@@ -145,23 +127,28 @@ fn validate_snapshot(state: &ReplicaState) -> crate::error::Result<()> {
     {
         return Err(crate::error::Failure::invalid_harness("Raft snapshot binding or identity mismatch"));
     }
-    for (request_ref, index) in &snapshot.completed_requests {
-        validate_content_ref(request_ref, "Raft snapshot completed request ref")?;
-        if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
-            return Err(crate::error::Failure::invalid_harness(
-                "Raft snapshot completed request index is out of range",
-            ));
-        }
-        if state.completed_requests.get(request_ref) != Some(index) {
-            return Err(crate::error::Failure::invalid_harness(
-                "Raft snapshot idempotency state is not retained locally",
-            ));
-        }
-    }
+    validate_snapshot_requests(snapshot, state.profile.request_retention_entries)?;
     if snapshot.last_included_index == INITIAL_COMMIT_INDEX || snapshot.last_included_index > state.commit_index {
         return Err(crate::error::Failure::invalid_harness(
             "Raft snapshot boundary must be positive and no newer than commit",
         ));
+    }
+    Ok(())
+}
+
+/// A snapshot carries exactly one request ref per retained index, each committed in
+/// (last_included_index - W, last_included_index].
+// r[impl molten.consensus.bounded_request_dedup]
+fn validate_snapshot_requests(snapshot: &ReplicaSnapshot, window: u64) -> crate::error::Result<()> {
+    let floor = request_window_floor(snapshot.last_included_index, window);
+    let mut indices = std::collections::BTreeSet::new();
+    for (request_ref, index) in &snapshot.completed_requests {
+        validate_content_ref(request_ref, "Raft snapshot completed request ref")?;
+        if *index <= floor || *index > snapshot.last_included_index || !indices.insert(*index) {
+            return Err(crate::error::Failure::invalid_harness(
+                "Raft snapshot completed request is outside its duplicate window",
+            ));
+        }
     }
     Ok(())
 }
@@ -209,7 +196,7 @@ fn validate_incoming_entry<'a>(
     entry: &'a ReplicatedEntry,
     expected_index: u64,
     leader_term: u64,
-    request_refs: &mut std::collections::BTreeSet<&'a str>,
+    request_refs: &mut std::collections::BTreeMap<&'a str, u64>,
 ) -> crate::error::Result<()> {
     if entry.index != expected_index || entry.term == 0 || entry.term > leader_term {
         return Err(crate::error::Failure::invalid_harness(
@@ -219,52 +206,22 @@ fn validate_incoming_entry<'a>(
     validate_content_ref(&entry.request_ref, "Raft log request ref")?;
     validate_content_ref(&entry.command_ref, "Raft log command ref")?;
     validate_content_ref(&entry.command_schema_ref, "Raft log command schema ref")?;
-    if !request_refs.insert(entry.request_ref.as_str()) {
-        return Err(crate::error::Failure::invalid_harness("Raft append entries contain a duplicate request ref"));
-    }
-    if state
-        .log
-        .iter()
-        .any(|existing| existing.request_ref == entry.request_ref && existing.index != entry.index)
-    {
+    let window = state.profile.request_retention_entries;
+    if !admit_request_ref(request_refs, entry, window) {
         return Err(crate::error::Failure::invalid_harness(
-            "Raft append reuses a request ref at a different index",
+            "Raft append entries repeat a request ref within its duplicate window",
+        ));
+    }
+    if state.log.iter().any(|existing| {
+        existing.request_ref == entry.request_ref
+            && existing.index != entry.index
+            && existing.index.abs_diff(entry.index) <= window
+    }) {
+        return Err(crate::error::Failure::invalid_harness(
+            "Raft append reuses a request ref within its duplicate window",
         ));
     }
     Ok(())
-}
-
-fn validate_message_sender(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
-    let embedded_sender = match &envelope.message {
-        Message::RecoveryQuery { requester_id, .. } => requester_id,
-        Message::RecoveryReport { peer_id, .. } => peer_id,
-        Message::RequestVote { candidate_id, .. } => candidate_id,
-        Message::VoteResponse { voter_id, .. } => voter_id,
-        Message::AppendEntries { leader_id, .. }
-        | Message::ReadProbe { leader_id, .. }
-        | Message::InstallSnapshot { leader_id, .. } => leader_id,
-        Message::AppendResponse { follower_id, .. }
-        | Message::ReadAcknowledgement { follower_id, .. }
-        | Message::SnapshotResponse { follower_id, .. } => follower_id,
-    };
-    if embedded_sender != &envelope.from {
-        return Err(crate::error::Failure::invalid_harness(
-            "Raft message sender does not match its canonical envelope",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_message_request_ref(message: &Message) -> crate::error::Result<()> {
-    match message {
-        Message::ReadProbe { request_ref, .. } | Message::ReadAcknowledgement { request_ref, .. } => {
-            validate_content_ref(request_ref, "Raft read request ref")
-        }
-        Message::InstallSnapshot { snapshot, .. } => {
-            validate_content_ref(&snapshot.snapshot_ref, "Raft installed snapshot ref")
-        }
-        _ => Ok(()),
-    }
 }
 
 fn validate_log(state: &ReplicaState) -> crate::error::Result<()> {
@@ -275,10 +232,10 @@ fn validate_log(state: &ReplicaState) -> crate::error::Result<()> {
             .ok_or_else(|| crate::error::Failure::invalid_harness("Raft snapshot log index overflow"))?,
         None => INITIAL_LOG_INDEX,
     };
-    let mut request_refs = std::collections::BTreeSet::new();
+    let mut request_refs = std::collections::BTreeMap::new();
     let mut previous_term = state.snapshot.as_ref().map_or(INITIAL_TERM, |snapshot| snapshot.last_included_term);
     for entry in &state.log {
-        validate_state_entry(entry, expected, previous_term, &mut request_refs)?;
+        validate_state_entry(entry, expected, previous_term, &mut request_refs, state.profile.request_retention_entries)?;
         previous_term = entry.term;
         expected = expected
             .checked_add(NEXT_LOG_INDEX_STEP)

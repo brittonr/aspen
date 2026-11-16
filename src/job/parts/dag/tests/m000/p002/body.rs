@@ -252,3 +252,44 @@
                 .any(|diagnostic| diagnostic.contains("unsatisfied selected-stage dependencies"))
         );
     }
+
+    #[test]
+    fn trellis_topology_orders_by_canonical_indices_and_rejects_cycles() {
+        let a = test_node_value(
+            "a",
+            "map",
+            &["in".to_string()],
+            &["out".to_string()],
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
+        )
+        .expect("a");
+        let b = test_node_value(
+            "b",
+            "map",
+            &["in".to_string()],
+            &["out".to_string()],
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
+        )
+        .expect("b");
+        let a_node = parse_job_node_value(&a).expect("parse a");
+        let b_node = parse_job_node_value(&b).expect("parse b");
+        let ordered = execution_order(&[b_node, a_node], &[]).expect("independent order");
+        assert_eq!(ordered, vec!["a".to_string(), "b".to_string()]);
+        let ab = stream_edge_value("a", "b").expect("ab");
+        let ba = stream_edge_value("b", "a").expect("ba");
+        let cyclic = test_dag_value(vec![a, b], vec![ab, ba], &["b".to_string()]).expect("cyclic dag value");
+        assert!(parse_job_dag_value(&cyclic).expect_err("cycle rejected").to_string().contains("trellis"));
+    }
+
+    #[test]
+    fn sync_plan_and_loopback_copy_dependency_closure_without_execution() {
+        let case = copy_case();
+        let sync_ref = assert_copy(&case);
+        let flow = passing_flow(&case, sync_ref);
+        assert_target_run(&case, &flow);
+        assert_wrong_peer_execution(&case, &flow);
+        assert_other_reference_denial(&case, &flow);
+        assert_stale_closure_execution(&case, &flow);
+        assert_missing_admission_inputs(&case, &flow);
+        assert_unsatisfied_stage_denial(&case, &flow);
+    }

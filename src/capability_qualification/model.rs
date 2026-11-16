@@ -133,6 +133,7 @@ pub(super) fn features() -> crate::error::Result<Vec<String>> {
         ("spacewasm-pilot", cfg!(feature = "spacewasm-pilot")),
         ("world-snapshot-vm-cohort", cfg!(feature = "world-snapshot-vm-cohort")),
         ("content-store-object-storage", cfg!(feature = "content-store-object-storage")),
+        ("test-fixtures", cfg!(feature = "test-fixtures")),
     ];
     let manifest: toml::Value = toml::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")))
         .map_err(|_| super::invalid("compiled Cargo feature manifest cannot be decoded"))?;

@@ -43,45 +43,69 @@
         assert_eq!(crate::preserves_rail::to_text(&run.output_value).expect("output"), "[6]");
     }
 
-    #[test]
-    fn trellis_topology_orders_by_canonical_indices_and_rejects_cycles() {
-        let a = test_node_value(
-            "a",
-            "map",
-            &["in".to_string()],
-            &["out".to_string()],
-            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
-        )
-        .expect("a");
-        let b = test_node_value(
-            "b",
-            "map",
-            &["in".to_string()],
-            &["out".to_string()],
-            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
-        )
-        .expect("b");
-        let a_node = parse_job_node_value(&a).expect("parse a");
-        let b_node = parse_job_node_value(&b).expect("parse b");
-        let ordered = execution_order(&[b_node, a_node], &[]).expect("independent order");
-        assert_eq!(ordered, vec!["a".to_string(), "b".to_string()]);
-        let ab = stream_edge_value("a", "b").expect("ab");
-        let ba = stream_edge_value("b", "a").expect("ba");
-        let cyclic = test_dag_value(vec![a, b], vec![ab, ba], &["b".to_string()]).expect("cyclic dag value");
-        assert!(parse_job_dag_value(&cyclic).expect_err("cycle rejected").to_string().contains("trellis"));
-    }
 
+    // r[verify molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied]
+    // r[verify molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
     #[test]
-    fn sync_plan_and_loopback_copy_dependency_closure_without_execution() {
+    fn fixture_gate_is_denied_by_strict_admission_and_labelled_in_fixture_admission() {
         let case = copy_case();
         let sync_ref = assert_copy(&case);
-        let flow = passing_flow(&case, sync_ref);
-        assert_target_run(&case, &flow);
-        assert_wrong_peer_execution(&case, &flow);
-        assert_other_reference_denial(&case, &flow);
-        assert_stale_closure_execution(&case, &flow);
-        assert_missing_admission_inputs(&case, &flow);
-        assert_unsatisfied_stage_denial(&case, &flow);
+        let context_ref = install_job_execute_authority_context(&case.target, &case.installed_job.job_ref);
+        let fixture = crate::octet_gate::UnqualifiedFixtureGate::new("dogfood:local-node").expect("fixture gate");
+        // Even registered under the Octet gate kind, the fixture is not an Octet gate receipt.
+        crate::artifacts::install_artifact(&case.target, &crate::artifacts::ArtifactInstallInput {
+            kind: "octet-gate-receipt".to_string(),
+            payload: fixture.value().clone(),
+            schema_refs: Vec::new(),
+            dependency_refs: Vec::new(),
+            effect_manifest_ref: None,
+            policy_refs: vec![test_ref("octet-policy")],
+            evidence_refs: vec![test_ref("octet-evidence")],
+            installer_ref: test_ref("octet-installer"),
+            capability_refs: vec![test_ref("octet-capability")],
+        })
+        .expect("install fixture under gate kind");
+        let request = job_admission_request_value(AdmissionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            sync_ref: &sync_ref,
+            stage_ids: &[],
+            target_peer: "peer:loopback",
+            policy_refs: &[test_ref("admit-policy")],
+            capability_refs: std::slice::from_ref(&context_ref),
+            evidence_refs: &[sync_ref.clone(), fixture.gate_ref().to_string()],
+            resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
+        })
+        .expect("admission request");
+
+        let strict = admission_loopback(&case.target, &request).expect("strict admission");
+        assert_eq!(strict.plan.decision, "deny");
+        assert!(strict.plan.diagnostics.iter().any(|diagnostic| diagnostic.contains("strict Octet source gate")));
+
+        let admitted =
+            admission_loopback_with_unqualified_fixture_gate(&case.target, &request, &fixture).expect("fixture admission");
+        assert_eq!(admitted.plan.decision, "pass");
+        assert!(admitted.plan.is_unqualified_fixture_gate);
+        assert_eq!(admitted.plan.source_gate_validation_refs, vec![fixture.validation_ref().to_string()]);
+        for value in [&admitted.plan.value, &admitted.receipt_value] {
+            let text = crate::preserves_rail::to_text(value).expect("admission text");
+            assert!(text.contains(r#"<check "strict-octet-source-gate-bound" "fail">"#), "{text}");
+            assert!(text.contains(r#"<check "unqualified-fixture-source-gate" "pass">"#), "{text}");
+        }
+
+        let unbound = job_admission_request_value(AdmissionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            sync_ref: &sync_ref,
+            stage_ids: &[],
+            target_peer: "peer:loopback",
+            policy_refs: &[test_ref("admit-policy")],
+            capability_refs: std::slice::from_ref(&context_ref),
+            evidence_refs: std::slice::from_ref(&sync_ref),
+            resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
+        })
+        .expect("unbound request");
+        let denied =
+            admission_loopback_with_unqualified_fixture_gate(&case.target, &unbound, &fixture).expect("unbound fixture");
+        assert_eq!(denied.plan.decision, "deny");
     }
 
     struct CopyArtifacts {

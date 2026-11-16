@@ -17,6 +17,7 @@ pub(super) async fn execute_effect<P: LiveReplicaEffectPorts>(
     ports: &mut P,
     effect: &ReplicaEffect,
     is_intent_required: bool,
+    planned: &ReplicaState,
 ) -> crate::error::Result<String> {
     match effect {
         ReplicaEffect::PersistHardState {
@@ -30,7 +31,7 @@ pub(super) async fn execute_effect<P: LiveReplicaEffectPorts>(
         ReplicaEffect::PersistSnapshot {
             snapshot,
             is_suffix_retained,
-        } => ports.persist_snapshot(snapshot, *is_suffix_retained),
+        } => ports.persist_snapshot(snapshot, *is_suffix_retained, &ReplicaRetainedState::after(planned, snapshot)),
         ReplicaEffect::Send { envelope } => ports.send(envelope).await,
         ReplicaEffect::ArmElectionTimer { timer_ref } => ports.arm_election_timer(timer_ref),
         ReplicaEffect::ArmHeartbeatTimer => ports.arm_heartbeat_timer(),

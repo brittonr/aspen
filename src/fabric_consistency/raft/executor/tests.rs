@@ -69,6 +69,7 @@ impl ReplicaDurabilityEffects for RecordingPorts {
         &mut self,
         _snapshot: &ReplicaSnapshot,
         _is_suffix_retained: bool,
+        _retained: &ReplicaRetainedState<'_>,
     ) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::PersistSnapshot)
     }

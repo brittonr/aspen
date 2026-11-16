@@ -13,11 +13,15 @@ pub(super) fn handle_proposal(
     if !matches!(state.rejoin, ReplicaRejoin::Voter) {
         return proposal_outcome(state, request_ref, ProposalDisposition::Denied, None);
     }
+    // r[impl molten.consensus.bounded_request_dedup]
+    // Committed duplicates are recognized only through the deterministic request window; an older
+    // committed entry still present in the local log does not count, so the decision never depends on
+    // when this replica last snapshotted.
     if let Some(committed_index) = state.completed_requests.get(&request_ref).copied() {
         return proposal_outcome(state, request_ref, ProposalDisposition::Committed, Some(committed_index));
     }
-    if let Some(existing) = state.log.iter().find(|entry| entry.request_ref == request_ref) {
-        return duplicate_proposal(state, request_ref, existing);
+    if state.log.iter().any(|entry| entry.index > state.commit_index && entry.request_ref == request_ref) {
+        return proposal_outcome(state, request_ref, ProposalDisposition::Retryable, None);
     }
     if state.role != ReplicaRole::Leader {
         return proposal_outcome(state, request_ref, ProposalDisposition::Retryable, None);
@@ -114,6 +118,9 @@ pub(super) fn handle_create_snapshot(
     if state.last_applied == INITIAL_COMMIT_INDEX {
         return Err(crate::error::Failure::invalid_harness("Raft snapshot requires a committed application boundary"));
     }
+    if state.snapshot.as_ref().is_some_and(|snapshot| snapshot.last_included_index >= state.last_applied) {
+        return Err(crate::error::Failure::invalid_harness("Raft snapshot boundary has not advanced"));
+    }
     let last_included_term = support::term_at(state, state.last_applied)
         .ok_or_else(|| crate::error::Failure::invalid_harness("Raft snapshot boundary term is absent"))?;
     let mut snapshot = ReplicaSnapshot {
@@ -160,20 +167,6 @@ pub(super) fn handle_stop(state: &ReplicaState) -> crate::error::Result<ReplicaT
     finish(next, vec![ReplicaEffect::LifecycleChanged {
         lifecycle: ReplicaLifecycle::Stopped,
     }])
-}
-
-fn duplicate_proposal(
-    state: &ReplicaState,
-    request_ref: String,
-    existing: &ReplicatedEntry,
-) -> crate::error::Result<ReplicaTransition> {
-    let disposition = if existing.index <= state.commit_index {
-        ProposalDisposition::Committed
-    } else {
-        ProposalDisposition::Retryable
-    };
-    let committed_index = (disposition == ProposalDisposition::Committed).then_some(existing.index);
-    proposal_outcome(state, request_ref, disposition, committed_index)
 }
 
 fn proposal_outcome(

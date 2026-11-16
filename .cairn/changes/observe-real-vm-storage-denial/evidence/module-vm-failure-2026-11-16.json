@@ -1,0 +1,22 @@
+{
+  "schema": "aspen.module-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "command": "nix run --option builders '' --option extra-substituters '' --option substituters https://cache.nixos.org .#nixos-vm-molten-module",
+  "test_derivation": "/nix/store/0azs51nqshkkih456q9cg63bfa26dc6j-vm-test-run-molten-module.drv",
+  "source_binding_output": "/nix/store/gg5xj3nk36dkvxd0q0855w91ravp3faa-molten-node-source-binding-v1",
+  "exit_code": 1,
+  "wall_seconds": 6469.39,
+  "driver_timeout_seconds": 7200,
+  "observed": [
+    "The VM booted, authenticated startup completed, and startup/config artifacts existed.",
+    "Restart completed and the shutdown receipt existed after stop.",
+    "Both stop paths reached the unchanged 30-second stop deadline and required SIGKILL; they are not clean shutdown observations.",
+    "Absent trust, stale binding, wrong signer and wrong output rejected startup without a new startup artifact.",
+    "The altered binary command failed and no startup artifact appeared, but a diagnostic wording assertion failed.",
+    "The later altered retained-policy case was not reached."
+  ],
+  "result": "failed-module-campaign; wording assertion and actual mixed-control-group shutdown defect remain distinct",
+  "repair": "Remove incidental diagnostic wording pins; preserve command failure and absent protected startup evidence. Signal the whole owned service control group, exit the termination trap, preserve stop-command failures, and require successful inactive unit state after stop. The 30-second bound is unchanged.",
+  "raw_log": "session artifact 3221",
+  "non_claim": "No passing module qualification, clean stop, independent operator trust or later-source result is established by this failed attempt."
+}

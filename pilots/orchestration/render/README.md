@@ -12,6 +12,8 @@ After the scoped-status RPC v2 repair settled, one further warm Nix-supported re
 
 A parent-run follow-on under the same RPC v2 release profile is retained separately at `/dev/shm/aspen-render-demo-rpcv2-20261114`. Its build and demo archives both have BLAKE3 `056886d7fae7a1ffd730eb2c162b7ae8aefe74484dea222f8d7438b334d0c907`; the exercised CLI has BLAKE3 `0cabdd83a6a34b534d175e58de7e03348e5d584c221cc8bbcea3852e5a75d053`, with v2 present and no v1 ALPN fallback. All 33 accepted output identities, the manifest, final envelope and raw RGB matched the original cohort; the verified PPM bytes were identical. Its existing whole-second metrics recorded preparation 0, combined execution/scheduling/transfer/assembly 5, download 0 and verification 0; separate scheduling, tile-transfer, assembly, retry and peak-memory values remain unavailable. These observations are not a controlled timing comparison.
 
+The 2026-11-16 component-dependent fault campaign passed all three selected tests: eight controller publication boundaries, active worker loss with controller restart, and pending/active cancellation with observed stop. The [retained observation](../../../evidence/render-faults-2026-11-16/observation.json) binds the archived source, actual component and process log; its public artifacts include manifests, inputs, packed/JSON progress and nine byte-identical verified final envelopes. The original component remains private because it embeds build paths; no redacted binary is substituted for its identity. These are same-host separate-process results, not two-host, physical-host-loss, cross-architecture or controlled-performance qualification. The six ordinary progress tests were filtered out of this invocation and retain their separate evidence scope. Batch/profile maintainers own repetition through `scripts/render-faults.sh` and the unchanged fixture limits.
+
 ## Entrypoints
 
 From the repository root, after the reviewed dependency locks have been generated:
@@ -32,6 +34,8 @@ bash pilots/orchestration/scripts/render-build.sh
 RENDER_SKIP_BUILD=1 bash pilots/orchestration/scripts/render-demo.sh
 RENDER_SKIP_BUILD=1 bash pilots/orchestration/scripts/render-faults.sh
 ```
+
+Fault campaigns retain their source archive, environment, process log and public observations under `RENDER_RETAIN_ROOT` (default `/tmp`), independently of the build shell's `TMPDIR`, which Nix removes on exit. Select an existing private retention root when needed; review and copy the completed evidence before ordinary temporary-file cleanup. This path is not a deployment root or a machine-loss durability claim.
 
 The demo starts separate isolated controller/two-worker processes through the existing CLI, uploads the component/assignment objects, submits twice with one key (same run), obtains a consistent progress snapshot/watermark, disconnects and resumes bounded accepted-output pages, verifies apply-once projection, renders/downloads/verifies, restarts the completed controller (same accepted output), and executes a fresh run comparing every tile/final accepted output identity. It never deletes deployment roots; private temporary inputs/state/logs/artifacts remain on success or failure. Default loopback UDP ports 45200/45201/45202 can be overridden with `CONTROLLER_PORT`, `WORKER_PORT`, `WORKER2_PORT`. `CARGO_TARGET_DIR` is honored; `RENDER_POLL_LIMIT` bounds 0.2s polls (default 3000). Do not publish private roots/keys/databases.
 

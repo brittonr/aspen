@@ -8,7 +8,9 @@
 
 ## Validation and integration
 
-- [ ] [serial] Parent integrates native facade/evidence CLI mounting and routing. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
-- [ ] [serial] Parent runs focused native tests, standalone controls and required source/lifecycle checks after integration. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
+- [x] [serial] Parent integrates native facade/evidence CLI mounting and routing. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
+- [x] [serial] Parent runs focused native tests, standalone controls and required source/lifecycle checks after integration. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
 - [ ] [serial] Execute the retained consumer fixture only with an independently admitted signed output containing this producer; retain exact artifacts and actual command outcomes. r[molten.testing.capability_qualification.exact_evidence]
-- [ ] [serial] Do not mark unexecuted product families, external checker cohorts or release/live qualification complete. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
+- [x] [serial] Do not mark unexecuted product families, external checker cohorts or release/live qualification complete. r[molten.testing.capability_qualification.exact_evidence] r[molten.testing.capability_qualification.diagnostic_output]
+
+The [earlier integrated execution](../../../evidence/integrated-cutover-2026-11-16/earlier-checks.json) records the passing complete workspace test selection and actual standalone capability-report self-test, while preserving its failed Clippy attempt. The [final ordered execution](../../../evidence/integrated-cutover-2026-11-16/checks.json) separately records the repaired source gate, workspace library tests, Clippy, formatting and strict provider-policy Cairn validation. These are regression controls; the independently admitted signed-output consumer execution above remains unexecuted and blocks archive.

@@ -47,7 +47,7 @@ fn assert_snapshot_suffix_restart(label: &str, is_suffix_retained: bool, is_suff
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("peer snapshot identity");
-    port.persist_snapshot(&snapshot, is_suffix_retained).expect("explicit snapshot suffix disposition");
+    port.persist_snapshot(&snapshot, is_suffix_retained, &UNCOMPACTED).expect("explicit snapshot suffix disposition");
     drop(port);
 
     let reopened = open_snapshot_suffix_port(&root, &log_ref, &store_ref);

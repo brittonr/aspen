@@ -4,7 +4,7 @@ Mode: Review checklist
 
 Apply this checklist to a change, operational report, or proposed demonstration that combines protocol sessions, coordination, and Raft membership. Record an answer and an artifact/source pointer for each relevant question; mark an inapplicable item with its reason. This is a source-checked review procedure, not a report that the checks ran. Return to the [Handbook](../README.md) for related workflows.
 
-The governing [architecture](../../architecture.md#consensus-layer-trellis-backed-raft-for-control-plane) restricts Raft to explicit control-plane state. Ordinary actor messages, ordinary choreography traffic, blob transfer, gossip fanout, and local-only assertions are outside that scope. OpenRaft is not selected or adapted. The [consistency companion](../../technical/membership/consistency-and-fastpath-nonclaims.md) explains why a consistency-shaped artifact is not proof of a live service.
+The governing [architecture](../../architecture.md#consensus-layer-in-tree-raft-and-the-in-process-control-registry) distinguishes replicated in-tree Raft from the single-process control registry and restricts their scope to explicit control-plane state. Neither path calls Trellis. Ordinary actor messages, ordinary choreography traffic, blob transfer, gossip fanout, and local-only assertions are outside that scope. OpenRaft is not selected or adapted. The [consistency companion](../../technical/membership/consistency-and-fastpath-nonclaims.md) explains why a consistency-shaped artifact is not proof of a live service.
 
 ## Scope and ownership acceptance
 
@@ -44,7 +44,7 @@ Final acceptance should state exactly what was executed, what was only inspected
 ## Sources
 
 - [Handbook](../README.md)
-- [Architecture and consensus scope](../../architecture.md#consensus-layer-trellis-backed-raft-for-control-plane)
+- [Architecture and consensus scope](../../architecture.md#consensus-layer-in-tree-raft-and-the-in-process-control-registry)
 - [Typed choreography facade](../../choreography-typed-facade.md)
 - [Consistency and fast-path non-claims](../../technical/membership/consistency-and-fastpath-nonclaims.md)
 - [Connectivity versus membership](../../technical/membership/connectivity-versus-membership.md)

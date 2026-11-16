@@ -28,6 +28,7 @@ const ENGINE_DECISION_DIAGNOSTIC: &str = "diagnostic";
 
 const ENGINE_CAPABILITY_PROPOSAL: &str = "proposal";
 const ENGINE_CAPABILITY_LINEARIZABLE_READ: &str = "linearizable-read";
+const ENGINE_CAPABILITY_LOCAL_COMMITTED_READ: &str = "local-committed-read";
 const ENGINE_CAPABILITY_LOCAL_STALE_READ: &str = "local-stale-read";
 const ENGINE_CAPABILITY_SNAPSHOT: &str = "snapshot";
 const ENGINE_CAPABILITY_RECOVERY: &str = "recovery";
@@ -36,8 +37,7 @@ const ENGINE_CAPABILITY_PLACEMENT_VALIDATION: &str = "placement-validation";
 const ENGINE_CAPABILITY_READBACK_SUMMARY: &str = "readback-summary";
 const ENGINE_CAPABILITY_SWITCHOVER: &str = "switchover-plan";
 
-const CURRENTNESS_CLASS_RAFT_QUORUM_COMMIT: &str = "raft-quorum-commit";
-const CURRENTNESS_CLASS_READ_INDEX: &str = "read-index-currentness";
+const CURRENTNESS_CLASS_LOCAL_COMMIT: &str = "local-committed-state";
 const MEMBERSHIP_CAPABILITY_JOINT_CONSENSUS: &str = "joint-consensus-reviewed";
 const MEMBERSHIP_CAPABILITY_DENY_UNSUPPORTED: &str = "deny-unsupported-transition";
 
@@ -193,7 +193,7 @@ pub trait ConsensusEngineProposal {
 }
 
 pub trait ConsensusEngineRead {
-    fn read(&self, input: &ControlRegistryReadInput) -> Result<RaftReadReceipt>;
+    fn read(&self, input: &ControlRegistryReadInput<'_>) -> Result<RaftReadReceipt>;
 }
 
 pub trait ConsensusEngineSnapshot {
@@ -238,7 +238,7 @@ impl ConsensusEngineProposal for RaftControlPlaneEngine {
 }
 
 impl ConsensusEngineRead for RaftControlPlaneEngine {
-    fn read(&self, input: &ControlRegistryReadInput) -> Result<RaftReadReceipt> {
+    fn read(&self, input: &ControlRegistryReadInput<'_>) -> Result<RaftReadReceipt> {
         read_control_registry(input)
     }
 }

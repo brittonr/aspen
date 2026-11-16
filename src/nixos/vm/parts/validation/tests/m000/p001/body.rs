@@ -137,6 +137,9 @@
             topology_value: &topology,
             descriptor_values: &[descriptor],
             receipt_values: &[receipt],
+            attempt_value: None,
+            pre_observation_value: None,
+            post_observation_value: None,
         })
         .expect("fault validation");
 
@@ -159,6 +162,9 @@
             topology_value: &topology,
             descriptor_values: &[descriptor],
             receipt_values: &[receipt],
+            attempt_value: None,
+            pre_observation_value: None,
+            post_observation_value: None,
         })
         .expect("fault validation");
 
@@ -196,6 +202,9 @@
             topology_value: &topology,
             descriptor_values: &[restart, storage],
             receipt_values: &[restart_receipt, storage_receipt],
+            attempt_value: None,
+            pre_observation_value: None,
+            post_observation_value: None,
         })
         .expect("fault validation");
 
@@ -204,7 +213,7 @@
     }
 
     #[test]
-    fn vm_fault_observed_denial_requires_executed_child_evidence() {
+    fn vm_fault_observed_denial_without_operation_is_unverifiable() {
         // r[verify molten.testing.nixos_vm_fault_injection.storage_state_faults]
         let topology = topology();
         let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
@@ -230,6 +239,9 @@
             topology_value: &topology,
             descriptor_values: &[descriptor],
             receipt_values: &[receipt],
+            attempt_value: None,
+            pre_observation_value: None,
+            post_observation_value: None,
         })
         .expect("fault validation");
 
@@ -240,4 +252,11 @@
                 .iter()
                 .any(|diagnostic| diagnostic == "vm-fault-observed-denial-missing-child-evidence")
         );
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "vm-fault-observed-denial-missing-operation-observations")
+        );
     }
+

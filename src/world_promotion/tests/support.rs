@@ -77,6 +77,17 @@ pub(super) fn dispatch_facts() -> WorldDispatchFacts {
     }
 }
 
+/// The verified operator grant that is current for the promoted head of `request`.
+pub(super) fn current_operator(request: &WorldPromotionRequest) -> WorldOperatorAuthority {
+    WorldOperatorAuthority {
+        branch_id: request.branch_id.clone(),
+        authority_ref: request.authority.authority_ref.clone(),
+        policy_ref: request.policy_ref.clone(),
+        generation: CURRENT_GENERATION + 1,
+        admitted: true,
+    }
+}
+
 pub(super) struct Current {
     pub is_admitted: bool,
 }
@@ -90,6 +101,7 @@ impl WorldPromotionCurrentPort for Current {
             authority_generation: plan.before.generation,
             policy_ref: plan.after.policy_ref.clone(),
             intent_closure_complete: true,
+            intent_material_available: true,
             reservation_refs: plan.reservations.iter().map(|reservation| reservation.reservation_ref.clone()).collect(),
         })
     }
@@ -160,6 +172,12 @@ impl WorldPromotionCommitPort for UnknownTransaction {
         self.readback_calls.set(self.readback_calls.get().saturating_add(1));
         Ok(WorldPromotionReadBackObservation::Reservation)
     }
+    fn read_promotion_identity(
+        &self,
+        _operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>> {
+        Ok(None)
+    }
 }
 
 impl WorldPromotionBookkeepingPort for UnknownTransaction {
@@ -195,13 +213,6 @@ impl WorldPromotionBookkeepingPort for UnknownTransaction {
 
     fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
         Ok(Vec::new())
-    }
-
-    fn read_promotion_identity(
-        &self,
-        _operation_ref: &WorldPromotionOperationRef,
-    ) -> Result<Option<StoredPromotionIdentity>> {
-        Ok(None)
     }
 }
 

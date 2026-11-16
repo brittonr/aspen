@@ -1,17 +1,15 @@
 use std::io::Write;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 
 use cap_fs_ext::OpenOptionsFollowExt;
 
 /// Separates a stage name from its destination leaf: `.{leaf}.stage-{process}-{sequence}`.
 const STAGE_INFIX: &str = ".stage-";
 
-static STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static STAGE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Whether a directory entry is a stage of an in-progress or interrupted publication; scans skip
 /// it.
-pub(crate) fn is_publication_stage(name: &str) -> bool {
+pub(crate) fn is_stage(name: &str) -> bool {
     name.starts_with('.') && name.contains(STAGE_INFIX)
 }
 
@@ -73,8 +71,11 @@ pub(crate) fn publish_regular_file(
         Err(error) => return Err(crate::error::Failure::from(error)),
     }
     remove_stale_stages(&parent, leaf_name)?;
-    let stage =
-        format!(".{leaf_name}{STAGE_INFIX}{}-{}", std::process::id(), STAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+    let stage = format!(
+        ".{leaf_name}{STAGE_INFIX}{}-{}",
+        std::process::id(),
+        STAGE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
     if let Err(error) = write_stage(&parent, &stage, bytes, unix_mode) {
         return Err(discard_stage(&parent, &stage, error));
     }
@@ -182,7 +183,7 @@ mod tests {
 
     // r[verify molten.crypto_identity.atomic_key_publication]
     #[test]
-    fn no_replace_publication_creates_once_and_never_overwrites() {
+    fn no_replace_creates_once_and_never_overwrites() {
         let dir = tempdir();
         let path = std::path::Path::new("keys/transport.key");
         publish_regular_file(&dir, path, b"first", Some(SECRET_MODE), Replacement::NoReplace).expect("first key");

@@ -20,6 +20,7 @@ pub(super) async fn run(
         accept_timeout: std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS),
         event_capacity: INGRESS_EVENT_CAPACITY,
         delivery_limit: INGRESS_DELIVERY_LIMIT,
+        delivery_window: INGRESS_DELIVERY_WINDOW,
     })?;
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "recovered-ready")?;
     let client_input = super::client_projection::input(run_directory)?;

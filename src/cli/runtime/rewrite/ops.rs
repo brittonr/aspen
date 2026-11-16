@@ -1,6 +1,5 @@
 type Command = super::RewriteCommand;
 type FilePath = std::path::PathBuf;
-type FilePathRef = std::path::Path;
 type Outcome<T> = molten::error::Result<T>;
 
 pub(super) fn run(command: Command) -> Outcome<()> {
@@ -103,6 +102,10 @@ fn apply(command: Command) -> Outcome<()> {
         receipt_out,
         upgrade_plan_out,
         session_id,
+        source_state_root,
+        initiator_ref,
+        capability_refs,
+        policy_refs,
     } = command
     else {
         return Err(wrong_handler("apply"));
@@ -115,12 +118,31 @@ fn apply(command: Command) -> Outcome<()> {
         dependency_inclusion_enabled,
         hidden_refs,
     })?;
-    let applied = molten::rewrites::apply(&registry, &input)?;
+    // Admit the upgrade-plan authority before any registry mutation, so a refusal leaves no plan and no
+    // rewrite.
+    let upgrade = upgrade_plan_out
+        .map(|path| {
+            UpgradePlanRequest::admit(UpgradePlanArgs {
+                path,
+                session_id,
+                source_state_root,
+                initiator_ref,
+                capability_refs,
+                policy_refs,
+            })
+        })
+        .transpose()?;
+    let (applied, upgrade_plan) = if let Some(upgrade) = upgrade.as_ref() {
+        let (applied, plan) = upgrade.apply(&registry, &input)?;
+        (applied, Some((&upgrade.path, plan)))
+    } else {
+        (molten::rewrites::apply(&registry, &input)?, None)
+    };
     if let Some(path) = plan_out.as_ref() {
         super::io::write_file(path, &molten::preserves_rail::to_text(&applied.preview.plan_value)?)?;
     }
-    if let Some(path) = upgrade_plan_out.as_ref() {
-        write_upgrade_plan(path, &applied, &session_id)?;
+    if let Some((path, plan)) = upgrade_plan.as_ref() {
+        super::io::write_file(path, &molten::preserves_rail::to_text(plan)?)?;
     }
     super::io::emit_named_receipt(receipt_out.as_ref(), "rewrite receipt", &applied.receipt_value)?;
     for installed in &applied.installed {
@@ -130,15 +152,80 @@ fn apply(command: Command) -> Outcome<()> {
     Ok(())
 }
 
-fn write_upgrade_plan(path: &FilePathRef, applied: &molten::rewrites::RewriteApply, session_id: &str) -> Outcome<()> {
-    let upgrade_plan = molten::rewrites::upgrade_plan_from_apply(
-        applied,
-        session_id,
-        &cli_rewrite_ref("initiator", session_id)?,
-        &[cli_rewrite_ref("capability", session_id)?],
-        &[cli_rewrite_ref("policy", session_id)?],
-    )?;
-    super::io::write_file(path, &molten::preserves_rail::to_text(&upgrade_plan)?)
+struct UpgradePlanArgs {
+    path: FilePath,
+    session_id: String,
+    source_state_root: Option<FilePath>,
+    initiator_ref: Option<String>,
+    capability_refs: Vec<String>,
+    policy_refs: Vec<String>,
+}
+
+/// Upgrade-plan authority admitted before apply: explicit operator refs plus authenticated source
+/// evidence.
+struct UpgradePlanRequest {
+    path: FilePath,
+    session_id: String,
+    initiator_ref: String,
+    capability_refs: Vec<String>,
+    policy_refs: Vec<String>,
+    source_gate: molten::node_daemon::AuthenticatedGate,
+}
+
+impl UpgradePlanRequest {
+    // r[impl molten.local_rewrite.upgrade_hook_authority]
+    fn admit(args: UpgradePlanArgs) -> Outcome<Self> {
+        let initiator_ref = args.initiator_ref.ok_or_else(|| {
+            molten::error::Failure::invalid_harness("rewrite apply --upgrade-plan-out requires --initiator-ref")
+        })?;
+        require_cli_refs(std::slice::from_ref(&initiator_ref), "--initiator-ref")?;
+        require_cli_refs(&args.capability_refs, "--capability-ref")?;
+        require_cli_refs(&args.policy_refs, "--policy-ref")?;
+        let source_state_root = args.source_state_root.ok_or_else(|| {
+            molten::error::Failure::invalid_harness(
+                "rewrite apply --upgrade-plan-out requires --source-state-root with an operator-selected \
+                 source-gate-trust.json",
+            )
+        })?;
+        let root = molten::node_state::DirectoryRoot::open_existing(&source_state_root)?;
+        let source_gate = molten::node_daemon::authenticated_gate_with_root(&root)?;
+        Ok(Self {
+            path: args.path,
+            session_id: args.session_id,
+            initiator_ref,
+            capability_refs: args.capability_refs,
+            policy_refs: args.policy_refs,
+            source_gate,
+        })
+    }
+
+    fn apply(
+        &self,
+        registry: &std::path::Path,
+        input: &molten::rewrites::RewritePlanInput,
+    ) -> Outcome<(molten::rewrites::RewriteApply, preserves::IOValue)> {
+        molten::rewrites::apply_with_upgrade_plan(registry, input, &molten::rewrites::RewriteUpgradePlanInput {
+            session_id: &self.session_id,
+            initiator_ref: &self.initiator_ref,
+            capability_refs: &self.capability_refs,
+            policy_refs: &self.policy_refs,
+            source_gate: &self.source_gate,
+        })
+    }
+}
+
+fn require_cli_refs(refs: &[String], flag: &str) -> Outcome<()> {
+    if refs.is_empty() {
+        return Err(molten::error::Failure::invalid_harness(format!(
+            "rewrite apply --upgrade-plan-out requires at least one explicit {flag}"
+        )));
+    }
+    for reference in refs {
+        molten::preserves_rail::validate_content_ref(reference).map_err(|error| {
+            molten::error::Failure::invalid_harness(format!("{flag} must be a canonical content ref: {error}"))
+        })?;
+    }
+    Ok(())
 }
 
 fn show(artifact: FilePath) -> Outcome<()> {

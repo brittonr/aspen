@@ -28,6 +28,8 @@ use serde::Deserialize;
 
 #[path = "worldpromotion/execute.rs"]
 mod execute;
+#[path = "worldpromotion/material.rs"]
+mod material;
 #[path = "worldpromotion/mutations.rs"]
 mod mutations;
 #[path = "worldpromotion/retry.rs"]
@@ -53,6 +55,12 @@ pub(crate) enum WorldPromotionCommand {
         #[arg(long)]
         trusted_signer: String,
     },
+    PublishIntent {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long)]
+        intent: PathBuf,
+    },
     OutboxInspect {
         #[arg(long)]
         state_root: PathBuf,
@@ -62,6 +70,10 @@ pub(crate) enum WorldPromotionCommand {
         state_root: PathBuf,
         #[arg(long)]
         request: PathBuf,
+        #[arg(long)]
+        authority: PathBuf,
+        #[arg(long)]
+        trusted_signer: String,
         #[arg(long)]
         reservation_ref: String,
         #[arg(long)]
@@ -79,6 +91,8 @@ pub(crate) enum WorldPromotionCommand {
         #[arg(long)]
         state_root: PathBuf,
         #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
         reservation_ref: String,
         #[arg(long)]
         authority: PathBuf,
@@ -90,6 +104,10 @@ pub(crate) enum WorldPromotionCommand {
         state_root: PathBuf,
         #[arg(long)]
         request: PathBuf,
+        #[arg(long)]
+        authority: PathBuf,
+        #[arg(long)]
+        trusted_signer: String,
         #[arg(long)]
         attempt_ref: String,
         #[arg(long)]
@@ -110,17 +128,7 @@ struct PromotionDocument {
     authority_admitted: bool,
     intent_closure_complete: bool,
     simulation_only: bool,
-    intents: Vec<IntentDocument>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct IntentDocument {
-    intent_ref: String,
-    semantic_ref: String,
-    handler_ref: String,
-    adapter_ref: String,
-    release_class: Option<String>,
+    intents: Vec<material::IntentDocument>,
 }
 
 pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Result<()> {
@@ -134,9 +142,12 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
             trusted_signer,
         } => execute::promote(&state_root, &request, &authority, &closure, &trusted_signer),
         WorldPromotionCommand::OutboxInspect { state_root } => inspect_outbox(&state_root),
+        WorldPromotionCommand::PublishIntent { state_root, intent } => material::publish_intent(&state_root, &intent),
         WorldPromotionCommand::RetryPlan {
             state_root,
             request,
+            authority,
+            trusted_signer,
             reservation_ref,
             attempt_ref,
             next_attempt_ref,
@@ -144,6 +155,8 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
         } => retry::retry_plan(retry::RetryPlanArguments {
             state_root: &state_root,
             request_path: &request,
+            authority: &authority,
+            trusted_signer: &trusted_signer,
             reservation_ref: &reservation_ref,
             attempt_ref: &attempt_ref,
             next_attempt_ref: &next_attempt_ref,
@@ -152,11 +165,13 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
         WorldPromotionCommand::Reconcile { state_root } => reconcile(&state_root),
         WorldPromotionCommand::Deny {
             state_root,
+            request,
             reservation_ref,
             authority,
             trusted_signer,
         } => mutations::deny(mutations::DenyArguments {
             state_root: &state_root,
+            request_path: &request,
             reservation_ref: &reservation_ref,
             authority: &authority,
             trusted_signer: &trusted_signer,
@@ -164,6 +179,8 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
         WorldPromotionCommand::Abandon {
             state_root,
             request,
+            authority,
+            trusted_signer,
             attempt_ref,
             acknowledge_unknown_outcome,
         } => {
@@ -173,6 +190,8 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
             mutations::abandon(mutations::AbandonArguments {
                 state_root: &state_root,
                 request_path: &request,
+                authority: &authority,
+                trusted_signer: &trusted_signer,
                 attempt_ref: &attempt_ref,
                 is_unknown_outcome_acknowledged: acknowledge_unknown_outcome,
             })
@@ -251,29 +270,9 @@ pub(super) fn read_request(path: &Path) -> Result<WorldPromotionRequest> {
         },
         intent_closure_complete: document.intent_closure_complete,
         simulation_only: document.simulation_only,
-        intents: document.intents.into_iter().map(parse_intent).collect::<Result<Vec<_>>>()?,
+        intents: document.intents.into_iter().map(material::parse_intent).collect::<Result<Vec<_>>>()?,
         bounds: WorldPromotionBounds::standard(),
     })
-}
-
-fn parse_intent(document: IntentDocument) -> Result<WorldEffectIntent> {
-    Ok(WorldEffectIntent {
-        intent_ref: WorldEffectIntentRef::new(document.intent_ref).map_err(reference_error)?,
-        semantic_ref: WorldSemanticIntentRef::new(document.semantic_ref).map_err(reference_error)?,
-        handler_ref: WorldPromotionHandlerRef::new(document.handler_ref).map_err(reference_error)?,
-        adapter_ref: WorldPromotionAdapterRef::new(document.adapter_ref).map_err(reference_error)?,
-        release_class: document.release_class.map(|value| parse_release_class(&value)).transpose()?,
-    })
-}
-
-fn parse_release_class(value: &str) -> Result<WorldIntentReleaseClass> {
-    match value {
-        "release" => Ok(WorldIntentReleaseClass::Release),
-        "deny" => Ok(WorldIntentReleaseClass::Deny),
-        "simulate" => Ok(WorldIntentReleaseClass::Simulate),
-        "retain" => Ok(WorldIntentReleaseClass::Retain),
-        _ => Err(Failure::invalid_harness("unsupported intent release class")),
-    }
 }
 
 pub(super) fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> {

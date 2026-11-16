@@ -31,6 +31,8 @@ mod registry;
 mod runtime;
 #[path = "host/session.rs"]
 mod session;
+#[path = "setup/snapshot.rs"]
+mod snapshot;
 
 pub use access::Authorization;
 pub use consensus::Group;

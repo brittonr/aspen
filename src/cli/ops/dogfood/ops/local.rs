@@ -25,8 +25,9 @@ pub(super) fn local_node(command: Command) -> Outcome<()> {
     if let (Some(path), Some(value)) = (replay_index_out.as_ref(), run.replay_index_value.as_ref()) {
         super::super::io::write_file(path, &molten::preserves_rail::to_text(value)?)?;
     }
+    // r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
     println!(
-        "dogfood local-node decision={} report={} release-gate={}",
+        "dogfood local-node decision={} report={} release-gate={} source-gate=unqualified-fixture",
         run.decision,
         run.report_ref,
         run.release_gate_ref.as_deref().unwrap_or("none")

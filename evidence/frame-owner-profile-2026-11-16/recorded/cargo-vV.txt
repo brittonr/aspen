@@ -1,0 +1,9 @@
+cargo 1.98.0-nightly (4d1f98451 2026-05-15)
+release: 1.98.0-nightly
+commit-hash: 4d1f984518c77fad6eeef4f40153b002a659e662
+commit-date: 2026-05-15
+host: x86_64-unknown-linux-gnu
+libgit2: 1.9.2 (sys:0.20.4 vendored)
+libcurl: 8.20.0-DEV (sys:0.4.88+curl-8.20.0 vendored ssl:OpenSSL/3.6.2)
+ssl: OpenSSL 3.6.2 7 Apr 2026
+os: NixOS 26.11.0 [64-bit]

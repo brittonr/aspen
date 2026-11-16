@@ -1,9 +1,15 @@
+#[path = "tests/budget.rs"]
+mod budget;
+#[path = "tests/malformed.rs"]
+mod malformed;
+
 use super::*;
 
 pub(super) const NODE_B: &str = "node-b";
 pub(super) const POSITIVE_TIMEOUT_SECONDS: u64 = 1;
 const INGRESS_TEST_CAPACITY: usize = 4;
 const INGRESS_TEST_DELIVERY_LIMIT: u64 = 4;
+const INGRESS_TEST_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
@@ -25,12 +31,17 @@ fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
         accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
         event_capacity: INGRESS_TEST_CAPACITY,
         delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
+        delivery_window: INGRESS_TEST_WINDOW,
     };
     assert!(super::iroh::validate_ingress_config(&valid).is_ok());
-    let mut invalid = valid;
+    let mut invalid = valid.clone();
     invalid.event_capacity = 0;
     let error = super::iroh::validate_ingress_config(&invalid).expect_err("zero ingress capacity must deny");
     assert!(error.to_string().contains("capacity"));
+    let mut no_window = valid;
+    no_window.delivery_window = std::time::Duration::ZERO;
+    let error = super::iroh::validate_ingress_config(&no_window).expect_err("zero delivery window must deny");
+    assert!(error.to_string().contains("window"));
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
@@ -44,6 +55,7 @@ async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
         ),
         event_capacity: INGRESS_TEST_CAPACITY,
         delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
+        delivery_window: INGRESS_TEST_WINDOW,
     })
     .expect("ingress pump");
     let listener = pump.shutdown().await.expect("cancelled ingress listener");
@@ -69,6 +81,7 @@ async fn idle_ingress_keeps_its_delivery_budget_and_accepts_a_later_frame() {
         accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
         event_capacity: 1,
         delivery_limit: 2,
+        delivery_window: INGRESS_TEST_WINDOW,
     })
     .expect("pump");
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -159,4 +172,118 @@ async fn malformed_payload_is_denied_before_transport_acknowledgement() {
         .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
         .await
         .expect("listener cleanup");
+}
+
+/// Frames from a script; an exhausted script idles for the accept deadline like a quiet listener.
+struct ScriptedFrames {
+    frames: std::collections::VecDeque<crate::error::Result<PolledReplicaFrame>>,
+    polls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl ReplicaFrameSource for ScriptedFrames {
+    fn poll_frame<'a>(&'a mut self, _session_ref: &'a str, timeout: std::time::Duration) -> ReplicaFrameFuture<'a> {
+        self.polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let next = self.frames.pop_front();
+        Box::pin(async move {
+            match next {
+                Some(frame) => frame,
+                None => {
+                    tokio::time::sleep(timeout).await;
+                    Ok(Ok(None))
+                }
+            }
+        })
+    }
+}
+
+fn scripted_event(label: &str) -> ReceivedReplicaEvent {
+    let group = super::tests::active_group();
+    let state = super::tests::started_state(&group, super::tests::NODE_A);
+    let election = apply_replica_event(&state, ReplicaEvent::ElectionTimeout {
+        timer_ref: state.active_election_timer_ref.clone(),
+    })
+    .expect("election");
+    ReceivedReplicaEvent {
+        event: ReplicaEvent::Message {
+            envelope: super::tests::sent_envelope_to(&election, NODE_B),
+        },
+        transport_evidence: crate::fabric_transport::FrameEvidence {
+            role: crate::fabric_transport::EndpointParticipantRole::Listener,
+            descriptor_ref: super::tests::test_ref("scripted-descriptor"),
+            session_ref: super::tests::test_ref("scripted-session"),
+            request_ref: super::tests::test_ref(label),
+            payload_ref: super::tests::test_ref(label),
+            acknowledgement_ref: super::tests::test_ref(label),
+            remote_transport_identity_ref: super::tests::test_ref("scripted-peer"),
+            payload_bytes: 1,
+            delivery: crate::fabric_transport::DeliveryOutcome::Delivered,
+            retry: crate::fabric_transport::RetryDisposition::NotApplicable,
+            automatic_retry_count: 0,
+            terminal_class: crate::fabric_transport::SessionTerminalClass::Clean,
+            cleanup_evidence_ref: super::tests::test_ref("scripted-cleanup"),
+        },
+    }
+}
+
+fn scripted_pump(
+    frames: Vec<crate::error::Result<PolledReplicaFrame>>,
+    delivery_limit: u64,
+) -> (ReplicaIngressPump<ScriptedFrames>, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    let polls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let source = ScriptedFrames {
+        frames: frames.into(),
+        polls: std::sync::Arc::clone(&polls),
+    };
+    let pump = ReplicaIngressPump::spawn_source(source, ReplicaIngressConfig {
+        session_ref: super::tests::test_ref("scripted-session"),
+        accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+        event_capacity: INGRESS_TEST_CAPACITY,
+        delivery_limit,
+        delivery_window: INGRESS_TEST_WINDOW,
+    })
+    .expect("scripted pump");
+    (pump, polls)
+}
+
+// r[verify molten.consensus.long_running_service_bounds]
+#[tokio::test(start_paused = true)]
+async fn spent_ingress_budget_pauses_polling_until_its_window_refills() {
+    let frames = ["first", "second", "third"].map(|label| Ok(Ok(Some(scripted_event(label)))));
+    let (mut pump, polls) = scripted_pump(frames.into(), 2);
+    let started = tokio::time::Instant::now();
+    pump.next().await.expect("first delivery");
+    pump.next().await.expect("second delivery");
+    let early = tokio::time::timeout(INGRESS_TEST_WINDOW / 2, pump.next()).await;
+    assert!(early.is_err(), "a spent budget delivers nothing before its window ends");
+    assert_eq!(polls.load(std::sync::atomic::Ordering::SeqCst), 2, "a spent budget stops polling");
+    let third = pump.next().await.expect("delivery after refill");
+    assert!(started.elapsed() >= INGRESS_TEST_WINDOW);
+    assert_eq!(third.transport_evidence.request_ref, super::tests::test_ref("third"));
+    assert_eq!(pump.dropped_frames(), 0);
+}
+
+// r[verify molten.consensus.long_running_service_bounds]
+#[tokio::test(start_paused = true)]
+async fn undecodable_frame_is_dropped_and_counted_and_ingress_continues() {
+    let frames = vec![
+        Ok(Err(crate::error::Failure::invalid_harness("undecodable payload"))),
+        Ok(Ok(Some(scripted_event("after-malformed")))),
+    ];
+    let (mut pump, _polls) = scripted_pump(frames, INGRESS_TEST_DELIVERY_LIMIT);
+    let delivered = pump.next().await.expect("valid frame after the malformed one");
+    assert_eq!(delivered.transport_evidence.request_ref, super::tests::test_ref("after-malformed"));
+    assert_eq!(pump.dropped_frames(), 1);
+    pump.shutdown().await.expect("ingress still running");
+}
+
+// r[verify molten.consensus.long_running_service_bounds]
+#[tokio::test(start_paused = true)]
+async fn transport_failure_ends_ingress_with_its_error() {
+    let frames = vec![Err(crate::error::Failure::invalid_harness(
+        "listener closed before accept",
+    ))];
+    let (mut pump, _polls) = scripted_pump(frames, INGRESS_TEST_DELIVERY_LIMIT);
+    assert!(pump.next().await.is_err(), "ingress ends after a transport failure");
+    let error = pump.shutdown().await.err().expect("transport failure is the pump result");
+    assert!(error.to_string().contains("listener closed before accept"));
 }

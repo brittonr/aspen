@@ -106,10 +106,10 @@ fn resolve_control_registry_engine_for_environment(
         algorithm_profile: manifest.algorithm_profile.clone(),
         profile_version: manifest.admitted_profile_version.clone(),
         requested_environment: requested_environment.to_string(),
-        requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        requested_read_consistency: READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
         required_capabilities: vec![
             ENGINE_CAPABILITY_PROPOSAL.to_string(),
-            ENGINE_CAPABILITY_LINEARIZABLE_READ.to_string(),
+            ENGINE_CAPABILITY_LOCAL_COMMITTED_READ.to_string(),
             ENGINE_CAPABILITY_SNAPSHOT.to_string(),
             ENGINE_CAPABILITY_RECOVERY.to_string(),
         ],
@@ -164,7 +164,7 @@ pub fn normalized_raft_read_receipt_value(receipt: &RaftReadReceipt, engine_epoc
         state_ref: Some(&read_fields.state_ref),
         currentness_ref: Some(&receipt.receipt_ref),
         source_receipt_ref: Some(&receipt.receipt_ref),
-        evidence_refs: read_fields.read_index_predicate_ref.as_slice(),
+        evidence_refs: read_fields.committed_read_predicate_ref.as_slice(),
         diagnostics: &receipt.diagnostics,
     })
 }
@@ -172,18 +172,18 @@ pub fn normalized_raft_read_receipt_value(receipt: &RaftReadReceipt, engine_epoc
 struct ReadReceiptFields {
     group_ref: String,
     state_ref: String,
-    read_index_predicate_ref: Option<String>,
+    committed_read_predicate_ref: Option<String>,
 }
 
 fn read_receipt_fields(value: &IoValue) -> Result<ReadReceiptFields> {
     let fields = value
-        .collect_simple_record("raft-read-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-read-receipt-v1 ...>"))?;
+        .collect_simple_record("raft-read-receipt-v2", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-read-receipt-v2 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_READ_RECEIPT_SCHEMA, "raft read receipt schema")?;
     Ok(ReadReceiptFields {
         group_ref: record_ref(&fields[2], "group")?,
         state_ref: record_ref(&fields[3], "state")?,
-        read_index_predicate_ref: record_optional_ref(&fields[10], "read-index-predicate")?,
+        committed_read_predicate_ref: record_optional_ref(&fields[10], "committed-read-predicate")?,
     })
 }
 

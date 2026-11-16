@@ -1,0 +1,20 @@
+The recorded run used a fresh task-owned source copy from staged tree bae6acf4fa500369ca25cd7a1e094add419efe53, with exactly issue6-probe.patch applied. No product runtime code was adopted. Run only in a new scratch copy of the matching source; retain a fresh output directory and never overwrite recorded/.
+
+Inside the matching pinned Nix shell (nightly-2026-05-26):
+export CARGO_TARGET_DIR="$PWD/target-issue6" CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0
+export CARGO_PROFILE_RELEASE_OPT_LEVEL=3 CARGO_PROFILE_RELEASE_DEBUG=0
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_PROFILE_RELEASE_LTO=false
+export TOKIO_WORKER_THREADS=2 RUST_BACKTRACE=1
+unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS CARGO_BUILD_RUSTFLAGS RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+ulimit -n 4096
+ulimit -v 16777216
+unshare --user --map-root-user --net -- bash -c 'set -e; ip link set lo up; ip -j address show'
+timeout --signal=TERM --kill-after=15s 3600s cargo test --frozen --offline --release -p molten --lib --no-run --message-format=json
+
+Select the one molten library-test executable from Cargo's compiler-artifact JSON, not a guessed target pathname. Set BINARY to that observed executable; set ISSUE6_SAMPLES to an absent file in a fresh output directory. The measured invocation was:
+export ISSUE6_SAMPLES
+IP=$(command -v ip)
+timeout --signal=TERM --kill-after=15s 600s unshare --user --map-root-user --net -- bash -c 'set -euo pipefail; "$1" link set lo up; exec "$2" --exact "$3" --nocapture --test-threads=1' _ "$IP" "$BINARY" fabric_transport::cross_process::tests::issue6_owner_held_real_delivered_profile
+jq -e -s -f issue6-summary.jq "$ISSUE6_SAMPLES"
+
+The source patch and measurement-only source files are retained beside this command record; baseline/ preserves the exact four pre-instrumentation source files. An intact whole-source archive and raw compiler/host logs remain operator-private. Compare the retained source/lock/compiler identities before reuse. No network execution outside the fresh loopback-only namespace is permitted by this profile. Missing offline dependencies or namespace capabilities are prerequisites, not permission to change the cohort. A 1,024-byte typical payload is an explicit assumption; 4,096 bytes is this fixture profile's admitted maximum, not a universal transport maximum. The predeclared 3 warmups and 20 measured operations per size are unchanged. Stage timers nest; do not add them or subtract runtime setup to manufacture a production-amortized denominator. This run cannot authorize begin/commit adoption, even independently of its failed ten-percent threshold.

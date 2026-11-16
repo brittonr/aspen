@@ -36,14 +36,24 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
 }
 
 pub fn admission_plan_value(target_registry: &FilePath, request_value: &IoValue) -> Result<JobAdmissionPlan> {
+    admission_plan_with_gate(target_registry, request_value, None)
+}
+
+fn admission_plan_with_gate(
+    target_registry: &FilePath,
+    request_value: &IoValue,
+    fixture: Option<&crate::octet_gate::UnqualifiedFixtureGate>,
+) -> Result<JobAdmissionPlan> {
     let request = parse_job_admission_request_value(request_value)?;
     let mut diagnostics = Vec::new();
     let has_explicit_authority = explicit_admission_authority(&request, &mut diagnostics);
     let (has_capability_authority, authority_receipt_refs) =
         capability_contexts_admit(target_registry, &request, &mut diagnostics)?;
     let has_sync_evidence = sync_evidence_bound(&request, &mut diagnostics);
-    let (has_source_gate_evidence, source_gate_validation_refs) =
-        source_gate_evidence_bound(target_registry, &request, &mut diagnostics)?;
+    let (has_source_gate_evidence, source_gate_validation_refs) = match fixture {
+        None => source_gate_evidence_bound(target_registry, &request, &mut diagnostics)?,
+        Some(fixture) => fixture_gate_evidence_bound(&request, fixture, &mut diagnostics),
+    };
     let readiness = scan_target(target_registry, &request, &mut diagnostics)?;
     let has_resource_profile = resource_profile_admits(&request, &readiness.stage_order, &mut diagnostics)?;
     finish_plan(PlanOutcomeInput {
@@ -55,6 +65,7 @@ pub fn admission_plan_value(target_registry: &FilePath, request_value: &IoValue)
         has_capability_authority,
         has_sync_evidence,
         has_source_gate_evidence,
+        is_unqualified_fixture_gate: fixture.is_some(),
         has_resource_profile,
         diagnostics,
     })
@@ -78,6 +89,7 @@ struct PlanOutcomeInput {
     has_capability_authority: bool,
     has_sync_evidence: bool,
     has_source_gate_evidence: bool,
+    is_unqualified_fixture_gate: bool,
     has_resource_profile: bool,
     diagnostics: Vec<String>,
 }
@@ -241,6 +253,7 @@ fn finish_plan(input: PlanOutcomeInput) -> Result<JobAdmissionPlan> {
         authority_receipt_refs,
         source_gate_validation_refs,
         diagnostics,
+        is_unqualified_fixture_gate,
         ..
     } = input;
     Ok(JobAdmissionPlan {
@@ -253,6 +266,7 @@ fn finish_plan(input: PlanOutcomeInput) -> Result<JobAdmissionPlan> {
         source_gate_validation_refs,
         resource_verdict,
         decision: decision.to_string(),
+        is_unqualified_fixture_gate,
         diagnostics,
         value,
         receipt_value,
@@ -275,16 +289,3 @@ fn plan_decision(input: &PlanOutcomeInput) -> &'static str {
     }
 }
 
-fn plan_checks(input: &PlanOutcomeInput) -> [(&'static str, &'static str); 9] {
-    [
-        ("target-closure-present", status(input.readiness.has_target_closure)),
-        ("trellis-topology", status(input.readiness.has_valid_topology)),
-        ("executable-artifact-gate", status(input.readiness.has_executable_artifacts)),
-        ("explicit-authority", status(input.has_explicit_authority)),
-        ("capability-authority-context", status(input.has_capability_authority)),
-        ("resource-profile", status(input.has_resource_profile)),
-        ("sync-evidence-bound", status(input.has_sync_evidence)),
-        ("strict-octet-source-gate-bound", status(input.has_source_gate_evidence)),
-        ("no-execution", "pass"),
-    ]
-}

@@ -109,6 +109,24 @@ fn run_case(case: &str, bind_ip: std::net::IpAddr, evidence_dir: Option<&std::pa
         listener_config.generation
     };
     let mut client = OwnedChild::spawn(&write_config(&client_config)?, workspace.join("client.log"), &workspace)?;
+    if case == "queue-saturation" {
+        listener.await_file(&workspace.join("receiver-paused"))?;
+        client.await_file(&workspace.join("producer-blocked"))?;
+        assert!(
+            !workspace.join("producer-finished").exists(),
+            "producer escaped blocked receiver before control probe"
+        );
+        let mut probe_config = listener_config.clone();
+        probe_config.role = "raw".to_owned();
+        probe_config.case = "queue-probe".to_owned();
+        let mut probe = OwnedChild::spawn(&write_config(&probe_config)?, workspace.join("probe.log"), &workspace)?;
+        probe.finish()?;
+        assert!(
+            !workspace.join("producer-finished").exists(),
+            "control rejection did not precede bulk producer completion"
+        );
+        atomic_value(&workspace.join("release-receiver"), &molten::preserves_rail::string("release"))?;
+    }
     client.finish()?;
     listener.finish()?;
     assert_native_output(&workspace.join("listener-evidence.preserves"))?;
@@ -166,6 +184,7 @@ qualification_case!(direct_stream_restart_does_not_replay_stale_operation, "rest
 qualification_case!(direct_stream_cancel_before_open_is_terminal, "cancel");
 qualification_case!(direct_stream_drained_listener_refuses_new_operation, "drain");
 qualification_case!(direct_stream_concurrent_transfer_refuses_second_connection, "concurrent");
+qualification_case!(direct_stream_saturated_receiver_preserves_control_admission_and_bulk_delivery, "queue-saturation");
 
 // r[verify molten.fabric_transport.direct_lan]
 #[tokio::test]

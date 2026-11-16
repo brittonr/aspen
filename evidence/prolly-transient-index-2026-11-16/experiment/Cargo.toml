@@ -1,0 +1,15 @@
+[workspace]
+members = ["current", "candidate", "sorted", "probe"]
+resolver = "3"
+
+[workspace.dependencies]
+blake3 = "=1.8.5"
+serde = { version = "=1.0.228", features = ["derive"] }
+content-identity-core = { git = "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git", rev = "7f55597b5dc879b7601856e8d7fd0dbacaa2a498", version = "=0.1.0" }
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 16
+debug = false
+panic = "unwind"

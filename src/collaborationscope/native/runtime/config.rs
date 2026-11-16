@@ -38,7 +38,9 @@ pub struct Input {
     pub handler_ref: String,
     pub session_ref: String,
     pub ingress_capacity: usize,
+    /// Deliveries admitted per `ingress_delivery_window_ms`; a rate, not a lifetime total.
     pub ingress_delivery_limit: u64,
+    pub ingress_delivery_window_ms: u64,
     pub timeout_ms: u64,
     /// Empty genesis only; privileged scopes, bindings and operations cannot be supplied.
     pub genesis: Option<Genesis>,

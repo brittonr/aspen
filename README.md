@@ -63,7 +63,13 @@ Inspect `manifest.preserves`, `status.preserves`, the upgrade/rollback/recovery 
 rm -rf -- "${ASPEN_DEMO_DIR:?Set by the demo above}"
 ```
 
-**Scope of this example:** lifecycle callbacks, bounded restart, checkpoint, upgrade/rollback, and canonical evidence. The `sandboxed-component` fixture invokes an import-free Wasmtime core-module probe; it is not the installed Component Model deployment path. It does not exercise live cross-host transport or qualify production isolation or durability. The [fixture implementation](src/cli/runtime/system_extension/ops.rs) owns its commands and canonical outputs.
+**Scope of this example:** lifecycle callbacks, bounded restart, checkpoint, upgrade/rollback, and canonical evidence. The `sandboxed-component` fixture invokes an import-free Wasmtime core-module probe; it is not the installed Component Model deployment path. It does not qualify production isolation or durability. The [fixture implementation](src/cli/runtime/system_extension/ops.rs) owns its commands and canonical outputs.
+
+**Not covered yet, with owning issues:**
+
+- Live cross-host transport: [qualify a cross-host Iroh streaming profile #15](https://github.com/brittonr/aspen/issues/15).
+- A selected runtime composition beyond this local fixture: [executable world promotion #17](https://github.com/brittonr/aspen/issues/17) and [a hosted addressable actor #19](https://github.com/brittonr/aspen/issues/19).
+- A two-host variant of this workflow is added only after #15 and the selected runtime path are qualified.
 
 **Retained execution observation (2026-11-13):** these fixture and status operations completed in **3m34.165s** with a fresh task-owned Cargo target, state and output directory in the pinned development shell (`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`). Existing Cargo/Nix source caches were used. The fixture retained 68 evidence entries; canonical status readback reported generation 3, stopped, one restart and 13 invocations. This is not a cold anonymous bootstrap, an installed-component deployment or a Nix-built-binary result. [Public-source qualification #23](https://github.com/brittonr/aspen/issues/23) and [exact capability qualification #22](https://github.com/brittonr/aspen/issues/22) remain separate.
 
@@ -84,7 +90,7 @@ Aspen uses a functional core with explicit effect boundaries:
 
 The implementation is written in Rust. Iroh provides peer transport and content mechanisms; Redb stores local durable metadata; Wasmtime hosts admitted Wasm execution. Preserves and BLAKE3 define canonical values and identities. Nickel, Basalt/UCAN, and the repository's evidence tools supply policy and admission inputs. The [manifest](Cargo.toml) and [dependency policy](docs/reproducible-dependencies.md) record the selected versions and source identities.
 
-Trellis-backed coordination is scoped to control-plane state. Ordinary actor and content traffic does not require a single global consensus path. A replay result, transport acknowledgement, or signed receipt remains evidence for its stated operation and profile.
+Consensus is scoped to control-plane state. The replicated Raft and single-process control registry are in-tree implementations; neither calls Trellis. Trellis supplies choreography and JobDag helpers. Ordinary actor and content traffic does not require a single global consensus path. A replay result, transport acknowledgement, or signed receipt remains evidence only for its stated operation and profile.
 
 Read the [system atlas](docs/atlas.md), [architecture guide](docs/architecture.md), and [core/adapter/extension boundaries](docs/distributed-system-fabric.md) for the detailed design.
 

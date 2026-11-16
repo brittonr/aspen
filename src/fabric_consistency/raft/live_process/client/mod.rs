@@ -6,11 +6,27 @@ mod tests;
 
 const NATIVE_RECOVERY_TICKS: u64 = 16;
 
+/// One measured running image for an original run, independent repeats and valid-prefix reduction.
+struct MeasuredExecutable {
+    path: std::path::PathBuf,
+    binary_ref: String,
+}
+
 fn run(
     input: &crate::fabric_simulation::bounded_client::Input,
     directory: &std::path::Path,
+    executable: &MeasuredExecutable,
 ) -> crate::error::Result<crate::fabric_simulation::bounded_client::History> {
     input.validate()?;
+    // Linux's /proc/self/exe remains this immutable image even if Cargo replaces its pathname.
+    // Other platforms recheck the selected path before each producer set instead of trusting a cache.
+    #[cfg(not(target_os = "linux"))]
+    {
+        let current = measure_running_executable()?;
+        if current.path != executable.path || current.binary_ref != executable.binary_ref {
+            return Err(crate::error::Failure::invalid_harness("original native executable changed before a repeat"));
+        }
+    }
     write_value(
         &directory.join(crate::fabric_simulation::bounded_client::CLIENT_INPUT_FILE),
         &crate::fabric_simulation::bounded_client::input_value(input),
@@ -23,13 +39,8 @@ fn run(
             crate::preserves_rail::string(crate::fabric_simulation::bounded_client::APPLY_ONCE_PROPERTY),
         ]),
     )?;
-    let executable = running_executable()?;
-    let mut binary = std::fs::File::open(&executable).map_err(crate::error::Failure::from)?;
-    let mut binary_hasher = blake3::Hasher::new();
-    binary_hasher.update_reader(&mut binary).map_err(crate::error::Failure::from)?;
-    let binary_ref = format!("blake3:{}", binary_hasher.finalize().to_hex());
     let workload = input.differential_workload()?;
-    let mut executor = executor::Driver::new(input, directory, &executable);
+    let mut executor = executor::Driver::new(input, directory, &executable.path);
     let outcomes = crate::fabric_simulation::execute_workload(&mut executor, &workload);
     let outcome_value = crate::preserves_rail::sequence(
         outcomes
@@ -49,7 +60,7 @@ fn run(
             crate::preserves_rail::string(executor.failure.as_deref().unwrap_or("")),
         ]),
     )?;
-    persist_build_bindings(directory, input, &binary_ref)?;
+    persist_build_bindings(directory, input, &executable.binary_ref)?;
     let executed = std::mem::take(&mut executor.executed);
     // A valid prefix may leave producers running. Reap those owned children
     // before reading their evidence, without executing omitted later phases.
@@ -92,6 +103,17 @@ fn persist_build_bindings(
             crate::preserves_rail::string("native-process-crash-only; no guest or replay qualification"),
         ]),
     )
+}
+
+fn measure_running_executable() -> crate::error::Result<MeasuredExecutable> {
+    let path = running_executable()?;
+    let mut binary = std::fs::File::open(&path).map_err(crate::error::Failure::from)?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_reader(&mut binary).map_err(crate::error::Failure::from)?;
+    Ok(MeasuredExecutable {
+        path,
+        binary_ref: format!("blake3:{}", hasher.finalize().to_hex()),
+    })
 }
 
 fn running_executable() -> crate::error::Result<std::path::PathBuf> {

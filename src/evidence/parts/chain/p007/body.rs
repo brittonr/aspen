@@ -121,9 +121,9 @@ fn parse_control_plane(value: &Value<IoValue>) -> Result<()> {
         .collect_simple_record("control-plane", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("chain checkpoint missing control-plane record"))?;
     let mode = record_string(&control[0], "mode", "checkpoint control-plane mode")?;
-    if mode != "trellis-raft" {
+    if mode != CHECKPOINT_CONTROL_PLANE_MODE {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported checkpoint control-plane mode {mode}; expected trellis-raft"
+            "unsupported checkpoint control-plane mode {mode}; expected {CHECKPOINT_CONTROL_PLANE_MODE}"
         )));
     }
     let command = record_string(&control[1], "command", "checkpoint control-plane command")?;

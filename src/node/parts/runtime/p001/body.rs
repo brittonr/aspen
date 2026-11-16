@@ -159,27 +159,42 @@ fn adapter_start(
 
 /// Explicit receipt-only composition for pure/domain tests; not normal daemon admission.
 pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeStart> {
-    start_node_runtime_with_gate(input, None)
+    start_node_runtime_with_gate(input, StartGate::Scan)
 }
 
 pub fn start_node_runtime_with_source_gate(
     input: &NodeRuntimeStartInput,
     gate: &ValidatedNodeSourceGate,
 ) -> Result<NodeRuntimeStart> {
-    start_node_runtime_with_gate(input, Some(gate))
+    start_node_runtime_with_gate(input, StartGate::Authenticated(gate))
 }
 
-fn start_node_runtime_with_gate(
+/// Local dogfood composition over an unqualified fixture gate. The startup receipt binds the fixture
+/// validation ref, records the strict Octet source-gate check as failed and carries the fixture marker.
+// r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+pub(crate) fn start_node_runtime_with_unqualified_fixture_gate(
     input: &NodeRuntimeStartInput,
-    admitted: Option<&ValidatedNodeSourceGate>,
+    fixture: &crate::octet_gate::UnqualifiedFixtureGate,
 ) -> Result<NodeRuntimeStart> {
+    start_node_runtime_with_gate(input, StartGate::UnqualifiedFixture(fixture))
+}
+
+#[derive(Clone, Copy)]
+enum StartGate<'a> {
+    Scan,
+    Authenticated(&'a ValidatedNodeSourceGate),
+    UnqualifiedFixture(&'a crate::octet_gate::UnqualifiedFixtureGate),
+}
+
+fn start_node_runtime_with_gate(input: &NodeRuntimeStartInput, gate: StartGate<'_>) -> Result<NodeRuntimeStart> {
     let config = parse_node_config(&input.config_value)?;
     validate_start_input(&config, input)?;
     let ordered = deterministic_adapter_bindings(&config.adapters);
     let mut diagnostics = startup_diagnostics(&config, input)?;
-    let gate_scan = match admitted {
-        Some(gate) => admitted_gate_scan(input, gate)?,
-        None => scan_gates(&config.config_ref, input)?,
+    let gate_scan = match gate {
+        StartGate::Scan => scan_gates(&config.config_ref, input)?,
+        StartGate::Authenticated(gate) => admitted_gate_scan(input, gate)?,
+        StartGate::UnqualifiedFixture(fixture) => fixture_gate_scan(input, fixture)?,
     };
     for diagnostic in gate_scan.diagnostics {
         push_bounded(&mut diagnostics, diagnostic, MAX_NODE_DIAGNOSTICS, "node runtime startup diagnostics")?;
@@ -214,6 +229,7 @@ fn start_node_runtime_with_gate(
         resource_receipt_refs: &input.resource_receipt_refs,
         version_refs: &input.version_refs,
         diagnostics: &diagnostics,
+        is_unqualified_fixture_gate: matches!(gate, StartGate::UnqualifiedFixture(_)),
     })?;
     let startup_receipt = parse_node_startup_receipt(&startup_value)?;
     Ok(NodeRuntimeStart {
@@ -267,26 +283,5 @@ pub fn node_adapter_receipt_value(
     })
 }
 
-pub fn node_adapter_lifecycle_receipt_value(input: &AdapterLifecycleReceiptInput<'_>) -> Result<IoValue> {
-    validate_adapter_operation(input.operation)?;
-    validate_decision(input.decision)?;
-    validate_refs(input.index_receipt_refs, "node adapter index receipt ref")?;
-    validate_refs(input.resource_receipt_refs, "node adapter resource receipt ref")?;
-    Ok(record("node-adapter-receipt-v1", vec![
-        string(NODE_ADAPTER_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("adapter", vec![string(&input.adapter.name)]),
-        record("profile", vec![string(&input.adapter.profile_ref)]),
-        record("index", vec![refs_sequence(input.index_receipt_refs)]),
-        record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        checks_value(&[
-            ("adapter-profile-bound", "pass"),
-            ("adapter-index-verified", status(!input.index_receipt_refs.is_empty())),
-            ("adapter-resource-profile-bound", status(!input.resource_receipt_refs.is_empty())),
-            ("no-invisible-startup", if input.decision == "pass" { "pass" } else { "fail" }),
-            ("canonical-receipt", "pass"),
-        ]),
-    ]))
-}
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/p001/encoding.rs"));
+

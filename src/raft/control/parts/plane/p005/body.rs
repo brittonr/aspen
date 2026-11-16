@@ -206,7 +206,7 @@ fn validate_read_mode(read_mode: &str) -> Result<()> {
 
 fn validate_read_consistency_mode(read_consistency_mode: &str) -> Result<()> {
     match read_consistency_mode {
-        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
+        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_COMMITTED | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
         _ => Err(MoltenError::invalid_harness(format!(
             "unsupported raft read consistency mode {read_consistency_mode}"
         ))),
@@ -215,8 +215,8 @@ fn validate_read_consistency_mode(read_consistency_mode: &str) -> Result<()> {
 
 fn validate_read_consistency_support(values: &[String]) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_RAFT_COMMANDS, "raft read consistency modes")?;
-    if !values.iter().any(|value| value == READ_CONSISTENCY_LINEARIZABLE) {
-        return Err(MoltenError::invalid_harness("consensus profile must support linearizable reads"));
+    if values.is_empty() {
+        return Err(MoltenError::invalid_harness("engine profile must declare a read consistency mode"));
     }
     for value in values {
         validate_read_consistency_mode(value)?;
@@ -229,6 +229,9 @@ fn validate_consensus_algorithm_profile(profile: &ConsensusAlgorithmProfileInput
     validate_non_empty(&profile.admitted_profile_version, "consensus profile version")?;
     validate_non_empty(&profile.quorum_rule, "consensus quorum rule")?;
     validate_read_consistency_support(&profile.read_consistency_support)?;
+    if !profile.read_consistency_support.iter().any(|mode| mode == READ_CONSISTENCY_LINEARIZABLE) {
+        return Err(MoltenError::invalid_harness("consensus profile must support linearizable reads"));
+    }
     validate_refs(&profile.membership_policy_refs, "consensus membership policy ref")?;
     validate_refs(&profile.required_evidence_refs, "consensus required evidence ref")?;
     validate_caveats(&profile.fault_model_caveats)?;

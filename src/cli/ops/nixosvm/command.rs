@@ -10,6 +10,7 @@ pub(crate) enum Command {
     FaultDescriptor(FaultDescriptorInput),
     FaultReceipt(FaultReceiptInput),
     FaultValidate(FaultValidateInput),
+    StateObserve(StateObserveInput),
     ShardRun(ShardRunInput),
     Aggregate(AggregateInput),
     Show { artifact: FilePath },
@@ -187,8 +188,30 @@ pub(crate) struct FaultValidateInput {
     pub(super) descriptors: Vec<FilePath>,
     #[arg(long = "receipt")]
     pub(super) receipts: Vec<FilePath>,
+    #[arg(long = "attempt-artifact")]
+    pub(super) attempt_artifact: Option<FilePath>,
+    #[arg(long = "pre-observation")]
+    pub(super) pre_observation: Option<FilePath>,
+    #[arg(long = "post-observation")]
+    pub(super) post_observation: Option<FilePath>,
     #[arg(long)]
     pub(super) out: Option<FilePath>,
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct StateObserveInput {
+    #[arg(long)]
+    pub(super) phase: String,
+    #[arg(long = "target-node")]
+    pub(super) target_node: String,
+    #[arg(long = "state-root")]
+    pub(super) state_root: FilePath,
+    #[arg(long = "package-path")]
+    pub(super) package_path: FilePath,
+    #[arg(long = "target", default_value = "health-receipt.preserves")]
+    pub(super) target: String,
+    #[arg(long)]
+    pub(super) out: FilePath,
 }
 
 #[derive(Debug, clap::Args)]

@@ -1,0 +1,265 @@
+{
+  "schema": "aspen.release-dependency-explanation-comparison-observation.v1",
+  "observed_on": "2026-11-16",
+  "nextest_run_id": "ac4afa47-226a-429d-81d1-b11c45236133",
+  "command": "nix develop --offline --option builders '' -c cargo nextest run --locked -p molten-core --no-capture --test-threads 1 -E 'test(/release_dependency::explanation::comparison::/)'",
+  "source": {
+    "base_git_revision": "166ecaf40a307bedd22694e4a027e616e03e21cf",
+    "state": "task-owned working-tree changes; selected exact source files identified below",
+    "blake3": {
+      "Cargo.toml": "df1604797781133ae827060d9f8304ef00254626961735858a7967c77d90b38e",
+      "Cargo.lock": "6f93991576af2303f9b99b20661da7e87e200faaed57617ee756b6c2e3d587db",
+      "crates/molten-core/Cargo.toml": "84d5b3e172cb09c219225d11e25b02dbace5168530e4db9d06092683f4ed7e0b",
+      "crates/molten-core/src/release_dependency.rs": "d902b25e9fb30d063da3c8783f177244b19619cd025b95592841e3cd96ab525e",
+      "crates/molten-core/src/release_dependency/explanation.rs": "241b2835ee7d854881a367fef28a0e60e5d3b4c43eb1ee7111e26ccf6e3d64b8",
+      "crates/molten-core/src/release_dependency/explanation/comparison.rs": "d852ebdd13bce93a73136ec76078e1280ac2f598f79be6db836650258837789f",
+      "crates/molten-core/src/release_dependency/explanation/corpus.rs": "b2619ba274742a5d2cd05643d11066856b611b6b77a59320b107dc6d2dbdef88",
+      "crates/molten-core/src/release_dependency/explanation/identity.rs": "ee3bf6b397de4e828091bbfea202d81f5613d219587be4396256c39ec4e52232",
+      "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs": "1ce5602886cf38e818eb72cac40d66a8ae4a050081ea87e4293a705d13fd0627",
+      "crates/molten-core/src/release_dependency/explanation/tests.rs": "17a4d611309f14f9dd7beb8e297a3e5e7494322c11a105d17fab1d6302335b61",
+      "crates/molten-core/src/release_dependency/explanation/verify.rs": "1efdd300e00ca6acc4d5dbb63b8b367b6801016cab3f3e775d139e9408b58d1e"
+    },
+    "after_capture_cleanup": {
+      "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
+      "change": "Removed only unused use super::ExplanationRule; no algorithm or fixture change",
+      "blake3": "92532ef8625d686a88ac5152d59c86377e1489e98fc6809b3e2e7de96080d06e"
+    }
+  },
+  "toolchain": {
+    "rustc": "1.98.0-nightly",
+    "commit": "31a9463c6e2794a59ce57a8f37abc6966afc2a58",
+    "commit_date": "2026-05-25",
+    "llvm": "22.1.6",
+    "host": "x86_64-unknown-linux-gnu",
+    "nextest": "0.9.136",
+    "profile": "test, unoptimized with debug info"
+  },
+  "execution": {
+    "tests_run": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 789,
+    "compile_seconds": 33.31,
+    "test_run_seconds": 11.286,
+    "command_wall_seconds": 46.81,
+    "cases": 12,
+    "cost_iterations_per_case": 2000,
+    "runner_note": "Nextest ignores --test-threads with --no-capture; the observed no-capture run executed these tests sequentially."
+  },
+  "tests": [
+    {
+      "name": "explanation_cost_relational_pilot",
+      "seconds": 6.381,
+      "result": "pass"
+    },
+    {
+      "name": "explanation_cost_structured_rust_path",
+      "seconds": 4.89,
+      "result": "pass"
+    },
+    {
+      "name": "pilot_absence_rule_silently_underderives_without_a_completed_relation",
+      "seconds": 0.004,
+      "result": "pass"
+    },
+    {
+      "name": "relational_pilot_agrees_with_structured_explanations_over_corpus",
+      "seconds": 0.01,
+      "result": "pass"
+    }
+  ],
+  "columns": [
+    "selected_rows",
+    "textual_ambiguous",
+    "rust_facts",
+    "rust_steps",
+    "rust_output_bytes",
+    "pilot_base_facts",
+    "pilot_derived_facts",
+    "pilot_steps",
+    "pilot_iterations",
+    "pilot_text_bytes"
+  ],
+  "rows": [
+    {
+      "case": "valid",
+      "selected_rows": 0,
+      "textual_ambiguous": 0,
+      "rust_facts": 8,
+      "rust_steps": 12,
+      "rust_output_bytes": 0,
+      "pilot_base_facts": 11,
+      "pilot_derived_facts": 6,
+      "pilot_steps": 65,
+      "pilot_iterations": 5,
+      "pilot_text_bytes": 773
+    },
+    {
+      "case": "lock-source-drift",
+      "selected_rows": 1,
+      "textual_ambiguous": 0,
+      "rust_facts": 8,
+      "rust_steps": 13,
+      "rust_output_bytes": 245,
+      "pilot_base_facts": 11,
+      "pilot_derived_facts": 7,
+      "pilot_steps": 94,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 878
+    },
+    {
+      "case": "lock-revision-drift-and-missing",
+      "selected_rows": 2,
+      "textual_ambiguous": 0,
+      "rust_facts": 8,
+      "rust_steps": 14,
+      "rust_output_bytes": 406,
+      "pilot_base_facts": 11,
+      "pilot_derived_facts": 8,
+      "pilot_steps": 94,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 826
+    },
+    {
+      "case": "absent-dependency-observation",
+      "selected_rows": 0,
+      "textual_ambiguous": 0,
+      "rust_facts": 7,
+      "rust_steps": 9,
+      "rust_output_bytes": 0,
+      "pilot_base_facts": 10,
+      "pilot_derived_facts": 5,
+      "pilot_steps": 51,
+      "pilot_iterations": 5,
+      "pilot_text_bytes": 597
+    },
+    {
+      "case": "absent-archive-observation",
+      "selected_rows": 1,
+      "textual_ambiguous": 0,
+      "rust_facts": 7,
+      "rust_steps": 12,
+      "rust_output_bytes": 187,
+      "pilot_base_facts": 10,
+      "pilot_derived_facts": 5,
+      "pilot_steps": 76,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 776
+    },
+    {
+      "case": "archive-reported-absent",
+      "selected_rows": 1,
+      "textual_ambiguous": 0,
+      "rust_facts": 8,
+      "rust_steps": 13,
+      "rust_output_bytes": 190,
+      "pilot_base_facts": 11,
+      "pilot_derived_facts": 7,
+      "pilot_steps": 94,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 819
+    },
+    {
+      "case": "duplicate-observation-last-clean",
+      "selected_rows": 0,
+      "textual_ambiguous": 0,
+      "rust_facts": 9,
+      "rust_steps": 13,
+      "rust_output_bytes": 0,
+      "pilot_base_facts": 12,
+      "pilot_derived_facts": 7,
+      "pilot_steps": 85,
+      "pilot_iterations": 5,
+      "pilot_text_bytes": 861
+    },
+    {
+      "case": "duplicate-observation-last-drifted",
+      "selected_rows": 1,
+      "textual_ambiguous": 1,
+      "rust_facts": 9,
+      "rust_steps": 14,
+      "rust_output_bytes": 219,
+      "pilot_base_facts": 12,
+      "pilot_derived_facts": 8,
+      "pilot_steps": 114,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 947
+    },
+    {
+      "case": "duplicate-archive-observation-last-present",
+      "selected_rows": 0,
+      "textual_ambiguous": 0,
+      "rust_facts": 9,
+      "rust_steps": 13,
+      "rust_output_bytes": 0,
+      "pilot_base_facts": 12,
+      "pilot_derived_facts": 7,
+      "pilot_steps": 87,
+      "pilot_iterations": 5,
+      "pilot_text_bytes": 790
+    },
+    {
+      "case": "duplicate-expectation",
+      "selected_rows": 1,
+      "textual_ambiguous": 1,
+      "rust_facts": 9,
+      "rust_steps": 17,
+      "rust_output_bytes": 438,
+      "pilot_base_facts": 12,
+      "pilot_derived_facts": 8,
+      "pilot_steps": 106,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 1033
+    },
+    {
+      "case": "crossed-packages",
+      "selected_rows": 2,
+      "textual_ambiguous": 0,
+      "rust_facts": 8,
+      "rust_steps": 16,
+      "rust_output_bytes": 922,
+      "pilot_base_facts": 11,
+      "pilot_derived_facts": 10,
+      "pilot_steps": 94,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 1129
+    },
+    {
+      "case": "registry-lock-drift",
+      "selected_rows": 1,
+      "textual_ambiguous": 0,
+      "rust_facts": 10,
+      "rust_steps": 18,
+      "rust_output_bytes": 255,
+      "pilot_base_facts": 13,
+      "pilot_derived_facts": 8,
+      "pilot_steps": 112,
+      "pilot_iterations": 6,
+      "pilot_text_bytes": 1279
+    }
+  ],
+  "totals": {
+    "selected_rows": 10,
+    "textual_ambiguous": 2,
+    "rust_facts": 100,
+    "rust_steps": 164,
+    "rust_output_bytes": 2862,
+    "pilot_base_facts": 136,
+    "pilot_derived_facts": 86,
+    "pilot_steps": 1072,
+    "pilot_iterations": 68,
+    "pilot_text_bytes": 10708
+  },
+  "decision": {
+    "outcome": "keep structured Rust; stop engine integration for the selected families",
+    "criterion": "Existing design reopens only if the captured pilot cost is cheaper.",
+    "observation": "Same supported explanations; relational per-test duration 6.381s versus Rust 4.890s, with no measured cost advantage."
+  },
+  "non_claims": [
+    "Single machine-local debug-profile observation, not production performance qualification or statistical comparison.",
+    "Per-test times include process/test overhead; compilation is excluded from those durations.",
+    "Step units are implementation-specific, not equivalent machine instructions.",
+    "Rust rendered bytes and relational materialized text are different representations, not allocator/RSS peaks.",
+    "No full executable/dependency-closure attestation, release authority, or runtime adoption follows."
+  ]
+}

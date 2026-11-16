@@ -138,6 +138,34 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
             Ok(WorldPromotionReadBackObservation::Missing)
         }
     }
+    fn read_promotion_identity(
+        &self,
+        operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>> {
+        let read = self.database().begin_read().map_err(store_error)?;
+        {
+            let identities = read.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
+            if let Some(bytes) =
+                identities.get(operation_ref.as_str()).map_err(store_error)?.map(|guard| guard.value().to_vec())
+            {
+                return Ok(Some(StoredPromotionIdentity::Current(crate::world_promotion::parse_promotion_identity(
+                    &bytes,
+                )?)));
+            }
+        }
+        let promotions = read.open_table(PROMOTIONS_TABLE).map_err(store_error)?;
+        for entry in promotions.iter().map_err(store_error)? {
+            let (_, value) = entry.map_err(store_error)?;
+            let (stored_operation, plan_ref) = crate::world_promotion::parse_promotion_operation(value.value())?;
+            if &stored_operation == operation_ref {
+                return Ok(Some(StoredPromotionIdentity::Legacy {
+                    operation_ref: stored_operation,
+                    plan_ref,
+                }));
+            }
+        }
+        Ok(None)
+    }
 }
 
 impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
@@ -173,35 +201,6 @@ impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
 
     fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
         super::outbox::list_attempts_in_progress(self.database())
-    }
-
-    fn read_promotion_identity(
-        &self,
-        operation_ref: &WorldPromotionOperationRef,
-    ) -> Result<Option<StoredPromotionIdentity>> {
-        let read = self.database().begin_read().map_err(store_error)?;
-        {
-            let identities = read.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
-            if let Some(bytes) =
-                identities.get(operation_ref.as_str()).map_err(store_error)?.map(|guard| guard.value().to_vec())
-            {
-                return Ok(Some(StoredPromotionIdentity::Current(crate::world_promotion::parse_promotion_identity(
-                    &bytes,
-                )?)));
-            }
-        }
-        let promotions = read.open_table(PROMOTIONS_TABLE).map_err(store_error)?;
-        for entry in promotions.iter().map_err(store_error)? {
-            let (_, value) = entry.map_err(store_error)?;
-            let (stored_operation, plan_ref) = crate::world_promotion::parse_promotion_operation(value.value())?;
-            if &stored_operation == operation_ref {
-                return Ok(Some(StoredPromotionIdentity::Legacy {
-                    operation_ref: stored_operation,
-                    plan_ref,
-                }));
-            }
-        }
-        Ok(None)
     }
 }
 

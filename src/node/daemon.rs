@@ -2,8 +2,10 @@
 mod ingress;
 #[path = "source-binding/mod.rs"]
 mod source_binding;
+pub use source_binding::AuthenticatedGate;
 pub use source_binding::GateValidation;
 pub use source_binding::SelectedNodeOutputValidation;
+pub use source_binding::authenticated_gate_with_root;
 pub use source_binding::gate_validation_with_root;
 pub use source_binding::start_runtime_with_root;
 pub use source_binding::verify_selected_node_output_with_root;

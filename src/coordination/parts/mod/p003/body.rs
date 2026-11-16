@@ -115,11 +115,7 @@ fn apply_coordination_read(
 ) -> Result<CoordinationApplyResult> {
     let read =
         crate::raft_control_plane::read_control_registry(&crate::raft_control_plane::ControlRegistryReadInput {
-            state: runtime.raft.state.value.clone(),
-            group_ref: runtime.raft.manifest.manifest_ref.clone(),
-            committed_term: runtime.raft.term,
-            committed_index: runtime.raft.committed_index,
-            read_index: runtime.raft.committed_index,
+            runtime: &runtime.raft,
             read_consistency_mode: request.read_consistency_mode.clone(),
             namespace: coordination_namespace(&request.service),
             name: request.key.clone(),
@@ -165,7 +161,7 @@ fn apply_coordination_read(
         },
         dataspace_assertion_refs: &assertion_refs,
         diagnostics: &diagnostics,
-        checks: &read_receipt_checks(&request.read_consistency_mode),
+        checks: &read_receipt_checks(&request.read_consistency_mode, decision),
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
     let assertions = corrected_read_assertions(assertion, &fact, &receipt.receipt_ref)?;
@@ -179,11 +175,18 @@ fn apply_coordination_read(
     }))
 }
 
-fn read_receipt_checks(read_consistency_mode: &str) -> [(&'static str, &'static str); 8] {
+/// v2 replaces the v1 `read-index-bound` check, which passed for every linearizable read although no read
+/// index was taken: `committed-state-bound` passes only for an admitted `local-committed` registry read.
+fn read_receipt_checks(read_consistency_mode: &str, decision: &str) -> [(&'static str, &'static str); 8] {
+    let committed_state_bound = if read_consistency_mode == READ_CONSISTENCY_LOCAL_COMMITTED && decision == "pass" {
+        "pass"
+    } else {
+        "diagnostic"
+    };
     [
         ("coordination-request-bound", "pass"),
         ("read-consistency-declared", "pass"),
-        ("read-index-bound", if read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
+        ("committed-state-bound", committed_state_bound),
         ("local-stale-non-authoritative", if read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE { "pass" } else { "diagnostic" }),
         ("control-plane-command", "pass"),
         ("normalized-consensus-evidence", "pass"),
@@ -218,7 +221,7 @@ fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IoValue
     }
     if diagnostics.is_empty() {
         diagnostics.push_limited(
-            "coordination read-index denied".to_string(),
+            "coordination registry read denied".to_string(),
             MAX_COORDINATION_DIAGNOSTICS,
             "coordination diagnostics",
         )?;

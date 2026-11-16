@@ -49,7 +49,15 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 const CONTROL_REGISTRY_STATE_MACHINE: &str = "control-registry-v1";
 const READ_MODE_READ_INDEX: &str = "read-index";
 pub const READ_CONSISTENCY_LINEARIZABLE: &str = "linearizable";
+/// Committed state of one in-process registry instance: authoritative only inside that instance, with no
+/// replication and no quorum read index behind it.
+pub const READ_CONSISTENCY_LOCAL_COMMITTED: &str = "local-committed";
 pub const READ_CONSISTENCY_LOCAL_STALE: &str = "local-stale";
+/// Diagnostic for a linearizable read requested from the in-process control registry.
+pub const IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED: &str =
+    "linearizable read unsupported by the in-process control registry: no replicated read index";
+/// Marker check naming the evaluator of every registry predicate receipt.
+const IN_PROCESS_REGISTRY_CHECK: &str = "in-process-registry";
 pub const CONSENSUS_PROFILE_RAFT: &str = "raft";
 pub const CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL: &str = "leaderless-quorum-experimental";
 const CONSENSUS_PROFILE_VERSION_RAFT: &str = "raft-production-v1";

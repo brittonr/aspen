@@ -99,24 +99,24 @@ impl StorageRoot {
     /// Replaces `path` through a synchronized stage in the same directory, so a crash leaves its previous
     /// or its new content. A failure after the leaf changed is an uncertain external outcome.
     pub fn publish(&self, path: &Locator, contents: &[u8]) -> Result<()> {
-        crate::node_state::publish_regular_file(
+        crate::node_state::publication::publish_regular_file(
             &self.dir,
             path.as_path(),
             contents,
             None,
-            crate::node_state::Replacement::Replace,
+            crate::node_state::publication::Replacement::Replace,
         )
     }
 
     /// Creates `path` through a synchronized stage without replacement: an existing member is never
     /// overwritten, and a crash leaves the path absent or whole.
     pub fn publish_new(&self, path: &Locator, contents: &[u8]) -> Result<()> {
-        crate::node_state::publish_regular_file(
+        crate::node_state::publication::publish_regular_file(
             &self.dir,
             path.as_path(),
             contents,
             None,
-            crate::node_state::Replacement::NoReplace,
+            crate::node_state::publication::Replacement::NoReplace,
         )
     }
 
@@ -151,7 +151,7 @@ impl StorageRoot {
             let entry = entry_result.map_err(MoltenError::from)?;
             let name = entry.file_name().to_string_lossy().into_owned();
             // A publication stage is never a member; the next publication of its leaf removes it.
-            if crate::node_state::is_publication_stage(&name) {
+            if crate::node_state::publication::is_stage(&name) {
                 continue;
             }
             let entry_path = path.join(&name)?;
@@ -294,26 +294,3 @@ impl LedgerStoreRoot {
     }
 }
 
-impl DeliveryStoreRoot {
-    pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
-        Self {
-            root: StorageRoot::from_dir(Kind::Delivery, dir),
-        }
-    }
-}
-
-impl ChunkStoreRoot {
-    #[doc(hidden)]
-    pub fn open_artifact_chunks(parent: &ArtifactStoreRoot) -> Result<Self> {
-        Ok(Self {
-            root: parent.root().open_subdir(Kind::Chunk, &Locator::parse("chunks")?)?,
-        })
-    }
-}
-
-impl DurableStoreRoot {
-    /// Derive a durable database capability without reopening an ambient path.
-    pub fn from_ledger(parent: &LedgerStoreRoot, path: &Locator) -> Result<Self> {
-        Ok(Self { root: parent.root().open_subdir(Kind::Durable, path)? })
-    }
-}

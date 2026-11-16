@@ -119,6 +119,9 @@ pub struct NixosVmFaultEvidenceInput<'a> {
     pub topology_value: &'a IoValue,
     pub descriptor_values: &'a [IoValue],
     pub receipt_values: &'a [IoValue],
+    pub attempt_value: Option<&'a IoValue>,
+    pub pre_observation_value: Option<&'a IoValue>,
+    pub post_observation_value: Option<&'a IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +168,7 @@ pub struct VmEvidenceManifest {
 struct ParsedTopology {
     nodes: Vec<String>,
     package_ref: String,
+    package_path: String,
     network: String,
     caveats: Vec<String>,
 }
@@ -216,6 +220,7 @@ struct ParsedFaultDescriptor {
     topology_ref: String,
     target_node: String,
     fault_kind: String,
+    command_profile: String,
     expected_outcome: String,
     duration_millis: u64,
     caveats: Vec<String>,

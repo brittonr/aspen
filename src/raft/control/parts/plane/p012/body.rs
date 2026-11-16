@@ -76,14 +76,14 @@ pub fn recover_control_registry(input: &RaftRecoveryInput) -> Result<RaftRecover
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let predicate = if decision == "pass" {
         Some(parse_predicate_receipt(&predicate_receipt_value(&PredicateReceiptInput {
-            predicate: "trellis-snapshot-restore",
+            predicate: "registry-snapshot-restore",
             decision,
             group_ref: &input.group_ref,
             term: snapshot.term,
             index: snapshot.index,
             subjects: &[snapshot.snapshot_ref.clone(), snapshot.state.state_ref.clone()],
             diagnostics: &[],
-            checks: &[("trellis-predicate", "pass"), ("snapshot-content-ref", "pass")],
+            checks: &[(IN_PROCESS_REGISTRY_CHECK, "pass"), ("snapshot-content-ref", "pass")],
         })?)?)
     } else {
         None

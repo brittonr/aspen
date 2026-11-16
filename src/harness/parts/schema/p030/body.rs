@@ -104,6 +104,9 @@ fn effect_name(effect: &super::core::CoreEffect) -> &'static str {
 fn error_kind(error: &MoltenError) -> String {
     match error {
         MoltenError::Io(_) => "io".to_string(),
+        MoltenError::NodeStateWriteOpenDenied { .. } | MoltenError::NodeStatusHealthOpenDenied { .. } => {
+            crate::error::FailureClass::StorageFailure.code().to_string()
+        }
         MoltenError::Preserves(_) => "preserves".to_string(),
         MoltenError::InvalidHarness(_) => "invalid-harness".to_string(),
         MoltenError::Classified { class, .. } => class.code().to_string(),
@@ -123,6 +126,12 @@ fn error_diagnostics(error: &MoltenError) -> Vec<IoValue> {
             diagnostics.push(record("detail", vec![string(&divergence.detail)]));
             diagnostics
         }
+        MoltenError::NodeStateWriteOpenDenied { path, errno }
+        | MoltenError::NodeStatusHealthOpenDenied { path, errno, .. } => vec![
+            record("path", vec![string(path)]),
+            record("errno", vec![string(errno.to_string())]),
+            record("phase", vec![string("open-before-write")]),
+        ],
         MoltenError::Io(_)
         | MoltenError::Preserves(_)
         | MoltenError::InvalidHarness(_)

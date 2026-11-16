@@ -67,6 +67,44 @@
         assert!(operator_dogfood_summary(&run.report_value).expect("summary").contains("decision=pass"));
     }
 
+    // r[verify molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+    // r[verify molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied]
+    #[test]
+    fn dogfood_binds_only_labelled_fixture_gate_that_real_consumers_deny() {
+        let root = temp_dir("operator-dogfood-fixture-gate");
+        let run = run_local_node_dogfood(&LocalNodeDogfoodInput { state_root: &root }).expect("dogfood run");
+        assert_eq!(run.decision, "pass");
+        let report = parse_dogfood_report(&run.report_value).expect("report");
+        let is_labelled = |checks: &[(String, String)]| {
+            checks.iter().any(|(name, status)| name == UNQUALIFIED_FIXTURE_SOURCE_GATE_CHECK && status == "pass")
+        };
+        assert!(is_labelled(&report.checks));
+        let release = parse_release_gate_receipt(run.release_gate_value.as_ref().expect("release gate")).expect("gate");
+        assert!(is_labelled(&release.checks));
+        let registries =
+            [root.join("registry"), root.join("job-source-registry"), root.join("job-target-registry")];
+        assert!(registries.iter().all(|registry| registry.exists()));
+        for registry in &registries {
+            let gates = crate::artifacts::list_artifacts(registry, Some("octet-gate-receipt")).expect("list gates");
+            assert!(gates.is_empty(), "dogfood installs no Octet gate receipt into {}", registry.display());
+        }
+
+        let fixture = dogfood_fixture_gate().expect("dogfood fixture gate");
+        for consumer in ["node-startup", "job-remote-admission", "upgrade-plan"] {
+            let validation =
+                crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
+                    consumer: consumer.to_string(),
+                    subject_ref: dogfood_ref("fixture-subject").expect("subject"),
+                    receipt_value: Some(fixture.value().clone()),
+                    source_scope: Vec::new(),
+                })
+                .expect("validate fixture");
+            assert_eq!(validation.decision, "deny", "{consumer}");
+        }
+        crate::octet_gate::validate_produced_octet_gate_receipt(fixture.value())
+            .expect_err("produced-gate validation rejects the dogfood fixture");
+    }
+
     #[test]
     fn nix_dogfood_release_evidence_verifies_and_denies_stale_refs() {
         let case = build_nix_case();
@@ -177,7 +215,7 @@
         std::fs::write(
             output_root.join("dogfood-summary.txt"),
             format!(
-                "dogfood local-node decision=pass report={} release-gate={}\n",
+                "dogfood local-node decision=pass report={} release-gate={} source-gate=unqualified-fixture\n",
                 run.report_ref,
                 run.release_gate_ref.as_deref().expect("release ref")
             ),
@@ -234,60 +272,3 @@
         .expect("verify release bundle")
     }
 
-    fn assert_release_binding_search(case: &NixCase) {
-        let catalog_registry = case.root.join("catalog-registry");
-        let release_ledger = case.root.join("release-ledger");
-        crate::ledger::import_artifact(&release_ledger, case.run.release_gate_value.as_ref().expect("release gate"))
-            .expect("import release gate");
-        crate::ledger::import_artifact(&release_ledger, case.run.replay_verify_value.as_ref().expect("replay verify"))
-            .expect("import replay verify");
-        crate::ledger::import_artifact(&release_ledger, case.run.replay_index_value.as_ref().expect("replay index"))
-            .expect("import replay index");
-        crate::ledger::import_artifact(&release_ledger, &case.evidence).expect("import Nix evidence");
-        crate::ledger::import_artifact(&release_ledger, &case.bundle_verify.value).expect("import bundle verify");
-        let replay_binding_request = crate::catalog_mcp::mcp_request_value("search_replay_evidence", vec![
-            crate::preserves_rail::record("stage", vec![crate::preserves_rail::string("release-binding")]),
-            crate::preserves_rail::record("release-replay-index-ref", vec![crate::preserves_rail::string(
-                &case.parsed.replay_index_ref,
-            )]),
-        ])
-        .expect("replay binding request");
-        let replay_binding =
-            crate::catalog_mcp::call(&catalog_registry, Some(&release_ledger), &replay_binding_request)
-                .expect("replay binding search");
-        assert_eq!(replay_binding.decision, "pass");
-        assert!(
-            to_text(&replay_binding.response_value)
-                .expect("replay binding response")
-                .contains("deterministic-replay:release-binding")
-        );
-    }
-
-    fn signed_members(case: &NixCase) -> Vec<IoValue> {
-        vec![
-            sign_member(&case.run.report_value),
-            sign_member(case.run.release_gate_value.as_ref().expect("release gate")),
-            sign_member(case.run.replay_verify_value.as_ref().expect("replay verify")),
-            sign_member(case.run.replay_index_value.as_ref().expect("replay index")),
-            sign_member(&case.evidence),
-            sign_member(&case.receipt.value),
-        ]
-    }
-
-    fn sign_member(receipt: &IoValue) -> IoValue {
-        sign_receipt(&SignReceiptInput {
-            receipt,
-            signer: "release-signer",
-            purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            trust_root: "release-root",
-            key: "release-key",
-            parents: &[],
-        })
-        .expect("sign member")
-    }
-
-    fn signed_bundle_pass(case: &NixCase, signed_members: &[IoValue]) -> ReleaseEvidenceBundleVerifyReceipt {
-        let signed_bundle_verify = required_bundle_verify(case, signed_members, Some("release-signer"), None);
-        assert_eq!(signed_bundle_verify.decision, "pass");
-        signed_bundle_verify
-    }

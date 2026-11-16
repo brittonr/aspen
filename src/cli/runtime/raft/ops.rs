@@ -13,12 +13,8 @@ fn run_fixture(out: std::path::PathBuf) -> Outcome<()> {
     let runtime = molten::raft_control_plane::run_control_registry_fixture()?;
     let read =
         molten::raft_control_plane::read_control_registry(&molten::raft_control_plane::ControlRegistryReadInput {
-            state: runtime.state.value.clone(),
-            group_ref: runtime.manifest.manifest_ref.clone(),
-            committed_term: runtime.term,
-            committed_index: runtime.committed_index,
-            read_index: runtime.committed_index,
-            read_consistency_mode: molten::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            runtime: &runtime,
+            read_consistency_mode: molten::raft_control_plane::READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
             authority_refs: vec![cli_synthetic_ref("raft-read-authority")?],

@@ -1,0 +1,18 @@
+{
+  "schema": "aspen.progress-process-observation.v1",
+  "observed_on": "2026-11-16",
+  "evidence_class": "same-host-separate-process",
+  "source_archive_blake3": "3747741c93e0e3f733b3db18dcfd7573c1aa3291313495d4c372d1c7e45c46de",
+  "original_process_log_blake3": "fef9eb0018ce2556ae4686250ae867330422df78aa184e160b885239e25a4bfc",
+  "command": ["cargo", "test", "--locked", "--manifest-path", "pilots/orchestration/Cargo.toml", "-p", "molten-orchestrator-cli", "--test", "progress_e2e", "progress_retention_overflow_requires_a_new_consistent_snapshot", "--", "--nocapture", "--test-threads=1"],
+  "test": "progress_retention_overflow_requires_a_new_consistent_snapshot",
+  "result": "passed",
+  "exit_code": 0,
+  "test_elapsed_seconds": 290.58,
+  "filtered_out": 8,
+  "fixture_change": "Generate the real retention overflow through completed 16-task jobs, stopping when the old cursor requires resnapshot. The finite run count derives from MAX_BATCH_PROGRESS_EVENTS. The 256-event capacity, per-run observation deadline and per-task limits are unchanged; max-size-job throughput is not the retention contract.",
+  "asserted_behavior": ["An old cursor is rejected with ResnapshotRequired after real event eviction.", "A fresh consistent snapshot preserves the original run's accepted outputs.", "Reading from the fresh snapshot watermark returns no replayed events."],
+  "initial_observation": "initial-observation.json",
+  "publication": "corrected-gap/public-observations contains original JSON and packed progress, admitted jobs and process stderr. Original source/environment/log are retained privately unchanged.",
+  "non_claims": ["This is the exact one-test correction, not a newly passing six-test or renderer-dependent campaign.", "The earlier five passes and failed 64-task observation remain separately source-bound and unchanged.", "No physical-host-loss, two-host, independent signed-output, throughput SLO or release qualification."]
+}

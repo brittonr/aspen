@@ -29,6 +29,10 @@ pub trait WorldPromotionCommitPort {
     ) -> Result<WorldPromotionCommitObservation>;
 
     fn read_back_promotion(&self, plan: &WorldPromotionPlan) -> Result<WorldPromotionReadBackObservation>;
+    fn read_promotion_identity(
+        &self,
+        operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>>;
 }
 
 /// The reservation and attempt bookkeeping half of the promotion transaction
@@ -52,11 +56,6 @@ pub trait WorldPromotionBookkeepingPort {
 
     /// Attempts still recorded as `attempting`, in attempt-reference order.
     fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>>;
-
-    fn read_promotion_identity(
-        &self,
-        operation_ref: &WorldPromotionOperationRef,
-    ) -> Result<Option<StoredPromotionIdentity>>;
 }
 
 /// Every transaction capability a promotion adapter must provide.

@@ -39,6 +39,7 @@ pub struct PortBinding {
 pub async fn start(input: Startup) -> crate::error::Result<super::runtime::Host> {
     input.host.validate()?;
     input.authorization.validate_start(&input)?;
+    super::snapshot::admit(&input.profile, input.listener.handoff().descriptor.resources.max_frame_bytes)?;
     let native = super::super::readiness::current::read(&input.authorization.root, &input.health_path)?;
     let instance_ref = super::control::instance_ref(&input.authorization.grant)?;
     admit_cohort(&input)?;

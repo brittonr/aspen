@@ -180,6 +180,7 @@ fn validate_profile(profile: &super::ReplicaProfile) -> crate::error::Result<()>
             "live Raft log-entry bound is outside the admitted range",
         ));
     }
+    validate_retention_bounds(profile)?;
     if profile.max_message_entries == 0 || profile.max_message_entries > super::MAX_REPLICA_MESSAGE_ENTRIES {
         return Err(crate::error::Failure::invalid_harness(
             "live Raft message-entry bound is outside the admitted range",
@@ -271,4 +272,24 @@ fn initial_effects(state: &super::ReplicaState) -> crate::error::Result<Vec<supe
         return Err(crate::error::Failure::invalid_harness("live Raft startup exceeds its admitted effect bound"));
     }
     Ok(effects)
+}
+
+/// The snapshot threshold must leave room below the log bound for entries that are not yet applied,
+/// and the duplicate-request window must be positive and no wider than the largest admitted log.
+// r[impl molten.consensus.snapshot_threshold]
+// r[impl molten.consensus.bounded_request_dedup]
+pub fn validate_retention_bounds(profile: &super::ReplicaProfile) -> crate::error::Result<()> {
+    if profile.snapshot_threshold_entries == 0 || profile.snapshot_threshold_entries >= profile.max_log_entries {
+        return Err(crate::error::Failure::invalid_harness(
+            "live Raft snapshot threshold must be positive and below the log-entry bound",
+        ));
+    }
+    let maximum_window = u64::try_from(super::MAX_REPLICA_LOG_ENTRIES)
+        .map_err(|_| crate::error::Failure::invalid_harness("live Raft log-entry bound exceeds duplicate-request index range"))?;
+    if profile.request_retention_entries == 0 || profile.request_retention_entries > maximum_window {
+        return Err(crate::error::Failure::invalid_harness(
+            "live Raft duplicate-request window is outside the admitted range",
+        ));
+    }
+    Ok(())
 }

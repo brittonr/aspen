@@ -1,0 +1,6 @@
+orchestrator ready id=5bafd92780e7446c2eb70e60dbf948a962e5ca137e9ee45141c3045c71e314d8
+orchestrator injected-process-fault point=before-dispatch
+orchestrator ready id=5bafd92780e7446c2eb70e60dbf948a962e5ca137e9ee45141c3045c71e314d8
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]

@@ -4,6 +4,9 @@ pub const FRAME_BYTES: u64 = 128;
 pub const REQUEST: &[u8] = include_bytes!("request.bin");
 pub const RESPONSE: &[u8] = include_bytes!("response.bin");
 pub const PROFILE_ID: &str = "molten-iroh-direct-lan-stream-v1";
+const SERVICE_ID: &str = "direct-stream-test-service";
+const ALPN: &str = "molten/direct-protected-unix/v1";
+const MIN_PROFILE_BUFFER_BYTES: u64 = 4096;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct RoleConfig {
@@ -29,7 +32,26 @@ pub fn bounds() -> molten::fabric_transport::DirectStreamBounds {
     }
 }
 
-pub fn profile() -> TestResult<molten::fabric_transport::Profile> {
+pub const SATURATION_BYTES: u64 = 4 * 1024 * 1024;
+
+pub fn bounds_for(case: &str) -> molten::fabric_transport::DirectStreamBounds {
+    if case != "queue-saturation" {
+        return bounds();
+    }
+    molten::fabric_transport::DirectStreamBounds {
+        max_connections: 1,
+        max_frame_bytes: 32 * 1024,
+        max_total_bytes: SATURATION_BYTES,
+        max_frames: 4096,
+        max_buffered_bytes: 6 * 32 * 1024 + 1024,
+        idle_timeout_ms: 3000,
+        total_timeout_ms: 16000,
+        cleanup_timeout_ms: 5000,
+    }
+}
+
+pub fn profile(case: &str) -> TestResult<molten::fabric_transport::Profile> {
+    let frame_bytes = bounds_for(case).max_frame_bytes;
     Ok(molten::fabric_transport::profile(&molten::fabric_transport::TransportProfile {
         schema: molten::fabric_transport::TRANSPORT_PROFILE_SCHEMA.to_owned(),
         profile_id: PROFILE_ID.to_owned(),
@@ -40,38 +62,38 @@ pub fn profile() -> TestResult<molten::fabric_transport::Profile> {
             max_listeners: 1,
             max_sessions: 1,
             max_streams_per_session: 1,
-            max_frame_bytes: FRAME_BYTES,
+            max_frame_bytes: frame_bytes,
             max_datagram_bytes: 1,
             max_queued_events: 64,
-            max_queued_bytes: 4096,
-            max_inflight_bytes: 4096,
+            max_queued_bytes: MIN_PROFILE_BUFFER_BYTES.max(frame_bytes),
+            max_inflight_bytes: MIN_PROFILE_BUFFER_BYTES.max(frame_bytes),
             operation_deadline_ticks: 64,
         },
         non_claims: molten::fabric_transport::REQUIRED_TRANSPORT_NON_CLAIMS.to_vec(),
     })?)
 }
 
-pub fn protocol(generation: u64) -> TestResult<molten::fabric_transport::ProtocolDescriptor> {
+pub fn protocol(generation: u64, case: &str) -> TestResult<molten::fabric_transport::ProtocolDescriptor> {
     Ok(molten::fabric_transport::ProtocolDescriptor {
         schema: molten::fabric_transport::TRANSPORT_PROTOCOL_SCHEMA.to_owned(),
         protocol_id: "protected-unix-consumer".to_owned(),
         version: "v1".to_owned(),
-        alpn: "molten/direct-protected-unix/v1".to_owned(),
+        alpn: ALPN.to_owned(),
         extension_id: "direct-stream-test-extension".to_owned(),
-        service_id: "direct-stream-test-service".to_owned(),
+        service_id: SERVICE_ID.to_owned(),
         generation,
         listener_limit: 1,
         requested_capabilities: vec![molten::fabric_transport::TransportCapability::BidirectionalStreams],
         framing: molten::fabric_transport::FramingProfile {
             profile_id: "direct-stream-test-framing".to_owned(),
             profile_ref: reference("direct-stream-test-framing")?,
-            max_frame_bytes: FRAME_BYTES,
+            max_frame_bytes: bounds_for(case).max_frame_bytes,
             length_prefix_bytes: 8,
             payload_hash_required: true,
         },
         cleanup_policy: molten::fabric_transport::ListenerCleanupPolicy::BoundedDrain { grace_ticks: 64 },
         registration_authority_ref: reference("direct-stream-registration-authority")?,
-        profile_ref: profile()?.profile.profile_ref,
+        profile_ref: profile(case)?.profile.profile_ref,
     })
 }
 
@@ -104,12 +126,11 @@ pub fn request(generation: u64) -> molten::fabric::FabricPortResult<molten::fabr
 }
 
 pub fn peer(is_client: bool, generation: u64) -> TestResult<molten::fabric_transport::DirectPeerBinding> {
-    let protocol = protocol(generation)?;
     Ok(molten::fabric_transport::DirectPeerBinding {
         endpoint_id: identity(!is_client),
         peer_context_ref: reference("direct-stream-peer-context")?,
-        service_id: protocol.service_id,
-        alpn: protocol.alpn,
+        service_id: SERVICE_ID.to_owned(),
+        alpn: ALPN.to_owned(),
         generation,
         remote_role: if is_client {
             molten::fabric_transport::EndpointParticipantRole::Listener
@@ -121,8 +142,8 @@ pub fn peer(is_client: bool, generation: u64) -> TestResult<molten::fabric_trans
 
 pub fn listener_input(config: &RoleConfig) -> TestResult<molten::fabric_transport::ListenerInput> {
     Ok(molten::fabric_transport::ListenerInput {
-        profile: profile()?,
-        protocol: protocol(config.generation)?,
+        profile: profile(&config.case)?,
+        protocol: protocol(config.generation, &config.case)?,
         capability: capability(false)?,
         bind_addr: std::net::SocketAddr::new(config.bind_ip, config.bind_port),
         listener_identity_ref: reference("direct-stream-listener")?,
@@ -148,8 +169,8 @@ pub fn client_input(
 ) -> TestResult<molten::fabric_transport::ClientInput> {
     let d = &endpoint.descriptor;
     Ok(molten::fabric_transport::ClientInput {
-        profile: profile()?,
-        protocol: protocol(config.client_generation)?,
+        profile: profile(&config.case)?,
+        protocol: protocol(config.client_generation, &config.case)?,
         capability: capability(true)?,
         bind_addr: std::net::SocketAddr::new(config.bind_ip, 0),
         expected: molten::fabric_transport::ExpectedEndpointBinding {

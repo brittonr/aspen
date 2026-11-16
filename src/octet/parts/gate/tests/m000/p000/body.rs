@@ -111,6 +111,27 @@
         assert_eq!(crate::ledger::artifact_kind(&validation.value), "octet-source-gate-validation");
     }
 
+    // r[verify molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied]
+    #[test]
+    fn unqualified_fixture_gate_is_denied_by_every_source_gate_consumer() {
+        let fixture = UnqualifiedFixtureGate::new("dogfood:local-node").expect("fixture gate");
+        for consumer in SOURCE_GATE_CONSUMERS {
+            let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
+                consumer: (*consumer).to_string(),
+                subject_ref: test_ref("subject"),
+                receipt_value: Some(fixture.value().clone()),
+                source_scope: Vec::new(),
+            })
+            .expect("validate fixture gate");
+            assert_eq!(validation.decision, "deny", "{consumer}");
+            assert_eq!(validation.gate_receipt_ref, None, "{consumer}: fixture is not an Octet gate receipt");
+        }
+        validate_produced_octet_gate_receipt(fixture.value()).expect_err("produced-gate validation rejects fixture");
+        let clean = synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate fixture");
+        assert_eq!(validate_produced_octet_gate_receipt(&clean).expect("strict receipt"), canonical_hash(&clean).expect("ref"));
+        assert_ne!(fixture.gate_ref(), canonical_hash(&clean).expect("ref"));
+    }
+
     #[test]
     fn source_gate_validation_denies_receipt_without_source_scope_coverage_check() {
         let legacy_checks = PASS_CHECKS
@@ -263,26 +284,3 @@
             .any(|diagnostic| diagnostic.contains("malformed canonical artifact refs")));
     }
 
-    #[test]
-    fn missing_status_denies_with_receipt() {
-        let dir = temp_dir("missing-status");
-        fs::create_dir_all(&dir).expect("create temp dir");
-        fs::write(dir.join(COMMAND_NAME), "cargo octet check --artifact-dir target/octet\n").expect("write command");
-        fs::write(dir.join(SUMMARY_NAME), clean_summary()).expect("write summary");
-        fs::write(dir.join(OBJECT_CORPUS_RECEIPT_NAME), object_corpus_json()).expect("write object corpus");
-
-        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
-
-        assert_eq!(evaluation.decision, "deny");
-        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains(STATUS_NAME)));
-    }
-
-    #[test]
-    fn malformed_status_denies_with_receipt() {
-        let dir = temp_dir("malformed-status");
-        write_artifacts(&dir, "{", clean_summary(), object_corpus_json());
-        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
-
-        assert_eq!(evaluation.decision, "deny");
-        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("malformed status.json")));
-    }

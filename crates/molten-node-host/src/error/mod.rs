@@ -71,6 +71,20 @@ impl FailureClass {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Failure {
     Io(String),
+    /// Kernel EACCES/EPERM while opening a node-state file for write, before a
+    /// writable handle exists. Later write/flush failures are not this case.
+    NodeStateWriteOpenDenied {
+        path: String,
+        errno: i32,
+    },
+    /// The existing node-status health write reached that typed failed open.
+    NodeStatusHealthOpenDenied {
+        path: String,
+        errno: i32,
+        startup_ref: String,
+        config_ref: String,
+        binding_ref: String,
+    },
     Preserves(String),
     InvalidHarness(String),
     HarnessDivergence(HarnessDivergence),
@@ -102,6 +116,9 @@ impl Failure {
         match self {
             Self::Classified { class, .. } => Some(*class),
             Self::Io(_) | Self::Preserves(_) | Self::InvalidHarness(_) | Self::HarnessDivergence(_) => None,
+            Self::NodeStateWriteOpenDenied { .. } | Self::NodeStatusHealthOpenDenied { .. } => {
+                Some(FailureClass::StorageFailure)
+            }
         }
     }
 }
@@ -110,6 +127,12 @@ impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Failure::Io(message) => write!(f, "io error: {message}"),
+            Failure::NodeStateWriteOpenDenied { path, errno } => {
+                write!(f, "node state write open denied path={path} errno={errno}")
+            }
+            Failure::NodeStatusHealthOpenDenied { path, errno, .. } => {
+                write!(f, "node status health write open denied path={path} errno={errno}")
+            }
             Failure::Preserves(message) => write!(f, "preserves error: {message}"),
             Failure::InvalidHarness(message) => write!(f, "invalid harness artifact: {message}"),
             Failure::Classified { class, message } => write!(f, "{}: {message}", class.as_str()),

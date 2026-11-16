@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Render the Aspen system atlas from its single Nickel-sourced JSON value."""
+# r[impl molten.project.system_atlas.payloads_and_tracking]
 
 from __future__ import annotations
 
@@ -76,6 +77,16 @@ def validate(atlas: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str
         require(edge["from"] in components, f"edge names unknown source {edge['from']}")
         require(edge["to"] in components, f"edge names unknown target {edge['to']}")
         require(edge["chapter"] in chapters, f"edge names unknown chapter {edge['chapter']}")
+        payload = edge.get("payload")
+        label = f"edge {edge['from']} -> {edge['to']}"
+        require(isinstance(payload, dict), f"{label} needs a payload")
+        for field in ("type", "source"):
+            require(isinstance(payload.get(field), str) and payload[field], f"{label} payload needs {field}")
+        fields = payload.get("fields")
+        require(
+            isinstance(fields, list) and fields and all(isinstance(name, str) and name for name in fields),
+            f"{label} payload needs a non-empty list of field names",
+        )
 
     for question in questions.values():
         for field in ("text", "status", "link"):
@@ -84,7 +95,27 @@ def validate(atlas: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str
             question["status"] in {"open", "answered", "blocked", "deferred"},
             f"question {question['id']} has unsupported status {question['status']}",
         )
+        tracking = question.get("tracking", [])
+        require(isinstance(tracking, list), f"question {question['id']} tracking must be a list")
+        for entry in tracking:
+            require(
+                isinstance(entry, dict)
+                and all(isinstance(entry.get(field), str) and entry[field] for field in ("label", "link")),
+                f"question {question['id']} tracking entries need label and link",
+            )
+        require(
+            question["status"] != "answered" or tracking,
+            f"answered question {question['id']} must link the issue or Cairn change that answered it",
+        )
     return components, chapters, questions
+
+
+def payload_text(payload: dict[str, Any]) -> str:
+    return f"`{payload['type']}` {{{', '.join(payload['fields'])}}} in `{payload['source']}`"
+
+
+def tracking_markdown(question: dict[str, Any]) -> str:
+    return ", ".join(f"[{entry['label']}]({entry['link']})" for entry in question.get("tracking", []))
 
 
 def markdown(atlas: dict[str, Any]) -> str:
@@ -109,11 +140,14 @@ def markdown(atlas: dict[str, Any]) -> str:
             lines.extend(["", "Messages:"])
             for edge in chapter_edges:
                 lines.append(f"- `{edge['from']}` → `{edge['to']}`: {edge['message']}")
+                lines.append(f"  - Payload: {payload_text(edge['payload'])}")
         chapter_questions = [questions[question] for question in chapter["questions"]]
         if chapter_questions:
             lines.extend(["", "Questions:"])
             for question in chapter_questions:
-                lines.append(f"- **{question['status']}** {question['text']} ([ref]({question['link']}))")
+                tracking = tracking_markdown(question)
+                tracked = f"; tracked by {tracking}" if tracking else ""
+                lines.append(f"- **{question['status']}** {question['text']} ([ref]({question['link']}){tracked})")
         lines.append("")
 
     lines.extend(["## Components", "", "| Component | Role | Source | Chapter |", "|---|---|---|---|"])
@@ -123,15 +157,35 @@ def markdown(atlas: dict[str, Any]) -> str:
             f"`{component['source']}` | {chapters[component['chapter']]['title']} |"
         )
 
-    lines.extend(["", "## Edges", "", "| From | To | Message | Chapter |", "|---|---|---|---|"])
+    lines.extend(["", "## Edges", "", "| From | To | Message | Payload | Chapter |", "|---|---|---|---|---|"])
     for edge in atlas["edges"]:
-        lines.append(f"| `{edge['from']}` | `{edge['to']}` | {edge['message']} | {chapters[edge['chapter']]['title']} |")
+        lines.append(
+            f"| `{edge['from']}` | `{edge['to']}` | {edge['message']} | {payload_text(edge['payload'])} | "
+            f"{chapters[edge['chapter']]['title']} |"
+        )
 
-    lines.extend(["", "## Open questions", "", "| Status | Question | Reference |", "|---|---|---|"])
+    lines.extend(["", "## Open questions", "", "| Status | Question | Reference | Tracking |", "|---|---|---|---|"])
     for question in atlas["questions"]:
-        lines.append(f"| {question['status']} | {question['text']} | [`{question['link']}`]({question['link']}) |")
+        lines.append(
+            f"| {question['status']} | {question['text']} | [`{question['link']}`]({question['link']}) | "
+            f"{tracking_markdown(question) or '—'} |"
+        )
     lines.append("")
     return "\n".join(lines)
+
+
+PIN_SCRIPT = (
+    'document.addEventListener("click",event=>{const pin=event.target.closest("button.pin");if(!pin)return;'
+    'const pinned=pin.closest(".edge").classList.toggle("pinned");pin.setAttribute("aria-pressed",String(pinned));});'
+)
+
+
+def tracking_html(question: dict[str, Any]) -> str:
+    tracking = question.get("tracking", [])
+    if not tracking:
+        return ""
+    links = ", ".join(f'<a href="{html.escape(entry["link"])}">{html.escape(entry["label"])}</a>' for entry in tracking)
+    return f"; tracked by {links}"
 
 
 def html_document(atlas: dict[str, Any]) -> str:
@@ -148,12 +202,15 @@ def html_document(atlas: dict[str, Any]) -> str:
         "body{font:16px/1.5 system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;color:canvastext;background:canvas}",
         "code{font-size:.9em}details{margin:.75rem 0;padding:.5rem .75rem;border:1px solid color-mix(in srgb,canvastext 20%,transparent);border-radius:.4rem}",
         "summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid color-mix(in srgb,canvastext 15%,transparent);vertical-align:top}",
+        ".edge{position:relative}.edge .pin{margin-left:.5rem;font-size:.8em}.payload{display:none;margin:.35rem 0 .5rem;padding:.4rem .6rem;border-left:3px solid color-mix(in srgb,canvastext 35%,transparent);background:color-mix(in srgb,canvastext 5%,canvas)}",
+        ".edge:hover>.payload,.edge:focus-within>.payload,.edge.pinned>.payload{display:block}",
         "</style>",
         "</head>",
         "<body>",
         f"<h1>{escape(atlas['title'])}</h1>",
         f"<p>{escape(atlas['summary'])}</p>",
         "<p><em>Generated from <code>docs/atlas.ncl</code> by <code>scripts/generate-atlas.py</code>. Do not edit by hand.</em></p>",
+        "<p>Hover over or focus a message to see its payload; <strong>pin</strong> keeps it open.</p>",
         "<h2>Chapters</h2>",
     ]
     for chapter in atlas["chapters"]:
@@ -172,9 +229,13 @@ def html_document(atlas: dict[str, Any]) -> str:
         if chapter_edges:
             parts.append("<h3>Messages</h3><ul>")
             for edge in chapter_edges:
+                payload = edge["payload"]
                 parts.append(
-                    f"<li><code>{escape(edge['from'])}</code> → <code>{escape(edge['to'])}</code>: "
-                    f"{escape(edge['message'])}</li>"
+                    f'<li class="edge" tabindex="0"><code>{escape(edge["from"])}</code> → <code>{escape(edge["to"])}</code>: '
+                    f'{escape(edge["message"])}<button type="button" class="pin" aria-pressed="false">pin</button>'
+                    f'<div class="payload" role="note"><strong>Payload</strong> <code>{escape(payload["type"])}</code>: '
+                    f'{", ".join(f"<code>{escape(name)}</code>" for name in payload["fields"])}'
+                    f' — <code>{escape(payload["source"])}</code></div></li>'
                 )
             parts.append("</ul>")
         chapter_questions = [questions[question] for question in chapter["questions"]]
@@ -183,7 +244,7 @@ def html_document(atlas: dict[str, Any]) -> str:
             for question in chapter_questions:
                 parts.append(
                     f"<li><strong>{escape(question['status'])}</strong> {escape(question['text'])} "
-                    f'<a href="{escape(question["link"])}">ref</a></li>'
+                    f'<a href="{escape(question["link"])}">ref</a>{tracking_html(question)}</li>'
                 )
             parts.append("</ul>")
         parts.append("</details>")
@@ -196,19 +257,25 @@ def html_document(atlas: dict[str, Any]) -> str:
             f"<td><code>{escape(component['source'])}</code></td>"
             f"<td>{escape(chapters[component['chapter']]['title'])}</td></tr>"
         )
-    parts.extend(["</tbody></table>", "<h2>Edges</h2>", "<table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Chapter</th></tr></thead><tbody>"])
+    parts.extend(["</tbody></table>", "<h2>Edges</h2>", "<table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Payload</th><th>Chapter</th></tr></thead><tbody>"])
     for edge in atlas["edges"]:
+        payload = edge["payload"]
         parts.append(
             f"<tr><td><code>{escape(edge['from'])}</code></td><td><code>{escape(edge['to'])}</code></td>"
-            f"<td>{escape(edge['message'])}</td><td>{escape(chapters[edge['chapter']]['title'])}</td></tr>"
+            f"<td>{escape(edge['message'])}</td><td><code>{escape(payload['type'])}</code></td>"
+            f"<td>{escape(chapters[edge['chapter']]['title'])}</td></tr>"
         )
-    parts.extend(["</tbody></table>", "<h2>Open questions</h2>", "<table><thead><tr><th>Status</th><th>Question</th><th>Reference</th></tr></thead><tbody>"])
+    parts.extend(["</tbody></table>", "<h2>Open questions</h2>", "<table><thead><tr><th>Status</th><th>Question</th><th>Reference</th><th>Tracking</th></tr></thead><tbody>"])
     for question in atlas["questions"]:
+        tracking = ", ".join(
+            f'<a href="{escape(entry["link"])}">{escape(entry["label"])}</a>' for entry in question.get("tracking", [])
+        )
         parts.append(
             f"<tr><td>{escape(question['status'])}</td><td>{escape(question['text'])}</td>"
-            f'<td><a href="{escape(question["link"])}"><code>{escape(question["link"])}</code></a></td></tr>'
+            f'<td><a href="{escape(question["link"])}"><code>{escape(question["link"])}</code></a></td>'
+            f"<td>{tracking or '—'}</td></tr>"
         )
-    parts.extend(["</tbody></table>", "</body>", "</html>", ""])
+    parts.extend(["</tbody></table>", f"<script>{PIN_SCRIPT}</script>", "</body>", "</html>", ""])
     return "\n".join(parts)
 
 

@@ -251,6 +251,8 @@ pub struct JobAdmissionPlan {
     pub source_gate_validation_refs: Vec<String>,
     pub resource_verdict: String,
     pub decision: String,
+    /// The source gate is an unqualified fixture: the strict Octet source-gate check is recorded failed.
+    pub is_unqualified_fixture_gate: bool,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
     pub receipt_value: IoValue,

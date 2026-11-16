@@ -74,7 +74,7 @@ Unexecuted external acceptance is deliberate and remains open: two real hosts wi
 
 ## IPv6 address hints and host-local scope
 
-IP hints cross host boundaries in two places: node live tickets (`live_ticket_address_refs` exports, `live_ticket_endpoint_addr` imports) and cross-process endpoint locators (`endpoint_locators` exports, `endpoint_addr` imports). Both use the shared admission in [`src/fabric_transport/ip_hint.rs`](../src/fabric_transport/ip_hint.rs). Direct-stream bind addresses are local configuration, not exchanged hints; `validate_bind` keeps its own explicit-unicast rule.
+IP hints cross host boundaries in two places: node live tickets (`live_ticket_address_refs` exports, `live_ticket_endpoint_addr` imports) and cross-process endpoint locators (`endpoint_locators` exports, `endpoint_addr` imports). Both use the shared admission in [`src/fabric_transport/address/mod.rs`](../src/fabric_transport/address/mod.rs). Direct-stream bind addresses are local configuration, not exchanged hints; `validate_bind` keeps its own explicit-unicast rule.
 
 An exchanged hint admits unicast IPv4 (including loopback) and unicast IPv6 (global, unique-local or loopback) with zero `flowinfo` and zero `scope_id`. It rejects unspecified and multicast addresses, link-local IPv6, a nonzero flow label (the textual form cannot carry it), and a nonzero scope id (an interface index on the sender does not name an interface on the receiver). Producers omit local addresses outside this domain rather than publishing them in a lossy or host-local form; consumers reject such a hint, naming the field, instead of reinterpreting it. For every admitted hint the textual round trip preserves address, port, flow label and scope.
 

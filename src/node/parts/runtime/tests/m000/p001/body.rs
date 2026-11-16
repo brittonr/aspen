@@ -160,3 +160,44 @@
 
         assert!(started.is_err());
     }
+
+    fn start_input_with_gate(gate_ref: String, gate_value: IoValue) -> NodeRuntimeStartInput {
+        NodeRuntimeStartInput {
+            config_value: test_node_config_value(&required_adapter_bindings_scrambled()),
+            identity_receipt_ref: test_ref("identity-receipt"),
+            index_receipt_refs: vec![test_ref("startup-index")],
+            source_gate_receipt_refs: vec![gate_ref],
+            source_gate_receipt_values: vec![gate_value],
+            profile_metadata_refs: vec![test_ref("profile-metadata")],
+            capability_receipt_refs: vec![test_ref("capability-receipt")],
+            resource_receipt_refs: vec![test_ref("resource-receipt")],
+            version_refs: vec![test_ref("version")],
+        }
+    }
+
+    // r[verify molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied]
+    // r[verify molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+    #[test]
+    fn fixture_gate_is_denied_by_scan_startup_and_labelled_in_fixture_startup() {
+        let fixture = crate::octet_gate::UnqualifiedFixtureGate::new("dogfood:local-node").expect("fixture gate");
+        let input = start_input_with_gate(fixture.gate_ref().to_string(), fixture.value().clone());
+
+        let scanned = start_node_runtime(&input).expect("scan start");
+        assert_eq!(scanned.decision, "deny");
+        assert!(scanned.startup_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("source gate")));
+
+        let started = start_node_runtime_with_unqualified_fixture_gate(&input, &fixture).expect("fixture start");
+        assert_eq!(started.decision, "pass");
+        assert_eq!(started.startup_receipt.source_gate_validation_refs, vec![fixture.validation_ref().to_string()]);
+        let receipt = crate::preserves_rail::to_text(&started.startup_receipt.value).expect("startup text");
+        assert!(receipt.contains(r#"<check "strict-octet-source-gate-bound" "fail">"#), "{receipt}");
+        assert!(receipt.contains(r#"<check "unqualified-fixture-source-gate" "pass">"#), "{receipt}");
+
+        let (clean_ref, clean_value) = clean_source_gate();
+        let strict = start_node_runtime(&start_input_with_gate(clean_ref.clone(), clean_value.clone())).expect("start");
+        let strict_text = crate::preserves_rail::to_text(&strict.startup_receipt.value).expect("startup text");
+        assert!(strict_text.contains(r#"<check "strict-octet-source-gate-bound" "pass">"#), "{strict_text}");
+        assert!(!strict_text.contains("unqualified-fixture-source-gate"));
+        start_node_runtime_with_unqualified_fixture_gate(&start_input_with_gate(clean_ref, clean_value), &fixture)
+            .expect_err("fixture mode only binds the fixture value");
+    }

@@ -38,9 +38,14 @@ qualified by this repository. See the open issues for their current status.
 Do not put exploitable details, credentials, private workload data, or memory
 dumps in a public issue. Report suspected Aspen vulnerabilities through the
 maintainer-selected [private GitHub advisory form](https://github.com/brittonr/aspen/security/advisories/new).
-Private vulnerability reporting is enabled for this repository; its API state
-was verified on 2026-11-13 after explicit maintainer approval. No response-time,
-fix-time or backport commitment is offered.
+Private vulnerability reporting is enabled for this repository. The repository
+owner's account re-read that setting through the read-only GitHub API on
+2026-11-16 and the response was `{"enabled":true}`; the
+[retained observation](.cairn/archive/2026-11-16-close-doc-and-tool-gaps/evidence/private-vulnerability-reporting-2026-11-16.json)
+records the endpoint, result and observer. That read confirms the setting only:
+no test report was submitted, so delivery, notification and maintainer handling
+of a report have not been exercised. No response-time, fix-time or backport
+commitment is offered.
 
 Include the exact Aspen source revision, dependency revision, host and kernel
 versions, affected command or profile, a minimal reviewed reproducer, observed

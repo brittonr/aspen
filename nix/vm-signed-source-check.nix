@@ -1,19 +1,27 @@
-{ pkgs, moltenPkg, startupSourceBinding, sourceForConfigChecks, moltenVmNodeModule }:
+{ pkgs, startupSourceBinding, sourceForConfigChecks, moltenVmNodeModule }:
 
-# Signed startup rail against real NixOS VMs. This is deliberately not a flake check: a
-# two-core VM needs far longer than a check's budget to measure the source closure, and the
-# fixture's VM-local signer proves the gate's mechanism, not producer/operator independence.
+# Signed startup rail against real NixOS VMs. This is deliberately not a flake check: repeated
+# full-closure admission needs an explicit aggregate campaign budget and VM resources. Individual
+# startup deadlines stay unchanged; the VM-local signer is not producer/operator independence.
+# Keep the exact closure, but serve read-heavy admission from a local read-only store image.
 pkgs.testers.runNixOSTest {
   name = "molten-nixos-vm-multinode-signed";
+  globalTimeout = 4 * 60 * 60;
   nodes = {
-    node_a = moltenVmNodeModule true "node-a";
-    node_b = moltenVmNodeModule true "node-b";
+    node_a = {
+      imports = [ (moltenVmNodeModule true "node-a") ];
+      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; };
+    };
+    node_b = {
+      imports = [ (moltenVmNodeModule true "node-b") ];
+      virtualisation = { cores = 8; memorySize = 8192; useNixStoreImage = true; };
+    };
   };
   testScript = ''
   start_all()
   for machine in [node_a, node_b]:
-      # Startup admission authenticates and hashes the full source closure; a
-      # two-core VM needs well beyond the driver's 900s default.
+      # Startup admission authenticates and hashes the full source closure. The individual
+      # 3600s startup deadline is separate from the aggregate multi-phase campaign budget.
       machine.wait_until_succeeds(
           "systemctl is-active --quiet molten-node.service", timeout=3600
       )
@@ -30,7 +38,10 @@ pkgs.testers.runNixOSTest {
   node_a.succeed("ping -c 1 node-b")
   node_b.succeed("ping -c 1 node-a")
 
+  # Every shell block invokes the signed output's executable, not the
+  # unrelated development package that also happens to provide `molten`.
   node_b.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     set -euo pipefail
     cd '${sourceForConfigChecks}'
     root=/var/lib/molten-cross/node-b
@@ -140,6 +151,7 @@ pkgs.testers.runNixOSTest {
       content = node_b.succeed(f"cat /var/lib/molten/vm-evidence/live-control/{artifact}")
       node_a.succeed(f"cat > /var/lib/molten/vm-evidence/live-control/{artifact} <<'EOF'\n" + content + "\nEOF")
   node_a.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     set -euo pipefail
     cd '${sourceForConfigChecks}'
     root=/var/lib/molten-cross/node-a
@@ -228,6 +240,7 @@ pkgs.testers.runNixOSTest {
   """)
 
   node_a.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     set -euo pipefail
     cd '${sourceForConfigChecks}'
     evidence=/var/lib/molten/vm-evidence/service-job
@@ -329,6 +342,7 @@ pkgs.testers.runNixOSTest {
       content = node_a.succeed(f"cat /var/lib/molten/vm-evidence/service-job/{artifact}")
       node_b.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
   node_b.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     set -euo pipefail
     cd '${sourceForConfigChecks}'
     evidence=/var/lib/molten/vm-evidence/service-job
@@ -401,6 +415,7 @@ pkgs.testers.runNixOSTest {
       node_a.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
 
   node_b.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     molten node control-request \
       --operation status \
       --out /var/lib/molten/vm-evidence/restart-status-request.preserves
@@ -423,11 +438,12 @@ pkgs.testers.runNixOSTest {
       machine.succeed("grep -q node-shutdown-receipt-v1 /var/lib/molten/vm-evidence/shutdown.preserves")
 
   node_a.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     molten test nixos-vm topology \
       --node node_a \
       --node node_b \
-      --package-ref 'store:${moltenPkg}' \
-      --package-path '${moltenPkg}' \
+      --package-ref 'store:${startupSourceBinding}' \
+      --package-path '${startupSourceBinding}' \
       --network nixos-test-private \
       --nix-input 'source:${sourceForConfigChecks}' \
       --caveat 'vm evidence is platform integration evidence only' \
@@ -435,6 +451,7 @@ pkgs.testers.runNixOSTest {
   """)
   for machine, node_name in [(node_a, "node_a"), (node_b, "node_b")]:
       machine.succeed(f"""
+        molten() {{ ${startupSourceBinding}/bin/molten "$@"; }}
         molten test nixos-vm node-evidence \
           --node {node_name} \
           --state-root /var/lib/molten \
@@ -460,7 +477,46 @@ pkgs.testers.runNixOSTest {
   ]:
       content = node_b.succeed(f"cat /var/lib/molten/vm-evidence/{artifact}")
       node_a.succeed(f"cat > /var/lib/molten/vm-evidence/node-b-{artifact} <<'EOF'\n" + content + "\nEOF")
+  node_b.succeed("""
+    set -euo pipefail
+    out=/tmp/molten-storage-fault
+    install -d -o molten -g molten -m 0700 "$out"
+    if [ ! -x ${pkgs.util-linux}/bin/runuser ] || [ "$(id -u molten)" -eq 0 ] ||
+       [ "$(stat -c %u /var/lib/molten)" -ne "$(id -u molten)" ]; then
+      printf '%s\n' unavailable-service-identity > "$out/status"
+    else
+      rm -f /var/lib/molten/health-receipt.preserves
+      chmod 0500 /var/lib/molten
+      if ! ${startupSourceBinding}/bin/molten test nixos-vm state-observe \
+        --phase pre --target-node node_b --state-root /var/lib/molten \
+        --package-path ${startupSourceBinding} --out "$out/pre.preserves" > "$out/pre.log" 2>&1; then
+        printf '%s\n' unavailable-pre-observation > "$out/status"
+      elif ${pkgs.util-linux}/bin/runuser -u molten -- ${startupSourceBinding}/bin/molten node status \
+        --state-root /var/lib/molten --failure-receipt-out "$out/attempt.preserves" \
+        > "$out/attempt.log" 2>&1; then
+        printf '%s\n' unavailable-no-denied-operation > "$out/status"
+      elif [ ! -s "$out/attempt.preserves" ]; then
+        printf '%s\n' unavailable-no-typed-child > "$out/status"
+      elif ! ${startupSourceBinding}/bin/molten test nixos-vm state-observe \
+        --phase post --target-node node_b --state-root /var/lib/molten \
+        --package-path ${startupSourceBinding} --out "$out/post.preserves" > "$out/post.log" 2>&1; then
+        printf '%s\n' unavailable-post-observation > "$out/status"
+      else
+        printf '%s\n' observed > "$out/status"
+      fi
+    fi
+  """)
+  storage_status = node_b.succeed("cat /tmp/molten-storage-fault/status").strip()
+  node_a.succeed("mkdir -p /var/lib/molten/vm-evidence/vm-faults")
+  if storage_status == "observed":
+      for artifact in ["pre.preserves", "post.preserves", "attempt.preserves", "attempt.log"]:
+          content = node_b.succeed(f"cat /tmp/molten-storage-fault/{artifact}")
+          node_a.succeed(f"cat > /var/lib/molten/vm-evidence/vm-faults/storage-{artifact} <<'EOF'\n" + content + "\nEOF")
+  else:
+      assert storage_status.startswith("unavailable-")
+      node_a.succeed("printf '%s\\n' 'storage operation not observed: " + storage_status + "' > /var/lib/molten/vm-evidence/vm-faults/storage-denial.log")
   node_a.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     protocol_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves)
     protocol_ref=''${protocol_summary#* ref=}
     protocol_ref=''${protocol_ref%% *}
@@ -670,30 +726,54 @@ pkgs.testers.runNixOSTest {
       --log /var/lib/molten/vm-evidence/run-loop.txt \
       --caveat 'restart evidence demonstrates bounded idempotent recovery only' \
       --out "$vm_fault_dir/restart.receipt.preserves"
-    printf '%s\n' 'permission-denied state-root scenario was not executed' > "$vm_fault_dir/storage-denial.log"
-    molten test nixos-vm fault-descriptor \
-      --fault-id permission-denied-state-root \
-      --topology /var/lib/molten/vm-evidence/topology.preserves \
-      --target-node node_b \
-      --fault-kind permission-denied-state-root \
-      --command-profile filesystem-state-root \
-      --expected-outcome unavailable \
-      --duration-millis "$fault_duration_millis" \
-      --trigger state-root-write-preflight \
-      --preflight /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-      --caveat 'storage fault evidence is bounded and diagnostic outside canonical receipts' \
-      --out "$vm_fault_dir/storage.descriptor.preserves"
-    molten test nixos-vm fault-receipt \
-      --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
-      --decision unavailable \
-      --host-support unavailable \
-      --pre-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-      --post-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-      --replay-status unavailable-permission-denied-state-root \
-      --diagnostic 'permission-denied state-root scenario not executed; no observed storage denial' \
-      --log "$vm_fault_dir/storage-denial.log" \
-      --caveat 'unavailable storage fault evidence cannot satisfy an observed-denial claim' \
-      --out "$vm_fault_dir/storage.receipt.preserves"
+    storage_args=()
+    if [ -s "$vm_fault_dir/storage-attempt.preserves" ] &&
+       [ -s "$vm_fault_dir/storage-pre.preserves" ] &&
+       [ -s "$vm_fault_dir/storage-post.preserves" ]; then
+      cp "$vm_fault_dir/storage-attempt.log" "$vm_fault_dir/storage-denial.log"
+      molten test nixos-vm fault-descriptor \
+        --fault-id permission-denied-state-root \
+        --topology /var/lib/molten/vm-evidence/topology.preserves \
+        --target-node node_b --fault-kind permission-denied-state-root \
+        --command-profile node-status-health-write --expected-outcome deny-before-side-effects \
+        --duration-millis "$fault_duration_millis" --trigger protected-status-health-open \
+        --preflight "$vm_fault_dir/storage-pre.preserves" \
+        --caveat 'VM-local service identity and root observer only; no independent operator qualification' \
+        --out "$vm_fault_dir/storage.descriptor.preserves"
+      molten test nixos-vm fault-receipt \
+        --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
+        --decision deny --host-support supported \
+        --pre-fault "$vm_fault_dir/storage-pre.preserves" \
+        --injection "$vm_fault_dir/storage-pre.preserves" \
+        --child "$vm_fault_dir/storage-attempt.preserves" \
+        --post-fault "$vm_fault_dir/storage-post.preserves" \
+        --replay-status denial-observed-before-mutation \
+        --diagnostic 'typed status health open denied; linked attempt and independent state observations required' \
+        --log "$vm_fault_dir/storage-denial.log" \
+        --caveat 'canonical fault validation, not the authored decision, determines observed denial' \
+        --out "$vm_fault_dir/storage.receipt.preserves"
+      storage_args=(--attempt-artifact "$vm_fault_dir/storage-attempt.preserves"
+        --pre-observation "$vm_fault_dir/storage-pre.preserves"
+        --post-observation "$vm_fault_dir/storage-post.preserves")
+    else
+      molten test nixos-vm fault-descriptor \
+        --fault-id permission-denied-state-root \
+        --topology /var/lib/molten/vm-evidence/topology.preserves \
+        --target-node node_b --fault-kind permission-denied-state-root \
+        --command-profile node-status-health-write --expected-outcome unavailable \
+        --duration-millis "$fault_duration_millis" --trigger unavailable-state-root-observation \
+        --preflight /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+        --caveat 'no observed typed denial with independent pre/post state' \
+        --out "$vm_fault_dir/storage.descriptor.preserves"
+      molten test nixos-vm fault-receipt \
+        --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
+        --decision unavailable --host-support unavailable \
+        --replay-status unavailable-permission-denied-state-root \
+        --diagnostic "$(cat "$vm_fault_dir/storage-denial.log")" \
+        --log "$vm_fault_dir/storage-denial.log" \
+        --caveat 'unavailable storage evidence cannot satisfy an observed-denial claim' \
+        --out "$vm_fault_dir/storage.receipt.preserves"
+    fi
     molten test nixos-vm fault-validate \
       --topology /var/lib/molten/vm-evidence/topology.preserves \
       --descriptor "$vm_fault_dir/network-partition.descriptor.preserves" \
@@ -702,6 +782,7 @@ pkgs.testers.runNixOSTest {
       --receipt "$vm_fault_dir/network-partition.receipt.preserves" \
       --receipt "$vm_fault_dir/restart.receipt.preserves" \
       --receipt "$vm_fault_dir/storage.receipt.preserves" \
+      ''${storage_args[@]} \
       --out "$vm_fault_dir/validation.preserves"
     vm_fault_validation_summary=$(molten test nixos-vm show "$vm_fault_dir/validation.preserves")
     vm_fault_validation_ref=''${vm_fault_validation_summary#* ref=}
@@ -788,6 +869,7 @@ pkgs.testers.runNixOSTest {
   node_a.succeed("grep -q nixos-vm-test-run-v1 /var/lib/molten/vm-evidence/vm-test-run.preserves")
   node_a.succeed("grep -q prod-soak-run-v1 /var/lib/molten/vm-evidence/prod-soak-run.preserves")
   node_a.succeed("""
+    molten() { ${startupSourceBinding}/bin/molten "$@"; }
     molten test nixos-vm validate \
       --topology /var/lib/molten/vm-evidence/topology.preserves \
       --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
@@ -797,6 +879,15 @@ pkgs.testers.runNixOSTest {
       --expected-node node_a \
       --expected-node node_b \
       --out /var/lib/molten/vm-evidence/vm-evidence-validation.preserves
+    storage_manifest_args=()
+    if [ -s /var/lib/molten/vm-evidence/vm-faults/storage-attempt.preserves ]; then
+      storage_manifest_args=(
+        --artifact /var/lib/molten/vm-evidence/vm-faults/storage-attempt.preserves
+        --artifact /var/lib/molten/vm-evidence/vm-faults/storage-pre.preserves
+        --artifact /var/lib/molten/vm-evidence/vm-faults/storage-post.preserves
+        --log /var/lib/molten/vm-evidence/vm-faults/storage-attempt.log
+      )
+    fi
     molten test nixos-vm manifest \
       --root /var/lib/molten/vm-evidence \
       --artifact /var/lib/molten/vm-evidence/topology.preserves \
@@ -812,6 +903,7 @@ pkgs.testers.runNixOSTest {
       --artifact /var/lib/molten/vm-evidence/vm-faults/storage.descriptor.preserves \
       --artifact /var/lib/molten/vm-evidence/vm-faults/storage.receipt.preserves \
       --artifact /var/lib/molten/vm-evidence/vm-faults/validation.preserves \
+      ''${storage_manifest_args[@]} \
       --log /var/lib/molten/vm-evidence/run.txt \
       --log /var/lib/molten/vm-evidence/status.txt \
       --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \

@@ -86,7 +86,7 @@
                 key: "resource:test".to_string(),
                 client_session: "session-malformed".to_string(),
                 operation_id_ref: invalid.to_string(),
-                read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+                read_consistency_mode: READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
                 payload: None,
                 authority_refs: authority_refs.clone(),
                 resource_refs: resource_refs.clone(),
@@ -126,7 +126,7 @@
             key: "resource:conflict".to_string(),
             client_session: "session-b".to_string(),
             operation_id_ref: parsed_acquire.operation_id_ref,
-            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            read_consistency_mode: READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
             payload: None,
             authority_refs: parsed_acquire.authority_refs,
             resource_refs: parsed_acquire.resource_refs,
@@ -219,7 +219,7 @@
     }
 
     #[test]
-    fn service_registry_updates_and_read_index_reads_are_control_plane_bound() {
+    fn service_registry_updates_and_local_committed_reads_are_control_plane_bound() {
         let mut runtime = runtime();
         let endpoint = fixture_ref("endpoint");
         let evidence = fixture_ref("evidence");

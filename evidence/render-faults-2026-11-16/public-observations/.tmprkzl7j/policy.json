@@ -1,0 +1,11 @@
+{
+  "profile": "molten-orchestrator/pure-component-batch/v1",
+  "cluster": "d95669528ca1acfc3538fa684ba8df52d6fa502c488c7b78a8f2ce22ee5636de",
+  "generation": 1,
+  "allow_any_pure_component": true,
+  "allowed_components": [],
+  "max_memory_bytes": 268435456,
+  "max_fuel": 1000000000,
+  "max_timeout_ms": 60000,
+  "max_output_bytes": 4194304
+}

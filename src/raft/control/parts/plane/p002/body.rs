@@ -219,52 +219,58 @@ fn denied_transition(runtime: &ControlRegistryRuntime, proposal: ControlRegistry
 }
 
 // r[impl molten.consensus.read_consistency_modes]
-pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftReadReceipt> {
+// r[impl molten.consensus.linearizable_reads]
+/// Reads one entry from the committed state of this in-process registry instance.
+///
+/// The registry has no replicas and takes no read index, so a `linearizable` read is denied with
+/// [`IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED`]. A `local-committed` read binds the instance's committed
+/// state through a `registry-committed-read` predicate receipt; a `local-stale` read is non-authoritative.
+pub fn read_control_registry(input: &ControlRegistryReadInput<'_>) -> Result<RaftReadReceipt> {
     validate_read_consistency_mode(&input.read_consistency_mode)?;
-    let state = parse_control_registry_state(&input.state)?;
+    let runtime = input.runtime;
+    let state = &runtime.state;
     let mut diagnostics = Vec::new();
+    if input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE {
+        diagnostics.push(IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED.to_string());
+    }
     if input.authority_refs.is_empty() {
         diagnostics.push("missing read authority evidence".to_string());
     }
     if input.resource_refs.is_empty() {
         diagnostics.push("missing read resource evidence".to_string());
     }
-    if input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE && input.read_index != input.committed_index {
-        diagnostics
-            .push(format!("stale read-index {}; expected committed index {}", input.read_index, input.committed_index));
-    }
     validate_refs(&input.authority_refs, "raft read authority ref")?;
     validate_refs(&input.resource_refs, "raft read resource ref")?;
-    let target = find_entry(&state, &input.namespace, &input.name).map(|entry| entry.target_ref.clone());
+    let target = find_entry(state, &input.namespace, &input.name).map(|entry| entry.target_ref.clone());
     if target.is_none() {
         diagnostics.push("control registry entry not found".to_string());
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let predicate = if decision == "pass" && input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE {
+    let predicate = if decision == "pass" && input.read_consistency_mode == READ_CONSISTENCY_LOCAL_COMMITTED {
         Some(parse_predicate_receipt(&predicate_receipt_value(&PredicateReceiptInput {
-            predicate: "trellis-read-index-freshness",
+            predicate: "registry-committed-read",
             decision,
-            group_ref: &input.group_ref,
-            term: input.committed_term,
-            index: input.committed_index,
+            group_ref: &runtime.manifest.manifest_ref,
+            term: runtime.term,
+            index: runtime.committed_index,
             subjects: std::slice::from_ref(&state.state_ref),
             diagnostics: &[],
-            checks: &[("trellis-predicate", "pass"), ("read-index-current", "pass")],
+            checks: &[(IN_PROCESS_REGISTRY_CHECK, "pass"), ("committed-state-bound", "pass")],
         })?)?)
     } else {
         None
     };
     let receipt = read_receipt_value(&ReadReceiptValueInput {
         decision,
-        group_ref: &input.group_ref,
+        group_ref: &runtime.manifest.manifest_ref,
         state_ref: &state.state_ref,
-        committed_term: input.committed_term,
-        committed_index: input.committed_index,
+        committed_term: runtime.term,
+        committed_index: runtime.committed_index,
         namespace: &input.namespace,
         name: &input.name,
         target_ref: target.as_deref(),
         read_consistency_mode: &input.read_consistency_mode,
-        read_index_predicate_ref: predicate.as_ref().map(|value| value.predicate_ref.as_str()),
+        committed_read_predicate_ref: predicate.as_ref().map(|value| value.predicate_ref.as_str()),
         authority_refs: &input.authority_refs,
         resource_refs: &input.resource_refs,
         diagnostics: &diagnostics,

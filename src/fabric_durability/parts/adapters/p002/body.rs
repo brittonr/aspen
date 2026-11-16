@@ -88,6 +88,26 @@ fn replace_log(database: &redb::Database, records: &[LogRecord]) -> PersistenceA
     })
 }
 
+/// Remove every log record before `retain_from_sequence` in one transaction.
+fn remove_log_before(database: &redb::Database, retain_from_sequence: u64) -> PersistenceAttempt {
+    write_observed(database, |write| {
+        let mut table = write.open_table(LOG_TABLE).map_err(adapter_error)?;
+        table.retain_in::<u64, _>(..retain_from_sequence, |_sequence, _value| false).map_err(adapter_error)?;
+        Ok(())
+    })
+}
+
+/// Remove the metadata rows of retired snapshots in one transaction.
+fn remove_snapshot_metadata(database: &redb::Database, retired: &[SnapshotRecord]) -> PersistenceAttempt {
+    write_observed(database, |write| {
+        let mut table = write.open_table(SNAPSHOT_TABLE).map_err(adapter_error)?;
+        for snapshot in retired {
+            table.remove(snapshot.snapshot_ref.as_str()).map_err(adapter_error)?;
+        }
+        Ok(())
+    })
+}
+
 fn persist_ordered_batch(database: &redb::Database, request: &AtomicBatchRequest, next: &DurableState) -> PersistenceAttempt {
     write_observed(database, |write| {
         let mut table = write.open_table(ORDERED_TABLE).map_err(adapter_error)?;

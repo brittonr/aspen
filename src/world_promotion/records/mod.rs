@@ -1,6 +1,8 @@
 mod identity;
+mod material;
 
 pub use identity::*;
+pub use material::*;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_promotion::*;
 use preserves::IOValue;

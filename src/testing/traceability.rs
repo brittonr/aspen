@@ -4,6 +4,7 @@ include!("traceability/parts/p002/body.rs");
 include!("traceability/parts/p003/body.rs");
 include!("traceability/parts/p008/body.rs");
 include!("traceability/parts/p004/body.rs");
+include!("traceability/parts/p009/body.rs");
 include!("traceability/parts/p005/body.rs");
 include!("traceability/parts/p006/body.rs");
 include!("traceability/parts/p007/body.rs");

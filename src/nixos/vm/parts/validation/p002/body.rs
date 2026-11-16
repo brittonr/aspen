@@ -1,16 +1,21 @@
 
+struct FaultDescriptors<'a> {
+    values: &'a [ParsedFaultDescriptor],
+    refs: &'a [String],
+}
+
 fn fault_diagnostics(
     topology: &ParsedTopology,
     topology_ref: &str,
-    descriptors: &[ParsedFaultDescriptor],
-    descriptor_refs: &[String],
+    descriptors: &FaultDescriptors<'_>,
     receipts: &[ParsedFaultReceipt],
+    input: &NixosVmFaultEvidenceInput<'_>,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    push_if(&mut diagnostics, descriptors.is_empty(), "vm-fault-missing-descriptors")?;
+    push_if(&mut diagnostics, descriptors.values.is_empty(), "vm-fault-missing-descriptors")?;
     push_if(&mut diagnostics, receipts.is_empty(), "vm-fault-missing-receipts")?;
     let topology_nodes = topology.nodes.iter().map(String::as_str).collect::<OrderedSet<_>>();
-    for descriptor in descriptors {
+    for descriptor in descriptors.values {
         push_if(&mut diagnostics, descriptor.id.trim().is_empty(), "vm-fault-descriptor-missing-id")?;
         push_if(&mut diagnostics, descriptor.topology_ref != topology_ref, "vm-fault-descriptor-topology-mismatch")?;
         push_if(
@@ -25,7 +30,7 @@ fn fault_diagnostics(
         )?;
         push_if(&mut diagnostics, descriptor.caveats.is_empty(), "vm-fault-descriptor-missing-caveats")?;
     }
-    diagnostics.extend(receipt_diagnostics(receipts, descriptors, descriptor_refs)?);
+    diagnostics.extend(receipt_diagnostics(receipts, descriptors, topology, input)?);
     Ok(diagnostics)
 }
 
@@ -37,11 +42,13 @@ fn parse_topology(value: &IoValue) -> Result<ParsedTopology> {
     let package_record = value_to_iovalue(&package[0]);
     let molten_package = simple_record(&package_record, "molten-package", 2)?;
     let package_ref = required_record_string(&molten_package[0], "ref", "topology package ref")?;
+    let package_path = required_record_string(&molten_package[1], "path", "topology package path")?;
     let network = required_record_string(&topology[TOPOLOGY_NETWORK_INDEX], "network", "topology network")?;
     let caveats = required_string_sequence_record(&topology[TOPOLOGY_CAVEATS_INDEX], "caveats", "topology caveats")?;
     Ok(ParsedTopology {
         nodes,
         package_ref,
+        package_path,
         network,
         caveats,
     })
@@ -200,6 +207,9 @@ fn parse_fault_descriptor(value: &IoValue) -> Result<ParsedFaultDescriptor> {
             &descriptor[FAULT_DESCRIPTOR_KIND_INDEX],
             "fault-kind",
             "fault descriptor kind",
+        )?,
+        command_profile: required_record_string(
+            &descriptor[6], "command-profile", "fault descriptor command profile",
         )?,
         expected_outcome: required_record_string(
             &descriptor[FAULT_DESCRIPTOR_EXPECTED_INDEX],

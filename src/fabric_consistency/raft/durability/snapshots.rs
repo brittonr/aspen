@@ -23,13 +23,13 @@ fn repeated_snapshot_recovery_replays_post_install_entries_without_old_snapshot_
         completed_requests: std::collections::BTreeMap::from([(first.request_ref.clone(), 1)]),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("first snapshot identity");
-    port.persist_snapshot(&snapshot, true).expect("installed peer snapshot");
+    port.persist_snapshot(&snapshot, true, &UNCOMPACTED).expect("installed peer snapshot");
     let second = entry(2, "installed-snapshot-second");
     snapshot.last_included_index = 2;
     snapshot.completed_requests.insert(second.request_ref.clone(), 2);
     snapshot.application_state_ref = super::tests::test_ref("second-checkpoint-application");
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("second snapshot identity");
-    port.persist_snapshot(&snapshot, true).expect("newer peer checkpoint at identical durable coverage");
+    port.persist_snapshot(&snapshot, true, &UNCOMPACTED).expect("newer peer checkpoint at identical durable coverage");
     let third = entry(3, "installed-snapshot-third");
     port.persist_entries(None, std::slice::from_ref(&third)).expect("entry after checkpoint");
     port.flush_log(3).expect("third durable");

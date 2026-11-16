@@ -1,21 +1,21 @@
 
-    /// A read behind the commit index is stale, and a group manifest naming an unsupported state machine is refused.
-    fn assert_stale_read_and_unsupported_state_machine_denied(runtime: &ControlRegistryRuntime) {
-        let stale_read = read_control_registry(&ControlRegistryReadInput {
-            state: runtime.state.value.clone(),
-            group_ref: runtime.manifest.manifest_ref.clone(),
-            committed_term: runtime.term,
-            committed_index: runtime.committed_index,
-            read_index: runtime.committed_index.saturating_sub(RAFT_TEST_SEQUENCE_STEP),
-            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            namespace: "receipt-index".to_string(),
-            name: "duplicate-scope".to_string(),
-            authority_refs: auth(),
-            resource_refs: resources(),
-        })
-        .expect("stale read");
-        assert_eq!(stale_read.decision, RAFT_DECISION_DENY);
-        assert!(stale_read.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale read-index")));
+    /// The in-process registry refuses a linearizable read, and a group manifest naming an unsupported state machine
+    /// is refused.
+    fn assert_linearizable_read_and_unsupported_state_machine_denied(runtime: &ControlRegistryRuntime) {
+        // r[verify molten.consensus.linearizable_reads]
+        let linearizable = RaftControlPlaneEngine
+            .read(&ControlRegistryReadInput {
+                runtime,
+                read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+                namespace: "receipt-index".to_string(),
+                name: "duplicate-scope".to_string(),
+                authority_refs: auth(),
+                resource_refs: resources(),
+            })
+            .expect("linearizable read");
+        assert_eq!(linearizable.decision, RAFT_DECISION_DENY);
+        assert_eq!(linearizable.diagnostics, vec![IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED.to_string()]);
+        assert!(read_receipt_fields(&linearizable.value).expect("read fields").committed_read_predicate_ref.is_none());
 
         let wrong_state_machine_manifest = raft_group_manifest_value(&RaftGroupManifestInput {
             group_id: DEFAULT_GROUP_ID.to_string(),
@@ -183,11 +183,7 @@
 
         let runtime = run_control_registry_fixture().expect("runtime");
         let local_stale = read_control_registry(&ControlRegistryReadInput {
-            state: runtime.state.value.clone(),
-            group_ref: runtime.manifest.manifest_ref.clone(),
-            committed_term: runtime.term,
-            committed_index: runtime.committed_index,
-            read_index: runtime.committed_index.saturating_sub(RAFT_TEST_SEQUENCE_STEP),
+            runtime: &runtime,
             read_consistency_mode: READ_CONSISTENCY_LOCAL_STALE.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
@@ -197,7 +193,9 @@
         .expect("local stale read");
         assert_eq!(local_stale.decision, RAFT_DECISION_PASS);
         assert_eq!(local_stale.read_consistency_mode, READ_CONSISTENCY_LOCAL_STALE);
-        assert!(to_text(&local_stale.value).expect("read text").contains("local-stale-non-authoritative"));
+        assert_eq!(read_receipt_check(&local_stale, "local-stale-non-authoritative"), RAFT_DECISION_PASS);
+        assert_eq!(read_receipt_check(&local_stale, "committed-state-bound"), "diagnostic");
+        assert!(read_receipt_fields(&local_stale.value).expect("read fields").committed_read_predicate_ref.is_none());
 
         let leaderless_profile = leaderless_experimental_algorithm_profile_input(
             vec![test_ref("membership-policy")],

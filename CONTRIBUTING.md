@@ -34,6 +34,13 @@ Aspen is the public project name. Molten is its internal codename; the current
   a new execution result.
 - Small documentation or maintenance edits may go directly to `molten` when the
   owning guides and repository notes allow it.
+- Documentation links: `python3 scripts/check-doc-links.py` (the `doc-links`
+  flake check) rejects missing local targets and anchors in `README.md`,
+  `CONTRIBUTING.md`, `SECURITY.md` and `docs/`. Archiving a change moves its
+  files, so repoint documentation links into `.cairn/changes/<change>/` in the
+  same commit. A link pass is not a review of the linked claims; pages listed in
+  [source-sensitive pages](docs/source-sensitive-pages.md) still need source
+  review when their sources change.
 
 ## Publishing evidence
 
@@ -91,10 +98,10 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 ```
 
-The default public source graph uses immutable HTTPS pins for the OnixResearch
-GitHub dependencies. A fresh checkout does not need a GitHub SSH key for those
-sources. Private Radicle inputs remain explicit and require their documented
-public seed or a local Radicle profile. Sibling checkouts are development-only
+The default public source graph uses immutable HTTPS pins and reviewed exact
+snapshots under `vendor/`; it requires no GitHub SSH key or local Radicle profile.
+Follow the README's environment-scoped HTTPS rewrite for the pinned Octet tool's
+public SSH-named dependency. Sibling checkouts are development-only explicit
 `--override-input` substitutions and are not release evidence.
 
 For source-gate changes, follow the ordered Octet sequence in the

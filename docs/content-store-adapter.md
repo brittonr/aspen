@@ -50,4 +50,13 @@ The earlier checked-in `evidence/` inventory contained no matching object-storag
 
 The [parent execution record](../.cairn/archive/2026-11-15-complete-object-storage-bounds/tasks.md#parent-execution-2026-11-13) records 32 passing object-feature controls, passing actual local S3 command/cache roundtrips, and the actual NVMe-path capacity/reopen control. Canonical object-conformance and NVMe-path receipts were retained for those specific execution cohorts. Task-owned tmpfs is not their NVMe storage claim.
 
-For issue #8 closure, a passing local-S3 CI run with uploaded canonical conformance artifacts remains required and unrecorded. Local observations do not establish cloud-provider behavior, physical power-loss durability, machine-loss recovery, sustained throughput or qualification of later source edits. Source fixtures and receipt producers for issues #13/#14 are not execution by themselves; retain each selected negative outcome and its emitted artifact rather than treating implementation as receipt acceptance. See the runbook for exact inputs and commands.
+Hosted local-S3 acceptance is now recorded: [run 43810362842](https://github.com/brittonr/aspen/actions/runs/43810362842) at `fcbf60a3d` and [run 43813756730](https://github.com/brittonr/aspen/actions/runs/43813756730) at `f663d2f47` passed. The latter executed 47 tests, including the actual local endpoint command/cache arms, corruption and capacity controls, and protected remote loss with a valid local copy retained. [Retained provenance, test names and original canonical receipts](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/observations.json) bind the exact source, artifact identities and command digests; earlier failed runs remain separate.
+
+The latter run's canonical conformance receipt reports these samples for the five-byte loopback fixture, not an NVMe or cloud-provider workload:
+
+| Read path | Samples | p50 (microseconds) | p99 (microseconds) |
+| --- | --- | --- | --- |
+| Remote local-S3 endpoint | 128 | 1513 | 6627 |
+| Verified local tier | 128 | 27 | 49 |
+
+The retained simulated put-fault receipt binds every selected fault's canonical fixture-command ref, terminal, state ref and event refs. Thirteen mock/fault receipts are byte-identical across the two hosted jobs; the live conformance receipt retains each run's own observation. Logs and decoded text are diagnostic views, not replacement receipt identities. These runs do not establish cloud-provider behavior, physical power-loss durability, machine-loss recovery, sustained throughput, a speedup, the default development shell, or qualification of later source edits.

@@ -113,6 +113,7 @@ pub(super) fn configuration(
     group: &crate::fabric_consistency::Group,
 ) -> crate::error::Result<()> {
     config.admission.validate()?;
+    super::super::snapshot::admit_configuration(config)?;
     let bindings = config
         .bindings
         .iter()

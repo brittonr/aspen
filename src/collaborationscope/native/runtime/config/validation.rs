@@ -26,6 +26,8 @@ fn identities(
             != input.membership.voters.iter().filter(|node| **node != input.node_id).cloned().collect()
         || !(1..=256).contains(&input.ingress_capacity)
         || !(1..=65536).contains(&input.ingress_delivery_limit)
+        || !(1..=60000).contains(&input.ingress_delivery_window_ms)
+        || crate::fabric_consistency::raft::validate_retention_bounds(&input.replica.decode()).is_err()
         || !(1..=30000).contains(&input.timeout_ms)
         || !(1..=30000).contains(&input.transport.timeout_ms)
         || !(1..=30000).contains(&input.time.tick_ms)

@@ -30,3 +30,15 @@ fn admitted_gate_scan(input: &NodeRuntimeStartInput, gate: &ValidatedNodeSourceG
     }
     Ok(GateScan { validation_refs: vec![gate.validation_ref.clone()], diagnostics: Vec::new() })
 }
+
+fn fixture_gate_scan(
+    input: &NodeRuntimeStartInput,
+    fixture: &crate::octet_gate::UnqualifiedFixtureGate,
+) -> Result<GateScan> {
+    if input.source_gate_receipt_refs.as_slice() != [fixture.gate_ref()]
+        || input.source_gate_receipt_values.as_slice() != std::slice::from_ref(fixture.value())
+    {
+        return Err(MoltenError::invalid_harness("unqualified fixture gate does not match runtime input"));
+    }
+    Ok(GateScan { validation_refs: vec![fixture.validation_ref().to_string()], diagnostics: Vec::new() })
+}

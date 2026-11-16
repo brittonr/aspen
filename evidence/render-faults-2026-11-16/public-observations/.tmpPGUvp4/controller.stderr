@@ -1,0 +1,5 @@
+orchestrator ready id=78c9c4adc8310ce789a600644c5b9547cf56c5cd4ae585172184f72ab109bd62
+orchestrator injected-process-fault point=before-progress-commit
+orchestrator ready id=78c9c4adc8310ce789a600644c5b9547cf56c5cd4ae585172184f72ab109bd62
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]

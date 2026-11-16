@@ -62,6 +62,8 @@ const _: () = assert!(RELEASE_WORKFLOW_STAGE_COUNT > 0);
 const _: () = assert!(RELEASE_EVIDENCE_BOUNDARY_GATE_COUNT > 0);
 
 const LOCAL_NODE_WORKFLOW_ID: &str = "dogfood:local-node";
+/// Dogfood outputs bind an unqualified fixture source gate, never authenticated Octet evidence.
+pub const UNQUALIFIED_FIXTURE_SOURCE_GATE_CHECK: &str = "unqualified-fixture-source-gate";
 const DOGFOOD_HARNESS_SUITE: &str = r#"<harness-suite-v1 "molten.harness.suite.v1" "dogfood-repro" 3
   <budget-v1 "molten.harness.budget.v1" <limits 32 8 128 65536>>
   <actor-registry-v1 "molten.harness.actor-registry.v1" [

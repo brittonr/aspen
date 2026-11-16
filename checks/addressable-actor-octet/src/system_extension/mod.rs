@@ -1,3 +1,9 @@
+#[path = "generation/mod.rs"]
+mod counters;
+
+pub use counters::Generation;
+pub use counters::Incarnation;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HealthState {
     Unknown,
@@ -19,7 +25,8 @@ pub enum LifecyclePhase {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LifecycleState {
-    pub generation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub phase: LifecyclePhase,
     pub restart_attempts: u64,
     pub health: HealthState,

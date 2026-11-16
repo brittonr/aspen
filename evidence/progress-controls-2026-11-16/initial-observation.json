@@ -1,0 +1,20 @@
+{
+  "schema": "aspen.progress-process-observation.v1",
+  "observed_on": "2026-11-16",
+  "evidence_class": "same-host-separate-process",
+  "source_archive_blake3": "a30112c1cf5a5b84ed2922517e499a72fa7254e8c20fe7c5eec3b4d34f739592",
+  "original_process_log_blake3": "34c14ede7158e17dd287ac9037764385890e96e352f19f2a74013c0f53d00261",
+  "command": ["cargo", "test", "--locked", "--manifest-path", "pilots/orchestration/Cargo.toml", "-p", "molten-orchestrator-cli", "--test", "progress_e2e", "--", "--skip", "real_renderer_", "--nocapture", "--test-threads=1"],
+  "tests": [
+    {"name": "acknowledged_progress_reply_survives_controller_crash_without_deleting_history", "result": "passed"},
+    {"name": "active_worker_loss_retries_only_after_stopped_recovery_and_preserves_accepted_tiles", "result": "passed"},
+    {"name": "exhaustion_and_running_cancellation_have_authoritative_terminal_observations", "result": "passed"},
+    {"name": "progress_disconnect_lost_reply_and_reconnect_preserve_event_identity", "result": "passed"},
+    {"name": "progress_output_and_terminal_crash_boundaries_recover", "result": "passed"},
+    {"name": "progress_retention_overflow_requires_a_new_consistent_snapshot", "result": "failed", "failure": "The observation deadline elapsed while the run remained Running: 50 Succeeded, 2 Active, 12 Pending tasks. Original wait/status/progress/controller-state diagnostics are retained unchanged."}
+  ],
+  "exit_code": 101,
+  "test_elapsed_seconds": 306.25,
+  "filtered_out": 3,
+  "non_claims": ["This is not a passing six-test campaign or renderer-dependent execution.", "The later retention fixture correction and its result have a separate source and observation; this failed attempt is not relabelled or discarded.", "No physical-host-loss, two-host, independent signed-output or release qualification."]
+}

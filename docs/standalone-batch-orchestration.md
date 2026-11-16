@@ -130,11 +130,15 @@ nix-shell --pure pilots/orchestration/render/shell.nix \
   --run 'bash pilots/orchestration/scripts/render-faults.sh'
 ```
 
-The process campaign covers dispatch, output persistence, atomic terminal/progress
+The process campaign defines dispatch, output persistence, atomic terminal/progress
 commit, lost notification replies, active worker loss/reconciliation, explicit
 cancellation, fuel/deadline/output exhaustion, peer denial, replay and retention
-overflow. It retains exact source, environment, public projections, accepted bytes
-and actual command outcomes. These fixtures are authored, not recorded passing
-execution. Temporary tmpfs operation proves neither NVMe nor machine-loss
-durability. A separate actual two-host direct-LAN run remains required before any
-cross-host qualification; no such evidence is supplied here.
+overflow. The [progress record](../pilots/orchestration/docs/PROGRESS.md) retains
+the corrected same-host run's four storage and six generic process cases; the
+[renderer record](../pilots/orchestration/render/README.md) separately retains the
+33-output demo, duplicate/restart/replay and fresh-repeat checks. Neither record
+alone establishes that every component-dependent renderer fault ran on that
+cohort. Retain exact source, environment, public projections, accepted bytes and
+command outcomes for each selected campaign. Temporary tmpfs operation proves
+neither NVMe nor machine-loss durability. Actual two-host direct-LAN execution
+remains required for cross-host qualification; no such evidence is supplied here.

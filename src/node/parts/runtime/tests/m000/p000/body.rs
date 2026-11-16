@@ -122,6 +122,7 @@
             resource_receipt_refs: &resource_receipt_refs,
             version_refs: &version_refs,
             diagnostics: &[],
+            is_unqualified_fixture_gate: false,
         })
         .expect("startup receipt");
         let receipt = parse_node_startup_receipt(&receipt_value).expect("parse startup");

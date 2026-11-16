@@ -35,7 +35,9 @@ const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
 const STALE_LEADER_TERM: u64 = 1;
 const EVENT_LOOP_LIMIT: usize = crate::fabric_simulation::bounded_client::CLIENT_EVENT_LOOP_LIMIT;
 const INGRESS_EVENT_CAPACITY: usize = 32;
+/// Per-window ingress budget: a rate, so a long harness run never exhausts ingress.
 const INGRESS_DELIVERY_LIMIT: u64 = 1_024;
+const INGRESS_DELIVERY_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ChildMode {

@@ -18,6 +18,8 @@ Canonical values are Preserves records identified with BLAKE3. Rust structure la
 
 The bounded execution port keeps executable policy in the pure core and process mechanics in one adapter. Canonical requests contain capability and content references, not host paths. The live adapter uses the exact pinned Bounded Exec cohort, while simulation uses the same request and receipt algebra. See [`fabric-execution.md`](fabric-execution.md).
 
+The optional [compute-capacity service](compute-capacity.md) separates qualified accelerator offers and physical backing-pool reservations from membership's CPU/memory/storage descriptors and agent workers. Its pure transitions decide eligibility and charge overlapping views; a capability-rooted Redb owner atomically persists intent before backend activation and requires affirmative release evidence before uncharging. The supplied-observation adapter performs no hardware probes. Node-local exclusion and synthetic restart fixtures do not establish distributed allocation authority, live device fencing, grouping qualification or inference throughput.
+
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
 The [standalone batch pilot](standalone-batch-orchestration.md) under
@@ -159,7 +161,7 @@ Aspen combines several prior-art lines without adopting them as compatibility ta
 
 - Synit / the Syndicated Actor Model inspire the dataspace interaction model.
 - Spritely Goblins inspires the vat/object-capability execution model.
-- Trellis provides verified finite choreography and Raft/consensus primitives.
+- Trellis provides verified finite choreography and the `job_dag` dependency/topological-order helpers. Aspen's two consensus paths, the replicated Raft in `fabric_consistency::raft` and the single-process control registry in `raft_control_plane`, are in-tree implementations that do not call Trellis.
 - Preserves provides the canonical value and schema boundary.
 
 ## Layer map
@@ -179,8 +181,8 @@ Typed Aspen config and artifacts
 +-------------------------------------------------------------+
         |                         |                         |
         v                         v                         v
-Synit/SAM dataspace        Goblins-style vat/object     Trellis layers
-assertions/retractions     transactional actormap       choreography + Raft
+Synit/SAM dataspace        Goblins-style vat/object     Trellis choreography
+assertions/retractions     transactional actormap       + in-tree Raft / registry
 Observe patterns           near/far refs, promises      protocol + control plane
         |                         |                         |
         +------------+------------+-------------------------+
@@ -402,25 +404,38 @@ Use choreography for:
 - client/worker/auditor flows,
 - reviewed dynamic predicate flows,
 - artifact publication workflows,
-- workflows that call into Raft-backed control-plane operations.
+- workflows that call into consensus-backed control-plane operations.
 
 Do not use choreography to define Raft internals. Choreography may orchestrate a consensus operation, but the Raft protocol itself is owned by the consensus layer.
 
-## Consensus layer: Trellis-backed Raft for control plane
+## Consensus layer: in-tree Raft and the in-process control registry
 
-Raft is scoped narrowly to strongly consistent control-plane state.
+Consensus is scoped narrowly to control-plane state. Aspen has two in-tree consensus paths; neither calls Trellis, which backs choreography projection and the `job_dag` helpers only.
 
-Use Raft for:
+| Path | Implementation | Callers | Read modes |
+| --- | --- | --- | --- |
+| Replicated Raft | `fabric_consistency::raft`: election, replication, leader read index, snapshots, recovery and rejoin across replicas | reliability service hosts, collaboration-scope services | linearizable through the leader read index; retryable until the leader commits a current-term entry |
+| In-process control registry | `raft_control_plane` (`src/raft/control`): one `ControlRegistryRuntime` that appends, commits and applies control-registry commands inside one process, with no replicas and no quorum | coordination runtime (`CoordinationRuntime.raft`) for locks, leases, queues, semaphores, rate limits, elections, barriers and the service registry; `molten test coordination`; `molten raft run-fixture`; job-schedule workflows | `local-committed` (that instance's committed state, authoritative only inside it) and `local-stale` (non-authoritative); `linearizable` is denied because there is no replicated read index |
+
+The control registry's predicate receipts (`registry-append-consistency`, `registry-local-commit`, `registry-commit-advancement`, `registry-committed-read`, `registry-snapshot-restore`) carry the `in-process-registry` evaluator check and record only what that process computes. Its commit receipts name no quorum. Protected coordination operations are admitted with `local-committed`, and denied with `local-stale` or `linearizable`. Coordination state is held by that one process; it is not replicated control-plane state. The `raft` engine descriptor and group manifest still describe the Raft algorithm profile, which is model-only, denied for production and caveated `in-process-model-does-not-prove-live-quorum`; they do not make the in-process registry serve linearizable reads.
+
+The replicated Raft transition is pure but lives in the root crate, not in `molten-core`.
+
+Long-running reliability and collaboration hosts use [explicit snapshot, duplicate-window and ingress bounds](distributed-system-fabric.md#long-running-raft-service-bounds). A full deduplication snapshot must fit the admitted protocol frame before service effects begin; durable compaction keeps the complete suffix in individually bounded records and requires a completion footer before retirement or truncation.
+
+The in-process engine descriptor advertises only `local-committed` and `local-stale` reads with local committed-state currentness; engine admission rejects requests for linearizable reads. Its construction and model switchover use the local-committed capability. A group manifest's Raft algorithm contract is separate from the selected implementation's supported modes and is not evidence that this registry implements a replicated read index.
+
+Use consensus for:
 
 - installed protocol registry,
 - Raft group membership,
 - capability/policy version registry,
 - durable receipt indexes,
 - replay/session sequence ledgers,
-- linearizable configuration and admission-policy updates,
-- explicit control-plane locks or leases.
+- configuration and admission-policy updates (linearizable only on the replicated path),
+- explicit control-plane locks or leases (today on the in-process registry).
 
-Do not use Raft for:
+Do not use consensus for:
 
 - normal actor messages,
 - ordinary choreography step traffic,
@@ -428,7 +443,7 @@ Do not use Raft for:
 - gossip fanout,
 - local-only dataspace assertions.
 
-Raft commands are canonical Aspen command envelopes. The replicated state machine is deterministic and side-effect free; adapters persist logs/snapshots and publish resulting facts only after admission and commit.
+Consensus commands are canonical Aspen command envelopes. Both state machines are deterministic and side-effect free; adapters persist logs/snapshots and publish resulting facts only after admission and commit.
 
 ## Storage faults and recovery
 
@@ -443,6 +458,8 @@ An unknown outcome, corruption, a snapshot payload whose BLAKE3 identity does no
 The adapter serves again only after a fresh transaction rewrites the reconciled content and observes its own synchronization, because a same-boot read-back may come from page cache rather than the medium. A local repair stays recorded after reconciliation.
 
 Snapshot payloads are published through the pinned [Durable File Publication](https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git) contract. The payload is staged, synchronized, published without replacement under its content-addressed name, and its parent directory synchronized before the snapshot metadata commits. A failed parent synchronization leaves the payload visible with unknown durability; the metadata is withheld and the adapter quarantines until reconciliation. A retry then verifies the existing destination's identity before committing metadata.
+
+Several snapshot identities can share one content-addressed payload. Retirement commits every superseded metadata row first, then deletes each unreferenced content identity once; a payload still referenced by any retained snapshot is preserved.
 
 Local database repair restores structure; it does not prove that a Raft replica retained committed history. The pure `consensus_recovery` core makes several decisions from Raft facts keyed by term and index:
 
@@ -653,7 +670,8 @@ Persistence must preserve authority graphs. Object snapshots should not be able 
 | Fine-grained local object behavior | Vat/object layer |
 | Async calls across vats/actors/peers | Far refs + promises/vows |
 | Legal multi-party workflow shape | Trellis choreography |
-| Strongly consistent replicated control-plane state | Trellis Raft |
+| Strongly consistent replicated control-plane state | In-tree replicated Raft (`fabric_consistency::raft`) |
+| Single-process coordination and registry state | In-process control registry (`raft_control_plane`), `local-committed` reads |
 | Large immutable content | Content refs + Iroh blobs |
 | Remote message fanout | Iroh gossip |
 | Mutable shared document/state surface | Iroh docs, with envelope evidence |
@@ -728,7 +746,7 @@ Active production-readiness work lives under `.cairn/changes/`. Accepted require
 - `synit-sam-runtime` — dataspace assertions, Observe patterns, turn semantics, service dependency assertions, tracing.
 - `goblins-vat-runtime` — vats, transactional actormap, object refs, promises, revocation, safe serialization, debugging.
 - `trellis-choreography` — protocol manifests, Trellis projectability/projection, dataspace endpoint interpreter.
-- `trellis-raft-consensus` — Raft-backed strongly consistent control-plane state.
+- `trellis-raft-consensus` (historical slice name) — Raft control-plane state; implemented in-tree without Trellis as the replicated `fabric_consistency::raft` and the in-process `raft_control_plane` registry.
 - `trellis-runtime-predicates` — Trellis-bounded runtime predicate receipts for dataspace assertion visibility, turn commit/rollback, deterministic pattern matching, Observe delivery, and harness/gate replay binding, with follow-up promises, revocation, snapshots, and service dependency admission.
 - `unison-artifact-registry` — content-addressed runtime artifacts, names as metadata, dependency graph, semantic docs/transcripts.
 - `unison-effect-handlers` — Unison ability-inspired effect/capability manifests with admitted handler profiles for production, local, chaos, and profiling execution.
@@ -757,7 +775,7 @@ Active production-readiness work lives under `.cairn/changes/`. Accepted require
 - `sealed-repro-redaction-preflight` — conservative confidentiality rail for portable pass artifacts: redaction policy/gate refs, forbidden sensitive marker scans, and fail-closed rejection of missing/tampered redaction evidence.
 - `redacted-repro-export-profiles` / `repro-reveal-encrypted-ref-binding` — explicit `deny-sensitive`, `redacted-diagnostic`, and `encrypted-private` export profiles; deterministic redaction transform manifests/receipts bind source report/suite, policy, profile, output bundle, marker coverage, and loss classification; encrypted-private unpack requires reveal receipts bound to the exact encrypted-ref ids in the bundle; diagnostic/private bundles stay out of pass gates unless future gate-preserving policy explicitly allows them.
 - `signed-evidence-receipts` / `signed-receipt-keyring` / `release-promotion-gate` — signed receipt envelopes that bind canonical evidence bytes to signer identity, key purpose, trust roots, expected subject refs, parent receipt chains, release bundle member verification, and the final promotion decision signature; ledger-backed key records and revocation/rotation records make currentness auditable; the promotion gate aggregates bundle verification, current keyring evidence, and source/Octet/Cairn markers into a final evidence-only pass/deny receipt, and promotion summary readback binds the signed final decision into one compact evidence artifact.
-- `chain-hashed-evidence-ledger` — scoped canonical hash chains for tamper-evident evidence continuity, turn journals, artifact publication lineages, and Trellis/Raft control-plane checkpoints without introducing a cryptocurrency or global actor-message chain.
+- `chain-hashed-evidence-ledger` — scoped canonical hash chains for tamper-evident evidence continuity, turn journals, artifact publication lineages, and local ledger checkpoints (`local-checkpoint` control-plane mode) without introducing a cryptocurrency or global actor-message chain.
 - `local-evidence-ledger-store` — local content-addressed evidence ledger for reports, receipts, bundles, indexes, retention pins, import/export receipts, and GC-safe dependencies.
 - `executor-hostcall-boundary` — canonical hostcall envelopes, mandatory executor preflight, conformance refs, and negative security tests for native, reviewed Steel, and reviewed Wasm hostcall actors.
 - `wasm-preserves-abi` — `molten.wasm.abi.v1` core-module memory ABI for canonical Preserves bytes across Wasmtime actor input, hostcall request/response, and output boundaries.
@@ -811,7 +829,7 @@ Active production-readiness work lives under `.cairn/changes/`. Accepted require
 - `node-control-live-trellis-workflow` — finite Trellis sender/receiver workflow gating for live bundle handoff, apply evidence, and ack/reconcile evidence via replay-bound `protocol-session-gate-receipt-v1` receipts; protocol gates remain evidence only and do not replace peer bootstrap, authority, policy/resource, provenance, or transport checks.
 - `sam-service-supervision-runtime` — demand-driven SAM services with readiness/failure assertions, logical supervision, restart policy, resource bounds, cleanup receipts, and replay-bound supervision gate receipts.
 - `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, dataspace-backed interpreters, and replay-bound protocol session gate receipts.
-- `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.
+- `raft-control-plane-registry` — single-process control registry for protocol/artifact/policy/capability pointers and receipt indexes, with `local-committed` reads authoritative only inside that process.
 - `job-dag-iroh-worker-execution` — remote-shaped job worker requests/results over remote dataspace/Iroh using target sync, admission, execution receipts, and recorded replay logs.
 - `job-dag-iroh-worker-cli-ux` — operator CLI for worker request generation, recorded local-gossip worker execution, worker evidence directories, ledger import, and read-only worker receipt summaries.
 - `job-worker-coordination-scheduling-ux` — coordination queue/claim/lease wrapper for job workers with duplicate operation replay, fencing-token stale denial before execution, schedule receipts, and ledger-visible status UX.
@@ -820,7 +838,7 @@ Active production-readiness work lives under `.cairn/changes/`. Accepted require
 - `secrets-redaction-encrypted-refs` — usable confidentiality rail with secret refs, redaction markers, encrypted refs, reveal/decrypt receipts, and commitment-based replay.
 - `plugin-host-lifecycle-runtime` — artifact-backed plugin install/permission/lifecycle/hostcall/health/upgrade receipts over existing executor/effect boundaries.
 - `system-extension-service-runtime` — distinct executable system-tier manifests, generation-fenced callbacks, exact typed fabric effects, bounded supervision, checkpoint recovery, upgrade/rollback, readiness, and operator evidence without widening ordinary plugin authority.
-- `coordination-services-control-plane` — concrete Raft-backed coordination services for locks/fencing, queues, semaphores, rate limits, elections, barriers, and service registry assertions.
+- `coordination-services-control-plane` — coordination services for locks/fencing, queues, semaphores, rate limits, elections, barriers, and service registry assertions on the in-process control registry.
 - `coordination-control-plane-ux` — operator CLI for canonical coordination manifests, requests, batch apply reports, read-only summaries, and duplicate operation-id replay evidence.
 - `operator-dogfood-node-workflow` — end-to-end local node dogfood workflow with canonical checkpoints, reports, repro bundles, and release gate receipts.
 - `operator-dogfood-retention-gc-workflow` — local dogfood release evidence for retention GC plan/apply/execute/audit, candidate bundle verify, and read-only catalog/MCP discovery while keeping retention artifacts evidence-only.

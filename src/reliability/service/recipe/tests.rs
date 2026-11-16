@@ -227,3 +227,6 @@ fn readiness_expectation_changes_with_source_bound_grant_configuration() {
         second.readiness_admission[endpoint].state.bootstrap_ref
     );
 }
+
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/reliability/service/recipe/snapshot/install.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/reliability/service/recipe/admission.rs"));

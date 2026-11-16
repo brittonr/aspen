@@ -1,9 +1,9 @@
 use crate::*;
 
-fn operation_digest(generation: u64) -> TestResult<[u8; 32]> {
-    let profile = config::profile()?;
-    let protocol = config::protocol(generation)?;
-    let bounds = config::bounds();
+fn operation_digest(generation: u64, case: &str) -> TestResult<[u8; 32]> {
+    let profile = config::profile(case)?;
+    let protocol = config::protocol(generation, case)?;
+    let bounds = config::bounds_for(case);
     let contract = molten::preserves_rail::record("fabric-direct-stream-contract-v1", vec![
         molten::preserves_rail::string(&profile.profile_ref),
         molten::preserves_rail::string(&protocol.protocol_id),
@@ -95,7 +95,11 @@ async fn bind_endpoint(config: &config::RoleConfig, alpn: &[u8]) -> TestResult<i
 }
 
 pub async fn run(config: &config::RoleConfig, handoff: molten::fabric_transport::Endpoint) -> TestResult {
-    let protocol = config::protocol(config.client_generation)?;
+    if config.case == "queue-probe" {
+        return refuse_concurrent(config, &handoff, config::protocol(config.generation, &config.case)?.alpn.as_bytes())
+            .await;
+    }
+    let protocol = config::protocol(config.client_generation, &config.case)?;
     let endpoint = bind_endpoint(config, protocol.alpn.as_bytes()).await?;
     let alpn = if config.case == "alpn" {
         b"molten/unregistered-direct-test/v1".as_slice()
@@ -110,10 +114,14 @@ pub async fn run(config: &config::RoleConfig, handoff: molten::fabric_transport:
     }
     let connection = connected?;
     let (mut send, mut receive) = connection.open_bi().await?;
-    let digest = operation_digest(config.client_generation)?;
+    let digest = operation_digest(config.client_generation, &config.case)?;
     send.write_all(&digest).await?;
     if matches!(config.case.as_str(), "stale" | "restart") {
-        assert_ne!(digest, operation_digest(config.generation)?, "stale generation matched the current contract");
+        assert_ne!(
+            digest,
+            operation_digest(config.generation, &config.case)?,
+            "stale generation matched the current contract"
+        );
         // A rejected operation can close the connection before its unaccepted
         // preface is delivered. Require the remote terminal close, not payload
         // from a stream the listener has already denied. The parent separately

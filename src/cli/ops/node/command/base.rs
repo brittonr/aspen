@@ -101,6 +101,9 @@ pub(crate) struct Status {
     pub(crate) health_out: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) receipt_out: Option<std::path::PathBuf>,
+    /// Canonical EACCES-before-open attempt evidence, written outside state_root.
+    #[arg(long)]
+    pub(crate) failure_receipt_out: Option<std::path::PathBuf>,
 }
 
 /// Read the node's control deliveries, pending requests, and processed

@@ -348,6 +348,112 @@ pub fn create_snapshot(
     })
 }
 
+/// Retire every snapshot that `keep_snapshot_ref` supersedes: snapshots whose log coverage does not
+/// exceed the kept snapshot's. The kept snapshot must be a valid durable snapshot, and checkpoints
+/// and snapshots covering later records stay.
+// r[impl molten.fabric_durability.snapshot_compaction]
+pub fn retire_superseded_snapshots(
+    profile: &DurableStateProfile,
+    state: &DurableState,
+    generation: u64,
+    keep_snapshot_ref: &str,
+    authority_ref: Option<&str>,
+) -> Result<DurableTransition, Vec<DurabilityIssue>> {
+    let mut issues = state_issues(profile, state);
+    validate_generation(state, generation, &mut issues);
+    validate_retention_authority(state, authority_ref, &mut issues);
+    let coverage = covering_snapshot_sequence(state, keep_snapshot_ref, &mut issues);
+    if !issues.is_empty() {
+        return Err(issues);
+    }
+    let mut next = state.clone();
+    next.snapshots.retain(|reference, snapshot| {
+        reference == keep_snapshot_ref
+            || snapshot.kind != SnapshotKind::Snapshot
+            || snapshot.covered_log_sequence.is_some_and(|covered| covered > coverage)
+    });
+    let affected_items = u64::try_from(state.snapshots.len().saturating_sub(next.snapshots.len()))
+        .map_err(|_| vec![DurabilityIssue::CollectionLimitExceeded])?;
+    Ok(DurableTransition {
+        next,
+        outcome: MutationOutcome::Durable,
+        operation: "retire-superseded-snapshots".to_string(),
+        affected_items,
+        affected_bytes: 0,
+        retry_safe: true,
+        reconciliation_required: false,
+    })
+}
+
+/// Truncate only records that a valid durable snapshot covers. `retain_from_sequence` must name a
+/// retained durable record no later than one past the snapshot's coverage, so the log never empties
+/// and no record outside the snapshot's coverage is removed.
+// r[impl molten.fabric_durability.snapshot_compaction]
+pub fn truncate_snapshot_covered(
+    profile: &DurableStateProfile,
+    state: &DurableState,
+    generation: u64,
+    snapshot_ref: &str,
+    retain_from_sequence: u64,
+    authority_ref: Option<&str>,
+) -> Result<DurableTransition, Vec<DurabilityIssue>> {
+    let mut issues = state_issues(profile, state);
+    validate_generation(state, generation, &mut issues);
+    validate_retention_authority(state, authority_ref, &mut issues);
+    let coverage = covering_snapshot_sequence(state, snapshot_ref, &mut issues);
+    let first_uncovered = coverage.saturating_add(SINGLE_AFFECTED_ITEM);
+    if retain_from_sequence > first_uncovered {
+        issues.push(DurabilityIssue::SequenceMismatch {
+            expected: first_uncovered,
+            actual: retain_from_sequence,
+        });
+    }
+    if !state.durable_log.iter().any(|record| record.sequence == retain_from_sequence) {
+        issues.push(DurabilityIssue::LogGap {
+            expected: retain_from_sequence,
+            actual: state.durable_log.first().map_or(0, |record| record.sequence),
+        });
+    }
+    if !issues.is_empty() {
+        return Err(issues);
+    }
+    let mut transition = truncate_log(profile, state, generation, retain_from_sequence, authority_ref)?;
+    "truncate-snapshot-covered".clone_into(&mut transition.operation);
+    Ok(transition)
+}
+
+/// Compaction requires the namespace's explicit retention authority; an unset authority never
+/// matches.
+fn validate_retention_authority(state: &DurableState, authority_ref: Option<&str>, issues: &mut Vec<DurabilityIssue>) {
+    if authority_ref.is_none() || state.descriptor.retention_authority_ref.as_deref() != authority_ref {
+        issues.push(DurabilityIssue::RetentionAuthorityRequired);
+    }
+}
+
+/// The log coverage of a valid, durable, uncorrupted snapshot of the namespace's schema.
+fn covering_snapshot_sequence(state: &DurableState, snapshot_ref: &str, issues: &mut Vec<DurabilityIssue>) -> u64 {
+    let Some(snapshot) = state.snapshots.get(snapshot_ref) else {
+        issues.push(DurabilityIssue::SnapshotNotFound);
+        return 0;
+    };
+    if snapshot.corrupted {
+        issues.push(DurabilityIssue::SnapshotCorrupt);
+    }
+    if snapshot.value_schema_ref != state.descriptor.value_schema_ref {
+        issues.push(DurabilityIssue::SnapshotSchemaMismatch);
+    }
+    if !snapshot.durability.is_durable() {
+        issues.push(DurabilityIssue::UnsupportedDurability(snapshot.durability));
+    }
+    if snapshot.kind != SnapshotKind::Snapshot {
+        issues.push(DurabilityIssue::MalformedField("snapshot-kind"));
+    }
+    snapshot.covered_log_sequence.unwrap_or_else(|| {
+        issues.push(DurabilityIssue::MalformedField("snapshot-coverage"));
+        0
+    })
+}
+
 // r[impl molten.fabric_durability.snapshot_recovery]
 pub fn plan_snapshot_restore(
     state: &DurableState,

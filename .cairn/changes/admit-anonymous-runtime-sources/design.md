@@ -57,6 +57,16 @@ Octet `3f7abb641ee604f54629da415bc7686f89662065` supplies `cargo-octet` to the d
 
 The repository and commit are public. Builds set an environment-scoped Git rewrite (`GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf`, `GIT_CONFIG_VALUE_0=ssh://git@github.com/`), documented in the README and the dependency policy and set per job in the hosted `Reproducible dependencies` workflow. It touches no global configuration or `git@github.com:` remote. In a fresh empty home without SSH, Git configuration or fetcher cache, evaluating the default development shell failed at exactly that fetch without the rewrite and succeeded with it over HTTPS (`evidence/anonymous-octet-transport-20261115.json`). Producer revision, source bytes and lint behavior are unchanged. Remove the rewrite when Octet publishes HTTPS or vendored coordinates and Aspen adopts that release.
 
+### Decision: Retain successful storage observations separately from full-flake acceptance
+
+Hosted storage runs `43810362842` (`fcbf60a3d`) and `43813756730` (`f663d2f47`) succeeded. The latter's 47 passing tests include the live local-S3 command/cache arms and mock fault controls. Retain its 14 original packed Preserves receipts, their BLAKE3 identities, both artifact records, an explicitly normalized test excerpt and decoded diagnostic views under `evidence/hosted-ci-20261116/`. The simulated put receipt already binds canonical fixture-command refs and each observed terminal. Thirteen mock/fault receipts match between runs; live conformance keeps run-specific latency observations.
+
+This satisfies the storage CI observation only. The default `Reproducible dependencies` workflow still needs its own passing retained result; the tool-scoped storage shell, public substitutes and local endpoint do not establish a full cold-source build, production durability, performance benefit or release eligibility. Preserve all earlier failures unchanged.
+
+### Decision: Execute the public commands, not only their packaged substitute
+
+The clean hosted workflow explicitly runs the locked Cargo build, default `nix build`, and full flake checks, then executes the README fixture and cleanup blocks unchanged through `scripts/readme-quickstart.py --cargo`. This mode runs in the checkout; the README's own `mktemp` creates the isolated output. The existing `--molten` mode remains the sandboxed packaged-binary smoke in a temporary working directory. Its result cannot substitute for the verbatim Cargo or cold-source result. Retain actual hosted outcomes before claiming either #23 or #25's clean-runner acceptance.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.

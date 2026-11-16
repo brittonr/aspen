@@ -30,6 +30,24 @@ impl super::Driver {
             self.is_uncertain = true;
             return Err(super::super::denied(super::super::Denial::Uncertain));
         }
+        self.snapshot_if_due().await
+    }
+    /// Snapshot with the application's state ref once the retained applied entries reach the
+    /// profile's threshold. A denied or failed snapshot makes the runtime uncertain.
+    // r[impl molten.consensus.snapshot_threshold]
+    async fn snapshot_if_due(&mut self) -> crate::error::Result<()> {
+        if !crate::fabric_consistency::raft::is_snapshot_due(self.service.state()) {
+            return Ok(());
+        }
+        let application_state_ref = self.application().state_ref().as_str().to_string();
+        let outcome = self
+            .service
+            .handle_event(crate::fabric_consistency::raft::ReplicaEvent::CreateSnapshot { application_state_ref })
+            .await;
+        if !matches!(outcome, crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_)) {
+            self.is_uncertain = true;
+            return Err(super::super::denied(super::super::Denial::Uncertain));
+        }
         Ok(())
     }
     pub(super) async fn step(

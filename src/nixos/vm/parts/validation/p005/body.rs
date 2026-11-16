@@ -1,10 +1,11 @@
 fn receipt_diagnostics(
     receipts: &[ParsedFaultReceipt],
-    descriptors: &[ParsedFaultDescriptor],
-    descriptor_refs: &[String],
+    descriptors: &FaultDescriptors<'_>,
+    topology: &ParsedTopology,
+    input: &NixosVmFaultEvidenceInput<'_>,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    let descriptor_ref_set = descriptor_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
+    let descriptor_ref_set = descriptors.refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
     for receipt in receipts {
         push_if(
             &mut diagnostics,
@@ -41,6 +42,9 @@ fn receipt_diagnostics(
             receipt.decision != "pass" && receipt.diagnostics.is_empty(),
             "vm-fault-deny-missing-diagnostic",
         )?;
+        if receipt.replay_status == "denial-observed-before-mutation" {
+            validate_observed_storage_denial(receipt, descriptors, topology, input, &mut diagnostics)?;
+        }
         push_if(
             &mut diagnostics,
             receipt.decision == "deny"
@@ -51,20 +55,19 @@ fn receipt_diagnostics(
         push_if(&mut diagnostics, receipt.log_refs.is_empty(), "vm-fault-missing-log-ref")?;
         push_if(&mut diagnostics, receipt.replay_status.trim().is_empty(), "vm-fault-missing-replay-status")?;
         push_if(&mut diagnostics, receipt.caveats.is_empty(), "vm-fault-missing-caveats")?;
-        validate_fault_expected_outcome(receipt, descriptors, descriptor_refs, &mut diagnostics)?;
+        validate_fault_expected_outcome(receipt, descriptors, &mut diagnostics)?;
     }
     Ok(diagnostics)
 }
 
 fn validate_fault_expected_outcome(
     receipt: &ParsedFaultReceipt,
-    descriptors: &[ParsedFaultDescriptor],
-    descriptor_refs: &[String],
+    descriptors: &FaultDescriptors<'_>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
-    let Some((descriptor, _)) = descriptors
+    let Some((descriptor, _)) = descriptors.values
         .iter()
-        .zip(descriptor_refs.iter())
+        .zip(descriptors.refs)
         .find(|(_, descriptor_ref)| descriptor_ref.as_str() == receipt.descriptor_ref)
     else {
         return Ok(());

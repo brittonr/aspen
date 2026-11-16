@@ -8,7 +8,7 @@ fn validate_no_advance_transition(state_ref: &str, transition: ReceiptTransition
 
 fn validate_read_consistency_mode(value: &str) -> Result<()> {
     match value {
-        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
+        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_COMMITTED | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
         _ => Err(MoltenError::invalid_harness(format!("unsupported coordination read consistency mode {value}"))),
     }
 }

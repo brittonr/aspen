@@ -1,3 +1,5 @@
+mod pump;
+
 use super::*;
 
 #[derive(Debug)]
@@ -20,13 +22,37 @@ pub struct ReplicaTransportRefs {
 
 pub const MAX_REPLICA_INGRESS_EVENTS: usize = 256;
 pub const MAX_REPLICA_INGRESS_DELIVERIES: u64 = 65_536;
+pub const MAX_REPLICA_INGRESS_DELIVERY_WINDOW: std::time::Duration = std::time::Duration::from_secs(3_600);
 
+/// Ingress admits at most `delivery_limit` deliveries per `delivery_window`: a rate, not a lifetime
+/// total. A spent budget pauses polling until the window ends.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaIngressConfig {
     pub session_ref: String,
     pub accept_timeout: std::time::Duration,
     pub event_capacity: usize,
     pub delivery_limit: u64,
+    pub delivery_window: std::time::Duration,
+}
+
+/// One bounded payload poll: a decoded event, idle deadline, or recoverable decode failure.
+/// A decode failure ends the frame's session without acknowledgement. The frame source's outer
+/// result separately carries fatal transport or listener failures; the decoded event stays inline.
+pub type PolledReplicaFrame = std::result::Result<Option<ReceivedReplicaEvent>, crate::error::Failure>;
+
+pub type ReplicaFrameFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = crate::error::Result<PolledReplicaFrame>> + Send + 'a>>;
+
+/// A source of peer frames for the ingress pump. An outer `Err` is a transport or listener failure
+/// and ends ingress; an inner `Err` is an undecodable payload that the pump drops and counts.
+pub trait ReplicaFrameSource: Send + 'static {
+    fn poll_frame<'a>(&'a mut self, session_ref: &'a str, timeout: std::time::Duration) -> ReplicaFrameFuture<'a>;
+}
+
+impl ReplicaFrameSource for crate::fabric_transport::Listener {
+    fn poll_frame<'a>(&'a mut self, session_ref: &'a str, timeout: std::time::Duration) -> ReplicaFrameFuture<'a> {
+        Box::pin(poll_listener_frame(self, session_ref, timeout))
+    }
 }
 
 pub trait ReplicaListenerSource {
@@ -46,10 +72,11 @@ impl ReplicaListenerSource for Option<crate::fabric_transport::Listener> {
     }
 }
 
-pub struct ReplicaIngressPump {
+pub struct ReplicaIngressPump<S: ReplicaFrameSource = crate::fabric_transport::Listener> {
     events: tokio::sync::mpsc::Receiver<ReceivedReplicaEvent>,
     cancel: Option<tokio::sync::oneshot::Sender<()>>,
-    task: Option<tokio::task::JoinHandle<crate::error::Result<crate::fabric_transport::Listener>>>,
+    task: Option<tokio::task::JoinHandle<crate::error::Result<S>>>,
+    dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl ReplicaTransportPort {
@@ -87,66 +114,7 @@ impl ReplicaIngressPump {
         listener: crate::fabric_transport::Listener,
         config: ReplicaIngressConfig,
     ) -> crate::error::Result<Self> {
-        validate_ingress_config(&config)?;
-        let (event_sender, events) = tokio::sync::mpsc::channel(config.event_capacity);
-        let (cancel, mut cancellation) = tokio::sync::oneshot::channel();
-        let task = tokio::spawn(async move {
-            let mut listener = listener;
-            let mut delivered = 0;
-            while delivered < config.delivery_limit {
-                tokio::select! {
-                    _ = &mut cancellation => return Ok(listener),
-                    result = poll_replica_event(&mut listener, &config.session_ref, config.accept_timeout) => {
-                        if let Some(event) = result? {
-                            event_sender
-                                .send(event)
-                                .await
-                                .map_err(|_| crate::error::Failure::invalid_harness("live Raft ingress consumer closed"))?;
-                            delivered += 1;
-                        }
-                    }
-                }
-            }
-            Err(crate::error::Failure::invalid_harness("live Raft ingress exhausted its delivery limit"))
-        });
-        Ok(Self {
-            events,
-            cancel: Some(cancel),
-            task: Some(task),
-        })
-    }
-
-    pub async fn next(&mut self) -> crate::error::Result<ReceivedReplicaEvent> {
-        self.events
-            .recv()
-            .await
-            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft ingress pump terminated before delivery"))
-    }
-
-    pub async fn shutdown(mut self) -> crate::error::Result<crate::fabric_transport::Listener> {
-        let cancel = self
-            .cancel
-            .take()
-            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft ingress cancellation handle is absent"))?;
-        let _cancel_result = cancel.send(());
-        let task = self
-            .task
-            .take()
-            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft ingress task handle is absent"))?;
-        task.await.map_err(|error| {
-            crate::error::Failure::invalid_harness(format!("live Raft ingress task failed: {error}"))
-        })?
-    }
-}
-
-impl Drop for ReplicaIngressPump {
-    fn drop(&mut self) {
-        if let Some(cancel) = self.cancel.take() {
-            let _cancel_result = cancel.send(());
-        }
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
+        Self::spawn_source(listener, config)
     }
 }
 
@@ -187,6 +155,26 @@ async fn poll_replica_event<L: ReplicaListenerSource>(
     else {
         return Ok(None);
     };
+    received_event(received).map(Some)
+}
+
+/// Poll one listener session, separating a payload that fails to decode from transport failures.
+async fn poll_listener_frame(
+    listener: &mut crate::fabric_transport::Listener,
+    session_ref: &str,
+    timeout: std::time::Duration,
+) -> crate::error::Result<PolledReplicaFrame> {
+    let mut is_undecodable = false;
+    let derive = |payload: &[u8]| derive_replica_request_ref(payload).inspect_err(|_error| is_undecodable = true);
+    match listener.poll_one_derived_frame(session_ref, timeout, derive).await {
+        Ok(None) => Ok(Ok(None)),
+        Ok(Some(received)) => received_event(received).map(|event| Ok(Some(event))),
+        Err(error) if is_undecodable => Ok(Err(error)),
+        Err(error) => Err(error),
+    }
+}
+
+fn received_event(received: crate::fabric_transport::ReceivedFrame) -> crate::error::Result<ReceivedReplicaEvent> {
     let envelope = parse_replica_message(&received.payload)?;
     let refs = replica_transport_refs(&envelope)?;
     let payload_bytes = u64::try_from(received.payload.len())
@@ -196,10 +184,10 @@ async fn poll_replica_event<L: ReplicaListenerSource>(
             "live Raft received payload shape does not match transport evidence",
         ));
     }
-    Ok(Some(ReceivedReplicaEvent {
+    Ok(ReceivedReplicaEvent {
         event: ReplicaEvent::Message { envelope },
         transport_evidence: received.evidence,
-    }))
+    })
 }
 
 pub fn replica_transport_refs(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<ReplicaTransportRefs> {
@@ -237,6 +225,11 @@ pub(super) fn validate_ingress_config(config: &ReplicaIngressConfig) -> crate::e
     if config.delivery_limit == 0 || config.delivery_limit > MAX_REPLICA_INGRESS_DELIVERIES {
         return Err(crate::error::Failure::invalid_harness(
             "live Raft ingress delivery limit is outside its static bound",
+        ));
+    }
+    if config.delivery_window.is_zero() || config.delivery_window > MAX_REPLICA_INGRESS_DELIVERY_WINDOW {
+        return Err(crate::error::Failure::invalid_harness(
+            "live Raft ingress delivery window is outside its static bound",
         ));
     }
     Ok(())

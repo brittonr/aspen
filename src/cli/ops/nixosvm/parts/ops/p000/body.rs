@@ -12,6 +12,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
         Command::FaultDescriptor(input) => run_fault_descriptor(input),
         Command::FaultReceipt(input) => run_fault_receipt(input),
         Command::FaultValidate(input) => run_fault_validate(input),
+        Command::StateObserve(input) => run_state_observe(input),
         Command::ShardRun(input) => run_shard_run(input),
         Command::Aggregate(input) => run_aggregate(input),
         Command::Show { artifact } => run_show(artifact),
@@ -233,11 +234,17 @@ fn run_fault_validate(input: super::command::FaultValidateInput) -> Outcome<()> 
     let topology = super::io::read_preserves_file(&input.topology)?;
     let descriptors = read_preserves_files(&input.descriptors)?;
     let receipts = read_preserves_files(&input.receipts)?;
+    let attempt = input.attempt_artifact.as_deref().map(super::io::read_preserves_file).transpose()?;
+    let pre = input.pre_observation.as_deref().map(super::io::read_preserves_file).transpose()?;
+    let post = input.post_observation.as_deref().map(super::io::read_preserves_file).transpose()?;
     let validation =
         molten::nixos_vm::validate_nixos_vm_fault_evidence(&molten::nixos_vm::NixosVmFaultEvidenceInput {
             topology_value: &topology,
             descriptor_values: &descriptors,
             receipt_values: &receipts,
+            attempt_value: attempt.as_ref(),
+            pre_observation_value: pre.as_ref(),
+            post_observation_value: post.as_ref(),
         })?;
     let is_written_to_file = super::io::write_optional_preserves(input.out.as_ref(), &validation.value)?;
     super::io::print_or_log_summary(

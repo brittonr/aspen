@@ -9,6 +9,7 @@ const CURRENT_GENERATION: u64 = 1;
 const EXPECTED_RESERVATIONS: usize = 1;
 
 mod observation;
+mod operator;
 
 // r[verify molten.world_promotion.plan]
 // r[verify molten.world_promotion.transaction]

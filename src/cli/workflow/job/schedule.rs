@@ -166,7 +166,7 @@ fn coordination_request(input: RequestInput<'_>) -> Result<Value> {
         key: input.key.to_string(),
         client_session: input.client_session.to_string(),
         operation_id_ref: super::io::synthetic_ref(input.operation_label, input.request_ref)?,
-        read_consistency_mode: molten::coordination::READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        read_consistency_mode: molten::coordination::READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
         payload: input.payload,
         authority_refs: input.refs.authority_refs.clone(),
         resource_refs: input.refs.resource_refs.clone(),

@@ -35,7 +35,8 @@
         assert_eq!(read.receipt.decision, "pass");
         assert_eq!(read.receipt.read_consistency_mode, READ_CONSISTENCY_LOCAL_STALE);
         assert_eq!(read.assertions[0].read_consistency_mode, READ_CONSISTENCY_LOCAL_STALE);
-        assert!(to_text(&read.receipt.value).expect("receipt text").contains("local-stale-non-authoritative"));
+        assert_eq!(receipt_check(&read.receipt.value, "local-stale-non-authoritative").as_deref(), Some("pass"));
+        assert_eq!(receipt_check(&read.receipt.value, "committed-state-bound").as_deref(), Some("diagnostic"));
 
         let stale_mutation = coordination_request_value(&CoordinationRequestInput {
             service: SERVICE_LOCK.to_string(),
@@ -54,6 +55,83 @@
         assert_eq!(denied.receipt.decision, "deny");
         assert!(denied.receipt.diagnostics.join(";").contains("local-stale"));
     }
+
+    fn receipt_check(receipt: &IoValue, name: &str) -> Option<String> {
+        let fields = simple_record(receipt, "coordination-receipt-v2", COORDINATION_RECEIPT_FIELD_COUNT).expect("fields");
+        parse_checks(&fields[12])
+            .expect("receipt checks")
+            .into_iter()
+            .find_map(|(check, status)| (check == name).then_some(status))
+    }
+
+    fn mode_request(service: &str, operation: &str, key: &str, label: &str, mode: &str) -> IoValue {
+        let (auth, resources, policies) = refs();
+        coordination_request_value(&CoordinationRequestInput {
+            service: service.to_string(),
+            operation: operation.to_string(),
+            key: key.to_string(),
+            client_session: format!("session:{label}"),
+            operation_id_ref: fixture_ref(label),
+            read_consistency_mode: mode.to_string(),
+            payload: None,
+            authority_refs: auth,
+            resource_refs: resources,
+            policy_refs: policies,
+        })
+        .expect("coordination request")
+    }
+
+    #[test]
+    fn in_process_runtime_admits_local_committed_and_denies_linearizable() {
+        // r[verify molten.coordination.read_consistency_modes]
+        // r[verify molten.coordination.local_stale_boundaries]
+        const UNSUPPORTED: &str = crate::raft_control_plane::IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED;
+        let mut runtime = runtime();
+        let committed = mode_request(SERVICE_LOCK, OP_ACQUIRE, "resource:committed", "committed-acquire", LOCAL_COMMITTED);
+        let committed = apply_coordination_request(&mut runtime, &committed).expect("local-committed acquire");
+        assert_eq!(committed.receipt.decision, "pass");
+        assert!(committed.token.is_some());
+        assert!(committed.raft_commit_ref.is_some());
+
+        let before = snapshot_from_state(&runtime.state).expect("before").state_ref;
+        for (label, mode, boundary) in [
+            ("linearizable-acquire", READ_CONSISTENCY_LINEARIZABLE, UNSUPPORTED),
+            ("stale-acquire", READ_CONSISTENCY_LOCAL_STALE, "local-stale"),
+        ] {
+            let request = mode_request(SERVICE_LOCK, OP_ACQUIRE, "resource:other", label, mode);
+            let denied = apply_coordination_request(&mut runtime, &request).expect("protected acquire");
+            assert_eq!(denied.receipt.decision, "deny", "{mode}");
+            assert!(denied.token.is_none(), "{mode}");
+            assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains(boundary)), "{mode}");
+            assert_eq!(snapshot_from_state(&runtime.state).expect("after").state_ref, before, "{mode}");
+        }
+
+        let register = request(
+            SERVICE_REGISTRY,
+            OP_REGISTER,
+            "svc:committed",
+            "registrar",
+            1,
+            Some(record("endpoint", vec![string(fixture_ref("endpoint")), string(fixture_ref("evidence"))])),
+        );
+        assert_eq!(apply_coordination_request(&mut runtime, &register).expect("register").receipt.decision, "pass");
+        let read = mode_request(SERVICE_REGISTRY, OP_READ, "svc:committed", "committed-read", LOCAL_COMMITTED);
+        let read = apply_coordination_request(&mut runtime, &read).expect("local-committed read");
+        assert_eq!(read.receipt.decision, "pass");
+        assert_eq!(receipt_check(&read.receipt.value, "committed-state-bound").as_deref(), Some("pass"));
+        assert_eq!(read.raft_read_receipt.as_ref().expect("registry read").decision, "pass");
+        assert_eq!(read.assertions[0].read_consistency_mode, LOCAL_COMMITTED);
+
+        let linearizable =
+            mode_request(SERVICE_REGISTRY, OP_READ, "svc:committed", "linearizable-read", READ_CONSISTENCY_LINEARIZABLE);
+        let linearizable = apply_coordination_request(&mut runtime, &linearizable).expect("linearizable read");
+        assert_eq!(linearizable.receipt.decision, "deny");
+        assert!(linearizable.assertions.is_empty());
+        assert_ne!(receipt_check(&linearizable.receipt.value, "committed-state-bound").as_deref(), Some("pass"));
+        assert!(linearizable.receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains(UNSUPPORTED)));
+    }
+
+    const LOCAL_COMMITTED: &str = READ_CONSISTENCY_LOCAL_COMMITTED;
 
     #[test]
     fn batch_envelopes_apply_deterministically_and_deny_invalid_batches() {

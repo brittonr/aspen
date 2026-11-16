@@ -67,6 +67,7 @@ pub(super) fn ingress(
             accept_timeout: std::time::Duration::from_millis(input.transport.timeout_ms),
             event_capacity: input.ingress_capacity,
             delivery_limit: input.ingress_delivery_limit,
+            delivery_window: std::time::Duration::from_millis(input.ingress_delivery_window_ms),
         },
     )
 }

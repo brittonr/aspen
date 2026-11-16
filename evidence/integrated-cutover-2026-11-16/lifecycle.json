@@ -1,0 +1,158 @@
+{
+  "schema": "aspen.native-lifecycle-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_checks": "checks.json",
+  "changes": [
+    {
+      "change": "explain-release-dependency-snapshots",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "7dbddf9a98c17996a4038d8ab6a4842f2e7faa5a336d05c22c075a179dd1c6a3"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "c3d87ca72da6dd2d9cd27ae848e71933dd00073a1369137ade646b4703100aa5"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "98bceed85fbf7bd1088bd9afd689685ef9fee439b7c24ee44a484353bc6ce159"
+        }
+      ],
+      "sync_receipt_hash": "fe61f83c7ded951d5db9a566447a6bd0662180a30fecf70e9daa1e99453f3ac3",
+      "archive_receipt_hash": "9751436f97870d41b1b21c032ce916b1de06c5152870c69d3b476c9f05f445aa",
+      "archive_path": "./.cairn/archive/2026-11-16-explain-release-dependency-snapshots",
+      "sync_mutated": true,
+      "archive_mutated": true
+    },
+    {
+      "change": "compose-world-promotion-current-authority",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "8a44434ca801cd1ea5faa3cbfbe2f36e09b532dd9e8ed7dc338b5194669f2343"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "b58075103899241b86c9056e8b17af50d9accdd892c65dd78b48ff0989d890b2"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "897b3224e2fe631020259246ad7f86b05dd61e979ff37f7eeb52185ca29ecf68"
+        }
+      ],
+      "sync_receipt_hash": "4b89a60dfd872f9001c275bbb9f90a1e1dfbf1624c210c43c0a9037b33956f3d",
+      "archive_receipt_hash": "ad9f78090207243dd716a3af683e8d31db163bb212712763b26100d0674f5eb3",
+      "archive_path": "./.cairn/archive/2026-11-16-compose-world-promotion-current-authority",
+      "sync_mutated": true,
+      "archive_mutated": true
+    },
+    {
+      "change": "bound-long-running-raft-services",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "6bf6b751d36e64ac671f9e206d8468cea6a5525125370c6a17492269df48292e"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "493d0f2885d85123c0de631feb84618cbd7393ceeda2fd9c32a1f1fc4e4db3dd"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "fee8543b9a00344cb3fb12ebb0beebeade4c20cd3b3846b5a5c9f7a72cac05e3"
+        }
+      ],
+      "sync_receipt_hash": "fa4eec9e7503b4a8df52e7e5be97921cf334e114b9ea6d31e219e82603b07932",
+      "archive_receipt_hash": "6ddcaa49beb27958cf2e1d756a818a9ab2b02c2e20a99c9f625a93099ace4c3d",
+      "archive_path": "./.cairn/archive/2026-11-16-bound-long-running-raft-services",
+      "sync_mutated": true,
+      "archive_mutated": true
+    },
+    {
+      "change": "truthful-registry-consistency-labels",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "1e4b1ea13692ec606b171b6c7a7b9405568dedf92a7c3418c4af6f3a7943b8c6"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "1ebc71f71fa54b630b85525ba43d8ad08dd4853e693924bc228c5ae6f87ef531"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "72c3e79f1f617a6162626e69cd10e0e603b7a9a7f06330a1df513ed059b89b6a"
+        }
+      ],
+      "sync_receipt_hash": "0e2d463ac0d9cb97e6ba3a7f14e96b7557911a4dd40f00350e6c74191b700627",
+      "archive_receipt_hash": "4b6ed865865d85c8e1af3456eee6f29f93dc625c967e11e821198eadb7e3d5d0",
+      "archive_path": "./.cairn/archive/2026-11-16-truthful-registry-consistency-labels",
+      "sync_mutated": true,
+      "archive_mutated": true
+    },
+    {
+      "change": "require-authenticated-rewrite-source-gate",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "0b2de26b074e6ed159b3454f21d39d8513cf55c1fba23f2c908b73ff59be3537"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "4debc3f078faed3d679818694d807b10390ffffb7925f127f55da04e2f205bcb"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "9e4575830d6180052789b8f80c360f7dce279aa8af7f345eb812a02e650ab237"
+        }
+      ],
+      "sync_receipt_hash": "7447eab168e060b4e66e742dfd64ea01fa4d3fff525421cef03b3713cb9cb668",
+      "archive_receipt_hash": "8c8a734808c5ace43b093c4554bc3aa561c366085475dfb16ba9bf6d52dc7b33",
+      "archive_path": "./.cairn/archive/2026-11-16-require-authenticated-rewrite-source-gate",
+      "sync_mutated": true,
+      "archive_mutated": true
+    },
+    {
+      "change": "add-compute-capacity-service",
+      "gates": [
+        {
+          "stage": "proposal",
+          "verdict": "PASS",
+          "receipt_hash": "88af9f2bc27f402fc3041bf085eba2e408f38f5ec658d75a1b4ba0ba7ed7683d"
+        },
+        {
+          "stage": "design",
+          "verdict": "PASS",
+          "receipt_hash": "22d7c96de958f71aa3a19bb0ea08f4ec46164b0de1fea3676bbe1a5f5f5e868f"
+        },
+        {
+          "stage": "tasks",
+          "verdict": "PASS",
+          "receipt_hash": "fd61dc82e269abf8e3536665edf3354437cca171d4677f936d987afd78d24fc7"
+        }
+      ],
+      "sync_receipt_hash": "b32b1d633d7096ed0487cf54b77d6bc38048b5f4acea935b323f64ca53b05616",
+      "archive_receipt_hash": "76b62c5597b485871b50b053f7cc8dbe064de4364e46dc7385ce19c9dc65bdc1",
+      "archive_path": "./.cairn/archive/2026-11-16-add-compute-capacity-service",
+      "sync_mutated": true,
+      "archive_mutated": true
+    }
+  ],
+  "non_claim": "Native structural gate/sync/archive observations only; not a behavioral proof, independent review approval or release authority."
+}

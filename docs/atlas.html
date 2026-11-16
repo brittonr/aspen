@@ -8,12 +8,15 @@
 body{font:16px/1.5 system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;color:canvastext;background:canvas}
 code{font-size:.9em}details{margin:.75rem 0;padding:.5rem .75rem;border:1px solid color-mix(in srgb,canvastext 20%,transparent);border-radius:.4rem}
 summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid color-mix(in srgb,canvastext 15%,transparent);vertical-align:top}
+.edge{position:relative}.edge .pin{margin-left:.5rem;font-size:.8em}.payload{display:none;margin:.35rem 0 .5rem;padding:.4rem .6rem;border-left:3px solid color-mix(in srgb,canvastext 35%,transparent);background:color-mix(in srgb,canvastext 5%,canvas)}
+.edge:hover>.payload,.edge:focus-within>.payload,.edge.pinned>.payload{display:block}
 </style>
 </head>
 <body>
 <h1>Aspen system atlas</h1>
 <p>A bounded map of the current Aspen runtime, storage, and networking boundaries. It is explanatory and does not replace the governing documents or lifecycle evidence.</p>
 <p><em>Generated from <code>docs/atlas.ncl</code> by <code>scripts/generate-atlas.py</code>. Do not edit by hand.</em></p>
+<p>Hover over or focus a message to see its payload; <strong>pin</strong> keeps it open.</p>
 <h2>Chapters</h2>
 <details open>
 <summary>Turn and dataspace runtime</summary>
@@ -24,8 +27,8 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <li><code>effects</code> — Effect boundary: Capability-rooted adapters perform effects; authority and uncertainty stay explicit. (<code>src/effects/</code>)</li>
 </ul>
 <h3>Messages</h3><ul>
-<li><code>runtime</code> → <code>effects</code>: typed effect request and terminal observation</li>
-<li><code>dataspaces</code> → <code>runtime</code>: assertion or retraction turn plan</li>
+<li class="edge" tabindex="0"><code>runtime</code> → <code>effects</code>: typed effect request and terminal observation<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>EffectRequest / EffectResponse</code>: <code>request_ref</code>, <code>effect_id</code>, <code>operation</code>, <code>handler_profile</code>, <code>capability_refs</code>, <code>decision</code>, <code>output_ref</code> — <code>src/effects/parts/mod/p000/body.rs</code></div></li>
+<li class="edge" tabindex="0"><code>dataspaces</code> → <code>runtime</code>: assertion or retraction turn plan<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>PendingTurn</code>: <code>actions</code>, <code>events</code>, <code>actor</code>, <code>cause</code> — <code>src/runtime/turn/mod.rs</code></div></li>
 </ul>
 <h3>Questions</h3><ul>
 <li><strong>open</strong> Which runtime transitions are replay-visible for the selected profile? <a href="world-replay-capsules.md">ref</a></li>
@@ -39,12 +42,13 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <li><code>prolly</code> — Prolly map: History-independent ordered state with a bounded incremental edit path and rebuild fallback. (<code>crates/molten-core/src/prolly_map/</code>)</li>
 <li><code>redb</code> — Redb stores: Capability-rooted durable logs, snapshots, indexes, and partial-state records. (<code>src/chunk/store.rs</code>)</li>
 <li><code>content-store</code> — Content store adapters: Canonical manifests and verified chunks across local, Redb, Iroh, optional object-storage and simulation profiles. (<code>src/content_store_adapter/</code>)</li>
-<li><code>world</code> — World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries. (<code>src/world_commit/</code>)</li>
+<li><code>world</code> — World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries. (<code>src/worldcommit/</code>)</li>
+<li><code>node-state</code> — Node state storage: Capability-rooted node namespaces and typed store roots; world commits persist through its storage namespace. (<code>src/node_state/</code>)</li>
 </ul>
 <h3>Messages</h3><ul>
-<li><code>runtime</code> → <code>content-store</code>: content operation and canonical manifest ref</li>
-<li><code>prolly</code> → <code>redb</code>: immutable block publication and generation check</li>
-<li><code>world</code> → <code>prolly</code>: active-head and reservation publication</li>
+<li class="edge" tabindex="0"><code>runtime</code> → <code>content-store</code>: content operation and canonical manifest ref<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ContentCommand</code>: <code>operation_ref</code>, <code>adapter_ref</code>, <code>operation</code>, <code>manifest_ref</code>, <code>range</code>, <code>deadline_tick</code> — <code>crates/molten-core/src/content_store_adapter/model.rs</code></div></li>
+<li class="edge" tabindex="0"><code>prolly</code> → <code>redb</code>: immutable block publication and generation check<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ProllyPublicationReceipt</code>: <code>map_id</code>, <code>prior_root_ref</code>, <code>next_root_ref</code>, <code>generation</code>, <code>staged_block_refs</code>, <code>status</code> — <code>src/prolly_map/records.rs</code></div></li>
+<li class="edge" tabindex="0"><code>world</code> → <code>node-state</code>: content-addressed root objects, canonical commit, and capture receipt<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>CaptureReceipt</code>: <code>decision</code>, <code>commit_ref</code>, <code>persisted_roots</code>, <code>revision_fences</code>, <code>publication</code> — <code>src/worldcommit/wire.rs</code></div></li>
 </ul>
 <h3>Questions</h3><ul>
 <li><strong>open</strong> What work does an incremental Prolly edit bound actually avoid? <a href="prolly-semantic-state-map.md">ref</a></li>
@@ -59,11 +63,11 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <li><code>admission</code> — Admission: Peer, membership, principal, trust, capability, resource, and policy observations. (<code>crates/molten-core/src/fabric_transport/</code>)</li>
 </ul>
 <h3>Messages</h3><ul>
-<li><code>transport</code> → <code>admission</code>: authenticated session and bounded frame observation</li>
-<li><code>admission</code> → <code>effects</code>: admitted operation scope, never ambient authority</li>
+<li class="edge" tabindex="0"><code>transport</code> → <code>admission</code>: authenticated session and bounded frame observation<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ReceiveObservation</code>: <code>peer_identity</code>, <code>peer_context_ref</code>, <code>service_id</code>, <code>alpn</code>, <code>generation</code>, <code>role</code> — <code>crates/molten-core/src/fabric_transport/receive.rs</code></div></li>
+<li class="edge" tabindex="0"><code>admission</code> → <code>effects</code>: admitted operation scope, never ambient authority<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>AdmittedOperation</code>: <code>request</code>, <code>peer</code>, <code>authority_ref</code> — <code>src/fabric_transport/cross_process/iroh/direct.rs</code></div></li>
 </ul>
 <h3>Questions</h3><ul>
-<li><strong>answered</strong> Is a per-source rate limit applied before inbound admission? <a href="inbound-admission-rate-limit-review.md">ref</a></li>
+<li><strong>answered</strong> Is a per-source rate limit applied before inbound admission? <a href="inbound-admission-rate-limit-review.md">ref</a>; tracked by <a href="https://github.com/brittonr/aspen/issues/7">issue #7</a>, <a href="../.cairn/changes/admit-direct-lan-streams/proposal.md">Cairn change admit-direct-lan-streams</a></li>
 <li><strong>blocked</strong> Which cross-host transport profile has actual two-host evidence? <a href="fabric-transport-session-runtime.md">ref</a></li>
 </ul>
 </details>
@@ -74,7 +78,7 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <li><code>qualification</code> — Capability qualification: Read-only, exact-build artifact validation; incomplete or simulation evidence cannot qualify live durability or cross-host behavior. (<code>tools/capability-report.rs</code>)</li>
 </ul>
 <h3>Messages</h3><ul>
-<li><code>runtime</code> → <code>qualification</code>: canonical profile-scoped execution observations, never ambient authority</li>
+<li class="edge" tabindex="0"><code>runtime</code> → <code>qualification</code>: canonical profile-scoped execution observations, never ambient authority<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ObservedReadback</code>: <code>subject</code>, <code>binding_ref</code>, <code>validation_ref</code>, <code>receipt_refs</code> — <code>src/capability_qualification/model.rs</code></div></li>
 </ul>
 <h3>Questions</h3><ul>
 <li><strong>open</strong> Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. <a href="capability-qualification-report.md">ref</a></li>
@@ -88,31 +92,33 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <tr><td><code>prolly</code></td><td>Prolly map: History-independent ordered state with a bounded incremental edit path and rebuild fallback.</td><td><code>crates/molten-core/src/prolly_map/</code></td><td>Storage and world state</td></tr>
 <tr><td><code>redb</code></td><td>Redb stores: Capability-rooted durable logs, snapshots, indexes, and partial-state records.</td><td><code>src/chunk/store.rs</code></td><td>Storage and world state</td></tr>
 <tr><td><code>content-store</code></td><td>Content store adapters: Canonical manifests and verified chunks across local, Redb, Iroh, optional object-storage and simulation profiles.</td><td><code>src/content_store_adapter/</code></td><td>Storage and world state</td></tr>
-<tr><td><code>world</code></td><td>World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries.</td><td><code>src/world_commit/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>world</code></td><td>World lifecycle: Commit, branch heads, diff/merge, promotion, and logical restore boundaries.</td><td><code>src/worldcommit/</code></td><td>Storage and world state</td></tr>
+<tr><td><code>node-state</code></td><td>Node state storage: Capability-rooted node namespaces and typed store roots; world commits persist through its storage namespace.</td><td><code>src/node_state/</code></td><td>Storage and world state</td></tr>
 <tr><td><code>transport</code></td><td>Fabric transport: Bounded Iroh sessions, registered protocols, peer evidence, and cleanup.</td><td><code>src/fabric_transport/</code></td><td>Networking and admission</td></tr>
 <tr><td><code>admission</code></td><td>Admission: Peer, membership, principal, trust, capability, resource, and policy observations.</td><td><code>crates/molten-core/src/fabric_transport/</code></td><td>Networking and admission</td></tr>
 <tr><td><code>qualification</code></td><td>Capability qualification: Read-only, exact-build artifact validation; incomplete or simulation evidence cannot qualify live durability or cross-host behavior.</td><td><code>tools/capability-report.rs</code></td><td>Evidence and qualification</td></tr>
 </tbody></table>
 <h2>Edges</h2>
-<table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Chapter</th></tr></thead><tbody>
-<tr><td><code>runtime</code></td><td><code>effects</code></td><td>typed effect request and terminal observation</td><td>Turn and dataspace runtime</td></tr>
-<tr><td><code>dataspaces</code></td><td><code>runtime</code></td><td>assertion or retraction turn plan</td><td>Turn and dataspace runtime</td></tr>
-<tr><td><code>runtime</code></td><td><code>content-store</code></td><td>content operation and canonical manifest ref</td><td>Storage and world state</td></tr>
-<tr><td><code>prolly</code></td><td><code>redb</code></td><td>immutable block publication and generation check</td><td>Storage and world state</td></tr>
-<tr><td><code>world</code></td><td><code>prolly</code></td><td>active-head and reservation publication</td><td>Storage and world state</td></tr>
-<tr><td><code>transport</code></td><td><code>admission</code></td><td>authenticated session and bounded frame observation</td><td>Networking and admission</td></tr>
-<tr><td><code>admission</code></td><td><code>effects</code></td><td>admitted operation scope, never ambient authority</td><td>Networking and admission</td></tr>
-<tr><td><code>runtime</code></td><td><code>qualification</code></td><td>canonical profile-scoped execution observations, never ambient authority</td><td>Evidence and qualification</td></tr>
+<table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Payload</th><th>Chapter</th></tr></thead><tbody>
+<tr><td><code>runtime</code></td><td><code>effects</code></td><td>typed effect request and terminal observation</td><td><code>EffectRequest / EffectResponse</code></td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>dataspaces</code></td><td><code>runtime</code></td><td>assertion or retraction turn plan</td><td><code>PendingTurn</code></td><td>Turn and dataspace runtime</td></tr>
+<tr><td><code>runtime</code></td><td><code>content-store</code></td><td>content operation and canonical manifest ref</td><td><code>ContentCommand</code></td><td>Storage and world state</td></tr>
+<tr><td><code>prolly</code></td><td><code>redb</code></td><td>immutable block publication and generation check</td><td><code>ProllyPublicationReceipt</code></td><td>Storage and world state</td></tr>
+<tr><td><code>world</code></td><td><code>node-state</code></td><td>content-addressed root objects, canonical commit, and capture receipt</td><td><code>CaptureReceipt</code></td><td>Storage and world state</td></tr>
+<tr><td><code>transport</code></td><td><code>admission</code></td><td>authenticated session and bounded frame observation</td><td><code>ReceiveObservation</code></td><td>Networking and admission</td></tr>
+<tr><td><code>admission</code></td><td><code>effects</code></td><td>admitted operation scope, never ambient authority</td><td><code>AdmittedOperation</code></td><td>Networking and admission</td></tr>
+<tr><td><code>runtime</code></td><td><code>qualification</code></td><td>canonical profile-scoped execution observations, never ambient authority</td><td><code>ObservedReadback</code></td><td>Evidence and qualification</td></tr>
 </tbody></table>
 <h2>Open questions</h2>
-<table><thead><tr><th>Status</th><th>Question</th><th>Reference</th></tr></thead><tbody>
-<tr><td>open</td><td>Which runtime transitions are replay-visible for the selected profile?</td><td><a href="world-replay-capsules.md"><code>world-replay-capsules.md</code></a></td></tr>
-<tr><td>open</td><td>How does the selected adapter classify an effect that may have happened?</td><td><a href="fabric-port-ownership.md"><code>fabric-port-ownership.md</code></a></td></tr>
-<tr><td>open</td><td>What work does an incremental Prolly edit bound actually avoid?</td><td><a href="prolly-semantic-state-map.md"><code>prolly-semantic-state-map.md</code></a></td></tr>
-<tr><td>blocked</td><td>Which logical restore profile has exact current-admission and restart qualification?</td><td><a href="world-execution-snapshots.md"><code>world-execution-snapshots.md</code></a></td></tr>
-<tr><td>answered</td><td>Is a per-source rate limit applied before inbound admission?</td><td><a href="inbound-admission-rate-limit-review.md"><code>inbound-admission-rate-limit-review.md</code></a></td></tr>
-<tr><td>blocked</td><td>Which cross-host transport profile has actual two-host evidence?</td><td><a href="fabric-transport-session-runtime.md"><code>fabric-transport-session-runtime.md</code></a></td></tr>
-<tr><td>open</td><td>Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges.</td><td><a href="capability-qualification-report.md"><code>capability-qualification-report.md</code></a></td></tr>
+<table><thead><tr><th>Status</th><th>Question</th><th>Reference</th><th>Tracking</th></tr></thead><tbody>
+<tr><td>open</td><td>Which runtime transitions are replay-visible for the selected profile?</td><td><a href="world-replay-capsules.md"><code>world-replay-capsules.md</code></a></td><td>—</td></tr>
+<tr><td>open</td><td>How does the selected adapter classify an effect that may have happened?</td><td><a href="fabric-port-ownership.md"><code>fabric-port-ownership.md</code></a></td><td>—</td></tr>
+<tr><td>open</td><td>What work does an incremental Prolly edit bound actually avoid?</td><td><a href="prolly-semantic-state-map.md"><code>prolly-semantic-state-map.md</code></a></td><td>—</td></tr>
+<tr><td>blocked</td><td>Which logical restore profile has exact current-admission and restart qualification?</td><td><a href="world-execution-snapshots.md"><code>world-execution-snapshots.md</code></a></td><td>—</td></tr>
+<tr><td>answered</td><td>Is a per-source rate limit applied before inbound admission?</td><td><a href="inbound-admission-rate-limit-review.md"><code>inbound-admission-rate-limit-review.md</code></a></td><td><a href="https://github.com/brittonr/aspen/issues/7">issue #7</a>, <a href="../.cairn/changes/admit-direct-lan-streams/proposal.md">Cairn change admit-direct-lan-streams</a></td></tr>
+<tr><td>blocked</td><td>Which cross-host transport profile has actual two-host evidence?</td><td><a href="fabric-transport-session-runtime.md"><code>fabric-transport-session-runtime.md</code></a></td><td>—</td></tr>
+<tr><td>open</td><td>Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges.</td><td><a href="capability-qualification-report.md"><code>capability-qualification-report.md</code></a></td><td>—</td></tr>
 </tbody></table>
+<script>document.addEventListener("click",event=>{const pin=event.target.closest("button.pin");if(!pin)return;const pinned=pin.closest(".edge").classList.toggle("pinned");pin.setAttribute("aria-pressed",String(pinned));});</script>
 </body>
 </html>

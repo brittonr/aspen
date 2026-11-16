@@ -14,6 +14,22 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
     }
     let adapter_names = input.adapter_receipts.iter().map(|receipt| receipt.name.clone()).collect::<Vec<_>>();
     let has_deterministic_adapter_order = adapter_names == deterministic_adapter_order(&input.config.adapters);
+    let has_strict_source_gate = !input.is_unqualified_fixture_gate
+        && !input.source_gate_receipt_refs.is_empty()
+        && !input.source_gate_validation_refs.is_empty();
+    let mut checks = vec![
+        ("explicit-state-root", "pass"),
+        ("adapter-order-deterministic", status(has_deterministic_adapter_order)),
+        ("strict-octet-source-gate-bound", status(has_strict_source_gate)),
+        ("profile-metadata-bound", status(!input.profile_metadata_refs.is_empty())),
+        ("profile-metadata-evidence-only", "pass"),
+        ("no-ambient-authority", "pass"),
+        ("canonical-receipt", "pass"),
+    ];
+    if input.is_unqualified_fixture_gate {
+        // r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+        checks.push(("unqualified-fixture-source-gate", "pass"));
+    }
     Ok(record("node-startup-receipt-v1", vec![
         string(NODE_STARTUP_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -30,18 +46,7 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
         record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
         record("version", vec![refs_sequence(input.version_refs)]),
         record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        checks_value(&[
-            ("explicit-state-root", "pass"),
-            ("adapter-order-deterministic", status(has_deterministic_adapter_order)),
-            (
-                "strict-octet-source-gate-bound",
-                status(!input.source_gate_receipt_refs.is_empty() && !input.source_gate_validation_refs.is_empty()),
-            ),
-            ("profile-metadata-bound", status(!input.profile_metadata_refs.is_empty())),
-            ("profile-metadata-evidence-only", "pass"),
-            ("no-ambient-authority", "pass"),
-            ("canonical-receipt", "pass"),
-        ]),
+        checks_value(&checks),
     ]))
 }
 

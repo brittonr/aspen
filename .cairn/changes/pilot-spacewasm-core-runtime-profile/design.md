@@ -62,13 +62,12 @@ Inspection, admission, instantiation, segment, yield/resume, hostcall, terminal,
 - No state serialization, migration, live upgrade, or cross-host resume claim.
 - No flight qualification, runtime correctness, sandbox-completeness, or release-readiness claim.
 
-## Current implementation blocker (2026-07-12)
+## Current evidence-bearing blocker (2026-11-16)
 
-Evidence-bearing implementation is blocked on three cross-repository inputs that are still active, unimplemented Cairn changes rather than archived receipts:
+The source-side pilot and its bounded negative controls can be checked locally. Evidence-bearing execution still requires a complete, independently admitted producer cohort:
 
-- Mantle `materialize-spacewasm-reference-cohort`, which owns the exact source commit, offline build closure, rehashable bundle, fixtures, licenses, and consumer handoff;
-- Octet `add-spacewasm-mvp-artifact-profile`, which owns the matching static MVP profile and artifact facts;
-- ChaosControl `add-spacewasm-mvp-differential-rail`, which owns the matching differential cohort and segmented-execution observations.
+- Mantle's `materialize-molten-spacewasm-abi` locally verified bundle `774331f6c2defe75e30c354b2b3080838cf56438bbd99268779fe4590f8c9f39` on 2026-10-30, but its immutable-revision/bundle publication task remains unchecked;
+- Octet archived the matching static `spacewasm-molten-abi-pilot` profile, but its fixture receipt is not a receipt for the exact selected Mantle members or an independently selected immutable verifier executable;
+- ChaosControl's archived/current differential is the older hostless `run()->()` profile on Wasmtime 41.0.3. It does not emit the required full-Molten-ABI `chaoscontrol.spacewasm-molten-abi-differential.v1` report on the consumer's 49.0.5 cohort.
 
-No matching SpaceWasm package or archived bundle exists in the sibling repositories. Molten cannot invent those identities, substitute Wasmtime, or label a fixture simulator as SpaceWasm without violating this design's exact-evidence and no-fallback requirements. The existing Wasmtime/component baseline tests pass, but implementation tasks remain intentionally unchecked until the three producer changes archive compatible receipts.
-- No silent module rewriting or post-MVP lowering.
+The expected bundle/cohort/profile/probe identities and Nix-store verifier executable hashes must be selected through their actual publication/admission boundary, never copied from a candidate's self-consistent reports. Do not substitute hostless receipts, Wasmtime, local fixture grants or silent module lowering for the missing full-ABI cohort. Local checks do not close these evidence-bearing acceptance tasks.

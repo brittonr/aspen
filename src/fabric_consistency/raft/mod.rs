@@ -67,3 +67,6 @@ mod tests;
 #[cfg(test)]
 #[path = "time/tests.rs"]
 mod time_tests;
+#[cfg(test)]
+#[path = "transition/bounds.rs"]
+mod transition_bounds_tests;

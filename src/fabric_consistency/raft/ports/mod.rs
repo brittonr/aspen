@@ -239,8 +239,9 @@ impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for Repli
         &mut self,
         snapshot: &ReplicaSnapshot,
         is_suffix_retained: bool,
+        retained: &ReplicaRetainedState<'_>,
     ) -> crate::error::Result<String> {
-        self.durability.persist_snapshot(snapshot, is_suffix_retained)
+        self.durability.persist_snapshot(snapshot, is_suffix_retained, retained)
     }
 }
 

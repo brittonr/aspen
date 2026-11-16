@@ -7,12 +7,18 @@ pub(super) async fn start(
     let authority = admitted.authority.bind(root, &admitted.time, replay)?;
     let adapter = durable(root, &input.raft_store)?;
     let has_raft_state = !adapter.state().durable_log.is_empty() || !adapter.state().snapshots.is_empty();
+    let retention_authority_ref = adapter.state().descriptor.retention_authority_ref.clone();
     let durability = crate::fabric_consistency::raft::RedbReplicaPort::new(
         adapter,
         input.replica.durable_log_ref.clone(),
         input.replica.snapshot_store_ref.clone(),
     )?
     .reconcile_repaired_storage()?;
+    // r[impl molten.consensus.durable_log_compaction]
+    let durability = match retention_authority_ref {
+        Some(authority_ref) => durability.with_retention_authority(authority_ref)?,
+        None => durability,
+    };
     if has_raft_state {
         admitted.plan = durability.plan_recovery(admitted.plan)?.start_plan;
     }

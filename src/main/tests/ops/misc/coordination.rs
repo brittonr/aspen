@@ -67,7 +67,7 @@
             key: "queue:cli".to_string(),
             client_session: "client-cli".to_string(),
             operation_id_ref,
-            read_consistency_mode: molten::coordination::READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            read_consistency_mode: molten::coordination::READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
             payload: Some(payload),
             authority_refs: vec![authority_ref],
             resource_refs: vec![resource_ref],

@@ -91,6 +91,13 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
+fn require_refs(refs: &[String], field: &str) -> Result<()> {
+    if refs.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{field} requires at least one explicit ref")));
+    }
+    validate_refs(refs, field)
+}
+
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
         Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
@@ -146,24 +153,15 @@ mod tests {
         assert!(!to_text(&new_payload).expect("render new again").contains("old"));
     }
 
-    #[test]
-    fn apply_receipt_builds_upgrade_plan_hook() {
-        let root = temp_dir("rewrite-upgrade-hook");
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/rewrites/parts/mod/p004/authorization.rs"));
+
+
+    fn rewrite_upgrade_fixture(name: &str) -> (PathBuf, RewritePlanInput) {
+        let root = temp_dir(name);
         let payload = parse_text(r#"<doc "old">"#).expect("parse payload");
         install_fixture(&root, "doc", payload, &[]);
         let input = plan_input(RewritePattern::StringEquals("old".to_string()), "old", "new");
-        let applied = apply(&root, &input).expect("apply rewrite");
-        let plan = upgrade_plan_from_apply(
-            &applied,
-            "rewrite-session",
-            &test_ref("initiator"),
-            &[test_ref("upgrade-capability")],
-            &[test_ref("upgrade-policy")],
-        )
-        .expect("upgrade plan");
-        let parsed = crate::upgrades::parse_upgrade_plan(&plan).expect("parse upgrade plan");
-        assert_eq!(parsed.tasks[0].kind, "install-artifact");
-        assert!(parsed.checks.as_slice().iter().any(|check| check == "no-ucm-clone"));
+        (root, input)
     }
 
     #[test]

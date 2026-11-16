@@ -93,3 +93,27 @@
 
         assert_eq!(evaluation.decision, "pass");
     }
+
+    #[test]
+    fn missing_status_denies_with_receipt() {
+        let dir = temp_dir("missing-status");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        fs::write(dir.join(COMMAND_NAME), "cargo octet check --artifact-dir target/octet\n").expect("write command");
+        fs::write(dir.join(SUMMARY_NAME), clean_summary()).expect("write summary");
+        fs::write(dir.join(OBJECT_CORPUS_RECEIPT_NAME), object_corpus_json()).expect("write object corpus");
+
+        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
+
+        assert_eq!(evaluation.decision, "deny");
+        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains(STATUS_NAME)));
+    }
+
+    #[test]
+    fn malformed_status_denies_with_receipt() {
+        let dir = temp_dir("malformed-status");
+        write_artifacts(&dir, "{", clean_summary(), object_corpus_json());
+        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
+
+        assert_eq!(evaluation.decision, "deny");
+        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("malformed status.json")));
+    }

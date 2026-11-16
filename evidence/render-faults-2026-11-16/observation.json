@@ -1,0 +1,27 @@
+{
+  "schema": "aspen.renderer-process-observation.v1",
+  "observed_on": "2026-11-16",
+  "evidence_class": "same-host-separate-process",
+  "source_archive_blake3": "e6abd20f008428aea877c85c7b9b419e45f7c022e6dfe476c174b3b2290a05d5",
+  "original_process_log_blake3": "9dc39adecf02fa9b0ecbd4f1c190336aca0407986f7d511c6d2c6918ae8fca98",
+  "component_blake3": "b24249da5b5b05239714cdc6203b62ef56212ad4b8f7101a74591c6725f81e7b",
+  "component_publication": "Original binary retained privately unchanged; omitted from this publication because it embeds private build paths. No redacted or rebuilt binary is substituted for its identity.",
+  "command": ["cargo", "test", "--locked", "-p", "molten-orchestrator-cli", "--test", "progress_e2e", "real_renderer_", "--", "--ignored", "--nocapture", "--test-threads=1"],
+  "entrypoint": "RENDER_SKIP_BUILD=1 bash pilots/orchestration/scripts/render-faults.sh in the pinned pilot Nix shell",
+  "toolchain": {"rustc": "1.98.0-nightly (31a9463c6 2026-05-25)", "cargo": "1.98.0-nightly (4d1f98451 2026-05-15)", "host": "x86_64-unknown-linux-gnu", "kernel": "Linux 6.18.60", "artifact_filesystem": "zfs"},
+  "tests": [
+    {"name": "real_renderer_active_worker_loss_and_controller_restart_keep_accepted_tiles", "result": "passed"},
+    {"name": "real_renderer_pending_and_active_cancellation_do_not_confuse_disconnect_with_stop", "result": "passed"},
+    {"name": "real_renderer_recovers_every_controller_publication_boundary", "result": "passed"}
+  ],
+  "test_elapsed_seconds": 646.13,
+  "failed": 0,
+  "filtered_out": 6,
+  "controller_fault_boundaries": ["before-dispatch", "after-dispatch", "before-output-persist", "after-output-persist", "before-terminal-commit", "after-terminal-commit", "before-progress-commit", "after-progress-commit"],
+  "retained_public_case_directories": 10,
+  "retained_public_files": 582,
+  "retained_completed_images": 9,
+  "completed_image_bytes_blake3": "19728e4b2b06643de6773a5bc4ea3b89b16a42c03c73b5171915e3a0b32c0340",
+  "publication": "public-observations contains original bounded fixture inputs/manifests, JSON and packed progress, final envelopes and process stderr. Keys and deployment databases are not published. The original source archive, environment, complete log and component remain in private retention.",
+  "non_claims": ["Not a cold public build, independent signed-output admission, two-host/direct-LAN, cross-architecture, native/Wasm equality, physical-host loss, controlled performance or release qualification.", "The six ordinary progress tests were filtered out of this component-dependent invocation; their resource-exhaustion, retention-gap and other generic controls are not relabelled as part of these three results."]
+}

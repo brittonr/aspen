@@ -1,0 +1,13 @@
+## Phase 1: Implementation
+
+- [x] [serial] Gate the fabricated passing receipt behind `cfg(test)` or the `test-fixtures` feature enabled only by the self dev-dependency, and confirm library and binary builds compile without it. r[molten.octet_source_gate_receipt_validation.spec.test_fixture_isolation]
+- [x] [serial] Expose authenticated source-gate admission from node source binding, require it and explicit operator refs through `apply_with_upgrade_plan`, validate current-workspace freshness before replacement effects, and make `molten rewrite apply --upgrade-plan-out` require `--source-state-root` and explicit refs. r[molten.upgrades.authenticated_source_gate] r[molten.local_rewrite.upgrade_hook_authority]
+- [x] [serial] Replace the dogfood gate with an unqualified fixture gate that every Octet consumer denies, add labelled fixture modes for startup and loopback job admission, and label dogfood reports, release gates and summaries. r[molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied] r[molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+
+## Phase 2: Verification
+
+- [x] [serial] Cover the authenticated plan path, denied and fixture gate content, missing refs, the fail-closed CLI and fixture denial by every consumer, then run the focused tests, Clippy, formatting and strict Cairn validation before review. r[molten.upgrades.authenticated_source_gate] r[molten.local_rewrite.upgrade_hook_authority] r[molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied] r[molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate] r[molten.octet_source_gate_receipt_validation.spec.test_fixture_isolation]
+
+The [earlier complete workspace execution](../../../evidence/integrated-cutover-2026-11-16/earlier-checks.json) includes the real binary/harness and default library/binary build controls. The [final ordered source checks](../../../evidence/integrated-cutover-2026-11-16/checks.json) separately passed current configured producers, strict source admission, workspace library regressions, Clippy, formatting and strict provider-policy Cairn validation. Fixture source tokens remain test-only and grant no production source authority.
+
+Native sync initially denied the legacy accepted `local-structured-rewrite` document because thirteen sections grouped multiple bare requirement IDs. Those sections are separated without changing any of the 32 existing ID-bearing normative statements; each identity now has its own requirement/scenario. The native sync preflight then admitted the unchanged source-gate delta. No requirement is dropped, aliased or weakened.

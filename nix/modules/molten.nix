@@ -23,7 +23,7 @@ let
   loopScript = pkgs.writeShellScript "molten-bounded-loop" ''
     set -euo pipefail
     rm -f ${lib.escapeShellArg "${state}/stop"}
-    trap 'touch ${lib.escapeShellArg "${state}/stop"}' TERM INT
+    trap 'touch ${lib.escapeShellArg "${state}/stop"}; exit 0' TERM INT
     while [ ! -e ${lib.escapeShellArg "${state}/stop"} ]; do
       ${lib.escapeShellArg cfg.package}/bin/molten node serve \
         --state-root ${lib.escapeShellArg state} \
@@ -38,7 +38,7 @@ let
     ${lib.escapeShellArg cfg.package}/bin/molten node stop \
       --state-root ${lib.escapeShellArg state} \
       --shutdown-out ${lib.escapeShellArg "${evidence}/shutdown.preserves"} \
-      --receipt-out ${lib.escapeShellArg "${evidence}/shutdown-control.preserves"} || true
+      --receipt-out ${lib.escapeShellArg "${evidence}/shutdown-control.preserves"}
   '';
 in
 {
@@ -142,7 +142,7 @@ in
         RestartSec = cfg.restartSeconds;
         TimeoutStartSec = cfg.timeoutStartSeconds;
         TimeoutStopSec = 30;
-        KillMode = "mixed";
+        KillMode = "control-group";
         ReadWritePaths = [ cfg.stateDir ];
         ProtectSystem = "strict";
         ProtectHome = true;

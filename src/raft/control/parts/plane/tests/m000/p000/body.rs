@@ -134,12 +134,8 @@
         assert_eq!(runtime.committed_index, 3);
         assert_eq!(runtime.state.entries.len(), 3);
         let read = read_control_registry(&ControlRegistryReadInput {
-            state: runtime.state.value.clone(),
-            group_ref: runtime.manifest.manifest_ref.clone(),
-            committed_term: runtime.term,
-            committed_index: runtime.committed_index,
-            read_index: runtime.committed_index,
-            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            runtime: &runtime,
+            read_consistency_mode: READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
             authority_refs: auth(),

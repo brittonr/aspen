@@ -9,45 +9,128 @@ the trigger for reopening.
 
 **Decision: no tree-clock implementation or dependency.**
 
-The prerequisite causal-turn validation has not produced a named recorded-
-causality query, expected scale, time or memory budget, or evidence that an
-explicit DAG or vector-clock baseline is insufficient. The inspected runtime
-records ordered events without a cause field, so a tree-clock projection would
-start from a representation the prerequisite has not validated.
+**Prerequisite status (rechecked 2026-11-16).** The causal-turn prerequisite has
+landed: the `record-turn-causality-in-traces` change is archived with every task
+complete (`.cairn/archive/1970-01-01-record-turn-causality-in-traces/`), and
+`r[molten.runtime_spine.turn_causality]` is an accepted requirement. Every
+`RuntimeEvent::TurnCommitted` now carries `actor`, `cause` and `event_refs`
+([`chronicle.rs`](../src/runtime/turn/chronicle.rs)); the cause is one of the
+closed `RuntimeTurnCause` variants (prior turn, cleanup, linked-task release,
+periodic activation, delay, external) in
+[`causality.rs`](../src/runtime/turn/causality.rs). The earlier statement that
+committed events lack a cause field is superseded.
 
-Reopen when the prerequisite lands and one concrete diagnostic query names its
-workload, bounds, baseline result, and acceptance threshold. Keep the DAG or
-vector-clock baseline authoritative until then.
+**Still missing for a tree-clock evaluation:**
+
+- No named recorded-causality query, workload, expected scale, time or memory
+  budget, or acceptance threshold exists: a 2026-11-16 search of `docs/`,
+  `.cairn/changes/`, `src/`, `crates/` and `tests/` for tree-clock,
+  vector-clock or causal-query consumers found only this record and the issue
+  triage page.
+- No baseline measurement shows that an explicit-edge DAG or a vector clock is
+  insufficient for any query.
+- The trace is not yet a causal index. `TraceEvidence` still binds an ordered
+  list of event refs and a replayability status
+  ([`syndicate/p000/body.rs`](../src/runtime/dataspace/parts/syndicate/p000/body.rs)).
+  Turns started through `PendingTurn::new()` or `apply_step` record a generic
+  `External` cause (`runtime-turn`, `runtime-step`), so they carry no prior-turn
+  edge, and the committed record names an actor string with no incarnation
+  identity. A projection to clock entries would have to define those cases
+  first.
+
+Reopen when one concrete diagnostic query names its workload, bounds, baseline
+result and acceptance threshold. Keep the explicit DAG or vector-clock baseline
+authoritative until then; this record runs no experiment and makes no
+equivalence or performance claim.
 
 ## #3 bbtree transient-index evaluation
 
 **Decision: keep the current BTreeMap index; no bbtree dependency.**
 
-The published `bbtree` versions inspected (0.1.5 through 0.2.1) pin
-`vstd = "=0.0.0-2026-08-30-0159"`. The workspace's `verified-logic` dependency
-pins `vstd = "=0.0.0-2026-01-25-0057"`. Cargo rejects the two exact pre-release
-versions in one graph, so a benchmark cannot compare bbtree against the current
-planner without a separate workspace, a different Verus cohort, or a patch that
-would change the evaluated source.
+The full product graph still rejects bbtree's exact August `vstd` alongside
+`verified-logic`'s January `vstd`. That is an integration blocker, not a claim
+that isolated compilation or measurement is impossible. On 2026-11-16 the
+unmodified upstream revision `8adae97a0ed97e5c98fa2790312eb0aec9719846`
+(bbtree 0.1.5, MIT OR Apache-2.0) built in an isolated pinned cohort.
 
-Reopen with a bbtree release or pinned revision that is compatible with the
-workspace's verified-logic cohort, or with an isolated benchmark workspace that
-retains the exact source/toolchain evidence. Until then, the canonical edit
-path, profile identity, roots, and storage behavior stay unchanged.
+The retained [observation](../evidence/prolly-transient-index-2026-11-16/observation.json)
+binds exact current, actual unsync bbtree planner/diff, and sorted-vector/edit-overlay
+source copies, resolved lock, fixtures, commands, full measurements and BLAKE3
+inputs. Both plain and allocation-instrumented binaries passed all 26 semantic
+cases. Seven repetitions across eight representative/maximum fixtures and ten
+phases produced 3,360 rows in 42 processes. Canonical nodes/roots, staged blocks,
+edit/error ordering, diffs and validation outcomes matched; this is sampled
+differential evidence, not proof over the byte domain.
+
+The predeclared gate required at least 10% paired end-to-end improvement in
+every fixture, at least six of seven passing pairs, relative median absolute
+deviation at most 5%, no semantic regression, and at most 5% peak/retained-memory
+or RSS regression in every measured phase. Neither candidate passed.
+
+| Fixture | bbtree/current median paired pipeline ratio | Sorted/current ratio |
+| --- | ---: | ---: |
+| Representative sequential | 0.9614 | 1.0101 |
+| Representative random | 0.9813 | 1.0049 |
+| Representative mixed | 0.9839 | 0.9592 |
+| Representative common-prefix | 1.0152 | 1.0241 |
+| Maximum sequential | 0.9504 | 0.9404 |
+| Maximum random | 0.9670 | 0.9533 |
+| Maximum mixed | 1.0063 | 1.0146 |
+| Maximum common-prefix | 0.9785 | 1.0001 |
+
+Peak/retained requested-live memory, phase RSS and process high-water RSS are
+retained, not inferred from timing. Both process high-water gates passed; some
+representative phase-memory/RSS gates failed. Pipeline retained requested-live
+bytes were zero after output destruction. Diagnostic phases include validation,
+decoding, indexing/conversion, cloning, iteration and canonical building; they
+are not additive. The sorted control deliberately retains the current diff
+algorithm. No cache indexes were changed or benchmarked: hot-set/scan, eviction
+churn, hash-lookup baselines and disabled-cache equivalence remain prerequisites
+if profiling ever justifies a cache experiment.
+
+The generic x86-64 build permits applicable SSE tag paths and scalar fallbacks;
+it does not qualify AVX512/native, AArch64/NEON, other targets, Miri, Verus,
+concurrency, cold-cache or deployment behavior. Upstream proofs do not certify
+the adapter. Molten-core Prolly maintainers own the retained baseline and any
+future review. Reopen only for a materially changed compatible cohort or a
+named workload with new predeclared gates. Canonical storage, profile identity,
+roots, operation-scoped cache, publication and authority remain unchanged.
 
 ## #6 Live-frame hashing split
 
 **Decision: keep the current single-step frame path.**
 
-No profile output shows that `frame_ref` is a material fraction of owner-held
-time. The current path also creates a thread and Tokio runtime per exchange,
-which is a larger suspected cost. Splitting hashing into a `Send` begin step and
-an owner-held commit step before measuring that path would add an API and stale-
-pending state without evidence.
+The 2026-11-16 optimized native loopback
+[observation](../evidence/frame-owner-profile-2026-11-16/observation.json)
+retains the timing-only patch, exact pre-instrumentation files, collector,
+profile contract, commands, canonical ACK samples and BLAKE3 input identities.
+Three warmups and twenty measured operations at each size completed: 46 real
+Delivered exchanges, zero automatic retries, zero final inflight bytes and clean
+listener cleanup. Actual ACK transition refs and complete transport state
+matched the direct canonical reference; the route exposes a receipt ref, not
+materialized receipt bytes.
 
-Reopen after runtime reuse or amortization lands and a profile at typical and
-maximum frame sizes names a predeclared threshold. The canonical hash, pending,
-acknowledgement, and uncertain-delivery semantics must remain unchanged.
+| Selected fixture payload | Mean admission hash | Mean owner-held time | Hash/owner aggregate |
+| --- | ---: | ---: | ---: |
+| 1,024 bytes, assumed typical | 1.772 µs | 2.140 ms | 0.0828% |
+| 4,096 bytes, admitted fixture maximum | 5.979 µs | 2.148 ms | 0.2784% |
+
+The predeclared threshold was strictly more than 10% at **both** sizes on an
+independently reviewed production-representative runtime-reuse/amortization
+baseline. Neither diagnostic percentage reaches it, and that production
+baseline is absent: this API still creates a worker thread and Tokio runtime
+per frame. No runtime cost is subtracted to manufacture such a baseline. The
+owner denominator measures complete external register and route calls,
+including destructors and timing overhead; nested stages are not additive and
+concurrent server hashing is not owner CPU time.
+
+This is a selected 4-KiB fixture profile, not a universal transport maximum;
+1 KiB is an explicit typical-size assumption, not a production traffic sample.
+It qualifies no Internet, cross-host, deployed service, physical hardware or
+release. Fabric-transport maintainers own the retained measurement capability.
+Reopen after runtime reuse/amortization exists and a reviewed bounded profile
+meets its predeclared gate. Canonical hashing, pending/ACK and uncertain-delivery
+semantics remain unchanged; no begin/commit prototype or dependency is added.
 
 ## #9 TPM2-sealed node identity key
 
@@ -78,7 +161,7 @@ state, host-filesystem secrecy, startup integration, attestation or production a
 
 ## #10 Encrypted discovery provider
 
-**Decision: no provider implementation.**
+**Decision: do not add an Aspen discovery provider; keep address discovery and relay selection at the host layer until a concrete admitted-member consumer requires more.**
 
 The issue is a design consideration, not an accepted requirement. There is no
 agreed threat model for address hints, no membership-policy decision about which
@@ -86,8 +169,43 @@ already-admitted peers may learn a hint, and no provider or relay profile that
 would carry the encrypted payload. Implementing a provider first would decide
 those questions implicitly.
 
-Reopen after a threat model, membership disclosure rule, hint lifetime, and
-public bootstrap path are agreed. Address hints must remain non-authoritative.
+**Need and ownership assessment (2026-11-16).**
+
+- *Deployments with changing member addresses: none recorded.* The repository
+  has no deployment inventory. Its documented deployment surface is the bounded
+  local [NixOS service module](nixos-service-module.md); the
+  [external pilot tracker](external-pilot-tracker.md) has not selected a
+  two-host workflow, and cross-host transport qualification (#15) is still
+  unmet. Whether any operator runs members whose addresses change is unknown: a
+  2026-11-16 search of `docs/`, `evidence/`, `pilots/`, `release/`,
+  `.cairn/changes/` and the issue tracker found no report of one.
+- *What the current code does with addresses.* Membership snapshots, views and
+  node descriptors have no address field.
+  `PolicyManagedProvider::replace_snapshot` accepts a newer membership view
+  (same provider kind and profile, advancing epoch), which answers the issue's
+  open question for membership only, not for locators
+  ([adapters](../src/fabric_membership/adapters.rs)). Peer locators come from a
+  `CrossProcessEndpointDescriptor` with a locator cohort and a validity window
+  ([endpoint](../crates/molten-core/src/fabric_transport/cross_process/endpoint.rs)),
+  the direct-LAN binding pins an authenticated endpoint id rather than an
+  address hint ([direct](../crates/molten-core/src/fabric_transport/direct.rs)),
+  and the Iroh endpoints are built with `RelayMode::Disabled`. A changed address
+  therefore needs a newly issued descriptor today.
+- *Host-layer trials reviewed.* The dots-onixos DNS/relay candidate declarations
+  and recorded semantic boundary concern host transport, not Aspen membership,
+  policy or encrypted group-hint admission. Reviewing them does not qualify
+  changing-address discovery in Aspen; no private inventory, endpoint, identity
+  or execution artifact is republished here.
+
+No current Aspen consumer with changing member addresses is established. Adding
+a second discovery protocol would introduce disclosure and key-distribution
+policy without that demand. Keep this concern with the existing host-layer
+trials rather than adding a provider or enabling a relay in Aspen.
+
+Reopen when a concrete admitted-member workflow demonstrates that the host-layer
+path is insufficient, and after its threat model, membership disclosure rule,
+hint lifetime, group-key distribution/rotation and bootstrap path are agreed.
+Address hints must remain non-authoritative.
 
 ## #12 Root-blocker explanations
 
@@ -137,8 +255,8 @@ bind by hash. `docs/external-pilot-tracker.md` and
 A scan of the tracked evidence, archives, pilots and the zip on 2026-11-15
 found no private-key blocks or GitHub, AWS, Slack, OpenAI, Anthropic, Google or
 GitLab tokens. `evidence/cairn-source-remediation-2026-10-15/` (42.5 MB, 1,193
-files) holds 25,932 absolute `/home/<user>` paths, 1,068 occurrences of the
-host name `aspen1.local`, and one captured `sudo -l` policy listing; those are
+files) held 25,932 absolute `/home/<user>` paths, 1,068 local host-name
+occurrences, and one captured `sudo -l` policy listing; those are
 host-configuration disclosures, not credentials.
 
 **Recurrence guard.** New and modified evidence must use the placeholders in

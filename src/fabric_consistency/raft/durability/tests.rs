@@ -6,6 +6,12 @@ const SECOND_ENTRY_INDEX: u64 = 2;
 const EXPECTED_DURABLE_RECORDS: usize = 3;
 const EXPECTED_RECOVERY_EFFECTS: usize = 3;
 const EXPECTED_SNAPSHOT_ONLY_RECOVERY_EFFECTS: usize = 2;
+/// Ports without retention authority never compact, so their snapshots ignore the retained state.
+const UNCOMPACTED: ReplicaRetainedState<'static> = ReplicaRetainedState {
+    term: TERM,
+    voted_for: None,
+    entries: &[],
+};
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
@@ -49,7 +55,7 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("snapshot identity");
-    let snapshot_evidence = port.persist_snapshot(&snapshot, true).expect("durable snapshot");
+    let snapshot_evidence = port.persist_snapshot(&snapshot, true, &UNCOMPACTED).expect("durable snapshot");
     assert!(snapshot_evidence.starts_with("blake3:"));
     assert!(port.adapter().state().snapshots.contains_key(&snapshot.snapshot_ref));
 }
@@ -83,7 +89,7 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("installed snapshot identity");
-    port.persist_snapshot(&snapshot, true).expect("machine-loss snapshot");
+    port.persist_snapshot(&snapshot, true, &UNCOMPACTED).expect("machine-loss snapshot");
     drop(port);
 
     let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
@@ -138,7 +144,7 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
         completed_requests: std::collections::BTreeMap::from([(entries[0].request_ref.clone(), ENTRY_INDEX)]),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("recovery snapshot identity");
-    port.persist_snapshot(&snapshot, true).expect("recovery snapshot");
+    port.persist_snapshot(&snapshot, true, &UNCOMPACTED).expect("recovery snapshot");
     drop(port);
 
     let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
@@ -252,3 +258,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durab
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/snapshots.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/uncertainty.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/suffix.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/compaction.rs"));

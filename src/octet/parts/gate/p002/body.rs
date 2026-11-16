@@ -180,6 +180,10 @@ fn push_outcome_checks(
     }
 }
 
+/// Fabricated passing receipt for tests only. It is not Octet output and no production path may
+/// reach it: the `test-fixtures` feature is enabled only by the crate's self dev-dependency.
+// r[impl molten.octet_source_gate_receipt_validation.spec.test_fixture_isolation]
+#[cfg(any(test, feature = "test-fixtures"))]
 #[doc(hidden)]
 pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
     let metadata = expected_metadata_for_command(DEFAULT_GATE_COMMAND, &capture_workspace())
@@ -213,67 +217,56 @@ pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
     }))
 }
 
-pub fn build_octet_warning_baseline(input: &OctetWarningBaselineInput) -> Result<OctetWarningBaselineArtifact> {
-    let mut checks = Vec::new();
-    let mut diagnostics = Vec::new();
-    let run = load_current_octet_run(&input.artifacts_dir, &capture_workspace(), &mut checks, &mut diagnostics)?;
-    if checks.iter().any(|check| check.status != "pass") {
-        return Err(MoltenError::invalid_harness(format!(
-            "cannot create octet warning baseline from invalid artifacts: {}",
-            diagnostics.join("; ")
-        )));
-    }
-    let target_next = input.target_next.unwrap_or(run.status.total_findings);
-    let critical_keys = critical_keys(&run.findings);
-    let source_snapshot_ref = source_snapshot_ref(&run)?;
-    let baseline_value = octet_warning_baseline_value(&OctetWarningBaselineValueInput {
-        run: &run,
-        created_at: &input.created_at,
-        expires_at: &input.expires_at,
-        target_next,
-        source_snapshot_ref: &source_snapshot_ref,
-        checks: &checks,
-    });
-    let baseline_ref = canonical_hash(&baseline_value)?;
-    Ok(OctetWarningBaselineArtifact {
-        baseline_ref,
-        baseline_value,
-        finding_count: run.status.total_findings,
-        critical_count: critical_keys.len() as u64,
-    })
+const UNQUALIFIED_FIXTURE_GATE_LABEL: &str = "octet-gate-fixture-v1";
+const UNQUALIFIED_FIXTURE_GATE_SCHEMA: &str = "molten.octet.gate-fixture.v1";
+
+/// Stand-in for a source gate where no authenticated Octet output exists (local dogfood).
+///
+/// It is deliberately not an `octet-gate-receipt-v1`: every Octet validator and source-gate consumer
+/// rejects it. Only explicit crate-internal fixture compositions bind it, and their receipts record the
+/// strict Octet source-gate check as failed.
+// r[impl molten.octet_source_gate_receipt_validation.spec.unqualified_fixture_denied]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnqualifiedFixtureGate {
+    value: IoValue,
+    gate_ref: String,
+    validation_ref: String,
 }
 
-pub fn import_octet_artifacts_to_ledger(input: &OctetArtifactLedgerInput) -> Result<OctetArtifactLedgerImport> {
-    let mut checks = Vec::new();
-    let mut diagnostics = Vec::new();
-    let files = read_import_files(&input.artifacts_dir, &mut checks, &mut diagnostics);
-    let mut values = raw_values(&files);
-    add_structured_value(&mut values, &files, &mut checks, &mut diagnostics);
-    add_fingerprint_value(&mut values, &files, &mut checks, &mut diagnostics)?;
-    ensure_count_at_most(values.len(), MAX_OCTET_IMPORTED_REFS, "octet imported artifacts")?;
-    let mut imported_refs = Vec::with_capacity(values.len());
-    for value in &values {
-        imported_refs.push(crate::ledger::import_artifact(&input.ledger_root, value)?.artifact_ref);
+impl UnqualifiedFixtureGate {
+    /// Crate-internal so neither the CLI nor another crate can mint fixture gate evidence.
+    pub(crate) fn new(consumer: &str) -> Result<Self> {
+        let value = record(UNQUALIFIED_FIXTURE_GATE_LABEL, vec![
+            string(UNQUALIFIED_FIXTURE_GATE_SCHEMA),
+            record("evidence", vec![string("unqualified-fixture")]),
+            record("octet-run", vec![string("none")]),
+            record("consumer", vec![string(consumer)]),
+        ]);
+        let gate_ref = canonical_hash(&value)?;
+        let validation_ref = canonical_hash(&record("octet-gate-fixture-validation-v1", vec![
+            string(UNQUALIFIED_FIXTURE_GATE_SCHEMA),
+            record("decision", vec![string("unqualified-fixture")]),
+            record("fixture", vec![string(&gate_ref)]),
+        ]))?;
+        Ok(Self {
+            value,
+            gate_ref,
+            validation_ref,
+        })
     }
-    push_check(&mut checks, "octet-ledger-imports", !imported_refs.is_empty());
-    let decision = if checks.iter().all(|check| check.status == "pass") {
-        "pass"
-    } else {
-        "deny"
-    };
-    let receipt_value = octet_artifact_ledger_receipt_value(
-        decision,
-        &input.artifacts_dir.to_string_lossy(),
-        &imported_refs,
-        &diagnostics,
-        &checks,
-    );
-    let receipt_ref = canonical_hash(&receipt_value)?;
-    Ok(OctetArtifactLedgerImport {
-        decision: decision.to_string(),
-        imported_refs,
-        receipt_ref,
-        receipt_value,
-        diagnostics,
-    })
+
+    pub fn value(&self) -> &IoValue {
+        &self.value
+    }
+
+    pub fn gate_ref(&self) -> &str {
+        &self.gate_ref
+    }
+
+    pub fn validation_ref(&self) -> &str {
+        &self.validation_ref
+    }
 }
+
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/p002/operations.rs"));
+

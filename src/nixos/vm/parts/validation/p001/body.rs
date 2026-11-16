@@ -8,8 +8,9 @@ pub fn validate_nixos_vm_fault_evidence(
     let receipts = parse_fault_receipts(input.receipt_values)?;
     let descriptor_refs = canonical_refs(input.descriptor_values)?;
     let receipt_refs = canonical_refs(input.receipt_values)?;
-    let diagnostics =
-        fault_diagnostics(&topology, &topology_ref, &descriptors, &descriptor_refs, &receipts)?;
+    let diagnostics = fault_diagnostics(
+        &topology, &topology_ref, &FaultDescriptors { values: &descriptors, refs: &descriptor_refs }, &receipts, input,
+    )?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
     let value = vm_fault_value(&decision, &topology_ref, &descriptor_refs, &receipt_refs, &diagnostics)?;
     let validation_ref = crate::preserves_rail::canonical_hash(&value)?;

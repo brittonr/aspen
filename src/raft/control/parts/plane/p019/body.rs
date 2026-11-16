@@ -9,10 +9,10 @@ fn consensus_engine_switchover_receipt_for_environment(
         algorithm_profile: input.target_profile.clone(),
         profile_version: input.target_version.clone(),
         requested_environment: requested_environment.to_string(),
-        requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        requested_read_consistency: READ_CONSISTENCY_LOCAL_COMMITTED.to_string(),
         required_capabilities: vec![
             ENGINE_CAPABILITY_PROPOSAL.to_string(),
-            ENGINE_CAPABILITY_LINEARIZABLE_READ.to_string(),
+            ENGINE_CAPABILITY_LOCAL_COMMITTED_READ.to_string(),
             ENGINE_CAPABILITY_SWITCHOVER.to_string(),
         ],
     })?;

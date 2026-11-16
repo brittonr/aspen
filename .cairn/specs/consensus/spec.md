@@ -57,13 +57,25 @@ r[molten.consensus.transport_neutral_messages] Consensus command and control-pla
 - WHEN the receiving consensus boundary validates the envelope content
 - THEN both deliveries produce the same admission result for the same local state.
 
-### Requirement: Trellis Raft core admission
-r[molten.consensus.trellis_raft_core] Molten MUST use Trellis-style bounded predicate receipts as the normative admission surface for append consistency, quorum/commit advancement, read-index freshness, snapshot restore, client-session idempotency, and state-machine safety in the implemented control-registry scope.
+### Requirement: In-process control registry admission receipts
+r[molten.consensus.trellis_raft_core] The in-process control registry MUST bind append consistency, local commit, commit advancement, committed reads and snapshot restore to bounded predicate receipts named for the property the registry computes, each carrying the `in-process-registry` evaluator check. A registry receipt MUST NOT claim Trellis evaluation, quorum commitment, quorum membership or read-index freshness that the registry did not compute, and receipt families whose meaning changes MUST change version.
 
-#### Scenario: Append admission uses Trellis-backed predicate
+#### Scenario: Append admission names its evaluator
 - GIVEN an append request for the control registry
-- WHEN Molten evaluates whether the request can update local log state
-- THEN the decision is bound to a Trellis-style predicate receipt for term, index, log, command, and quorum conditions.
+- WHEN Molten admits the request
+- THEN the decision binds a `registry-append-consistency` predicate receipt over the command envelope with the `in-process-registry` and prior-log-binding checks
+- AND the receipt names no Trellis predicate.
+
+#### Scenario: Local commit names no quorum
+- GIVEN an admitted control-registry command
+- WHEN the in-process registry commits it
+- THEN the commit predicate is `registry-local-commit` bound to the log entry
+- AND neither the predicate nor the commit receipt lists quorum members or a quorum-commit check.
+
+#### Scenario: Version-one registry receipt is rejected
+- GIVEN a version-one registry predicate, read or commit receipt
+- WHEN Molten parses it
+- THEN the parser rejects it.
 
 ### Requirement: Log-entry admission
 r[molten.consensus.log_admission] Molten MUST admit log updates only when term/index ordering, append consistency, commit advancement, and command hash integrity checks pass.
@@ -87,10 +99,10 @@ r[molten.consensus.client_sessions] Molten MUST track client sessions and sequen
 - THEN the state machine returns the prior recorded result or rejects the duplicate without applying the command a second time.
 
 ### Requirement: Linearizable read admission
-r[molten.consensus.linearizable_reads] Molten MUST support linearizable control-plane reads through read-index admission by default and MUST deny lease-read semantics unless explicit future manifest timing assumptions and policy admission are implemented. A leader MUST NOT take a read index until its commit index covers every entry an earlier leader may have committed: the entry at its commit index belongs to its current term, or its commit index reaches the last entry in its log. Until then a linearizable read MUST be reported retryable rather than served.
+r[molten.consensus.linearizable_reads] The replicated consensus service MUST support linearizable control-plane reads through read-index admission by default and MUST deny lease-read semantics unless explicit future manifest timing assumptions and policy admission are implemented. A leader MUST NOT take a read index until its commit index covers every entry an earlier leader may have committed: the entry at its commit index belongs to its current term, or its commit index reaches the last entry in its log. Until then a linearizable read MUST be reported retryable rather than served. The in-process control registry has no replicated read index and MUST deny a linearizable read with an explicit diagnostic rather than serve it.
 
 #### Scenario: Read-index admits current read
-- GIVEN a leader or local model state that has satisfied the configured read-index condition
+- GIVEN a leader that has satisfied the configured read-index condition
 - WHEN a client requests a linearizable read
 - THEN the read can be served from state that is at least as recent as the admitted read index.
 
@@ -109,6 +121,12 @@ r[molten.consensus.linearizable_reads] Molten MUST support linearizable control-
 - GIVEN a new leader whose commit index reaches the last entry in its log, with no current-term entry committed
 - WHEN a client requests a linearizable read
 - THEN the leader takes its commit index as the read index, which covers every write an earlier leader acknowledged.
+
+#### Scenario: In-process registry denies a linearizable read
+- GIVEN an in-process control registry holding the requested entry
+- WHEN a client requests a linearizable read from it
+- THEN the read receipt is denied with the diagnostic that the in-process registry has no replicated read index
+- AND the receipt binds no committed-read predicate.
 
 ### Requirement: Membership change admission
 r[molten.consensus.membership_changes] Molten MUST validate static group membership in the current manifest and MUST treat dynamic voter, learner, joint-consensus, and leadership-transfer changes as denied or future explicit extensions unless represented by an admitted replicated command and policy evidence.
@@ -357,18 +375,24 @@ r[molten.consensus.leaderless_profile_boundary] Molten MAY define a Meerkat/QueP
 - AND the emitted commit receipt names the proposing replica, quorum evidence, and experimental caveat.
 
 ### Requirement: Consensus reads declare consistency mode
-r[molten.consensus.read_consistency_modes] Molten MUST classify every control-plane read request and read receipt as `linearizable` or `local-stale`. Linearizable reads MUST bind read-index evidence or admitted algorithm-specific quorum evidence. Local-stale reads MAY expose local diagnostics but MUST NOT satisfy mutation guards, release gates, policy currentness checks, membership admission, or production pass evidence.
+r[molten.consensus.read_consistency_modes] Molten MUST classify every control-plane read request and read receipt as `linearizable`, `local-committed` or `local-stale`. Linearizable reads MUST bind read-index evidence or admitted algorithm-specific quorum evidence. A `local-committed` read MUST be served only by the in-process control registry, MUST bind that instance's committed state, term, index and group manifest, and is authoritative only inside that instance: it carries no replication or quorum read-index evidence. Local-stale reads MAY expose local diagnostics but MUST NOT satisfy mutation guards, release gates, policy currentness checks, membership admission, or production pass evidence.
 
 #### Scenario: Linearizable read has quorum-backed freshness
-- GIVEN a client requests a linearizable control-plane read
+- GIVEN a client requests a linearizable control-plane read from the replicated consensus service
 - WHEN Molten serves the read
 - THEN the receipt binds read-index or algorithm-specific quorum freshness evidence
 - AND the returned state ref is at least as fresh as the admitted read evidence.
 
+#### Scenario: Local-committed read binds the registry's committed state
+- GIVEN an in-process control registry that has committed an entry
+- WHEN a client requests a `local-committed` read of that entry
+- THEN the receipt passes and binds the registry's current committed state, term, index and a `registry-committed-read` predicate
+- AND after a further commit, a new read binds the new state and index.
+
 #### Scenario: Local-stale read is visibly non-authoritative
 - GIVEN a client requests a local-stale control-plane read from a replica that may lag
 - WHEN Molten serves the read
-- THEN the receipt marks the response as local-stale
+- THEN the receipt marks the response as local-stale and binds no committed-read predicate
 - AND downstream gates reject that receipt wherever linearizable currentness is required.
 
 ### Requirement: Consensus placement evidence is explicit
@@ -416,19 +440,25 @@ r[molten.consensus.non_claim_boundaries] Molten MUST record explicit non-claim b
 - AND requires linearizable read evidence or a visibly local-stale receipt.
 
 ### Requirement: Consensus engines are registered by explicit profile identity
-r[molten.consensus.engine_registry] Molten MUST maintain an explicit consensus engine registry keyed by algorithm profile id and admitted profile version. Each registry entry MUST declare implementation id, supported read consistency modes, quorum/currentness evidence classes, membership/config capabilities, production-admission status, required evidence refs, conformance receipt refs, and operator caveats.
+r[molten.consensus.engine_registry] Molten MUST maintain an explicit consensus engine registry keyed by algorithm profile id and admitted profile version. Each registry entry MUST declare implementation id, supported read consistency modes, currentness evidence classes, membership/config capabilities, production-admission status, required evidence refs, conformance receipt refs, and operator caveats. Supported modes and currentness classes MUST describe the selected implementation, not unimplemented algorithm guarantees. The in-process registry MUST declare `local-committed` and `local-stale` modes with local committed-state currentness and MUST NOT advertise linearizable reads or quorum read-index evidence.
 
 #### Scenario: Registered Raft profile resolves
 - GIVEN a control-plane group manifest names the admitted Raft algorithm profile and profile version
 - WHEN runtime construction resolves the manifest through the consensus engine registry
-- THEN the registry returns the Raft engine descriptor
-- AND the descriptor binds supported read modes, quorum evidence class, membership capability, conformance refs, and production-admission status.
+- THEN the registry returns the selected engine descriptor
+- AND the descriptor binds implemented read modes, currentness classes, membership capability, conformance refs, and production-admission status.
 
 #### Scenario: Unknown engine profile denies
 - GIVEN a control-plane group manifest names an unknown, disabled, or misspelled algorithm profile
 - WHEN runtime construction resolves the manifest through the consensus engine registry
 - THEN Molten denies runtime construction before opening control-plane state
 - AND diagnostics name the unsupported profile without falling back to another engine.
+
+#### Scenario: Local registry cannot be admitted for linearizable reads
+- GIVEN the in-process registry engine and a model-environment admission request
+- WHEN the request requires linearizable mode or capability
+- THEN admission denies the unsupported mode or capability
+- AND local-committed admission remains available without claiming quorum evidence.
 
 ### Requirement: Consensus engines implement a common control-plane interface
 r[molten.consensus.engine_interface] Molten MUST define a common control-plane consensus engine boundary for proposals, linearizable reads, local-stale reads, snapshots, recovery, membership/config transitions, placement validation, and readback summaries. Engine implementations MUST return canonical commit, denial, read, snapshot, recovery, and diagnostic receipts that preserve common evidence fields while allowing engine-specific evidence refs.
@@ -976,3 +1006,66 @@ r[molten.consensus.storage_fault_validation] Molten MUST include positive and ne
 - GIVEN one faulty quorum-intersection node, one unavailable correct node, and one lagging node
 - WHEN the persistent-Raft campaign attempts recovery and election
 - THEN the oracle rejects unsafe voting, committed-entry loss, or unsupported truncation
+
+### Requirement: Long-running Raft services use rate, concurrency and retention bounds
+r[molten.consensus.long_running_service_bounds] Reliability and collaboration Raft services MUST be long-running services. Their peer ingress MUST admit at most a configured number of deliveries per non-zero window and pause polling while that budget is spent; a frame whose payload fails to decode MUST be dropped, counted and logged without ending ingress, while a transport or listener failure MUST end ingress with its error. A public host's connection bound MUST limit simultaneously served connections, not connections over its lifetime. A service MUST stop only on operator stop or teardown, cancellation, a failed replica effect, or an ingress transport failure.
+
+#### Scenario: Ingress budget refills after its window
+- GIVEN an ingress pump admits two deliveries per window and three frames are waiting
+- WHEN two are delivered
+- THEN the pump polls nothing until the window ends
+- AND then delivers the third frame.
+
+#### Scenario: Undecodable frame does not stop ingress
+- GIVEN a peer sends a frame whose payload does not decode and then a valid frame
+- WHEN ingress polls them
+- THEN the first is dropped and counted and the second is delivered.
+
+#### Scenario: Connections beyond the bound wait
+- GIVEN a host serves at most one connection at a time and one connection is open
+- WHEN a second client connects and sends a request
+- THEN the second request is served after the first completes and the host keeps serving.
+
+### Requirement: Hosts snapshot at a validated threshold
+r[molten.consensus.snapshot_threshold] A replica profile MUST declare a snapshot threshold greater than zero and less than its log-entry bound. When a running voter retains at least that many applied entries above its snapshot, its hosting service MUST issue a snapshot with the application's state ref, persisting the snapshot before the log is compacted. A denied or failed snapshot MUST be reported through the host's failure path and MUST NOT be ignored.
+
+#### Scenario: Writes continue past the log bound
+- GIVEN a group whose log holds four entries and whose threshold is two
+- WHEN ten writes are proposed and hosts snapshot at the threshold
+- THEN every write commits.
+
+#### Scenario: Without snapshots the log bound denies
+- GIVEN the same group without snapshots
+- WHEN the log is full
+- THEN the next proposal is denied.
+
+### Requirement: Duplicate requests are recognized within a deterministic window
+r[molten.consensus.bounded_request_dedup] A replica profile MUST declare a duplicate-request window W. After applying index i, a replica MUST retain exactly the request refs committed at indices in (i - W, i], independent of when it snapshotted. A retry MUST be recognized as a duplicate, returning the prior committed index without a new append, only while its original commit is within the last W applied entries; an older retry MUST be treated as a new request. Snapshots MUST carry the window at their boundary, installation MUST restore it, and validation MUST reject a snapshot whose retained refs fall outside (boundary - W, boundary] or share an index.
+
+#### Scenario: Retry within the window
+- GIVEN a request committed at index i and the replica has applied fewer than W further entries
+- WHEN the request is proposed again
+- THEN the leader reports it committed at i and appends nothing.
+
+#### Scenario: Snapshot timing does not change the window
+- GIVEN one replica snapshots at every threshold and another never does
+- WHEN both have applied the same index
+- THEN their retained request refs are identical.
+
+#### Scenario: Malformed window is rejected
+- GIVEN an installed snapshot retains a request ref above its boundary or at or below boundary - W
+- WHEN a replica installs it
+- THEN the installation is rejected.
+
+### Requirement: Raft durable logs compact behind durable snapshots
+r[molten.consensus.durable_log_compaction] When its durable namespace declares retention authority and the port is given that authority, a Raft durability port MUST, after persisting and synchronizing a snapshot, write a compaction base holding the hard state and the entries above the snapshot boundary, then retire superseded snapshots, then truncate only records the snapshot covers. Recovery after a crash between any two steps MUST rebuild the newest valid snapshot plus the hard state and entries above it. Recovery MUST accept retained records starting after sequence zero only when a snapshot covers every earlier record, and MUST reject a compacted record stream that does not begin with that snapshot's compaction base. Without retention authority, the port MUST NOT remove records or snapshots, and the namespace limits bound the service.
+
+#### Scenario: Compaction stays within namespace limits
+- GIVEN a namespace that holds at most N snapshots and the threshold is t
+- WHEN more than N × t writes commit with snapshots
+- THEN one snapshot remains and the record count stays below the namespace limit.
+
+#### Scenario: Crash between compaction steps
+- GIVEN a crash after the snapshot, the compaction base or snapshot retirement
+- WHEN the replica recovers
+- THEN its snapshot, log, commit index, retained request refs and term equal the compacted state.

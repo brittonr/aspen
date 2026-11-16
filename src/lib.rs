@@ -39,6 +39,7 @@ pub mod collaboration_scope;
 #[cfg(feature = "component-rpc")]
 #[path = "componentrpc/mod.rs"]
 pub mod component_rpc;
+pub mod compute_capacity;
 #[doc(hidden)]
 #[path = "project/config/portability.rs"]
 pub mod config_portability_core;

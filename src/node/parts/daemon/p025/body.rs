@@ -100,7 +100,7 @@ fn stable_live_endpoint_id(identity: &crate::node_identity::Identity) -> String 
 fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
     addr.addrs
         .iter()
-        .filter(|address| crate::fabric_transport::is_exportable_transport_hint(address))
+        .filter(|address| crate::fabric_transport::is_exportable_hint(address))
         .map(ToString::to_string)
         .collect()
 }

@@ -1,0 +1,296 @@
+{
+  "repeat-6-sorted-alloc.usage.json": {
+    "max_rss_kib": 79896,
+    "user_seconds": 1.364176,
+    "system_seconds": 0.035877,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-6-sorted-plain.usage.json": {
+    "max_rss_kib": 79536,
+    "user_seconds": 1.262652,
+    "system_seconds": 0.029873999999999998,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-6-candidate-alloc.usage.json": {
+    "max_rss_kib": 80232,
+    "user_seconds": 1.357227,
+    "system_seconds": 0.025061,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-6-candidate-plain.usage.json": {
+    "max_rss_kib": 80504,
+    "user_seconds": 1.177202,
+    "system_seconds": 0.028912,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-6-current-alloc.usage.json": {
+    "max_rss_kib": 79296,
+    "user_seconds": 1.273236,
+    "system_seconds": 0.035047,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-6-current-plain.usage.json": {
+    "max_rss_kib": 79724,
+    "user_seconds": 1.1776,
+    "system_seconds": 0.037836999999999996,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-5-sorted-alloc.usage.json": {
+    "max_rss_kib": 79616,
+    "user_seconds": 1.295943,
+    "system_seconds": 0.027951,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-5-sorted-plain.usage.json": {
+    "max_rss_kib": 79640,
+    "user_seconds": 1.189852,
+    "system_seconds": 0.024929999999999997,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-5-current-alloc.usage.json": {
+    "max_rss_kib": 80100,
+    "user_seconds": 1.320614,
+    "system_seconds": 0.034846999999999996,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-5-current-plain.usage.json": {
+    "max_rss_kib": 79208,
+    "user_seconds": 1.279224,
+    "system_seconds": 0.028916999999999998,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-5-candidate-alloc.usage.json": {
+    "max_rss_kib": 79896,
+    "user_seconds": 1.376249,
+    "system_seconds": 0.026934,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-5-candidate-plain.usage.json": {
+    "max_rss_kib": 80268,
+    "user_seconds": 1.246846,
+    "system_seconds": 0.024940999999999998,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-4-current-alloc.usage.json": {
+    "max_rss_kib": 79280,
+    "user_seconds": 1.36694,
+    "system_seconds": 0.020909,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-4-current-plain.usage.json": {
+    "max_rss_kib": 79880,
+    "user_seconds": 1.179126,
+    "system_seconds": 0.027929,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-4-sorted-alloc.usage.json": {
+    "max_rss_kib": 79700,
+    "user_seconds": 1.377828,
+    "system_seconds": 0.02597,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-4-sorted-plain.usage.json": {
+    "max_rss_kib": 79644,
+    "user_seconds": 1.224164,
+    "system_seconds": 0.022954,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-4-candidate-alloc.usage.json": {
+    "max_rss_kib": 79856,
+    "user_seconds": 1.330357,
+    "system_seconds": 0.029944,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-4-candidate-plain.usage.json": {
+    "max_rss_kib": 79508,
+    "user_seconds": 1.189753,
+    "system_seconds": 0.034977999999999995,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-3-current-alloc.usage.json": {
+    "max_rss_kib": 79692,
+    "user_seconds": 1.236916,
+    "system_seconds": 0.024943999999999997,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-3-current-plain.usage.json": {
+    "max_rss_kib": 79492,
+    "user_seconds": 1.164359,
+    "system_seconds": 0.030008999999999997,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-3-candidate-alloc.usage.json": {
+    "max_rss_kib": 80292,
+    "user_seconds": 1.257323,
+    "system_seconds": 0.027864999999999997,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-3-candidate-plain.usage.json": {
+    "max_rss_kib": 80336,
+    "user_seconds": 1.148913,
+    "system_seconds": 0.027899,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-3-sorted-alloc.usage.json": {
+    "max_rss_kib": 80124,
+    "user_seconds": 1.295771,
+    "system_seconds": 0.023925,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-3-sorted-plain.usage.json": {
+    "max_rss_kib": 79832,
+    "user_seconds": 1.172343,
+    "system_seconds": 0.025737,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-2-candidate-alloc.usage.json": {
+    "max_rss_kib": 79928,
+    "user_seconds": 1.271979,
+    "system_seconds": 0.025977999999999998,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-2-candidate-plain.usage.json": {
+    "max_rss_kib": 80116,
+    "user_seconds": 1.180636,
+    "system_seconds": 0.022955999999999997,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-2-current-alloc.usage.json": {
+    "max_rss_kib": 80076,
+    "user_seconds": 1.302212,
+    "system_seconds": 0.025997,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-2-current-plain.usage.json": {
+    "max_rss_kib": 79648,
+    "user_seconds": 1.202953,
+    "system_seconds": 0.026781,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-2-sorted-alloc.usage.json": {
+    "max_rss_kib": 80152,
+    "user_seconds": 1.294316,
+    "system_seconds": 0.029907,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-2-sorted-plain.usage.json": {
+    "max_rss_kib": 79660,
+    "user_seconds": 1.118166,
+    "system_seconds": 0.029005,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-1-candidate-alloc.usage.json": {
+    "max_rss_kib": 79660,
+    "user_seconds": 1.289988,
+    "system_seconds": 0.024929999999999997,
+    "minor_faults": 22831,
+    "major_faults": 0
+  },
+  "repeat-1-candidate-plain.usage.json": {
+    "max_rss_kib": 80368,
+    "user_seconds": 1.111342,
+    "system_seconds": 0.028022,
+    "minor_faults": 22829,
+    "major_faults": 0
+  },
+  "repeat-1-sorted-alloc.usage.json": {
+    "max_rss_kib": 80240,
+    "user_seconds": 1.264,
+    "system_seconds": 0.027919,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-1-sorted-plain.usage.json": {
+    "max_rss_kib": 80060,
+    "user_seconds": 1.194751,
+    "system_seconds": 0.029885,
+    "minor_faults": 22699,
+    "major_faults": 0
+  },
+  "repeat-1-current-alloc.usage.json": {
+    "max_rss_kib": 79556,
+    "user_seconds": 1.277496,
+    "system_seconds": 0.027004999999999998,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-1-current-plain.usage.json": {
+    "max_rss_kib": 79188,
+    "user_seconds": 1.209725,
+    "system_seconds": 0.026881,
+    "minor_faults": 22702,
+    "major_faults": 0
+  },
+  "repeat-0-sorted-alloc.usage.json": {
+    "max_rss_kib": 79580,
+    "user_seconds": 1.328784,
+    "system_seconds": 0.036959,
+    "minor_faults": 22699,
+    "major_faults": 1
+  },
+  "repeat-0-sorted-plain.usage.json": {
+    "max_rss_kib": 79912,
+    "user_seconds": 1.189096,
+    "system_seconds": 0.028909999999999998,
+    "minor_faults": 22699,
+    "major_faults": 1
+  },
+  "repeat-0-candidate-alloc.usage.json": {
+    "max_rss_kib": 80404,
+    "user_seconds": 1.300022,
+    "system_seconds": 0.028915999999999997,
+    "minor_faults": 22831,
+    "major_faults": 1
+  },
+  "repeat-0-candidate-plain.usage.json": {
+    "max_rss_kib": 80508,
+    "user_seconds": 1.141457,
+    "system_seconds": 0.030872999999999998,
+    "minor_faults": 22829,
+    "major_faults": 1
+  },
+  "repeat-0-current-alloc.usage.json": {
+    "max_rss_kib": 79956,
+    "user_seconds": 1.341071,
+    "system_seconds": 0.030888,
+    "minor_faults": 22702,
+    "major_faults": 10
+  },
+  "repeat-0-current-plain.usage.json": {
+    "max_rss_kib": 79312,
+    "user_seconds": 1.185817,
+    "system_seconds": 0.034841,
+    "minor_faults": 22702,
+    "major_faults": 8
+  }
+}

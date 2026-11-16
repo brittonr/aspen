@@ -18,8 +18,10 @@ authority.
 | [Component RPC pilot](component-rpc-pilot.md) | `src/componentrpc/`, `config/component-rpc/`, `tests/componentrpc.rs` | `cargo test --features component-rpc --test componentrpc` |
 | [SpaceWasm core pilot](spacewasm-core-pilot.md) | `src/spacewasm/`, `config/spacewasm/` | `cargo test --features spacewasm-pilot -p molten --lib` |
 | [Reproducible dependencies](reproducible-dependencies.md) | `Cargo.toml`, `Cargo.lock`, `flake.nix`, `flake.lock`, `config/release-dependencies/profile.ncl`, `crate-hashes.json`, both unit2nix plans | `nix build .#checks.x86_64-linux.release-dependency-profile` and `scripts/git-source-hashes.sh --check` |
-| [README first workflow](README.md) | `src/cli/ops/`, `src/system_extension/` | Execute the documented command in a fresh output directory |
+| [README first workflow](../README.md#getting-started) | `src/cli/runtime/system_extension/`, `src/system_extension/` | The `readme-quickstart` flake check runs the documented fixture and status commands with the packaged `molten` binary; to review the `cargo run` path, execute it verbatim in a fresh output directory |
 
 Related pages outside this table may still make source claims. Use the source
 links in the page itself and the governing [documentation map](README.md) when a
-change crosses a boundary this table does not name.
+change crosses a boundary this table does not name. The `doc-links` flake check
+(`scripts/check-doc-links.py`) rejects missing local targets and anchors in the
+root entry pages and `docs/`; it does not review the claims behind a link.

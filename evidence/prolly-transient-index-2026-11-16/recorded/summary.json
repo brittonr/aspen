@@ -1,0 +1,296 @@
+{
+  "schema": "issue3-observations-v1",
+  "runtime_adoption": false,
+  "policy": "KEEP unless every gate below passes; success only permits a separately reviewed live integration experiment",
+  "samples": 7,
+  "semantic_evidence_required": "results/semantics.log and semantics-alloc.log with every named case and zero assertions/failures",
+  "note": "Timing gates use the default System allocator without counting wrappers; allocation/live-byte gates use the separate allocation-counters binary. Both modes retain wait4 process RSS high-water marks in *.usage.json. Requested-live bytes exclude allocator overhead and realloc internal overlap. Standalone phases are not additive.",
+  "comparisons": {
+    "candidate": {
+      "fixtures": [
+        {
+          "fixture": "maximum-mixed",
+          "paired_time_ratios": [
+            1.03171027050162,
+            0.9913679036302668,
+            0.9786436770477491,
+            0.8938565535240787,
+            1.0063157593563705,
+            1.016888571625819,
+            1.0258683351119842
+          ],
+          "median_time_ratio": 1.0063157593563705,
+          "baseline_relative_mad": 0.03373880743994508,
+          "variant_relative_mad": 0.0225289796289928,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-prefix",
+          "paired_time_ratios": [
+            1.0247113935238448,
+            0.9730462069356195,
+            0.99546147358006,
+            0.9267487610092019,
+            0.9702031370930889,
+            0.9785296100776211,
+            1.013389767037389
+          ],
+          "median_time_ratio": 0.9785296100776211,
+          "baseline_relative_mad": 0.01128629847778603,
+          "variant_relative_mad": 0.0035730991826907884,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-random",
+          "paired_time_ratios": [
+            0.9669960241581316,
+            0.7769294351293679,
+            0.9741051137310756,
+            0.8916181519907981,
+            1.0708515165885402,
+            0.8973017735860287,
+            1.036331606406432
+          ],
+          "median_time_ratio": 0.9669960241581316,
+          "baseline_relative_mad": 0.02350733258208566,
+          "variant_relative_mad": 0.030003982820089654,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-sequential",
+          "paired_time_ratios": [
+            0.7705079844832563,
+            0.759542763619484,
+            0.96353241036804,
+            1.2399700148062371,
+            0.9590809975192808,
+            0.9503728785594986,
+            0.7771965994855324
+          ],
+          "median_time_ratio": 0.9503728785594986,
+          "baseline_relative_mad": 0.023801103490261367,
+          "variant_relative_mad": 0.0482454491051115,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "representative-mixed",
+          "paired_time_ratios": [
+            0.8053854493545615,
+            0.9608454933894751,
+            0.8641349734292936,
+            0.9855508340204224,
+            1.2372706686712038,
+            0.9839268675551726,
+            0.9907099483997404
+          ],
+          "median_time_ratio": 0.9839268675551726,
+          "baseline_relative_mad": 0.017442211209947982,
+          "variant_relative_mad": 0.010118247100916035,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-prefix",
+          "paired_time_ratios": [
+            1.0495785706569334,
+            0.9731338008724943,
+            1.0029426846802763,
+            1.2597915363244465,
+            1.0443807072014193,
+            1.0152247784256034,
+            1.0111463781224377
+          ],
+          "median_time_ratio": 1.0152247784256034,
+          "baseline_relative_mad": 0.013631789382479827,
+          "variant_relative_mad": 0.009899040133087463,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-random",
+          "paired_time_ratios": [
+            1.0084970832773528,
+            0.9484427155338548,
+            0.9813074072084654,
+            0.9616342357915392,
+            0.9446669391091131,
+            1.000755475627665,
+            0.9872538237772308
+          ],
+          "median_time_ratio": 0.9813074072084654,
+          "baseline_relative_mad": 0.014260241226533361,
+          "variant_relative_mad": 0.020456207644475696,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-sequential",
+          "paired_time_ratios": [
+            0.9829608473595823,
+            0.9614194244615836,
+            1.0515786912839935,
+            0.9360413300034278,
+            0.9461536489379431,
+            0.954940098293551,
+            0.9952062335347392
+          ],
+          "median_time_ratio": 0.9614194244615836,
+          "baseline_relative_mad": 0.006983007688164145,
+          "variant_relative_mad": 0.017470323921936825,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        }
+      ],
+      "process_peak_rss_gate": true,
+      "measured_gates_pass": false,
+      "decision": "KEEP pending parent review of semantic, platform, source and complete measurements"
+    },
+    "sorted": {
+      "fixtures": [
+        {
+          "fixture": "maximum-mixed",
+          "paired_time_ratios": [
+            1.0263778484872477,
+            1.0146096942742924,
+            0.9925949934042089,
+            0.9430652465520173,
+            1.0384700795448507,
+            0.9598963926256806,
+            1.0217164608760823
+          ],
+          "median_time_ratio": 1.0146096942742924,
+          "baseline_relative_mad": 0.03373880743994508,
+          "variant_relative_mad": 0.014613294914029093,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-prefix",
+          "paired_time_ratios": [
+            1.0139889831964184,
+            0.948832749928664,
+            1.0000815718196114,
+            0.9941425694254913,
+            1.0065120284247029,
+            0.9988943686850844,
+            1.0469431666511748
+          ],
+          "median_time_ratio": 1.0000815718196114,
+          "baseline_relative_mad": 0.01128629847778603,
+          "variant_relative_mad": 0.02151564012061738,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-random",
+          "paired_time_ratios": [
+            0.9775295271948448,
+            0.9532772511458603,
+            0.7966470865721508,
+            0.9181003056811626,
+            1.0557184542898894,
+            0.9177540356511451,
+            1.0909957468564162
+          ],
+          "median_time_ratio": 0.9532772511458603,
+          "baseline_relative_mad": 0.02350733258208566,
+          "variant_relative_mad": 0.01689418153453954,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-sequential",
+          "paired_time_ratios": [
+            0.9354319863849111,
+            0.9404229647861272,
+            0.793493988175344,
+            1.1910231876068185,
+            0.9964750452899852,
+            0.9248228719945433,
+            1.042159211119652
+          ],
+          "median_time_ratio": 0.9404229647861272,
+          "baseline_relative_mad": 0.023801103490261367,
+          "variant_relative_mad": 0.019101059048650778,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "representative-mixed",
+          "paired_time_ratios": [
+            0.8244272391090874,
+            0.9591707539011184,
+            0.9344869826797537,
+            1.124277288006596,
+            1.0002495274573775,
+            0.9535338114438733,
+            1.043298857977741
+          ],
+          "median_time_ratio": 0.9591707539011184,
+          "baseline_relative_mad": 0.017442211209947982,
+          "variant_relative_mad": 0.031975112014526255,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-prefix",
+          "paired_time_ratios": [
+            1.0241330645624698,
+            0.9563819095477387,
+            0.9838018279501419,
+            1.1142249637138697,
+            1.0123129226815673,
+            1.0292063033628767,
+            1.1687309549794906
+          ],
+          "median_time_ratio": 1.0241330645624698,
+          "baseline_relative_mad": 0.013631789382479827,
+          "variant_relative_mad": 0.023721487140527846,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-random",
+          "paired_time_ratios": [
+            1.0022683884755867,
+            1.1249726550699362,
+            1.0048911652537686,
+            1.2996130097253693,
+            0.9836231818250617,
+            0.9940677100921178,
+            1.01045743131118
+          ],
+          "median_time_ratio": 1.0048911652537686,
+          "baseline_relative_mad": 0.014260241226533361,
+          "variant_relative_mad": 0.02610060473633188,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-sequential",
+          "paired_time_ratios": [
+            1.0100563796703577,
+            0.9631694480780962,
+            1.0387670296144338,
+            0.9709400453781238,
+            0.9575193246933046,
+            1.0124724608585693,
+            1.0357156900009175
+          ],
+          "median_time_ratio": 1.0100563796703577,
+          "baseline_relative_mad": 0.006983007688164145,
+          "variant_relative_mad": 0.024996695932815668,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        }
+      ],
+      "process_peak_rss_gate": true,
+      "measured_gates_pass": false,
+      "decision": "KEEP pending parent review of semantic, platform, source and complete measurements"
+    }
+  }
+}

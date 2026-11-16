@@ -166,6 +166,15 @@ fn base_outputs(dir: &std::path::Path) -> CliResult<BaseOutputs> {
     let report_value = read_preserves(&report)?;
     let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
     assert_eq!(parsed_report.decision, "pass");
+    // r[verify molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+    let is_labelled = |checks: &[(String, String)]| {
+        checks.iter().any(|(name, status)| {
+            name == molten::operator_dogfood::UNQUALIFIED_FIXTURE_SOURCE_GATE_CHECK && status == "pass"
+        })
+    };
+    assert!(is_labelled(&parsed_report.checks));
+    let parsed_gate = molten::operator_dogfood::parse_release_gate_receipt(&read_preserves(&gate)?)?;
+    assert!(is_labelled(&parsed_gate.checks));
     let gate_ref = molten::preserves_rail::canonical_hash(&read_preserves(&gate)?)?;
     assert!(std::fs::read_to_string(&replay_verify)?.contains("deterministic-replay-verify-v1"));
     assert!(std::fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
@@ -225,7 +234,10 @@ fn receipt_ops(base: &BaseOutputs) -> CliResult<()> {
 fn nix_bundle(dir: &std::path::Path, base: &BaseOutputs) -> CliResult<()> {
     std::fs::write(
         dir.join("dogfood-summary.txt"),
-        format!("dogfood local-node decision=pass report={} release-gate={}\n", base.report_ref, base.gate_ref),
+        format!(
+            "dogfood local-node decision=pass report={} release-gate={} source-gate=unqualified-fixture\n",
+            base.report_ref, base.gate_ref
+        ),
     )?;
     std::fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")?;
     let export_nix = molten_cmd()

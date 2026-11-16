@@ -1,0 +1,180 @@
+{
+  "schema": "aspen.local-check-execution.v1",
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "octet",
+        "check",
+        "--artifact-dir",
+        "target/octet"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 111928182544
+    },
+    {
+      "argv": [
+        "cargo",
+        "octet",
+        "check",
+        "-p",
+        "molten",
+        "--artifact-dir",
+        "target/octet-lib",
+        "--",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 36180082453
+    },
+    {
+      "argv": [
+        "python3",
+        "target/emit-object-corpus.py"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 852048113
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "artifacts",
+        "import",
+        "--artifacts",
+        "target/octet",
+        "--ledger",
+        "target/octet-ledger",
+        "--receipt-out",
+        "target/octet/artifact-ledger-receipt.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 83622634462
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "gate",
+        "--artifacts",
+        "target/octet",
+        "--profile",
+        "strict-ci",
+        "--receipt-out",
+        "target/octet/gate-receipt.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 623102085
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "remediation",
+        "plan",
+        "--artifacts",
+        "target/octet",
+        "--lib-artifacts",
+        "target/octet-lib",
+        "--focused-object-corpus",
+        "target/octet/object-corpus-receipt.json",
+        "--receipt-out",
+        "target/octet/remediation-plan.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 487714627
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--no-fail-fast"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 1012177462223
+    },
+    {
+      "argv": [
+        "cargo",
+        "-q",
+        "-Zscript",
+        "tools/capability-report.rs",
+        "--self-test"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 142312471767
+    },
+    {
+      "argv": [
+        "cargo",
+        "check",
+        "--locked",
+        "-p",
+        "molten",
+        "--lib",
+        "--bins"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 62657547138
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "elapsed_ns": 24835441920
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 1966498389
+    },
+    {
+      "argv": [
+        "nix",
+        "run",
+        "path:<cairn-provider>#cairn",
+        "--option",
+        "builders",
+        "",
+        "--",
+        "validate",
+        "--root",
+        ".",
+        "--policy",
+        "<cairn-provider>/cairn-policy/generated/cairn-policy.json",
+        "--strict"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 18474337863
+    }
+  ],
+  "non_claim": "Check observations only; not runtime qualification or release authority",
+  "publication_view": "Command-path-redacted earlier script-produced record; this preserves the Clippy failure rather than replacing it with the later passing result.",
+  "original_record_blake3": "d9028dd7402827cf49e9a31135102092b89391cc5698d95661e689f714ad141f",
+  "capture_phase": "Earlier complete workspace tests and standalone capability controls; subsequent local source changes and the final Clippy repair have their separate checks.json record."
+}

@@ -139,7 +139,7 @@ fn sync_job_stack(input: JobSyncInput<'_>) -> Result<String> {
 fn admit_job_stack(input: JobAdmissionInput<'_>) -> Result<JobAdmissionParts> {
     let authority_ref =
         install_job_execute_authority_context(input.target, input.job_ref, input.policy_refs, input.capability_refs)?;
-    let source_gate_ref = install_clean_octet_gate(input.target, input.policy_refs, input.capability_refs)?;
+    let fixture_gate = dogfood_fixture_gate()?;
     let admission_request = crate::job_dag::job_admission_request_value(crate::job_dag::AdmissionRequestValueInput {
         job_ref: input.job_ref,
         sync_ref: input.sync_ref,
@@ -147,10 +147,11 @@ fn admit_job_stack(input: JobAdmissionInput<'_>) -> Result<JobAdmissionParts> {
         target_peer: "peer:dogfood",
         policy_refs: input.policy_refs,
         capability_refs: std::slice::from_ref(&authority_ref),
-        evidence_refs: &[input.sync_ref.to_string(), source_gate_ref],
+        evidence_refs: &[input.sync_ref.to_string(), fixture_gate.gate_ref().to_string()],
         resource_refs: input.resource_refs,
     })?;
-    let admission = crate::job_dag::admission_loopback(input.target, &admission_request)?;
+    let admission =
+        crate::job_dag::admission_loopback_with_unqualified_fixture_gate(input.target, &admission_request, &fixture_gate)?;
     Ok(JobAdmissionParts {
         authority_ref,
         receipt_ref: crate::preserves_rail::canonical_hash(&admission.receipt_value)?,

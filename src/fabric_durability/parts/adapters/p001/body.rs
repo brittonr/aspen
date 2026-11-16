@@ -116,6 +116,43 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
+    // r[impl molten.fabric_durability.snapshot_compaction]
+    pub fn retire_superseded_snapshots(
+        &mut self,
+        generation: u64,
+        keep_snapshot_ref: &str,
+        authority_ref: Option<&str>,
+    ) -> crate::error::Result<TransitionEnvelope> {
+        let transition =
+            retire_superseded_snapshots(&self.profile.profile, &self.state, generation, keep_snapshot_ref, authority_ref)
+                .map_err(|issues| adapter_validation_error("simulated snapshot retirement", &issues))?;
+        let canonical = durable_transition(&self.profile, &transition)?;
+        self.state = transition.next;
+        Ok(canonical)
+    }
+
+    // r[impl molten.fabric_durability.snapshot_compaction]
+    pub fn truncate_snapshot_covered(
+        &mut self,
+        generation: u64,
+        snapshot_ref: &str,
+        retain_from_sequence: u64,
+        authority_ref: Option<&str>,
+    ) -> crate::error::Result<TransitionEnvelope> {
+        let transition = truncate_snapshot_covered(
+            &self.profile.profile,
+            &self.state,
+            generation,
+            snapshot_ref,
+            retain_from_sequence,
+            authority_ref,
+        )
+        .map_err(|issues| adapter_validation_error("simulated covered truncation", &issues))?;
+        let canonical = durable_transition(&self.profile, &transition)?;
+        self.state = transition.next;
+        Ok(canonical)
+    }
+
     pub fn apply_effect(
         &mut self,
         command: &EffectTransactionCommand,
@@ -197,49 +234,7 @@ impl SimulatedDurableStateAdapter {
     }
 }
 
-impl DurableCommandShell for RedbDurableStateAdapter {
-    fn profile_id(&self) -> &str {
-        &self.profile.profile.profile_id
-    }
-
-    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<TransitionEnvelope> {
-        let result = match command {
-            DurablePortCommand::Append(request) => self.append(request),
-            DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),
-            DurablePortCommand::Truncate {
-                generation,
-                retain_from_sequence,
-                authority_ref,
-            } => self.truncate(*generation, *retain_from_sequence, authority_ref.as_deref()),
-            DurablePortCommand::AtomicBatch(request) => self.apply_batch(request),
-            DurablePortCommand::Snapshot { request, bytes } => self.create_snapshot(request, bytes),
-            DurablePortCommand::Effect(command) => self.apply_effect(command),
-        };
-        result.map_err(|error| FabricPortError::storage(error.to_string()))
-    }
-}
-
-impl DurableCommandShell for SimulatedDurableStateAdapter {
-    fn profile_id(&self) -> &str {
-        &self.profile.profile.profile_id
-    }
-
-    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<TransitionEnvelope> {
-        let result = match command {
-            DurablePortCommand::Append(request) => self.append(request, None),
-            DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),
-            DurablePortCommand::Truncate {
-                generation,
-                retain_from_sequence,
-                authority_ref,
-            } => self.truncate(*generation, *retain_from_sequence, authority_ref.as_deref()),
-            DurablePortCommand::AtomicBatch(request) => self.apply_batch(request, None),
-            DurablePortCommand::Snapshot { request, .. } => self.create_snapshot(request),
-            DurablePortCommand::Effect(command) => self.apply_effect(command),
-        };
-        result.map_err(|error| FabricPortError::storage(error.to_string()))
-    }
-}
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapters/p001/driver.rs"));
 
 fn initialize_tables(database: &redb::Database) -> crate::error::Result<()> {
     let write = database.begin_write().map_err(adapter_error)?;

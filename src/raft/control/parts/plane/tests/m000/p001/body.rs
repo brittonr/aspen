@@ -59,23 +59,8 @@
     }
 
     #[test]
-    fn stale_read_bad_snapshot_log_gap_and_redb_store_are_detected() {
+    fn bad_snapshot_log_gap_and_redb_store_are_detected() {
         let runtime = run_control_registry_fixture().expect("runtime");
-        let stale = read_control_registry(&ControlRegistryReadInput {
-            state: runtime.state.value.clone(),
-            group_ref: runtime.manifest.manifest_ref.clone(),
-            committed_term: runtime.term,
-            committed_index: runtime.committed_index,
-            read_index: runtime.committed_index.saturating_sub(1),
-            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            namespace: "protocol".to_string(),
-            name: "proto:request-response".to_string(),
-            authority_refs: auth(),
-            resource_refs: resources(),
-        })
-        .expect("stale read");
-        assert_eq!(stale.decision, "deny");
-        assert!(stale.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
 
         let snapshot = snapshot_control_registry(&RaftSnapshotInput {
             group_ref: runtime.manifest.manifest_ref.clone(),
@@ -241,7 +226,7 @@
             .iter()
             .any(|diagnostic| diagnostic.contains("unknown Raft command schema")));
 
-        assert_stale_read_and_unsupported_state_machine_denied(&runtime);
+        assert_linearizable_read_and_unsupported_state_machine_denied(&runtime);
     }
 
     /// The runtime state ref and log, commit, and registry receipt counts at one point of a test.

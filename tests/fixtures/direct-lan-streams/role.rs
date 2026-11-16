@@ -32,9 +32,9 @@ pub async fn run(config: config::RoleConfig) -> TestResult {
     let (cancel, cancellation) = tokio::sync::watch::channel(config.case == "cancel");
     let evidence = proxy(&config, is_client, &mut service, cancellation).await?;
     drop(cancel);
-    assert_bounds(&evidence);
-    if config.case == "positive" {
-        assert_positive(&config, is_client, &service, &evidence);
+    assert_bounds(&config.case, &evidence);
+    if matches!(config.case.as_str(), "positive" | "queue-saturation") {
+        assert_positive(&config, is_client, &service, &evidence)?;
         tokio::time::timeout(std::time::Duration::from_secs(2), application).await???;
     } else {
         application.abort();
@@ -59,8 +59,11 @@ fn spawn_application(
     revoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> tokio::task::JoinHandle<TestResult> {
     let case = config.case.clone();
+    let root = config.root.clone();
     tokio::spawn(async move {
-        if case == "ack-loss" && !is_client {
+        if case == "queue-saturation" {
+            service::saturation_application(listener, &root, is_client).await
+        } else if case == "ack-loss" && !is_client {
             let (mut socket, _) = listener.accept().await?;
             socket.write_all(config::RESPONSE).await?;
             // Keep the local producer alive until its owner cancels the fault fixture.
@@ -93,7 +96,7 @@ async fn proxy(
             molten::fabric_transport::direct::Outbound {
                 input: config::client_input(config, endpoint)?,
                 peer: config::peer(true, config.client_generation)?,
-                bounds: config::bounds(),
+                bounds: config::bounds_for(&config.case),
                 request: config::request(config.client_generation)?,
                 clock: std::time::Instant::now,
             },
@@ -109,7 +112,7 @@ async fn proxy(
     let mut listener = molten::fabric_transport::direct::Acceptor::bind(molten::fabric_transport::direct::Config {
         listener: config::listener_input(config)?,
         peer,
-        bounds: config::bounds(),
+        bounds: config::bounds_for(&config.case),
         receive_budget: molten::fabric_transport::ReceiveBudget {
             burst: 16,
             refill_ticks: 100,
@@ -127,12 +130,13 @@ async fn proxy(
     Ok(result?)
 }
 
-fn assert_bounds(evidence: &molten::fabric_transport::direct::Evidence) {
+fn assert_bounds(case: &str, evidence: &molten::fabric_transport::direct::Evidence) {
+    let bounds = config::bounds_for(case);
     assert_eq!(evidence.automatic_retry_count, 0, "base stream must never redial/replay");
-    assert!(evidence.sent_bytes <= config::bounds().max_total_bytes);
-    assert!(evidence.received_bytes <= config::bounds().max_total_bytes);
-    assert!(evidence.sent_frames <= config::bounds().max_frames);
-    assert!(evidence.received_frames <= config::bounds().max_frames);
+    assert!(evidence.sent_bytes <= bounds.max_total_bytes);
+    assert!(evidence.received_bytes <= bounds.max_total_bytes);
+    assert!(evidence.sent_frames <= bounds.max_frames);
+    assert!(evidence.received_frames <= bounds.max_frames);
     assert!(evidence.cleanup_observed, "terminal evidence omitted owned transport cleanup");
 }
 
@@ -141,25 +145,45 @@ fn assert_positive(
     is_client: bool,
     service: &service::SocketService,
     evidence: &molten::fabric_transport::direct::Evidence,
-) {
+) -> TestResult {
     assert_eq!(evidence.terminal, molten::fabric_transport::DirectStreamTerminal::Clean);
     assert_eq!(evidence.delivery, molten::fabric_transport::DeliveryOutcome::Delivered);
     assert_eq!(service.opens, 1);
-    let (sent, received) = if is_client {
-        (config::REQUEST.len(), config::RESPONSE.len())
+    let request_bytes = u64::try_from(config::REQUEST.len())?;
+    let response_bytes = u64::try_from(config::RESPONSE.len())?;
+    let (sent, received) = if config.case == "queue-saturation" {
+        if is_client {
+            (config::SATURATION_BYTES, response_bytes)
+        } else {
+            (response_bytes, config::SATURATION_BYTES)
+        }
+    } else if is_client {
+        (request_bytes, response_bytes)
     } else {
-        (config::RESPONSE.len(), config::REQUEST.len())
+        (response_bytes, request_bytes)
     };
-    assert_eq!(evidence.sent_bytes, sent as u64);
-    assert_eq!(evidence.received_bytes, received as u64);
-    assert!(evidence.sent_frames > 1);
-    assert!(evidence.received_frames > 1);
+    assert_eq!(evidence.sent_bytes, sent);
+    assert_eq!(evidence.received_bytes, received);
+    if config.case == "queue-saturation" {
+        let bulk_frames = if is_client {
+            evidence.sent_frames
+        } else {
+            evidence.received_frames
+        };
+        assert!(bulk_frames > 1, "bulk transfer did not exercise multiple bounded frames");
+        assert!(evidence.sent_frames >= 1);
+        assert!(evidence.received_frames >= 1);
+    } else {
+        assert!(evidence.sent_frames > 1);
+        assert!(evidence.received_frames > 1);
+    }
     let expected_path = if config.bind_ip.is_loopback() {
         molten::fabric_transport::DirectStreamPath::DirectLoopback
     } else {
         molten::fabric_transport::DirectStreamPath::DirectIp
     };
     assert_eq!(evidence.actual_path, expected_path);
+    Ok(())
 }
 
 fn assert_fault(

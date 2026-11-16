@@ -14,6 +14,7 @@ pub mod codec;
 #[path = "collaborationscope/mod.rs"]
 pub mod collaboration_scope;
 pub mod committed_stream;
+pub mod compute_capacity;
 pub mod consensus_recovery;
 pub mod content_replication;
 pub mod content_store_adapter;

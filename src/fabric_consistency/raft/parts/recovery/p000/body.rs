@@ -8,6 +8,32 @@ const SINGLE_INDEX_ARITY: usize = 1;
 const SNAPSHOT_ARITY: usize = 9;
 const COMPLETED_REQUEST_ARITY: usize = 2;
 const OPTIONAL_VALUE_ARITY: usize = 1;
+const COMPACTION_BASE_RECORD: &str = "raft-compaction-start-v1";
+const COMPACTION_BASE_ARITY: usize = 6;
+
+/// Start a bounded base: a fixed-size header, one existing log-mutation record per retained
+/// entry, then a footer naming the header's content ref. Only the footer completes the base.
+// r[impl molten.consensus.durable_log_compaction]
+pub(super) fn compaction_base_value(
+    snapshot: &ReplicaSnapshot,
+    term: u64,
+    voted_for: Option<&str>,
+    entries: &[ReplicatedEntry],
+    commit_index: u64,
+) -> preserves::IOValue {
+    let vote = voted_for.map_or_else(
+        || crate::preserves_rail::record("none", Vec::new()),
+        |voter| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(voter)]),
+    );
+    crate::preserves_rail::record(COMPACTION_BASE_RECORD, vec![
+        crate::preserves_rail::string(&snapshot.snapshot_ref),
+        crate::preserves_rail::u64_value(snapshot.last_included_index),
+        crate::preserves_rail::u64_value(term),
+        vote,
+        crate::preserves_rail::u64_value(entries.len() as u64),
+        crate::preserves_rail::u64_value(commit_index),
+    ])
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaPlan {
@@ -44,9 +70,8 @@ pub fn plan_replica(
         .filter(|entry| entry.index > replay_start && entry.index <= durable_commit_index)
         .cloned()
         .collect::<Vec<_>>();
-    for entry in state.log.iter().filter(|entry| entry.index <= durable_commit_index) {
-        state.completed_requests.insert(entry.request_ref.clone(), entry.index);
-    }
+    state.last_applied = durable_commit_index;
+    record_completed_requests(&mut state, &replay_entries);
     finish_recovered_state(&mut state, durable_commit_index)?;
     let effects = initial_effects(&state, &replay_entries)?;
     let recovery_ref = r#ref(&state, &durable_record_refs, snapshot_bytes)?;
@@ -69,14 +94,26 @@ fn replay_durable_records(
     snapshot: Option<ReplicaSnapshot>,
     snapshot_covered_sequence: Option<u64>,
 ) -> crate::error::Result<(u64, Vec<String>)> {
-    let mut expected_sequence = 0_u64;
+    // r[impl molten.consensus.durable_log_compaction]
+    // Records before the first retained one exist only if compaction removed them after a durable
+    // snapshot covered them; that snapshot's compaction base must then open the retained records.
+    let first_sequence = durable_records.first().map_or(0, |record| record.sequence);
+    let is_compacted = first_sequence > 0;
+    if is_compacted && !snapshot_covered_sequence.is_some_and(|covered| covered.saturating_add(1) >= first_sequence) {
+        return Err(crate::error::Failure::invalid_harness(
+            "live Raft recovery durable records begin after records no snapshot covers",
+        ));
+    }
+    let is_base_required = snapshot_covered_sequence.is_some_and(|covered| covered < first_sequence);
+    let mut expected_sequence = first_sequence;
     let mut durable_commit_index = INITIAL_COMMIT_INDEX;
     let mut durable_record_refs = Vec::with_capacity(durable_records.len());
     let snapshot_boundary = snapshot.as_ref().map(|snapshot| (snapshot.last_included_index, snapshot.last_included_term));
     replay_snapshot(state, &mut durable_commit_index, snapshot)?;
     let mut boundary_term = None;
     let mut is_suffix_retained = None;
-    let mut is_coverage_seen = snapshot_covered_sequence.is_none();
+    let mut is_coverage_seen = snapshot_covered_sequence.is_none_or(|covered| covered < first_sequence);
+    let mut base_replay = CompactionReplay { pending: None, is_required_complete: !is_base_required };
     for record in durable_records {
         if record.sequence != expected_sequence {
             return Err(crate::error::Failure::invalid_harness("live Raft recovery durable sequence has a gap"));
@@ -87,11 +124,26 @@ fn replay_durable_records(
         if crate::preserves_rail::content_ref_from_bytes(&record.value) != record.value_ref {
             return Err(crate::error::Failure::invalid_harness("live Raft recovery durable record content ref mismatch"));
         }
-        if snapshot_covered_sequence.is_some_and(|covered| record.sequence <= covered) {
-            replay_snapshot_prefix(state, &mut durable_commit_index, &record.value,
+        let decoded = crate::preserves_rail::strict_canonical_decode(&record.value)?;
+        let value = &decoded.value;
+        if is_base_required && record.sequence == first_sequence
+            && value.collect_simple_record(COMPACTION_BASE_RECORD, Some(COMPACTION_BASE_ARITY)).is_none()
+        {
+            return Err(crate::error::Failure::invalid_harness(
+                "live Raft recovery compacted records do not begin with their compaction base",
+            ));
+        }
+        let is_covered = snapshot_covered_sequence.is_some_and(|covered| record.sequence <= covered);
+        if replay_base_record(
+            state, &mut durable_commit_index, CompactionRecordInput { record, value, is_covered },
+            &mut base_replay, &mut boundary_term,
+        )? {
+            // Framed mutations never affect the reconstructed suffix before their footer.
+        } else if is_covered {
+            replay_snapshot_prefix(state, &mut durable_commit_index, value,
                 &mut boundary_term, &mut is_suffix_retained)?;
         } else {
-            replay_record(state, &mut durable_commit_index, &record.value)?;
+            replay_value(state, &mut durable_commit_index, value)?;
         }
         if Some(record.sequence) == snapshot_covered_sequence {
             is_coverage_seen = true;
@@ -106,6 +158,9 @@ fn replay_durable_records(
     }
     if !is_coverage_seen {
         return Err(crate::error::Failure::invalid_harness("snapshot coverage exceeds durable records"));
+    }
+    if !base_replay.is_required_complete {
+        return Err(crate::error::Failure::invalid_harness("live Raft recovery requires a complete compaction base"));
     }
     Ok((durable_commit_index, durable_record_refs))
 }

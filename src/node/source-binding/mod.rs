@@ -6,7 +6,7 @@ mod closure;
 mod measure;
 mod process;
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +32,72 @@ pub fn gate_validation_with_root(root: &crate::node_state::DirectoryRoot) -> cra
         validation_ref: source.validation_ref,
         validation_value: source.validation_value,
     })
+}
+
+/// Strict Octet gate content from the authenticated source binding of the executing candidate.
+///
+/// Constructed only by source-binding admission (or its `cfg(test)` fixture), so a caller cannot
+/// pass a fabricated or caller-supplied gate receipt where authenticated source evidence is
+/// required.
+// r[impl molten.upgrades.authenticated_source_gate]
+#[derive(Debug, Clone)]
+pub struct AuthenticatedGate {
+    binding_ref: String,
+    gate_ref: String,
+    gate_value: preserves::IOValue,
+    validation_ref: String,
+}
+
+impl AuthenticatedGate {
+    pub fn binding_ref(&self) -> &str {
+        &self.binding_ref
+    }
+
+    pub fn gate_ref(&self) -> &str {
+        &self.gate_ref
+    }
+
+    pub fn gate_value(&self) -> &preserves::IOValue {
+        &self.gate_value
+    }
+
+    /// Ref of the `node-source-binding-validation-v1` record that admitted the binding.
+    pub fn validation_ref(&self) -> &str {
+        &self.validation_ref
+    }
+
+    fn from_accepted(source: Accepted) -> Self {
+        Self {
+            binding_ref: source.binding_ref,
+            gate_ref: source.gate_ref,
+            gate_value: source.gate_value,
+            validation_ref: source.validation_ref,
+        }
+    }
+
+    /// Test-only authenticated gate over the synthetic fixture receipt; no producer is
+    /// authenticated.
+    #[cfg(test)]
+    pub(crate) fn fixture() -> crate::error::Result<Self> {
+        tests::fixture().map(Self::from_accepted)
+    }
+
+    /// Test-only: replace the admitted gate content to exercise downstream re-validation.
+    #[cfg(test)]
+    pub(crate) fn with_gate_value_for_tests(mut self, gate_value: preserves::IOValue) -> crate::error::Result<Self> {
+        self.gate_ref = crate::preserves_rail::canonical_hash(&gate_value)?;
+        self.gate_value = gate_value;
+        Ok(self)
+    }
+}
+
+/// Loads `source-gate-trust.json` from `root` and runs the same authenticated admission as node
+/// startup: producer output authentication, executing-binary measurement and produced-gate
+/// validation.
+pub fn authenticated_gate_with_root(
+    root: &crate::node_state::DirectoryRoot,
+) -> crate::error::Result<AuthenticatedGate> {
+    load(root).map(AuthenticatedGate::from_accepted)
 }
 
 /// Authoring-only verification. This cannot construct a current-process startup token.
@@ -193,24 +259,6 @@ fn accepted(
     let validation_ref = crate::preserves_rail::canonical_hash(&validation_value)?;
     Ok(Accepted {
         binding_ref,
-        gate_ref,
-        gate_value,
-        validation_ref,
-        validation_value,
-    })
-}
-
-#[cfg(test)]
-pub(super) fn fixture() -> crate::error::Result<Accepted> {
-    let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let gate_ref = crate::preserves_rail::canonical_hash(&gate_value)?;
-    let validation_value = crate::preserves_rail::record("node-source-fixture-validation-v1", vec![
-        crate::preserves_rail::string("explicit-test-only-no-producer-authentication"),
-        crate::preserves_rail::string(&gate_ref),
-    ]);
-    let validation_ref = crate::preserves_rail::canonical_hash(&validation_value)?;
-    Ok(Accepted {
-        binding_ref: validation_ref.clone(),
         gate_ref,
         gate_value,
         validation_ref,

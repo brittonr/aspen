@@ -1,8 +1,8 @@
 
 pub fn parse_chain_checkpoint(value: &IoValue) -> Result<ChainCheckpoint> {
     let checkpoint = value
-        .collect_simple_record("chain-checkpoint-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
+        .collect_simple_record("chain-checkpoint-v2", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v2 ...>"))?;
     require_schema(&checkpoint[0], EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
     let range = parse_checkpoint_range(&checkpoint[3])?;
     let parsed = ChainCheckpoint {

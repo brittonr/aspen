@@ -156,7 +156,8 @@ fn input(
         handler_ref: super::reference("collaboration-native-handler"),
         session_ref: super::reference(&format!("collaboration-native-session:{}", cohort.nodes[index])),
         ingress_capacity: 64,
-        ingress_delivery_limit: 65_536,
+        ingress_delivery_limit: 4096,
+        ingress_delivery_window_ms: 1000,
         timeout_ms: 30_000,
         genesis: Some(molten::collaboration_scope::native_runtime::Genesis {
             consistency_epoch: 1,
@@ -221,8 +222,8 @@ fn replica(
     ))?;
     let time = mechanisms.time.clone().into_descriptor()?;
     let durability = mechanisms.durable.clone().into_profile()?;
-    Ok(molten::live_reliability::service::Replica {
-        profile_ref: super::reference("collaboration-native-replica-profile"),
+    let mut profile = molten::live_reliability::service::Replica {
+        profile_ref: String::new(),
         group_binding_ref: group.binding_ref.clone(),
         service_generation: 1,
         protocol_ref,
@@ -236,15 +237,21 @@ fn replica(
         supervision_ref: super::reference("collaboration-native-supervision"),
         resource_profile_ref: group.resource_profile_ref.clone(),
         // This signed-source rail performs slow independent source checks between operations.
-        // At two responses per heartbeat, this schedule keeps the finite ingress budget
-        // above the declared twelve-hour operator window instead of exhausting it in minutes.
         heartbeat_ticks: 200,
         election_min_ticks: 600,
         election_max_ticks: 1200,
         max_log_entries: 4096,
+        snapshot_threshold_entries: 2048,
+        request_retention_entries: 256,
         max_message_entries: 64,
         max_effects_per_step: 128,
-    })
+    };
+    let mut definition = serde_json::to_value(&profile)?;
+    definition.as_object_mut().ok_or("replica definition object")?.remove("profile_ref");
+    profile.profile_ref = molten::live_reliability::checker::canonical_ref(&serde_json::json!({
+        "schema": "molten.experimental-replica-definition.v1", "profile": definition
+    }))?;
+    Ok(profile)
 }
 
 fn effects(

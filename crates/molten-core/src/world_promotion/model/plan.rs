@@ -30,6 +30,16 @@ impl WorldIntentReleaseClass {
             Self::Retain => "retain",
         }
     }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "release" => Some(Self::Release),
+            "deny" => Some(Self::Deny),
+            "simulate" => Some(Self::Simulate),
+            "retain" => Some(Self::Retain),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,6 +143,7 @@ pub enum WorldPromotionIssue {
     DuplicateIntent(String),
     DuplicateSemanticIntent(String),
     IntentClosureIncomplete,
+    IntentMaterialUnavailable,
     IntentUnclassified(String),
     SimulationBranchDenied,
     BranchClassDenied,

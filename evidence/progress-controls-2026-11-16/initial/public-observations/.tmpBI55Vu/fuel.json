@@ -1,0 +1,22 @@
+{
+  "name": "fuel",
+  "tasks": [
+    {
+      "component": "b87c48d226e078c67a83d07139a1e9d348bf94dcead48227c6a14c5b04e79a26",
+      "dependencies": [],
+      "fuel": 100,
+      "id": "tile",
+      "inputs": [],
+      "max_attempts": 1,
+      "max_output_bytes": 1024,
+      "required_labels": {},
+      "resources": {
+        "cpu_millis": 1000,
+        "memory_bytes": 16777216,
+        "slots": 1
+      },
+      "retry_delay_ticks": 1,
+      "timeout_ms": 5000
+    }
+  ]
+}

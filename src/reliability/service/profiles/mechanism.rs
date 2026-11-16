@@ -125,10 +125,26 @@ fn namespace_definition(
     Ok(serde_json::json!({
         "schema": crate::fabric_durability::DURABLE_STATE_NAMESPACE_SCHEMA, "profile_ref": profile["profile_ref"],
         "adapter_id": input.adapter_id, "namespace_id": input.namespace_id, "generation": 1,
-        "value_schema_ref": input.value_schema_ref, "retention_authority_ref": null, "quota_bytes": 67108864,
+        "value_schema_ref": input.value_schema_ref,
+        "retention_authority_ref": retention_authority_ref(input)?, "quota_bytes": 67108864,
         "atomicity_domain": { "domain_id": input.namespace_id, "adapter_id": input.adapter_id,
             "namespace_id": input.namespace_id, "generation": 1,
             "object_classes": ["log-record", "ordered-value", "snapshot", "checkpoint", "effect-transaction"],
             "max_operations": 64, "max_bytes": 67108864, "supported_levels": ["machine-loss"] }
     }))
+}
+
+/// Explicit authority to retire superseded Raft snapshots and truncate only records a durable
+/// snapshot covers in this namespace, bound to the service, namespace and signed registration
+/// authority. It grants no other retention.
+// r[impl molten.consensus.durable_log_compaction]
+fn retention_authority_ref(input: &ExperimentalInput) -> crate::error::Result<String> {
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+        "molten.experimental.raft-snapshot-retention-authority.v1",
+        vec![
+            crate::preserves_rail::string(&input.service_id),
+            crate::preserves_rail::string(&input.namespace_id),
+            crate::preserves_rail::string(&input.registration_authority_ref),
+        ],
+    ))
 }

@@ -14,7 +14,9 @@ pub struct Configuration {
     pub admission: super::runtime::HostAdmission,
     pub handler_ref: String,
     pub ingress_capacity: usize,
+    /// Deliveries admitted per `ingress_delivery_window_ms`; a rate, not a lifetime total.
     pub ingress_delivery_limit: u64,
+    pub ingress_delivery_window_ms: u64,
     pub health_path: String,
     pub peer_probes: std::collections::BTreeMap<String, super::leader::PeerProbe>,
 }
@@ -47,11 +49,13 @@ impl Configuration {
             || configuration.bindings.len() != 7
             || !(1..=256).contains(&configuration.ingress_capacity)
             || !(1..=65_536).contains(&configuration.ingress_delivery_limit)
+            || !(1..=60_000).contains(&configuration.ingress_delivery_window_ms)
             || !(1..=30_000).contains(&configuration.time.tick_ms)
         {
             return Err(crate::error::Failure::invalid_harness("invalid bounded coordination service configuration"));
         }
         configuration.admission.validate()?;
+        super::snapshot::admit_configuration(&configuration)?;
         crate::node_state::RelativePath::parse(&configuration.health_path)?;
         let group = configuration.group.open(authority.grant.grant_ref())?;
         let grant = authority.grant.grant();
@@ -81,8 +85,10 @@ impl Configuration {
         group: crate::fabric_consistency::Group,
     ) -> crate::error::Result<super::runtime::Host> {
         authority.require("serve")?;
+        super::snapshot::admit_configuration(&self)?;
         let profile = self.durability.profile.into_profile()?;
         let namespace = self.durability.namespace.into_descriptor(&profile)?;
+        let retention_authority_ref = namespace.retention_authority_ref.clone();
         let root = crate::local_store::DurableStoreRoot::from_ledger(
             &authority.root.ledger_store()?,
             &crate::local_store::Locator::parse(&self.durability.storage_namespace)?,
@@ -94,6 +100,11 @@ impl Configuration {
             self.replica.durable_log_ref.clone(),
             self.replica.snapshot_store_ref.clone(),
         )?;
+        // r[impl molten.consensus.durable_log_compaction]
+        let durability = match retention_authority_ref {
+            Some(authority_ref) => durability.with_retention_authority(authority_ref)?,
+            None => durability,
+        };
         let transport = self.transport.open(&authority, &self.replica.protocol_ref).await?;
         let timer = self.time.profile.into_descriptor()?;
         super::launch::start(super::launch::Startup {
@@ -110,6 +121,7 @@ impl Configuration {
                 accept_timeout: std::time::Duration::from_millis(self.transport.timeout_ms),
                 event_capacity: self.ingress_capacity,
                 delivery_limit: self.ingress_delivery_limit,
+                delivery_window: std::time::Duration::from_millis(self.ingress_delivery_window_ms),
             },
             timer: crate::fabric_consistency::raft::TokioReplicaConfig {
                 profile: timer.profile,

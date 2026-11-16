@@ -143,80 +143,18 @@ pub fn apply(root: &Path, input: &RewritePlanInput) -> Result<RewriteApply> {
     })
 }
 
-pub fn upgrade_plan_from_apply(
-    rewrite: &RewriteApply,
-    session_id: &str,
-    initiator_ref: &str,
-    capability_refs: &[String],
-    policy_refs: &[String],
-) -> Result<IoValue> {
-    validate_non_empty(session_id, "rewrite upgrade session id")?;
-    validate_ref(initiator_ref, "rewrite upgrade initiator ref")?;
-    validate_refs(capability_refs, "rewrite upgrade capability ref")?;
-    validate_refs(policy_refs, "rewrite upgrade policy ref")?;
-    let apply_receipt_ref = canonical_hash(&rewrite.receipt_value)?;
-    let preview_receipt_ref = canonical_hash(&rewrite.preview.receipt_value)?;
-    let mut tasks = Vec::new();
-    for (index, installed) in rewrite.installed.iter().enumerate() {
-        push_bounded(
-            &mut tasks,
-            crate::upgrades::UpgradeTaskInput {
-                task_id: format!("rewrite-install-{index}"),
-                kind: "install-artifact".to_string(),
-                subject: installed.old_artifact_ref.clone(),
-                from_ref: Some(installed.old_artifact_ref.clone()),
-                to_ref: Some(installed.new_artifact_ref.clone()),
-                precondition_refs: vec![rewrite.preview.plan_ref.clone(), preview_receipt_ref.clone()],
-                postcondition_refs: vec![installed.install_receipt_ref.clone()],
-                reversible: true,
-            },
-            MAX_REWRITE_ITEMS,
-            "rewrite upgrade tasks",
-        )?;
-    }
-    if !rewrite.preview.query.matches.is_empty() {
-        push_bounded(
-            &mut tasks,
-            crate::upgrades::UpgradeTaskInput {
-                task_id: "rewrite-transcript-gate".to_string(),
-                kind: "transcript-rerun".to_string(),
-                subject: rewrite.preview.plan_ref.clone(),
-                from_ref: None,
-                to_ref: None,
-                precondition_refs: vec![preview_receipt_ref.clone()],
-                postcondition_refs: vec![apply_receipt_ref.clone()],
-                reversible: true,
-            },
-            MAX_REWRITE_ITEMS,
-            "rewrite upgrade tasks",
-        )?;
-    }
-    let affected_refs = rewrite
-        .installed
-        .iter()
-        .flat_map(|installed| [installed.old_artifact_ref.clone(), installed.new_artifact_ref.clone()])
-        .collect::<Vec<_>>();
-    crate::upgrades::upgrade_plan_value(&crate::upgrades::UpgradePlanInput {
-        session_id: session_id.to_string(),
-        reason: "structured rewrite".to_string(),
-        summary: format!("structured rewrite applied {} immutable artifact replacement(s)", rewrite.installed.len()),
-        initiator_ref: initiator_ref.to_string(),
-        capability_refs: capability_refs.to_vec(),
-        affected_refs: sorted_unique_refs(&affected_refs),
-        impact_refs: rewrite.preview.impacted_refs.clone(),
-        tasks,
-        compatibility: crate::upgrades::UpgradeCompatibilityWindow {
-            old_refs: rewrite.installed.iter().map(|installed| installed.old_artifact_ref.clone()).collect(),
-            new_refs: rewrite.installed.iter().map(|installed| installed.new_artifact_ref.clone()).collect(),
-            expires_at: None,
-            policy_refs: policy_refs.to_vec(),
-        },
-        rollback_refs: rewrite.installed.iter().map(|installed| installed.old_artifact_ref.clone()).collect(),
-        policy_refs: policy_refs.to_vec(),
-        evidence_refs: vec![rewrite.preview.plan_ref.clone(), preview_receipt_ref, apply_receipt_ref],
-        source_gate_receipt_values: vec![crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?],
-    })
+/// Operator-supplied authority and authenticated source evidence for a rewrite upgrade plan.
+#[derive(Debug, Clone, Copy)]
+pub struct RewriteUpgradePlanInput<'a> {
+    pub session_id: &'a str,
+    pub initiator_ref: &'a str,
+    pub capability_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub source_gate: &'a crate::node_daemon::AuthenticatedGate,
 }
+
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/rewrites/parts/mod/p001/builder.rs"));
+
 
 pub fn parse_rewrite_receipt(value: &IoValue) -> Result<RewriteReceipt> {
     let fields = value

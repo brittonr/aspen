@@ -1,3 +1,4 @@
+pub mod explanation;
 mod registry;
 
 use std::collections::BTreeMap;

@@ -1,0 +1,170 @@
+{
+  "schema": "aspen.historical-storage-dependency-cohorts.v1",
+  "observed_on": "2026-11-16",
+  "method": "Read each immutable Cargo.lock and Cargo.toml with git show REV:PATH; resolve blob IDs with git rev-parse REV:PATH; parse TOML with Python tomllib; count package arrays; compare exact name/version/source triples; hash exact source bytes with b3sum --no-names.",
+  "scope": "Historical whole-lock inventories, not a current feature-toggle resolution, a build, or attribution of every package change to object storage. Git blob IDs retain the interoperable Git object algorithm; stack-owned content identities use BLAKE3.",
+  "pairs": [
+    {
+      "label": "original-client-introduction",
+      "before": {
+        "commit": "e2125ab2923048f188493cbfb71ce63e6542cd26",
+        "lock_git_blob": "73e2854b85326c8d5456a74d9ec717cb2727a246",
+        "lock_blake3": "0cd78f69dd82e350f34ad8f10476d77e0ca905519c0c51951ed08d1d5941b8cb",
+        "manifest_git_blob": "46f3323c3dadebc76d326d240ca3ecd112efa6c4",
+        "manifest_blake3": "ad7380b6bd799e5b98426f4e6501fbe683092a8440899095c853523eef182e7d",
+        "lock_package_count": 997,
+        "object_storage_feature": null,
+        "client_dependency_declarations": {
+          "reqwest": null,
+          "sha2": null,
+          "hmac": null,
+          "time": null
+        }
+      },
+      "after": {
+        "commit": "1d2668987a91ce0c4cc3d827606cc9da4c590062",
+        "lock_git_blob": "78f9fd935bbaf5a49985f4609ca27acf71945da3",
+        "lock_blake3": "5785c056c8ee991a2dd3e26b0ae1605c33f2cc33d553f719a576ff0a6b77cc48",
+        "manifest_git_blob": "a9a0959c749f374e4cf4358ede0249792f55f273",
+        "manifest_blake3": "c3131846af457e306697735ddda3877e4d336ccbbf956be54c6473eedee5d933",
+        "lock_package_count": 1005,
+        "object_storage_feature": null,
+        "client_dependency_declarations": {
+          "reqwest": {
+            "version": "0.13",
+            "default-features": false,
+            "features": [
+              "rustls"
+            ]
+          },
+          "sha2": "0.10",
+          "hmac": "0.12",
+          "time": {
+            "version": "0.3",
+            "features": [
+              "formatting",
+              "macros"
+            ]
+          }
+        }
+      },
+      "package_count_delta": 8,
+      "added_package_identities": [
+        [
+          "aws-lc-rs",
+          "1.19.0",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "aws-lc-sys",
+          "0.47.0",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "cmake",
+          "0.1.58",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "dunce",
+          "1.0.5",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "fs_extra",
+          "1.3.0",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "quinn",
+          "0.11.12",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "quinn-proto",
+          "0.11.19",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ],
+        [
+          "quinn-udp",
+          "0.5.16",
+          "registry+https://github.com/rust-lang/crates.io-index"
+        ]
+      ],
+      "removed_package_identities": []
+    },
+    {
+      "label": "subsequent-feature-gating",
+      "before": {
+        "commit": "38387343c1e2a7e81bedb157d600177abe5beb17",
+        "lock_git_blob": "78f9fd935bbaf5a49985f4609ca27acf71945da3",
+        "lock_blake3": "5785c056c8ee991a2dd3e26b0ae1605c33f2cc33d553f719a576ff0a6b77cc48",
+        "manifest_git_blob": "a9a0959c749f374e4cf4358ede0249792f55f273",
+        "manifest_blake3": "c3131846af457e306697735ddda3877e4d336ccbbf956be54c6473eedee5d933",
+        "lock_package_count": 1005,
+        "object_storage_feature": null,
+        "client_dependency_declarations": {
+          "reqwest": {
+            "version": "0.13",
+            "default-features": false,
+            "features": [
+              "rustls"
+            ]
+          },
+          "sha2": "0.10",
+          "hmac": "0.12",
+          "time": {
+            "version": "0.3",
+            "features": [
+              "formatting",
+              "macros"
+            ]
+          }
+        }
+      },
+      "after": {
+        "commit": "f810f36e305ccd1ddb39291032ecdca0629caa36",
+        "lock_git_blob": "78f9fd935bbaf5a49985f4609ca27acf71945da3",
+        "lock_blake3": "5785c056c8ee991a2dd3e26b0ae1605c33f2cc33d553f719a576ff0a6b77cc48",
+        "manifest_git_blob": "c6350ee1ea83a8274f210a48f7e7293fa3f65cc8",
+        "manifest_blake3": "15dfa22c9b84bb0a6b8e8c380a1a18de98ba8d5e5c7569e5f609333c2ec4008d",
+        "lock_package_count": 1005,
+        "object_storage_feature": [
+          "dep:reqwest",
+          "dep:sha2",
+          "dep:hmac",
+          "dep:time"
+        ],
+        "client_dependency_declarations": {
+          "reqwest": {
+            "version": "0.13",
+            "default-features": false,
+            "features": [
+              "rustls"
+            ],
+            "optional": true
+          },
+          "sha2": {
+            "version": "0.10",
+            "optional": true
+          },
+          "hmac": {
+            "version": "0.12",
+            "optional": true
+          },
+          "time": {
+            "version": "0.3",
+            "features": [
+              "formatting",
+              "macros"
+            ],
+            "optional": true
+          }
+        }
+      },
+      "package_count_delta": 0,
+      "added_package_identities": [],
+      "removed_package_identities": []
+    }
+  ]
+}

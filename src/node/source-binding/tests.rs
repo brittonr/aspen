@@ -59,3 +59,21 @@ fn verifier_process_executes_the_selected_binary_under_valid_bounds() {
     let stdout = super::process::run(&trust, &["path-info", "--json"]).expect("verifier process executes");
     assert!(stdout.starts_with(b"verified "), "{}", String::from_utf8_lossy(&stdout));
 }
+
+/// Test-only accepted source over the synthetic gate receipt; no producer is authenticated.
+pub(in super::super) fn fixture() -> crate::error::Result<super::Accepted> {
+    let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
+    let gate_ref = crate::preserves_rail::canonical_hash(&gate_value)?;
+    let validation_value = crate::preserves_rail::record("node-source-fixture-validation-v1", vec![
+        crate::preserves_rail::string("explicit-test-only-no-producer-authentication"),
+        crate::preserves_rail::string(&gate_ref),
+    ]);
+    let validation_ref = crate::preserves_rail::canonical_hash(&validation_value)?;
+    Ok(super::Accepted {
+        binding_ref: validation_ref.clone(),
+        gate_ref,
+        gate_value,
+        validation_ref,
+        validation_value,
+    })
+}

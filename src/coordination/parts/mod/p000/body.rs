@@ -67,7 +67,11 @@ pub const OP_ARRIVE: &str = "arrive";
 pub const OP_REGISTER: &str = "register";
 pub const OP_UNREGISTER: &str = "unregister";
 pub const OP_READ: &str = "read";
+/// Requested from the coordination runtime, `linearizable` is denied: its in-process control registry has
+/// no replicated read index.
 pub const READ_CONSISTENCY_LINEARIZABLE: &str = crate::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE;
+/// Default coordination mode: committed state of the runtime's in-process control registry.
+pub const READ_CONSISTENCY_LOCAL_COMMITTED: &str = crate::raft_control_plane::READ_CONSISTENCY_LOCAL_COMMITTED;
 pub const READ_CONSISTENCY_LOCAL_STALE: &str = crate::raft_control_plane::READ_CONSISTENCY_LOCAL_STALE;
 
 const TRANSITION_KIND_ADVANCE: &str = "advance";

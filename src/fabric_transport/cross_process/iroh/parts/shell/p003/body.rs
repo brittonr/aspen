@@ -106,7 +106,7 @@ fn validate_exchange_refs(session_ref: &str, request_ref: &str) -> crate::error:
 fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> crate::error::Result<Vec<EndpointLocator>> {
     let mut locators = Vec::new();
     for address in &endpoint_addr.addrs {
-        if !crate::fabric_transport::is_exportable_transport_hint(address) {
+        if !crate::fabric_transport::is_exportable_hint(address) {
             continue;
         }
         let class = match address {

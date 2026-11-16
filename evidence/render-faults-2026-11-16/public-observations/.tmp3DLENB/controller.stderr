@@ -1,0 +1,4 @@
+orchestrator ready id=b64678a34075708c8631e655ccb48b9feeb47fff491f8d75bf85d9a6a665fcc1
+orchestrator ready id=b64678a34075708c8631e655ccb48b9feeb47fff491f8d75bf85d9a6a665fcc1
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]
+orchestrator counters [transport,reconciliation,admission,error]=[0, 0, 0, 0]

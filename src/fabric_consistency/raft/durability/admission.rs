@@ -187,7 +187,7 @@ fn persist_recovery_effects(port: &mut RedbReplicaPort, effects: &[ReplicaEffect
             ReplicaEffect::FlushLog { through_index } => { port.flush_log(*through_index).expect("flush recovery log"); }
             ReplicaEffect::PersistCommit { through_index } => { port.persist_commit(*through_index).expect("persist recovery commit"); }
             ReplicaEffect::PersistSnapshot { snapshot, is_suffix_retained } => {
-                port.persist_snapshot(snapshot, *is_suffix_retained).expect("persist recovery snapshot");
+                port.persist_snapshot(snapshot, *is_suffix_retained, &UNCOMPACTED).expect("persist recovery snapshot");
             }
             _ => {}
         }

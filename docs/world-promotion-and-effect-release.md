@@ -112,15 +112,18 @@ An unknown, unacknowledged, mismatched, unchanged, or malformed observation fail
 `molten world-promotion` provides these commands:
 
 - `plan` validates a JSON request and writes a canonical Preserves plan.
-- `promote` fails closed until a current authority adapter is composed.
+- `publish-intent` stores canonical intent material under its content reference; it grants no authority.
+- `promote` composes the signed current-facts adapter, the local transaction store, and the receipt store; it rereads the head and every intent's material at application time.
 - `outbox-inspect` reads bounded reservation state.
-- `retry-plan` inspects exact reservation and attempt identities, then fails closed without the current plan and authority adapters.
+- `retry-plan` plans one retry of an uncertain attempt for the same logical release under a current operator grant, the committed original plan, and explicit duplicate-risk acknowledgement; it does not dispatch.
 - `reconcile` classifies interrupted attempts as uncertain, then reports unresolved reservations without automatic retry.
-- `deny` and `abandon` fail closed until current operator authority is composed.
+- `deny` and `abandon` require a current operator grant; `abandon` also requires the committed original plan and explicit unknown-outcome acknowledgement.
+
+See [World promotion current facts](world-promotion-current-facts.md) for the signed inputs, intent material, and operator authority rules.
 
 ## Failure behavior
 
-Promotion or dispatch denies on incomplete intent closure, an unclassified intent, a simulated branch, stale generation, denied authority, policy drift, reservation mismatch, handler drift, adapter drift, missing acknowledgment, or conflicting persistence.
+Promotion or dispatch denies on incomplete intent closure, unavailable or mismatched intent material, an unclassified intent, a simulated branch, stale generation, denied authority, policy drift, reservation mismatch, handler drift, adapter drift, missing acknowledgment, or conflicting persistence.
 
 ## Non-claims
 

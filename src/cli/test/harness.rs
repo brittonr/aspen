@@ -111,6 +111,8 @@ fn run_failure_phase(error: &MoltenError) -> &'static str {
     match error {
         MoltenError::InvalidHarness(_) => "preflight",
         MoltenError::Io(_)
+        | MoltenError::NodeStateWriteOpenDenied { .. }
+        | MoltenError::NodeStatusHealthOpenDenied { .. }
         | MoltenError::Preserves(_)
         | MoltenError::HarnessDivergence(_)
         | MoltenError::Classified { .. } => "execute",

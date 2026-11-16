@@ -64,8 +64,8 @@ Aspen is a workload-neutral, policy-gated distributed-systems fabric built aroun
 - Preserves + Blake3 define stable communication, storage, policy, and evidence boundaries.
 - Synit/SAM-inspired dataspaces provide assertions, retractions, `Observe` patterns, service dependency assertions, and turn tracing.
 - Spritely Goblins-inspired vats are optional actor internals for near/far object references, transactional actormaps, promises/vows, revocable proxies, safe object serialization, and authority-graph debugging. The first local fixtures are available with `molten test vat run-fixture --out target/vat.preserves`, `molten test vat snapshot-fixture --out target/vat-snapshot.preserves`, `molten test vat restore-fixture --out target/vat-restore.preserves`, `molten test vat promise-fixture --out target/vat-promise.preserves`, `molten test vat ambient-authority-fixture --out target/vat-authority.preserves`, `molten test vat rights-fixture --out target/vat-rights.preserves`, `molten test vat distributed-ref-fixture --out target/vat-distributed-ref.preserves`, `molten test vat replay-fixture --out target/vat-replay.preserves`, and `molten test vat show <artifact>`.
-- Trellis choreographies define finite multi-party protocol shape and project to dataspace-backed local endpoints.
-- Trellis Raft primitives define strongly consistent replicated control-plane state, not normal actor traffic.
+- Trellis choreographies define finite multi-party protocol shape and project to dataspace-backed local endpoints; Trellis also backs the `job_dag` dependency and topological-order helpers.
+- Consensus is for control-plane state, not normal actor traffic, and does not call Trellis. The replicated in-tree Raft (`fabric_consistency::raft`) serves reliability and collaboration-scope services. Coordination locks/leases/registries, `molten test coordination`, `molten raft run-fixture`, and job scheduling run on the single-process control registry (`raft_control_plane`), whose `local-committed` reads are authoritative only inside that process and which denies `linearizable` reads.
 - Basalt/UCAN, Nickel contracts, reviewed Steel predicates, Trellis predicates, Cairn receipts, and Octet/Valence evidence gate side effects. Aspen-to-Valence stack evidence identity compatibility is documented in [`docs/valence-stack-evidence-adapter.md`](../docs/valence-stack-evidence-adapter.md).
 - Iroh bridges envelopes, blobs, and docs across peers; Wasmtime actors run behind deny-by-default hostcalls; Redb stores local durable metadata and indexes.
 
@@ -670,6 +670,8 @@ molten test coordination show target/coordination-apply/report.preserves
 ```
 
 `apply` writes `coordination-apply-report-v1` plus indexed request/receipt/state/assertion evidence. Duplicate operation ids replay the prior receipt instead of advancing state twice. Coordination receipts and reports are evidence only; they do not grant authority, policy, resource, transport, provenance, or source-gate trust.
+
+Coordination requests default to `--read-consistency-mode local-committed`: the committed state of the runtime's single-process control registry. Mutations and other protected operations are admitted only in that mode; `local-stale` is denied for them, and `linearizable` is denied for every operation because the in-process registry has no replicated read index. Read receipts mark `committed-state-bound` as passing only for an admitted `local-committed` read.
 
 ## Production readiness receipts
 

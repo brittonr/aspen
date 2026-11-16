@@ -1,0 +1,15 @@
+[package]
+name = "issue3-probe"
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[features]
+allocation-counters = []
+
+[dependencies]
+current-core = { path = "../current" }
+candidate-core = { path = "../candidate" }
+sorted-core = { path = "../sorted" }
+bbtree = { path = "../../upstream/bbtree", version = "=0.1.5", default-features = false }
+blake3.workspace = true

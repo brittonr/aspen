@@ -44,13 +44,11 @@ pub struct ControlRegistryRuntime {
     pub predicate_receipts: Vec<RaftPredicateReceipt>,
 }
 
+/// A read served from one in-process registry instance. The receipt binds that instance's committed
+/// state, term, index, and group manifest; callers cannot supply them separately.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ControlRegistryReadInput {
-    pub state: IoValue,
-    pub group_ref: String,
-    pub committed_term: u64,
-    pub committed_index: u64,
-    pub read_index: u64,
+pub struct ControlRegistryReadInput<'a> {
+    pub runtime: &'a ControlRegistryRuntime,
     pub read_consistency_mode: String,
     pub namespace: String,
     pub name: String,

@@ -37,7 +37,7 @@ For a clean prior stop, restart first requires matching current-run completion a
 
 The [runbooks](../../production-operator-runbooks.md) require backup drills to bind ledger, Redb, chunks, identity metadata, retention pins, source-gate refs, restore verification, and tamper-denial evidence. A directory copy alone cannot express those relationships. Upgrade and rollback evidence additionally addresses migration, smoke observations, rollback eligibility, irreversible exclusions, and post-rollback verification. An irreversible operation without exclusion evidence cannot justify a rollback-safety claim.
 
-There is an important source boundary: the inspected local startup uses `synthetic_clean_octet_gate_receipt_for_tests()`. The production runbook, by contrast, requires current evidence for the exact reviewed source candidate and policy. Local lifecycle success therefore does not demonstrate fulfillment of that production requirement. This article deliberately leaves that gap visible rather than treating the local fixture path as production admission.
+There is an important source boundary. Normal local startup loads the operator-selected `source-gate-trust.json` and admits the authenticated source binding of the executing candidate; the fabricated `synthetic_clean_octet_gate_receipt_for_tests()` receipt is compiled only into test targets. `molten dogfood local-node` has no authenticated Octet output, so it composes startup over an unqualified fixture gate whose startup receipt records `strict-octet-source-gate-bound` as failed. The production runbook requires current evidence for the exact reviewed source candidate and policy, so dogfood lifecycle success does not demonstrate fulfillment of that production requirement.
 
 ## Verification and limits
 

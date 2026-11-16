@@ -27,10 +27,10 @@ only if the workflow promises snapshot restoration.
 | Kiln #57 | Consumer persistence for a Kiln-hosted pilot, if selected. | External dependency; not started. |
 | #22 | Capability report with implementation separate from recorded execution. | Implemented tool; pilot bundle still required. |
 | #26 | Supported NixOS module when NixOS is the advertised deployment path. | Module/eval implemented; opt-in VM rail not executed. |
-| #27 | Notices bound to selected dependency revisions. | Implemented checker; rerun for the candidate closure. |
+| #27 | Notices bound to selected dependency revisions. | Row-bound checker and `license-boundary` flake check implemented; rerun for the candidate closure. |
 | #28 | Advisory and license audit dispositions. | Implemented tool; candidate snapshot and dispositions still required. |
-| #29 | Source/documentation drift repaired for touched surfaces. | Prolly and source-sensitive map updated; rerun for the candidate. |
-| #30 | Security and contribution entry points. | Added; private reporting channel still needs maintainer verification. |
+| #29 | Source/documentation drift repaired for touched surfaces. | Prolly and source-sensitive map updated; `doc-links` and `readme-quickstart` flake checks added; rerun for the candidate. |
+| #30 | Security and contribution entry points. | Added. Private reporting is enabled per a [retained read-only API observation](../.cairn/archive/2026-11-16-close-doc-and-tool-gaps/evidence/private-vulnerability-reporting-2026-11-16.json) (2026-11-16, owner account); report delivery and maintainer handling are not exercised. |
 
 ## Qualification and distribution
 

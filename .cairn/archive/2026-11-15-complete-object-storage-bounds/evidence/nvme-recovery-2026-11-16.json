@@ -1,0 +1,13 @@
+{
+  "schema": "aspen.recovered-nvme-observation.v1",
+  "recovered_on": "2026-11-16",
+  "recorded_execution_date": "2026-11-13",
+  "receipt": "nvme-path.preserves",
+  "receipt_bytes": 173,
+  "receipt_blake3": "f62fc0061837fef1f9070e12e3de0e88c17e9fb26e85737b2bfcee531f7de09b",
+  "producer_test": "qualify_actual_nvme_path_capacity_and_reopen",
+  "recovery": "Exact packed bytes copied from the originally retained task receipt; original and publication copy have the same BLAKE3 identity. No workload was rerun for this recovery.",
+  "execution_record": "../tasks.md#parent-execution-2026-11-13",
+  "scope": "Actual device-path, bounded capacity and reopen observation only; not sustained throughput, latency, MTTR, power-loss, machine-loss or current-source qualification.",
+  "source_binding": "Historical parent execution record; this recovery does not establish a newly bound current-source execution."
+}

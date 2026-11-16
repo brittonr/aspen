@@ -316,3 +316,83 @@ fn recovery_denies_stale_generation_schema_drift_and_unresolved_effects() {
     assert!(decision.diagnostics.iter().any(|issue| matches!(issue, DurabilityIssue::StaleGeneration { .. })));
     assert!(decision.diagnostics.iter().any(|issue| matches!(issue, DurabilityIssue::UnresolvedEffect(_))));
 }
+
+fn snapshot_request(snapshot_ref: &str, covered: u64) -> SnapshotRequest {
+    SnapshotRequest {
+        kind: SnapshotKind::Snapshot,
+        generation: GENERATION,
+        snapshot_ref: snapshot_ref.to_string(),
+        content_ref: VALUE_REF.to_string(),
+        ordered_state_ref: ORDERED_REF.to_string(),
+        covered_log_sequence: Some(covered),
+        durability: DurabilityLevel::MachineLoss,
+    }
+}
+
+/// Three durable records with an older snapshot covering the first and a newer one covering two.
+fn compactable_state(profile: &DurableStateProfile) -> DurableState {
+    let mut state = state();
+    for sequence in 0..3 {
+        state = append_log(profile, &state, &append_request(sequence, DurabilityLevel::MachineLoss, VALUE_REF))
+            .expect("durable record")
+            .next;
+    }
+    let older = create_snapshot(profile, &state, &snapshot_request(OTHER_VALUE_REF, FIRST_SEQUENCE)).expect("older");
+    create_snapshot(profile, &older.next, &snapshot_request(SNAPSHOT_REF, SECOND_SEQUENCE))
+        .expect("newer")
+        .next
+}
+
+// r[verify molten.fabric_durability.snapshot_compaction]
+#[test]
+fn snapshot_retirement_keeps_the_newest_valid_snapshot_and_requires_authority() {
+    let profile = profile(DurableAdapterKind::DeterministicSimulation);
+    let state = compactable_state(&profile);
+    let retired = retire_superseded_snapshots(&profile, &state, GENERATION, SNAPSHOT_REF, Some(AUTHORITY_REF))
+        .expect("retire superseded snapshot");
+    assert_eq!(retired.next.snapshots.keys().collect::<Vec<_>>(), vec![SNAPSHOT_REF]);
+    assert_eq!(retired.affected_items, 1);
+
+    let issues = retire_superseded_snapshots(&profile, &state, GENERATION, SNAPSHOT_REF, None)
+        .expect_err("retirement without authority must deny");
+    assert!(issues.contains(&DurabilityIssue::RetentionAuthorityRequired));
+    let mut unauthorized = state.clone();
+    unauthorized.descriptor.retention_authority_ref = None;
+    let issues = retire_superseded_snapshots(&profile, &unauthorized, GENERATION, SNAPSHOT_REF, None)
+        .expect_err("a namespace without retention authority cannot retire snapshots");
+    assert!(issues.contains(&DurabilityIssue::RetentionAuthorityRequired));
+
+    let corrupt = mark_snapshot_corrupt(&state, SNAPSHOT_REF).expect("corrupt newest");
+    let issues = retire_superseded_snapshots(&profile, &corrupt, GENERATION, SNAPSHOT_REF, Some(AUTHORITY_REF))
+        .expect_err("a corrupt snapshot cannot replace the others");
+    assert!(issues.contains(&DurabilityIssue::SnapshotCorrupt));
+}
+
+// r[verify molten.fabric_durability.snapshot_compaction]
+#[test]
+fn covered_truncation_removes_only_records_the_snapshot_covers() {
+    let profile = profile(DurableAdapterKind::DeterministicSimulation);
+    let state = compactable_state(&profile);
+    let truncated =
+        truncate_snapshot_covered(&profile, &state, GENERATION, SNAPSHOT_REF, SECOND_SEQUENCE + 1, Some(AUTHORITY_REF))
+            .expect("truncate covered records");
+    assert_eq!(truncated.next.durable_log.iter().map(|record| record.sequence).collect::<Vec<_>>(), vec![2]);
+    assert_eq!(truncated.next.next_log_sequence(), Ok(3));
+
+    let issues = truncate_snapshot_covered(
+        &profile,
+        &state,
+        GENERATION,
+        OTHER_VALUE_REF,
+        SECOND_SEQUENCE + 1,
+        Some(AUTHORITY_REF),
+    )
+    .expect_err("records after the older snapshot's coverage stay");
+    assert!(issues.iter().any(|issue| matches!(issue, DurabilityIssue::SequenceMismatch { .. })));
+    let issues = truncate_snapshot_covered(&profile, &state, GENERATION, SNAPSHOT_REF, SECOND_SEQUENCE + 1, None)
+        .expect_err("covered truncation without authority must deny");
+    assert!(issues.contains(&DurabilityIssue::RetentionAuthorityRequired));
+    let issues = truncate_snapshot_covered(&profile, &state, GENERATION, SNAPSHOT_REF, 7, Some(AUTHORITY_REF))
+        .expect_err("truncation must retain an existing record");
+    assert!(issues.iter().any(|issue| matches!(issue, DurabilityIssue::LogGap { .. })));
+}

@@ -275,6 +275,8 @@ fn profile(group: &Group) -> ReplicaProfile {
         election_min_ticks: ELECTION_MIN_TICKS,
         election_max_ticks: ELECTION_MAX_TICKS,
         max_log_entries: MAX_REPLICA_LOG_ENTRIES,
+        snapshot_threshold_entries: MAX_REPLICA_LOG_ENTRIES / 2,
+        request_retention_entries: 2_048,
         max_message_entries: MAX_REPLICA_MESSAGE_ENTRIES,
         max_effects_per_step: EFFECT_LIMIT,
     }

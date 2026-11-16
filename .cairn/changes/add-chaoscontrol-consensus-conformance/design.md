@@ -86,9 +86,11 @@ Consensus execution, guest startup, Nix materialization, filesystem access, KVM 
 
 ## Dependencies and blocker
 
-Implementation is blocked until ChaosControl archives versioned SMR chain-workload and protocol-observation-cohort contracts with accepted producer evidence classes. Foundation artifacts and local negative fixtures can proceed before that handoff.
+The producer-contract prerequisite is available: ChaosControl archived `2026-08-07-add-smr-chain-workload` and `2026-11-05-add-protocol-observation-cohorts`. Inspection at provider checkout `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` found their schemas, pure validators, guest-intake hook, SDK emitter and VMM collector. This records source availability, not an adopted immutable consumer pin, an admitted Molten guest or execution evidence.
 
-The integration also requires a production-shaped multi-node Molten consensus guest profile. If that profile cannot use admitted cross-process transport, the KVM tasks remain blocked rather than substituting an in-process model.
+The remaining cutover requires the selected producer/schema/profile/evidence identities, an adapter on actual committed application and independent-oracle paths, and a measured multi-node Molten guest source/binary/image/kernel/runtime closure. The native three-child signal directory is not a cross-VM protocol; the current producer supervisor's memory-backed shared directories are not an admitted persistent-device mapping.
+
+The inspected SDK envelope emits no inline projection and uses a raw projection hash, while the core SMR guest-history intake requires inline bytes with the versioned protocol-projection identity. Resolve that exact producer/consumer representation handoff before treating emitted records as admitted history. Strict SMP rejection does not rule out a supported single-vCPU-per-guest multi-VM cohort, but neither native runs nor historical release receipts qualify that cohort.
 
 ## Risks / Trade-offs
 

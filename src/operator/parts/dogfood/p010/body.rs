@@ -227,19 +227,21 @@ fn start_node(
         resource_refs,
         effect_profile_refs: &[effects_ref],
     })?;
-    let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
-    crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
-        config_value,
-        identity_receipt_ref: identity_receipt_ref.to_string(),
-        index_receipt_refs: vec![dogfood_ref("adapter-index")?],
-        source_gate_receipt_refs: vec![source_gate_ref],
-        source_gate_receipt_values: vec![source_gate_value],
-        profile_metadata_refs: vec![dogfood_ref("production-profile-metadata")?],
-        capability_receipt_refs: capability_refs.to_vec(),
-        resource_receipt_refs: resource_refs.to_vec(),
-        version_refs: vec![dogfood_ref(env!("CARGO_PKG_VERSION"))?],
-    })
+    let fixture_gate = dogfood_fixture_gate()?;
+    crate::node_runtime::start_node_runtime_with_unqualified_fixture_gate(
+        &crate::node_runtime::NodeRuntimeStartInput {
+            config_value,
+            identity_receipt_ref: identity_receipt_ref.to_string(),
+            index_receipt_refs: vec![dogfood_ref("adapter-index")?],
+            source_gate_receipt_refs: vec![fixture_gate.gate_ref().to_string()],
+            source_gate_receipt_values: vec![fixture_gate.value().clone()],
+            profile_metadata_refs: vec![dogfood_ref("production-profile-metadata")?],
+            capability_receipt_refs: capability_refs.to_vec(),
+            resource_receipt_refs: resource_refs.to_vec(),
+            version_refs: vec![dogfood_ref(env!("CARGO_PKG_VERSION"))?],
+        },
+        &fixture_gate,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

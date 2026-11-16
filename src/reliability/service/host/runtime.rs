@@ -19,7 +19,7 @@ impl HostAdmission {
         if self.run_id.is_empty()
             || self.run_id.len() > 256
             || self.endpoint.port() == 0
-            || !(1..=65_536).contains(&self.max_connections)
+            || !(1..=MAX_CONCURRENT_CONNECTIONS).contains(&self.max_connections)
         {
             return Err(crate::error::Failure::invalid_harness("invalid bounded public registry host admission"));
         }
@@ -49,7 +49,7 @@ pub struct Host {
 enum Incoming {
     Timer(crate::fabric_consistency::raft::ReplicaEvent),
     Peer(crate::fabric_consistency::raft::ReplicaEvent),
-    Client(tokio::net::TcpStream),
+    Client(connections::Admitted),
 }
 
 impl Host {
@@ -77,6 +77,10 @@ impl Host {
     }
 
     /// Receives only in select; effects are awaited outside select and never cancelled midway.
+    ///
+    /// The host is a long-running service: it stops on an operator stop or teardown request, on
+    /// cancellation, or fail-stop when an admitted replica effect fails or Raft ingress ends with a
+    /// transport failure. Connection counts and peer traffic volume never end it.
     pub async fn serve(mut self) -> crate::error::Result<()> {
         self.context.authorization.require("serve")?;
         let listener = tokio::net::TcpListener::bind(self.admission.endpoint).await.map_err(io_error)?;
@@ -99,14 +103,20 @@ impl Host {
         Ok(())
     }
 
+    // r[impl molten.consensus.long_running_service_bounds]
     async fn serve_bound(&mut self, listener: &tokio::net::TcpListener) -> crate::error::Result<()> {
-        let mut connections = 0;
+        let mut connections =
+            connections::Intake::new(self.admission.max_connections, std::time::Duration::from_secs(5))?;
         let mut control = tokio::time::interval(std::time::Duration::from_millis(100));
         loop {
             let incoming = tokio::select! {
                 event = self.timers.recv() => Incoming::Timer(event.ok_or_else(|| crate::error::Failure::invalid_harness("timer queue closed"))?),
                 event = self.ingress.next() => Incoming::Peer(event?.event),
-                accepted = listener.accept(), if connections < self.admission.max_connections => Incoming::Client(accepted.map_err(io_error)?.0),
+                accepted = listener.accept(), if connections.has_capacity() => {
+                    connections.admit(accepted.map_err(io_error)?.0)?;
+                    continue;
+                }
+                admitted = connections.next() => Incoming::Client(admitted),
                 _ = control.tick() => {
                     if super::control::should_stop(&self.context)? { return Ok(()); }
                     continue;
@@ -116,15 +126,9 @@ impl Host {
                 Incoming::Timer(event) | Incoming::Peer(event) => {
                     self.apply(event).await?;
                 }
-                Incoming::Client(stream) => {
-                    connections += 1;
-                    if self.connection(stream).await? {
+                Incoming::Client(admitted) => {
+                    if self.connection(admitted).await? {
                         return Ok(());
-                    }
-                    if connections == self.admission.max_connections {
-                        return Err(crate::error::Failure::invalid_harness(
-                            "public registry connection bound exhausted",
-                        ));
                     }
                 }
             }
@@ -132,10 +136,11 @@ impl Host {
         }
     }
 
-    async fn connection(&mut self, mut stream: tokio::net::TcpStream) -> crate::error::Result<bool> {
-        let request = match self.read_request(&mut stream).await {
-            Some(request) => request,
-            None => return Ok(false),
+    /// Answer one fully read request; its connection permit is released when this returns.
+    async fn connection(&mut self, admitted: connections::Admitted) -> crate::error::Result<bool> {
+        let connections::Admitted { frame, mut stream, .. } = admitted;
+        let Ok(request) = parse_request(&frame) else {
+            return Ok(false);
         };
         let response = match self.admit(&request) {
             Err(diagnostic) => denied(&request, diagnostic),
@@ -153,21 +158,6 @@ impl Host {
         .await;
         Ok(should_stop)
     }
-    async fn read_request(&mut self, stream: &mut tokio::net::TcpStream) -> Option<super::super::protocol::Request> {
-        let incoming = receive(stream);
-        tokio::pin!(incoming);
-        let expiry = tokio::time::sleep(std::time::Duration::from_secs(5));
-        tokio::pin!(expiry);
-        loop {
-            tokio::select! {
-                request = &mut incoming => return request.ok(),
-                _ = &mut expiry => return None,
-                event = self.timers.recv() => { self.apply(event?).await.ok()?; }
-                event = self.ingress.next() => { self.apply(event.ok()?.event).await.ok()?; }
-            }
-        }
-    }
-
     fn admit(&self, request: &super::super::protocol::Request) -> std::result::Result<(), String> {
         let endpoint = super::super::protocol::validate_request(request)?;
         if request.run_id != self.admission.run_id || !self.admission.peers.values().any(|peer| peer == &endpoint) {
@@ -225,28 +215,59 @@ impl Host {
         event: crate::fabric_consistency::raft::ReplicaEvent,
     ) -> crate::error::Result<()> {
         self.context.require_current("serve")?;
-        match self.replica.handle_event(event).await {
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => Ok(()),
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-                Err(crate::error::Failure::invalid_harness(diagnostic))
-            }
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failure) => {
-                Err(crate::error::Failure::invalid_harness(failure.diagnostic))
-            }
+        executed(self.replica.handle_event(event).await)?;
+        self.snapshot_if_due().await
+    }
+
+    /// Snapshot with the registry's state ref once the retained applied entries reach the profile's
+    /// threshold, so the log keeps room for new proposals. A denied or failed snapshot takes the
+    /// same fail-stop path as any other replica effect.
+    // r[impl molten.consensus.snapshot_threshold]
+    async fn snapshot_if_due(&mut self) -> crate::error::Result<()> {
+        if !crate::fabric_consistency::raft::is_snapshot_due(self.replica.state()) {
+            return Ok(());
+        }
+        let application_state_ref = self.replica.ports().application.handler().state_ref()?;
+        executed(
+            self.replica
+                .handle_event(crate::fabric_consistency::raft::ReplicaEvent::CreateSnapshot { application_state_ref })
+                .await,
+        )
+    }
+}
+
+fn executed(outcome: crate::fabric_consistency::raft::ReplicaExecutionOutcome) -> crate::error::Result<()> {
+    match outcome {
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => Ok(()),
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
+            Err(crate::error::Failure::invalid_harness(diagnostic))
+        }
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failure) => {
+            Err(crate::error::Failure::invalid_harness(failure.diagnostic))
         }
     }
 }
 
+#[cfg(test)]
 pub(super) async fn receive(
     stream: &mut tokio::net::TcpStream,
 ) -> crate::error::Result<super::super::protocol::Request> {
+    parse_request(&read_frame(stream).await?)
+}
+
+/// Read one newline-terminated public request frame of bounded size.
+async fn read_frame(stream: &mut tokio::net::TcpStream) -> crate::error::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut reader = tokio::io::BufReader::new(stream).take(super::super::protocol::MAX_FRAME_BYTES + 1);
     reader.read_until(b'\n', &mut bytes).await.map_err(io_error)?;
     if bytes.len() as u64 > super::super::protocol::MAX_FRAME_BYTES || bytes.last() != Some(&b'\n') {
         return Err(crate::error::Failure::invalid_harness("invalid bounded public request frame"));
     }
-    serde_json::from_slice(&bytes).map_err(|error| crate::error::Failure::invalid_harness(error.to_string()))
+    Ok(bytes)
+}
+
+fn parse_request(frame: &[u8]) -> crate::error::Result<super::super::protocol::Request> {
+    serde_json::from_slice(frame).map_err(|error| crate::error::Failure::invalid_harness(error.to_string()))
 }
 
 fn success(request: &super::super::protocol::Request, value: serde_json::Value) -> super::super::protocol::Response {
@@ -264,5 +285,10 @@ fn io_error(error: std::io::Error) -> crate::error::Failure {
     crate::error::Failure::invalid_harness(error.to_string())
 }
 
+/// Simultaneous public connections a host may serve; later connections wait in the listen backlog.
+const MAX_CONCURRENT_CONNECTIONS: u64 = 256;
+
+#[path = "runtime/connections.rs"]
+mod connections;
 #[path = "runtime/operation.rs"]
 mod operation;

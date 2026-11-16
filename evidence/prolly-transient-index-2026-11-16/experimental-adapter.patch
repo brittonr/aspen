@@ -1,0 +1,153 @@
+--- staged-source/prolly_map/operations.rs
++++ experiment/current/src/prolly_map/operations.rs
+@@ -96,7 +96,7 @@
+     })
+ }
+ 
+-fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
++pub fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
+     let mut entries = prior.iter().map(|entry| (entry.key.clone(), entry.value.clone())).collect::<BTreeMap<_, _>>();
+     for edit in edits {
+         apply_edit(&mut entries, edit)?;
+--- staged-source/prolly_map/operations.rs
++++ experiment/candidate/src/prolly_map/operations.rs
+@@ -1,4 +1,4 @@
+-use std::collections::BTreeMap;
++use bbtree::unsync::BBTreeMap as BTreeMap;
+ use std::collections::BTreeSet;
+ 
+ mod diff;
+@@ -96,7 +96,7 @@
+     })
+ }
+ 
+-fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
++pub fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
+     let mut entries = prior.iter().map(|entry| (entry.key.clone(), entry.value.clone())).collect::<BTreeMap<_, _>>();
+     for edit in edits {
+         apply_edit(&mut entries, edit)?;
+--- staged-source/prolly_map/operations/diff.rs
++++ experiment/candidate/src/prolly_map/operations/diff.rs
+@@ -1,6 +1,6 @@
+ //! Snapshot diff traversal over validated snapshots.
+ 
+-use std::collections::BTreeMap;
++use bbtree::unsync::BBTreeMap as BTreeMap;
+ use std::collections::VecDeque;
+ 
+ use super::*;
+--- staged-source/prolly_map/operations.rs
++++ experiment/sorted/src/prolly_map/operations.rs
+@@ -1,4 +1,3 @@
+-use std::collections::BTreeMap;
+ use std::collections::BTreeSet;
+ 
+ mod diff;
+@@ -96,12 +95,73 @@
+     })
+ }
+ 
+-fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
+-    let mut entries = prior.iter().map(|entry| (entry.key.clone(), entry.value.clone())).collect::<BTreeMap<_, _>>();
++// Experimental sorted edit overlay followed by one merge of validated prior entries.
++// Error precedence follows input order, including repeated edits to the same key.
++pub fn edited_entries(prior: &[SemanticEntry], edits: &[MapEdit]) -> Result<Vec<SemanticEntry>, Vec<ProllyIssue>> {
++    let mut overlay: Vec<(&[u8], Option<&[u8]>)> = Vec::with_capacity(edits.len());
++    let mut final_length = prior.len();
+     for edit in edits {
+-        apply_edit(&mut entries, edit)?;
+-    }
+-    Ok(entries.into_iter().map(|(key, value)| SemanticEntry { key, value }).collect())
++        let key = match edit {
++            MapEdit::Insert(entry) | MapEdit::Update(entry) => entry.key.as_slice(),
++            MapEdit::Delete(key) => key.as_slice(),
++        };
++        let position = overlay.binary_search_by(|(stored, _)| stored.cmp(&key));
++        let present = match position {
++            Ok(index) => overlay[index].1.is_some(),
++            Err(_) => prior.binary_search_by(|entry| entry.key.as_slice().cmp(key)).is_ok(),
++        };
++        let value = match edit {
++            MapEdit::Insert(entry) => {
++                if present {
++                    return Err(vec![ProllyIssue::EditInsertExisting(key.to_vec())]);
++                }
++                final_length += 1;
++                Some(entry.value.as_slice())
++            }
++            MapEdit::Update(entry) => {
++                if !present {
++                    return Err(vec![ProllyIssue::EditUpdateMissing(key.to_vec())]);
++                }
++                Some(entry.value.as_slice())
++            }
++            MapEdit::Delete(_) => {
++                if !present {
++                    return Err(vec![ProllyIssue::EditDeleteMissing(key.to_vec())]);
++                }
++                final_length -= 1;
++                None
++            }
++        };
++        match position {
++            Ok(index) => overlay[index] = (key, value),
++            Err(index) => overlay.insert(index, (key, value)),
++        }
++    }
++    let mut output = Vec::with_capacity(final_length);
++    let mut prior_index = 0;
++    let mut overlay_index = 0;
++    while prior_index < prior.len() || overlay_index < overlay.len() {
++        let ordering = match (prior.get(prior_index), overlay.get(overlay_index)) {
++            (Some(entry), Some((key, _))) => entry.key.as_slice().cmp(key),
++            (Some(_), None) => core::cmp::Ordering::Less,
++            (None, Some(_)) => core::cmp::Ordering::Greater,
++            (None, None) => break,
++        };
++        if ordering == core::cmp::Ordering::Less {
++            output.push(prior[prior_index].clone());
++            prior_index += 1;
++        } else {
++            let (key, value) = overlay[overlay_index];
++            if let Some(value) = value {
++                output.push(SemanticEntry { key: key.to_vec(), value: value.to_vec() });
++            }
++            overlay_index += 1;
++            if ordering == core::cmp::Ordering::Equal {
++                prior_index += 1;
++            }
++        }
++    }
++    Ok(output)
+ }
+ 
+ fn leaf_count(profile: &ProllyProfile, build: &MapBuild) -> Result<u32, Vec<ProllyIssue>> {
+@@ -181,28 +241,6 @@
+     })
+ }
+ 
+-fn apply_edit(entries: &mut BTreeMap<Vec<u8>, Vec<u8>>, edit: &MapEdit) -> Result<(), Vec<ProllyIssue>> {
+-    match edit {
+-        MapEdit::Insert(entry) => {
+-            if entries.contains_key(&entry.key) {
+-                return Err(vec![ProllyIssue::EditInsertExisting(entry.key.clone())]);
+-            }
+-            entries.insert(entry.key.clone(), entry.value.clone());
+-        }
+-        MapEdit::Update(entry) => {
+-            let Some(value) = entries.get_mut(&entry.key) else {
+-                return Err(vec![ProllyIssue::EditUpdateMissing(entry.key.clone())]);
+-            };
+-            *value = entry.value.clone();
+-        }
+-        MapEdit::Delete(key) => {
+-            if entries.remove(key).is_none() {
+-                return Err(vec![ProllyIssue::EditDeleteMissing(key.clone())]);
+-            }
+-        }
+-    }
+-    Ok(())
+-}
+ 
+ fn added(entry: &SemanticEntry) -> DiffRecord {
+     DiffRecord {

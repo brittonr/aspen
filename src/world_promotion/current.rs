@@ -19,6 +19,7 @@ use molten_node_host::node_state::NamespaceKind;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::LocalIntentMaterial;
 use super::WorldPromotionCurrentPort;
 use crate::error::Failure;
 use crate::error::Result;
@@ -62,9 +63,26 @@ pub struct ObservedPromotionCurrent {
     pub authority_generation: u64,
     pub policy_ref: WorldHeadPolicyRef,
     pub closure: SignedIntentClosure,
+    material: LocalIntentMaterial,
+}
+
+impl ObservedPromotionCurrent {
+    /// Reads the content-addressed material for every plan intent now, at
+    /// application time, and requires it to match the plan exactly.
+    fn is_intent_material_available(&self, plan: &WorldPromotionPlan) -> Result<bool> {
+        let mut material = Vec::with_capacity(plan.intents.len());
+        for intent in &plan.intents {
+            match self.material.read(&intent.intent_ref)? {
+                Some(stored) => material.push(stored),
+                None => return Ok(false),
+            }
+        }
+        Ok(intent_material_matches(plan, &material))
+    }
 }
 
 impl WorldPromotionCurrentPort for ObservedPromotionCurrent {
+    // r[impl molten.world_promotion.transaction]
     fn observe_transaction(&mut self, plan: &WorldPromotionPlan) -> Result<WorldPromotionTransactionFacts> {
         let expected_intents = plan.intents.iter().map(|intent| intent.intent_ref.as_str()).collect::<BTreeSet<_>>();
         let closure_intents = self.closure.intent_refs.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -83,6 +101,7 @@ impl WorldPromotionCurrentPort for ObservedPromotionCurrent {
             authority_generation: self.authority_generation,
             policy_ref: self.policy_ref.clone(),
             intent_closure_complete: is_closure_complete,
+            intent_material_available: self.is_intent_material_available(plan)?,
             reservation_refs: plan.reservations.iter().map(|reservation| reservation.reservation_ref.clone()).collect(),
         })
     }
@@ -115,11 +134,23 @@ pub fn read_observed_current(
         authority_generation: authority.generation,
         policy_ref: authority.policy_ref()?,
         closure,
+        material: LocalIntentMaterial::from_storage(storage),
     })
 }
 
-pub fn read_operator_authority(path: &Path, trusted_signer: &str) -> Result<SignedPromotionAuthority> {
-    read_authority(path, trusted_signer)
+/// Reads and verifies one signed operator authority grant for deny, retry
+/// planning, or abandon. Verification establishes who signed it, not that it is
+/// current: callers decide currentness with `validate_operator_authority`.
+pub fn read_operator_authority(path: &Path, trusted_signer: &str) -> Result<WorldOperatorAuthority> {
+    let authority = read_authority(path, trusted_signer)?;
+    Ok(WorldOperatorAuthority {
+        branch_id: molten_core::world_head::WorldBranchId::new(authority.branch_id.clone())
+            .map_err(|error| Failure::invalid_harness(format!("invalid branch id: {error}")))?,
+        authority_ref: authority.authority_ref()?,
+        policy_ref: authority.policy_ref()?,
+        generation: authority.generation,
+        admitted: authority.admitted,
+    })
 }
 
 pub(super) fn read_authority(path: &Path, trusted_signer: &str) -> Result<SignedPromotionAuthority> {

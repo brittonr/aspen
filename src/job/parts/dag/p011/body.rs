@@ -1,27 +1,4 @@
 
-fn explicit_admission_authority(
-    request: &JobAdmissionRequest,
-    diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> bool {
-    let mut has_explicit_authority = true;
-    if request.policy_refs.is_empty() {
-        has_explicit_authority = false;
-        diagnostics.push_item("job admission missing explicit policy refs".to_string());
-    }
-    if request.capability_refs.is_empty() {
-        has_explicit_authority = false;
-        diagnostics.push_item("job admission missing explicit capability refs".to_string());
-    }
-    if request.evidence_refs.is_empty() {
-        has_explicit_authority = false;
-        diagnostics.push_item("job admission missing explicit evidence refs".to_string());
-    }
-    if request.resource_refs.is_empty() {
-        has_explicit_authority = false;
-        diagnostics.push_item("job admission missing explicit resource refs".to_string());
-    }
-    has_explicit_authority
-}
 
 fn capability_contexts_admit(
     target_registry: &FilePath,
@@ -83,6 +60,19 @@ fn sync_evidence_bound(request: &JobAdmissionRequest, diagnostics: &mut impl cra
     } else {
         diagnostics.push_item(format!("job admission evidence refs do not bind sync evidence {}", request.sync_ref));
         false
+    }
+}
+
+fn fixture_gate_evidence_bound(
+    request: &JobAdmissionRequest,
+    fixture: &crate::octet_gate::UnqualifiedFixtureGate,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> (bool, Vec<String>) {
+    if request.evidence_refs.iter().any(|reference| reference == fixture.gate_ref()) {
+        (true, vec![fixture.validation_ref().to_string()])
+    } else {
+        diagnostics.push_item(format!("job admission evidence refs do not bind fixture gate {}", fixture.gate_ref()));
+        (false, Vec::new())
     }
 }
 

@@ -36,21 +36,11 @@ fn install_job_execute_authority_context(
     Ok(context_ref)
 }
 
-fn install_clean_octet_gate(registry: &Path, policy_refs: &[String], capability_refs: &[String]) -> Result<String> {
-    let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let gate_ref = crate::preserves_rail::canonical_hash(&gate_value)?;
-    crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
-        kind: "octet-gate-receipt".to_string(),
-        payload: gate_value,
-        schema_refs: Vec::new(),
-        dependency_refs: Vec::new(),
-        effect_manifest_ref: None,
-        policy_refs: policy_refs.to_vec(),
-        evidence_refs: vec![dogfood_ref("octet-evidence")?],
-        installer_ref: dogfood_ref("octet-installer")?,
-        capability_refs: capability_refs.to_vec(),
-    })?;
-    Ok(gate_ref)
+/// Local dogfood has no authenticated Octet output, so it binds an unqualified fixture gate that no
+/// Octet source-gate consumer accepts. Nothing is installed into a registry as an Octet gate receipt.
+// r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+fn dogfood_fixture_gate() -> Result<crate::octet_gate::UnqualifiedFixtureGate> {
+    crate::octet_gate::UnqualifiedFixtureGate::new(LOCAL_NODE_WORKFLOW_ID)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

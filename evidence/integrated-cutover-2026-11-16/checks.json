@@ -1,0 +1,187 @@
+{
+  "schema": "aspen.local-check-execution.v1",
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "octet",
+        "check",
+        "--artifact-dir",
+        "target/octet"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 331107090015
+    },
+    {
+      "argv": [
+        "cargo",
+        "octet",
+        "check",
+        "-p",
+        "molten",
+        "--artifact-dir",
+        "target/octet-lib",
+        "--",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 66538630418
+    },
+    {
+      "argv": [
+        "python3",
+        "target/emit-object-corpus.py"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 852483461
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "artifacts",
+        "import",
+        "--artifacts",
+        "target/octet",
+        "--ledger",
+        "target/octet-ledger",
+        "--receipt-out",
+        "target/octet/artifact-ledger-receipt.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 358273327505
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "gate",
+        "--artifacts",
+        "target/octet",
+        "--profile",
+        "strict-ci",
+        "--receipt-out",
+        "target/octet/gate-receipt.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 556068871
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "remediation",
+        "plan",
+        "--artifacts",
+        "target/octet",
+        "--lib-artifacts",
+        "target/octet-lib",
+        "--focused-object-corpus",
+        "target/octet/object-corpus-receipt.json",
+        "--receipt-out",
+        "target/octet/remediation-plan.preserves"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 436045019
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--workspace",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 301301274268
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "molten",
+        "--test",
+        "worldpromotioncli",
+        "--test",
+        "worldpromotiondenials"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 38408280107
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "molten-core",
+        "--doc"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 82470414948
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/readme-quickstart.py",
+        "--cargo"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 1274788535
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 249297659101
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 2571716095
+    },
+    {
+      "argv": [
+        "/nix/store/shd041f9gjj2jf06cbfxs241a16b752h-cairn-0.2.1/bin/cairn",
+        "validate",
+        "--root",
+        ".",
+        "--policy",
+        "<cairn-provider>/cairn-policy/generated/cairn-policy.json",
+        "--strict"
+      ],
+      "exit_code": 0,
+      "elapsed_ns": 80558608
+    }
+  ],
+  "non_claim": "Final cutover source/library/affected-command checks; earlier complete workspace run retained separately. No cold public-runner, signed VM, cross-host or release qualification.",
+  "publication_view": "Command-path-redacted view of the script-produced original; exit codes and durations are unchanged.",
+  "original_record_blake3": "955c17e820287388d3cd0238c3bef112606457f29c4855080fec9bfb4b084df5",
+  "observed_on": "2026-11-16"
+}

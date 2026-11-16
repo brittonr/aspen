@@ -1,0 +1,24 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "command": "nix run --option builders '' --option extra-substituters '' --option substituters https://cache.nixos.org .#nixos-vm-multinode-signed",
+  "test_derivation": "/nix/store/hpiiiqmbzj0aq1b8rzd8afd90dms5yx4-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "source_binding_derivation": "/nix/store/vv6wnrm533gsskdrg2g7bbd3nyy79hrv-molten-node-source-binding-v1.drv",
+  "candidate_derivation": "/nix/store/9wqvmz6g2s1la5kpbzrsglynpipgrs0q-rust_molten-0.1.0.drv",
+  "outer_exit_code": 1,
+  "test_builder_exit_code": 143,
+  "wall_seconds": 5003.67,
+  "driver_timeout_seconds": 3600,
+  "result": "aggregate-driver-timeout-during-initial-startup-wait",
+  "observed": [
+    "Both NixOS VMs booted and the VM-local trust fixture added its signature.",
+    "The driver waited for the initial molten-node service to become active; no successful completion of that wait appears in the retained log.",
+    "The aggregate driver timeout terminated both QEMU processes."
+  ],
+  "non_claims": [
+    "No passing signed multinode result.",
+    "No observed storage-denial scenario or canonical denial result from this attempt.",
+    "No producer/operator independence, current later-source qualification or release authority."
+  ],
+  "raw_log": "session artifact 3201; preserved as failed-attempt evidence, not passing execution"
+}

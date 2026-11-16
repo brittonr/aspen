@@ -774,6 +774,18 @@
           ];
         };
         workspaceCrateOverrides = pkgs.lib.genAttrs moltenOwnedCrates (_name: overflowCheckedCrate) // {
+          # Cargo's self dev-dependency unifies this feature into the unit graph.
+          # Strip it and its Cargo metadata for non-test derivations.
+          molten = attrs:
+            let
+              features = pkgs.lib.filter
+                (feature: feature != "test-fixtures" || (attrs.buildTests or false))
+                (attrs.features or [ ]);
+            in
+            (overflowCheckedCrate attrs) // {
+              inherit features;
+              CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," features;
+            };
           # nickel-lang-core's Nix FFI is disabled in this workspace.
           nickel-lang-core = attrs: { };
           # verus_prettyplease vendors its implementation; no native library is needed.
@@ -824,9 +836,13 @@
         fastpathMutantWs = mkUnit2nixWorkspace {
           src = fastpathQuint.mutateSource sourceForConfigChecks;
         };
-        fastpathMutantTests = (fastpathMutantWs.test.workspaceMembers."molten".build).override {
+        # Explicit test derivation: retain Cargo's test-support feature without enabling it in packages.
+        fastpathMutantTests = ((fastpathMutantWs.test.workspaceMembers."molten".build).override (old: {
           buildTests = true;
-        };
+          features = (old.features or [ ]) ++ [ "test-fixtures" ];
+        })).overrideAttrs (old: {
+          CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
+        });
         kacheWs = mkUnit2nixWorkspace { enableKache = true; };
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
@@ -888,7 +904,13 @@
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
-        moltenTestBinaries = (ws.test.workspaceMembers."molten".build).override { buildTests = true; };
+        # Test support is explicit here and removed by workspaceCrateOverrides from non-test builds.
+        moltenTestBinaries = ((ws.test.workspaceMembers."molten".build).override (old: {
+          buildTests = true;
+          features = (old.features or [ ]) ++ [ "test-fixtures" ];
+        })).overrideAttrs (old: {
+          CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
+        });
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
         rustLibDir = "${rustToolchain}/lib/rustlib/${targetTriple}/lib";
         nextestCi = pkgs.writeShellApplication {
@@ -896,6 +918,7 @@
           runtimeInputs = [
             rustToolchain
             pkgs.cargo-nextest
+            pkgs.nickel
             fastpathQuint.quint
           ];
           text = ''
@@ -968,6 +991,9 @@
               cp ${./checks/native-system-extension-octet/src/lib.rs} "$out/src/lib.rs"
               cp ${./checks/native-system-extension-octet/src/system_extension/mod.rs} \
                 "$out/src/system_extension/mod.rs"
+              mkdir -p "$out/src/system_extension/generation"
+              cp ${./crates/molten-core/src/system_extension/generation/mod.rs} \
+                "$out/src/system_extension/generation/mod.rs"
               cp -R ${./crates/molten-core/src/system_extension/native_host} \
                 "$out/src/system_extension/native_host"
               chmod -R u+w "$out/src/system_extension/native_host"
@@ -1175,6 +1201,9 @@
           mkdir -p "$out/src/system_extension"
           cp ${./checks/addressable-actor-octet/src/system_extension/mod.rs} \
             "$out/src/system_extension/mod.rs"
+          mkdir -p "$out/src/system_extension/generation"
+          cp ${./crates/molten-core/src/system_extension/generation/mod.rs} \
+            "$out/src/system_extension/generation/mod.rs"
           cp -R ${./crates/molten-core/src/addressable_actor} "$out/src/addressable_actor"
           chmod -R u+w "$out/src/addressable_actor"
           rm -rf "$out/src/addressable_actor/tests.rs"
@@ -1191,12 +1220,12 @@
         };
 
         vmSignedSourceCheck = import ./nix/vm-signed-source-check.nix {
-          inherit pkgs moltenPkg startupSourceBinding sourceForConfigChecks;
+          inherit pkgs startupSourceBinding sourceForConfigChecks;
           moltenVmNodeModule = moltenVmNodeModule;
         };
 
         vmMoltenModule = import ./nix/vm-molten-module.nix {
-          inherit pkgs moltenPkg startupSourceBinding;
+          inherit pkgs startupSourceBinding;
         };
 
         moltenVmNodeModule =
@@ -1204,28 +1233,59 @@
           { pkgs, ... }:
           let
             inherit (pkgs) lib;
+            nodeBinary = if provisionSourceGate then startupSourceBinding else moltenPkg;
+            sourceTrustProvision = pkgs.writeShellScript "molten-vm-source-trust-${nodeId}" ''
+              set -euo pipefail
+              state=/var/lib/molten
+              install -d -m 0700 -o molten -g molten "$state"
+              if [ ! -f "$state/source-gate-trust.json" ]; then
+                # Only this privileged VM fixture setup can read the local signing key.
+                key_root=/var/lib/molten-source-gate
+                install -d -m 0700 "$key_root"
+                key="$key_root/signing-key"
+                nix --extra-experimental-features 'nix-command blake3-hashes' \
+                  key generate-secret --key-name molten-vm-source-gate > "$key"
+                chmod 600 "$key"
+                public=$(nix --extra-experimental-features 'nix-command blake3-hashes' \
+                  key convert-secret-to-public < "$key")
+                nix --extra-experimental-features 'nix-command blake3-hashes' \
+                  store sign --key-file "$key" ${startupSourceBinding}
+                binding=$(b3sum ${startupSourceBinding}/binding.json | cut -d' ' -f1)
+                policy=$(b3sum ${startupSourceBinding}/policy | cut -d' ' -f1)
+                profile=$(b3sum ${startupSourceBinding}/profile | cut -d' ' -f1)
+                printf '{"schema":"molten-node-source-trust-v1","nix":"%s","output":"%s","public_key":"%s","selection":{"binding_ref":"blake3:%s","policy_ref":"blake3:%s","profile_ref":"blake3:%s"}}\n' \
+                  "${pkgs.nix}/bin/nix" "${startupSourceBinding}" "$public" "$binding" "$policy" "$profile" \
+                  > "$state/source-gate-trust.json"
+                chown molten:molten "$state/source-gate-trust.json"
+                chmod 600 "$state/source-gate-trust.json"
+              fi
+            '';
           in
           {
             virtualisation.graphics = false;
             networking.hostName = nodeId;
+            users.groups = lib.optionalAttrs provisionSourceGate { molten = { }; };
+            users.users = lib.optionalAttrs provisionSourceGate {
+              molten = { isSystemUser = true; group = "molten"; };
+            };
             networking.firewall.enable = false;
             networking.extraHosts = ''
               192.168.1.1 node-a node_a
               192.168.1.2 node-b node_b
             '';
             environment.systemPackages = [
-              moltenPkg
+              nodeBinary
               pkgs.coreutils
               pkgs.gnugrep
               pkgs.iputils
-            ] ++ lib.optionals provisionSourceGate [ startupSourceBinding ];
+            ] ++ lib.optionals provisionSourceGate [ pkgs.util-linux ];
             systemd.services.molten-node = {
               description = "Aspen node VM integration service";
               wantedBy = [ "multi-user.target" ];
               after = [ "network-online.target" ];
               wants = [ "network-online.target" ];
               path = [
-                moltenPkg
+                nodeBinary
                 pkgs.coreutils
                 pkgs.gnugrep
               ] ++ lib.optionals provisionSourceGate [ pkgs.nix pkgs.b3sum ];
@@ -1234,62 +1294,45 @@
                 RemainAfterExit = true;
                 StateDirectory = "molten";
                 WorkingDirectory = "${sourceForConfigChecks}";
-                ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
-              } // lib.optionalAttrs provisionSourceGate { TimeoutStartSec = "3600"; };
+                ExecStop = "${nodeBinary}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
+              } // lib.optionalAttrs provisionSourceGate {
+                TimeoutStartSec = "3600";
+                User = "molten";
+                Group = "molten";
+                StateDirectoryMode = "0700";
+                NoNewPrivileges = true;
+                CapabilityBoundingSet = "";
+                AmbientCapabilities = "";
+                ExecStartPre = [ "+${sourceTrustProvision}" ];
+              };
               script = ''
                 set -euo pipefail
                 state=/var/lib/molten
                 evidence="$state/vm-evidence"
                 mkdir -p "$evidence"
                 if [ ! -f "$state/config.preserves" ]; then
-                  molten node init \
+                  ${nodeBinary}/bin/molten node init \
                     --state-root "$state" \
                     --node-id "node:${nodeId}" \
                     --config-out "$evidence/node-config.preserves" \
                     --identity-receipt-out "$evidence/identity.preserves" \
                     > "$evidence/init.txt"
                 fi
-                molten node run \
+                ${nodeBinary}/bin/molten node run \
                   --state-root "$state" \
                   --startup-out "$evidence/startup.preserves" \
                   > "$evidence/run.txt"
-                molten node status \
+                ${nodeBinary}/bin/molten node status \
                   --state-root "$state" \
                   --health-out "$evidence/health.preserves" \
                   --receipt-out "$evidence/status.preserves" \
                   > "$evidence/status.txt"
-                molten node run-loop \
+                ${nodeBinary}/bin/molten node run-loop \
                   --state-root "$state" \
                   --max-requests 1 \
                   --receipt-out "$evidence/control-loop.preserves" \
                   --heartbeat-out "$evidence/heartbeat.preserves" \
                   > "$evidence/run-loop.txt"
-              '';
-            } // lib.optionalAttrs provisionSourceGate {
-              # Node startup requires an operator-selected signed source binding. The VM fixture
-              # generates a local signer, signs the exact admitted output, and records a trust
-              # whose key only this test machine uses; it proves the gate's mechanism, not
-              # producer/operator independence.
-              preStart = ''
-                set -euo pipefail
-                state=/var/lib/molten
-                mkdir -p "$state"
-                if [ ! -f "$state/source-gate-trust.json" ]; then
-                  key="$state/source-gate-signing-key"
-                  nix --extra-experimental-features 'nix-command blake3-hashes' \
-                    key generate-secret --key-name molten-vm-source-gate > "$key"
-                  chmod 600 "$key"
-                  public=$(nix --extra-experimental-features 'nix-command blake3-hashes' \
-                    key convert-secret-to-public < "$key")
-                  nix --extra-experimental-features 'nix-command blake3-hashes' \
-                    store sign --key-file "$key" ${startupSourceBinding}
-                  binding=$(b3sum ${startupSourceBinding}/binding.json | cut -d' ' -f1)
-                  policy=$(b3sum ${startupSourceBinding}/policy | cut -d' ' -f1)
-                  profile=$(b3sum ${startupSourceBinding}/profile | cut -d' ' -f1)
-                  printf '{"schema":"molten-node-source-trust-v1","nix":"%s","output":"%s","public_key":"%s","selection":{"binding_ref":"blake3:%s","policy_ref":"blake3:%s","profile_ref":"blake3:%s"}}\n' \
-                    "${pkgs.nix}/bin/nix" "${startupSourceBinding}" "$public" "$binding" "$policy" "$profile" \
-                    > "$state/source-gate-trust.json"
-                fi
               '';
             };
             system.stateVersion = "24.11";
@@ -1428,6 +1471,31 @@
                     tests/parts/cliharness/p000/body.rs \
                     tests/parts/cliharness/p013/body.rs \
                     > "$TMPDIR/converted.json"
+                  touch "$out"
+                '';
+            # Feature-independent guard: the fabricated Octet gate receipt may only be referenced by
+            # its definition and test files. The planted tree proves the guard fires on a non-test caller.
+            testFixtureCallersCheck =
+              pkgs.runCommand "molten-test-fixture-callers"
+                {
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  guard="$src/scripts/check-test-fixture-callers.sh"
+                  bash "$guard" "$src"
+                  planted="$TMPDIR/planted"
+                  mkdir -p "$planted/src/octet/parts/gate/p002" "$planted/src/rewrites" "$planted/tests"
+                  cp "$src/src/octet/parts/gate/p002/body.rs" "$planted/src/octet/parts/gate/p002/body.rs"
+                  printf '%s\n' 'fn t() { molten::octet_gate::synthetic_clean_octet_gate_receipt_for_tests(); }' \
+                    > "$planted/tests/allowed.rs"
+                  bash "$guard" "$planted"
+                  printf '%s\n' 'fn planted() { crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests(); }' \
+                    > "$planted/src/rewrites/planted.rs"
+                  if bash "$guard" "$planted"; then
+                    echo "test-fixture caller guard missed a planted non-test caller" >&2
+                    exit 1
+                  fi
                   touch "$out"
                 '';
             nodeStateAuthorityCheck =
@@ -3307,6 +3375,7 @@
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
             node-state-authority = nodeStateAuthorityCheck;
+            test-fixture-callers = testFixtureCallersCheck;
             materialization-authority = materializationAuthorityCheck;
             wasm-component-profile = wasmComponentProfileCheck;
             wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
@@ -3336,32 +3405,35 @@
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             molten-module-eval =
               let
-                moduleEval = (nixpkgs.lib.nixosSystem {
+                evaluateService = supplied: builtins.tryEval (nixpkgs.lib.nixosSystem {
                   system = system;
                   modules = [
                     (import ./nix/modules/molten.nix)
                     {
+                      boot.isContainer = true;
                       services.molten = {
                         enable = true;
-                        package = moltenPkg;
                         nodeId = "node:module-eval";
-                        sourceTrustFile = "/run/molten/source-gate-trust.json";
-                      };
+                      } // supplied;
                       system.stateVersion = "24.11";
                     }
                   ];
-                }).config;
+                }).config.system.build.toplevel.drvPath;
+                admitted = evaluateService {
+                  package = moltenPkg;
+                  sourceTrustFile = "/run/molten/source-gate-trust.json";
+                };
+                missingPackage = evaluateService {
+                  sourceTrustFile = "/run/molten/source-gate-trust.json";
+                };
+                missingTrust = evaluateService { package = moltenPkg; };
               in
-              pkgs.runCommand "molten-module-eval"
-                {
-                  nativeBuildInputs = [ pkgs.coreutils ];
-                }
-                ''
-                  test -n ${pkgs.lib.escapeShellArg moduleEval.systemd.services.molten.serviceConfig.ExecStart}
-                  test "${toString moduleEval.services.molten.maxTicks}" = "3600"
-                  test "${moduleEval.systemd.services.molten.serviceConfig.User}" = "molten"
-                  touch "$out"
-                '';
+              assert admitted.success;
+              assert !missingPackage.success;
+              assert !missingTrust.success;
+              pkgs.runCommand "molten-module-eval" { } ''
+                touch "$out"
+              '';
             atlas-current =
               pkgs.runCommand "molten-atlas-current"
                 {
@@ -3376,8 +3448,54 @@
                   cp -R $src source
                   chmod -R u+w source
                   cd source
+                  python3 scripts/test_generate_atlas.py
                   nickel export --format json docs/atlas.ncl > "$TMPDIR/atlas.json"
                   python3 scripts/generate-atlas.py "$TMPDIR/atlas.json" --check
+                  touch "$out"
+                '';
+            # r[impl molten.project.license_boundary.notice_revisions]
+            # Selected dependency revisions are bound to their own reviewed notice rows (#27).
+            license-boundary =
+              pkgs.runCommand "molten-license-boundary"
+                {
+                  nativeBuildInputs = [ rustToolchain ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  rustc --edition=2024 tools/check-license-boundary.rs -o "$TMPDIR/check-license-boundary"
+                  "$TMPDIR/check-license-boundary" .
+                  touch "$out"
+                '';
+            # r[impl molten.project.documentation_links.local_targets]
+            # Local links and anchors in the public entry pages and docs/ resolve (#29).
+            doc-links =
+              pkgs.runCommand "molten-doc-links"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_check_doc_links.py
+                  python3 scripts/test_readme_quickstart.py
+                  python3 scripts/check-doc-links.py --root .
+                  touch "$out"
+                '';
+            # r[impl molten.project.documentation_links.quickstart_commands]
+            # The README first-workflow commands run with the packaged binary (#29).
+            readme-quickstart =
+              pkgs.runCommand "molten-readme-quickstart"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/readme-quickstart.py --molten ${moltenPkg}/bin/molten --readme README.md
                   touch "$out"
                 '';
             # Every Molten-owned crate derivation carries the release overflow option (docs/development.md).
@@ -4233,6 +4351,7 @@
                   nativeBuildInputs = [
                     rustToolchain
                     pkgs.cargo-nextest
+                    pkgs.nickel
                     fastpathQuint.quint
                     pkgs.perl
                     moltenPkg

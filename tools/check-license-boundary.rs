@@ -163,8 +163,11 @@ fn validate_contains(contents: &str, marker: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Returns the one revision that the workspace manifest selects for `dependency`.
+/// Every declaration of the dependency (normal, development or target-specific) must agree.
 fn dependency_revision(manifest: &str, dependency: &str) -> Result<String, String> {
     let prefix = format!("{dependency} =");
+    let mut selected: Option<String> = None;
     for raw_line in manifest.lines() {
         let line = raw_line.trim();
         let Some(rest) = line.strip_prefix(&prefix) else {
@@ -179,9 +182,53 @@ fn dependency_revision(manifest: &str, dependency: &str) -> Result<String, Strin
         if revision.is_empty() {
             return Err(format!("dependency {dependency} has an empty rev"));
         }
-        return Ok(revision.to_owned());
+        match &selected {
+            Some(previous) if previous != revision => {
+                return Err(format!(
+                    "dependency {dependency} selects conflicting revisions {previous} and {revision}"
+                ));
+            }
+            Some(_) => {}
+            None => selected = Some(revision.to_owned()),
+        }
     }
-    Err(format!("dependency {dependency} is missing from the workspace manifest"))
+    selected.ok_or_else(|| format!("dependency {dependency} is missing from the workspace manifest"))
+}
+
+/// First cell of a Markdown table row, or `None` for any other line.
+fn notice_row_subject(line: &str) -> Option<&str> {
+    let rest = line.trim().strip_prefix('|')?;
+    let (subject, _) = rest.split_once('|')?;
+    Some(subject.trim())
+}
+
+/// Binds a selected dependency revision to its own current-dependency notice row.
+///
+/// The row is the single table row whose subject classifies it as `Cargo packages` and names
+/// the dependency as an exact backticked package. Revisions recorded by other rows (copied
+/// historical fixtures, vendored snapshots, external references) neither satisfy nor fail it.
+// r[impl molten.project.license_boundary.notice_revisions]
+fn validate_notice_revision(notice: &str, dependency: &str, revision: &str) -> Result<(), String> {
+    let package = format!("`{dependency}`");
+    let rows: Vec<&str> = notice
+        .lines()
+        .filter(|line| {
+            notice_row_subject(line)
+                .is_some_and(|subject| subject.contains("Cargo packages") && subject.contains(&package))
+        })
+        .collect();
+    let row = match rows.as_slice() {
+        [row] => row,
+        [] => return Err(format!("no current-dependency notice row names {package}")),
+        _ => return Err(format!("{} current-dependency notice rows name {package}", rows.len())),
+    };
+    let recorded = format!("revision `{revision}`");
+    if !row.contains(&recorded) {
+        return Err(format!(
+            "notice row for {package} does not record the selected revision {revision}"
+        ));
+    }
+    Ok(())
 }
 
 fn validate_forbid(contents: &str, marker: &str) -> Result<(), String> {
@@ -229,6 +276,11 @@ fn run_self_tests() {
     assert_eq!(dependency_revision(manifest, "hardened").expect("revision"), "abc123");
     assert!(dependency_revision(manifest, "missing").is_err());
     assert!(dependency_revision("hardened = { rev = \"unterminated }\n", "hardened").is_err());
+    let repeated = "hardened = { rev = \"abc123\" }\n[dev-dependencies]\nhardened = { rev = \"abc123\" }\n";
+    assert_eq!(dependency_revision(repeated, "hardened").expect("agreeing revisions"), "abc123");
+    let conflicting = "hardened = { rev = \"abc123\" }\n[dev-dependencies]\nhardened = { rev = \"def456\" }\n";
+    assert!(dependency_revision(conflicting, "hardened").is_err());
+    run_notice_revision_self_tests();
     assert!(validate_forbid("dependencies = []", "host-controller").is_ok());
     assert!(validate_forbid("host-controller = true", "host-controller").is_err());
     assert!(validate_forbid_any("dependencies = []", "host-a,host-b").is_ok());
@@ -264,6 +316,54 @@ fn run_self_tests() {
         value: "MPL-2.0".to_owned(),
     });
     assert!(validate_workspace_coverage(workspace, &strict_rules).is_err());
+}
+
+/// Notice-row binding fixtures for brittonr/aspen#27.
+// r[verify molten.project.license_boundary.notice_revisions]
+fn run_notice_revision_self_tests() {
+    const WASMTIME_SELECTED: &str = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e";
+    const WASMTIME_STALE: &str = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c";
+    const MANTLE_SELECTED: &str = "dd2bebab894688d07e7a29c75c1437f4ecc120df";
+    const MANTLE_STALE: &str = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0";
+    let historical_row = format!(
+        "| `evidence/immutable-producer-snapshot.zip`, unchanged actual publication from Mantle's fixture \
+         and pipeline at revision `{MANTLE_STALE}` | AGPL-3.0-or-later |"
+    );
+    let note = format!("Manifests elsewhere select `{WASMTIME_SELECTED}` and `{MANTLE_SELECTED}`.");
+    let notice = |wasmtime: &str, mantle: &str| {
+        format!(
+            "| Paths | Terms |\n|---|---|\n\
+             | Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `seed` \
+             revision `{wasmtime}` | MIT |\n\
+             | Cargo packages `mantle-wasm-consumer-verifier` and `crunch-wasm-component-core` from \
+             `OnixResearch/mantle` revision `{mantle}` | AGPL-3.0-or-later |\n\
+             {historical_row}\n\n{note}\n"
+        )
+    };
+
+    // The two mismatches observed at 7a068c2a: stale current rows while the selected revisions
+    // still appear elsewhere in the file, which a whole-file search accepts.
+    let observed = notice(WASMTIME_STALE, MANTLE_STALE);
+    assert!(validate_contains(&observed, WASMTIME_SELECTED).is_ok());
+    assert!(validate_contains(&observed, MANTLE_SELECTED).is_ok());
+    assert!(validate_notice_revision(&observed, "hardened-wasmtime-runtime", WASMTIME_SELECTED).is_err());
+    assert!(validate_notice_revision(&observed, "hardened-wasmtime-shell", WASMTIME_SELECTED).is_err());
+    assert!(validate_notice_revision(&observed, "mantle-wasm-consumer-verifier", MANTLE_SELECTED).is_err());
+
+    // Reviewed rows bind the selected revisions while the unchanged historical fixture row keeps
+    // its older Mantle revision.
+    let reviewed = notice(WASMTIME_SELECTED, MANTLE_SELECTED);
+    assert!(reviewed.contains(&historical_row));
+    assert!(validate_notice_revision(&reviewed, "hardened-wasmtime-runtime", WASMTIME_SELECTED).is_ok());
+    assert!(validate_notice_revision(&reviewed, "hardened-wasmtime-shell", WASMTIME_SELECTED).is_ok());
+    assert!(validate_notice_revision(&reviewed, "mantle-wasm-consumer-verifier", MANTLE_SELECTED).is_ok());
+    // A historical fixture row is not a current-dependency row, so its older revision cannot
+    // stand in for a selected one.
+    assert!(validate_notice_revision(&historical_row, "mantle-wasm-consumer-verifier", MANTLE_STALE).is_err());
+
+    let duplicated = format!("{reviewed}{}\n", reviewed.lines().nth(2).expect("wasmtime row"));
+    assert!(validate_notice_revision(&duplicated, "hardened-wasmtime-runtime", WASMTIME_SELECTED).is_err());
+    assert!(validate_notice_revision(&reviewed, "hardened-wasmtime", WASMTIME_SELECTED).is_err());
 }
 
 fn read_required(path: &Path) -> Result<String, String> {
@@ -302,8 +402,8 @@ fn check_rule(root: &Path, workspace_manifest: &str, rule: &Rule) -> Result<(), 
         RuleKind::NoticeRevision => {
             let contents = read_required(&path)?;
             let revision = dependency_revision(workspace_manifest, &rule.value)?;
-            validate_contains(&contents, &revision)
-                .map_err(|error| format!("{}: {error} for {}", rule.path.display(), rule.value))
+            validate_notice_revision(&contents, &rule.value, &revision)
+                .map_err(|error| format!("{}: {error}", rule.path.display()))
         }
     }
 }

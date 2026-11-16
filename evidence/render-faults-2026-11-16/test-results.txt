@@ -1,0 +1,6 @@
+running 3 tests
+test real_renderer_active_worker_loss_and_controller_restart_keep_accepted_tiles ... ok
+test real_renderer_pending_and_active_cancellation_do_not_confuse_disconnect_with_stop ... ok
+test real_renderer_recovers_every_controller_publication_boundary ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 646.13s

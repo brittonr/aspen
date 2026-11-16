@@ -15,5 +15,10 @@ jobs:
       GIT_CONFIG_VALUE_0: ssh://git@github.com/
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: DeterminateSystems/nix-installer-action@v19
+      - run: nix develop --command cargo build --locked
+      - run: nix build --no-link
       - run: nix flake check
+      - run: nix develop --command python3 scripts/readme-quickstart.py --cargo

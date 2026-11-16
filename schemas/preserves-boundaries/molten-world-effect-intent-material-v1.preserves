@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-effect-intent-material">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-effect-intent-material">
+  <schema-id "molten.world-effect-intent-material.v1">
+  <arity 5>>

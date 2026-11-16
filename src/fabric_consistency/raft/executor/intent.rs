@@ -15,7 +15,7 @@ async fn each_proposal_phase_failure_quarantines_without_clearing_the_marker() {
     let plan = proposal_plan(&leader);
     let mut successful = super::super::executor_tests::RecordingPorts::default();
     assert!(matches!(
-        execute_planned_transition(&leader, plan.clone(), &mut successful).await,
+        batch::execute_planned_transition(&leader, plan.clone(), &mut successful).await,
         ReplicaExecutionOutcome::Applied(_)
     ));
     assert_eq!(successful.hard_states.last(), Some(&(plan.next.current_term, plan.next.voted_for.clone(), false)));
@@ -27,7 +27,7 @@ async fn each_proposal_phase_failure_quarantines_without_clearing_the_marker() {
             fail_at: Some(index),
             ..super::super::executor_tests::RecordingPorts::default()
         };
-        let outcome = execute_planned_transition(&leader, plan.clone(), &mut ports).await;
+        let outcome = batch::execute_planned_transition(&leader, plan.clone(), &mut ports).await;
         let ReplicaExecutionOutcome::Failed(failed) = outcome else {
             panic!("phase {index} must quarantine")
         };
@@ -46,7 +46,7 @@ async fn fences_are_admitted_before_any_proposal_effect() {
     let plan = proposal_plan(&leader);
     leader.profile.max_effects_per_step = plan.effects.len() + 1;
     let mut ports = super::super::executor_tests::RecordingPorts::default();
-    let outcome = execute_planned_transition(&leader, plan, &mut ports).await;
+    let outcome = batch::execute_planned_transition(&leader, plan, &mut ports).await;
     assert!(matches!(outcome, ReplicaExecutionOutcome::Denied { retained, .. } if retained == leader));
     assert!(ports.executed.is_empty(), "denial precedes even the intent write");
 }
@@ -70,7 +70,7 @@ async fn recovery_keeps_the_marker_and_admission_clears_exact_planned_vote_only_
         }],
     };
     assert!(matches!(
-        execute_planned_transition(&recovering, recovery, &mut ports).await,
+        batch::execute_planned_transition(&recovering, recovery, &mut ports).await,
         ReplicaExecutionOutcome::Applied(_)
     ));
     assert_eq!(
@@ -98,7 +98,7 @@ async fn recovery_keeps_the_marker_and_admission_clears_exact_planned_vote_only_
         },
     ];
     let mut ports = super::super::executor_tests::RecordingPorts::default();
-    let outcome = execute_planned_transition(
+    let outcome = batch::execute_planned_transition(
         &recovering,
         ReplicaTransition {
             next: admitted.clone(),

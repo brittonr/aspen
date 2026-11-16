@@ -1,0 +1,26 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "test_derivation": "/nix/store/vjqgaa3i8gymbs2wrps6cqrxp4hvbp9s-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "source_binding_derivation": "/nix/store/6kfpbbhm9ic1ijzcjfvpcqg4pxn3zcyx-molten-node-source-binding-v1.drv",
+  "candidate_derivation": "/nix/store/775qspkh31s4l157bkc9b5ixm1kgy2mn-rust_molten-0.1.0.drv",
+  "resources_per_vm": {"vcpus": 8, "memory_mib": 8192},
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 14400,
+  "wall_seconds": 6108.55,
+  "outer_exit_code": 1,
+  "test_builder_exit_code": 1,
+  "result": "initial-service-active-wait-timeout",
+  "observed": [
+    "Both NixOS VMs booted with eight vCPUs and 8 GiB each, and the VM-local trust fixture added its signature.",
+    "The initial molten-node.service active-state assertion timed out after 3600.58 seconds, before the signed integration and storage-denial assertions.",
+    "The test driver terminated both QEMU processes during cleanup. The four-hour aggregate driver deadline was not the failing bound.",
+    "Guest boot logs show the 9p driver and read-only store mount; they do not establish the startup timeout's root cause."
+  ],
+  "raw_log_blake3": "b4d2c1342e71eeac3ca7ef13da2daf7cf0486b7fdc31bdbb98dec807d56270cc",
+  "non_claims": [
+    "No passing signed multinode result or observed storage-denial result.",
+    "No proof that CPU, memory, store transport or repeated admission caused the timeout.",
+    "No producer/operator independence, qualification of later source, or release authority."
+  ]
+}

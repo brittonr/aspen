@@ -70,7 +70,7 @@ pub fn publish_chain_anchor(
 }
 
 pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IoValue {
-    record("chain-checkpoint-v1", vec![
+    record("chain-checkpoint-v2", vec![
         string(EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
         chain_record(&input.chain),
         record("prior-checkpoint", vec![optional_ref_value(input.prior_checkpoint_ref.as_deref())]),
@@ -83,7 +83,7 @@ pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IoValue {
         record("policy", vec![ref_sequence_value(&input.policy_refs)]),
         record("membership", vec![ref_sequence_value(&input.membership_refs)]),
         record("control-plane", vec![
-            record("mode", vec![string("trellis-raft")]),
+            record("mode", vec![string(CHECKPOINT_CONTROL_PLANE_MODE)]),
             record("command", vec![string("accept-chain-head")]),
         ]),
         producer_record(&input.producer),

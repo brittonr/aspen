@@ -121,6 +121,17 @@ fn collect_admission_diagnostics(
             "coordination diagnostics",
         )?;
     }
+    // r[impl molten.coordination.read_consistency_modes]
+    if request.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE {
+        diagnostics.push_limited(
+            format!(
+                "linearizable coordination consistency unsupported by the in-process coordination runtime: {}",
+                crate::raft_control_plane::IN_PROCESS_REGISTRY_LINEARIZABLE_UNSUPPORTED
+            ),
+            MAX_COORDINATION_DIAGNOSTICS,
+            "coordination diagnostics",
+        )?;
+    }
     let engine_gate = active_engine_epoch_gate(runtime, &request.operation)?;
     if engine_gate.decision != "pass" {
         for diagnostic in engine_gate.diagnostics {

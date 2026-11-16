@@ -9,6 +9,7 @@ pub(super) async fn run(root: &std::path::Path, node_id: &str, phase: &str) -> c
         accept_timeout: std::time::Duration::from_secs(30),
         event_capacity: 32,
         delivery_limit: 2048,
+        delivery_window: std::time::Duration::from_secs(1),
     })?;
     signal(&file(root, phase, node_id, "ready"));
     wait_signal(&root.join(format!("{phase}-start.preserves"))).await?;

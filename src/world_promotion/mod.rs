@@ -8,6 +8,8 @@
 )]
 
 mod current;
+mod material;
+mod operator;
 mod ports;
 mod receipts;
 mod records;
@@ -15,6 +17,8 @@ mod service;
 mod store;
 
 pub use current::*;
+pub use material::*;
+pub use operator::*;
 pub use ports::*;
 pub use receipts::*;
 pub use records::*;

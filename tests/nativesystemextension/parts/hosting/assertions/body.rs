@@ -68,7 +68,7 @@ fn stage_durable_work(
     runtime_local.class = molten::system_extension::WorkClass::RuntimeLocal;
     assert!(host.actor_submit_dormant_preview(member, &runtime_local, &retained_ingress.payload, 5).is_err());
     let mut stale = presentation.clone();
-    stale.incarnation = stale.incarnation.checked_add(1).expect("incarnation increment");
+    stale.incarnation = stale.incarnation.checked_add(1).ok_or("incarnation increment overflow")?;
     assert!(host.actor_submit_dormant_preview(member, &stale, &retained_ingress.payload, 5).is_err());
     let mut substituted = retained_ingress.payload.clone();
     substituted.bytes.push(0);
@@ -115,7 +115,8 @@ fn assert_rewake_readmission(
     let presentation = &delivery.presentation;
     let retained_ingress = &delivery.ingress;
     let running = host.actor_rewake(member, 6)?;
-    assert_eq!(running.lifecycle.incarnation, dormant.lifecycle.incarnation.checked_add(1).expect("incarnation increment"));
+    let expected_incarnation = dormant.lifecycle.incarnation.checked_add(1).ok_or("incarnation increment overflow")?;
+    assert_eq!(running.lifecycle.incarnation, expected_incarnation);
     assert_eq!(running.lifecycle.generation, dormant.lifecycle.generation);
     assert_eq!(running.lifecycle.restart_attempts, dormant.lifecycle.restart_attempts);
     assert!(

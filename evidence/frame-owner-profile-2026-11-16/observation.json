@@ -1,0 +1,418 @@
+{
+  "schema": "aspen.frame-owner-profile-observation.v1",
+  "observed_date": "2026-11-16",
+  "decision": "keep-current-single-step-frame-path",
+  "runtime_adoption": false,
+  "owner": "fabric-transport maintainers",
+  "source_index_tree": "bae6acf4fa500369ca25cd7a1e094add419efe53",
+  "whole_source_archive_blake3": "acbd1d4e842b73ab68b14c9588d70359b90c53a741c50735905b489aad18f67e",
+  "whole_source_archive_retention": "operator-private; contains the complete staged source, not republished",
+  "cohort": {
+    "rust_channel": "nightly-2026-05-26",
+    "rustc": "1.98.0-nightly",
+    "rustc_commit": "31a9463c6e2794a59ce57a8f37abc6966afc2a58",
+    "host": "x86_64-unknown-linux-gnu",
+    "release": {
+      "opt_level": 3,
+      "debug": 0,
+      "codegen_units": 16,
+      "lto": false
+    },
+    "features": "manifest defaults cfg(test)",
+    "cargo_jobs": 2,
+    "tokio_worker_threads": 2,
+    "test_threads": 1,
+    "incremental": false,
+    "network": "fresh user and network namespace, only loopback enabled, explicit IPv4 loopback binds and relay disabled",
+    "virtual_memory_limit_KiB": 16777216,
+    "open_file_limit": 4096
+  },
+  "execution": {
+    "stage": "complete",
+    "exit_code": 0,
+    "library_test": "fabric_transport::cross_process::tests::issue6_owner_held_real_delivered_profile",
+    "tests_passed": 1,
+    "samples": 46,
+    "warmups": 6,
+    "measured": 40,
+    "canonical_reference_and_actual_state_match": true,
+    "real_client_and_listener_delivered": true,
+    "automatic_retries": 0,
+    "clean_listener_cleanup": true
+  },
+  "profile_refs": [
+    "blake3:9a7bfa572b5b33c52f765140cce85ad6c436436817851a4f43ec15c1fa4548ba"
+  ],
+  "profile_canonical": "<fabric-transport-profile-v1 \"molten.fabric.transport.profile.v1\" <field \"profile-id\" \"iroh-cross-process-v1\"> <field \"declared-profile-ref\" \"blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"> <field \"adapter-kind\" \"iroh-live\"> <field \"capabilities\" [\"bidirectional-streams\", \"unidirectional-streams\"]> <field \"max-listeners\" 8> <field \"max-sessions\" 8> <field \"max-streams-per-session\" 8> <field \"max-frame-bytes\" 4096> <field \"max-datagram-bytes\" 1024> <field \"max-queued-events\" 8> <field \"max-queued-bytes\" 16384> <field \"max-inflight-bytes\" 8192> <field \"operation-deadline-ticks\" 64> <field \"non-claims\" [\"does-not-prove-durable-delivery\", \"does-not-prove-exactly-once-delivery\", \"does-not-prove-transactional-messaging\", \"does-not-prove-global-ordering\", \"does-not-provide-automatic-retry-safety\", \"does-not-grant-membership\", \"does-not-prove-consensus\", \"does-not-prove-protocol-compatibility\", \"does-not-grant-application-authority\"]> <field \"checks\" [\"canonical-adapter-neutral-profile\", \"framing-and-resource-bounds-explicit\", \"capabilities-versioned\", \"delivery-non-claims-complete\"]>>",
+  "threshold": {
+    "register_hash_fraction_strict_min": 0.1,
+    "required_at_both_sizes": true,
+    "required_baseline": "independently reviewed production-representative runtime-reuse/amortization baseline",
+    "baseline_available": false,
+    "subtracting_runtime_setup_is_not_a_baseline": true
+  },
+  "measured": {
+    "schema": "aspen.issue6.summary.v1",
+    "sizes": [
+      {
+        "payload_bytes": 1024,
+        "size_class": "typical-assumed",
+        "n": 20,
+        "register_hash_ns": {
+          "n": 20,
+          "min": 1713,
+          "median_lower": 1763,
+          "p95_nearest_rank": 1813,
+          "max": 1824,
+          "mean": 1771.6
+        },
+        "full_owner_held_ns": {
+          "n": 20,
+          "min": 1945562,
+          "median_lower": 2128676,
+          "p95_nearest_rank": 2402690,
+          "max": 2424000,
+          "mean": 2140073.7
+        },
+        "whole_operation_ns": {
+          "n": 20,
+          "min": 1945653,
+          "median_lower": 2128777,
+          "p95_nearest_rank": 2402771,
+          "max": 2424080,
+          "mean": 2140159.55
+        },
+        "register_hash_owner_fraction_aggregate": 0.000827821957720428,
+        "stage_distributions_ns": {
+          "ack_transition_ns": {
+            "n": 20,
+            "min": 25097,
+            "median_lower": 35146,
+            "p95_nearest_rank": 58691,
+            "max": 59843,
+            "mean": 36317.3
+          },
+          "client_frame_hash_ns": {
+            "n": 20,
+            "min": 2034,
+            "median_lower": 2335,
+            "p95_nearest_rank": 2745,
+            "max": 2865,
+            "mean": 2424.5
+          },
+          "evidence_matching_ns": {
+            "n": 20,
+            "min": 881,
+            "median_lower": 1142,
+            "p95_nearest_rank": 2545,
+            "max": 2835,
+            "mean": 1256.25
+          },
+          "exchange_block_on_ns": {
+            "n": 20,
+            "min": 1711753,
+            "median_lower": 1890329,
+            "p95_nearest_rank": 2128707,
+            "max": 2198527,
+            "mean": 1905308.4
+          },
+          "exchange_input_copy_ns": {
+            "n": 20,
+            "min": 1804,
+            "median_lower": 2004,
+            "p95_nearest_rank": 2344,
+            "max": 2795,
+            "mean": 2098.05
+          },
+          "exchange_total_ns": {
+            "n": 20,
+            "min": 1876282,
+            "median_lower": 2050620,
+            "p95_nearest_rank": 2305979,
+            "max": 2364659,
+            "mean": 2069323.75
+          },
+          "register_body_ns": {
+            "n": 20,
+            "min": 2736,
+            "median_lower": 2825,
+            "p95_nearest_rank": 3166,
+            "max": 3246,
+            "mean": 2876.95
+          },
+          "register_copy_ns": {
+            "n": 20,
+            "min": 150,
+            "median_lower": 171,
+            "p95_nearest_rank": 210,
+            "max": 220,
+            "mean": 178.3
+          },
+          "register_hash_ns": {
+            "n": 20,
+            "min": 1713,
+            "median_lower": 1763,
+            "p95_nearest_rank": 1813,
+            "max": 1824,
+            "mean": 1771.6
+          },
+          "register_validation_after_hash_ns": {
+            "n": 20,
+            "min": 40,
+            "median_lower": 50,
+            "p95_nearest_rank": 60,
+            "max": 60,
+            "mean": 50.55
+          },
+          "register_validation_before_hash_ns": {
+            "n": 20,
+            "min": 60,
+            "median_lower": 61,
+            "p95_nearest_rank": 80,
+            "max": 110,
+            "mean": 67.65
+          },
+          "route_body_ns": {
+            "n": 20,
+            "min": 1929622,
+            "median_lower": 2114029,
+            "p95_nearest_rank": 2384647,
+            "max": 2407599,
+            "mean": 2123682.25
+          },
+          "runtime_setup_ns": {
+            "n": 20,
+            "min": 29585,
+            "median_lower": 33783,
+            "p95_nearest_rank": 44924,
+            "max": 52929,
+            "mean": 36481.45
+          },
+          "runtime_shutdown_ns": {
+            "n": 20,
+            "min": 36289,
+            "median_lower": 42680,
+            "p95_nearest_rank": 61936,
+            "max": 67557,
+            "mean": 47027.85
+          },
+          "server_frame_hash_ns": {
+            "n": 20,
+            "min": 2053,
+            "median_lower": 2685,
+            "p95_nearest_rank": 3617,
+            "max": 3787,
+            "mean": 2716
+          },
+          "submit_transition_ns": {
+            "n": 20,
+            "min": 13887,
+            "median_lower": 14617,
+            "p95_nearest_rank": 17312,
+            "max": 23434,
+            "mean": 15228.7
+          },
+          "worker_dispatch_ns": {
+            "n": 20,
+            "min": 30758,
+            "median_lower": 42009,
+            "p95_nearest_rank": 57278,
+            "max": 58389,
+            "mean": 43774.75
+          }
+        }
+      },
+      {
+        "payload_bytes": 4096,
+        "size_class": "admitted-maximum",
+        "n": 20,
+        "register_hash_ns": {
+          "n": 20,
+          "min": 5881,
+          "median_lower": 5991,
+          "p95_nearest_rank": 6021,
+          "max": 6021,
+          "mean": 5979.1
+        },
+        "full_owner_held_ns": {
+          "n": 20,
+          "min": 1911950,
+          "median_lower": 2093640,
+          "p95_nearest_rank": 2351425,
+          "max": 2578581,
+          "mean": 2147728.8
+        },
+        "whole_operation_ns": {
+          "n": 20,
+          "min": 1912020,
+          "median_lower": 2093730,
+          "p95_nearest_rank": 2351505,
+          "max": 2578721,
+          "mean": 2147818
+        },
+        "register_hash_owner_fraction_aggregate": 0.002783917597044841,
+        "stage_distributions_ns": {
+          "ack_transition_ns": {
+            "n": 20,
+            "min": 28523,
+            "median_lower": 35497,
+            "p95_nearest_rank": 62718,
+            "max": 71845,
+            "mean": 38793.9
+          },
+          "client_frame_hash_ns": {
+            "n": 20,
+            "min": 6122,
+            "median_lower": 6873,
+            "p95_nearest_rank": 7424,
+            "max": 7444,
+            "mean": 6889.95
+          },
+          "evidence_matching_ns": {
+            "n": 20,
+            "min": 622,
+            "median_lower": 1202,
+            "p95_nearest_rank": 2756,
+            "max": 2805,
+            "mean": 1342.15
+          },
+          "exchange_block_on_ns": {
+            "n": 20,
+            "min": 1664906,
+            "median_lower": 1869850,
+            "p95_nearest_rank": 2126062,
+            "max": 2265132,
+            "mean": 1915116.2
+          },
+          "exchange_input_copy_ns": {
+            "n": 20,
+            "min": 1913,
+            "median_lower": 2164,
+            "p95_nearest_rank": 2284,
+            "max": 2495,
+            "mean": 2144.5
+          },
+          "exchange_total_ns": {
+            "n": 20,
+            "min": 1811370,
+            "median_lower": 2020132,
+            "p95_nearest_rank": 2279038,
+            "max": 2465789,
+            "mean": 2070392.25
+          },
+          "register_body_ns": {
+            "n": 20,
+            "min": 7043,
+            "median_lower": 7093,
+            "p95_nearest_rank": 7363,
+            "max": 7454,
+            "mean": 7141.3
+          },
+          "register_copy_ns": {
+            "n": 20,
+            "min": 150,
+            "median_lower": 181,
+            "p95_nearest_rank": 230,
+            "max": 251,
+            "mean": 183.75
+          },
+          "register_hash_ns": {
+            "n": 20,
+            "min": 5881,
+            "median_lower": 5991,
+            "p95_nearest_rank": 6021,
+            "max": 6021,
+            "mean": 5979.1
+          },
+          "register_validation_after_hash_ns": {
+            "n": 20,
+            "min": 30,
+            "median_lower": 50,
+            "p95_nearest_rank": 60,
+            "max": 60,
+            "mean": 50.1
+          },
+          "register_validation_before_hash_ns": {
+            "n": 20,
+            "min": 60,
+            "median_lower": 70,
+            "p95_nearest_rank": 70,
+            "max": 80,
+            "mean": 66.5
+          },
+          "route_body_ns": {
+            "n": 20,
+            "min": 1888275,
+            "median_lower": 2073182,
+            "p95_nearest_rank": 2330545,
+            "max": 2547883,
+            "mean": 2126812.5
+          },
+          "runtime_setup_ns": {
+            "n": 20,
+            "min": 26360,
+            "median_lower": 33653,
+            "p95_nearest_rank": 48101,
+            "max": 49002,
+            "mean": 35482.05
+          },
+          "runtime_shutdown_ns": {
+            "n": 20,
+            "min": 28654,
+            "median_lower": 38943,
+            "p95_nearest_rank": 55314,
+            "max": 61606,
+            "mean": 40761.05
+          },
+          "server_frame_hash_ns": {
+            "n": 20,
+            "min": 6583,
+            "median_lower": 7263,
+            "p95_nearest_rank": 7985,
+            "max": 8065,
+            "mean": 7271.15
+          },
+          "submit_transition_ns": {
+            "n": 20,
+            "min": 14077,
+            "median_lower": 14597,
+            "p95_nearest_rank": 15079,
+            "max": 17172,
+            "mean": 14731.75
+          },
+          "worker_dispatch_ns": {
+            "n": 20,
+            "min": 31409,
+            "median_lower": 40245,
+            "p95_nearest_rank": 55384,
+            "max": 61255,
+            "mean": 43542.75
+          }
+        }
+      }
+    ],
+    "exceeds_ten_percent_at_both_sizes_diagnostic_only": false,
+    "adoption_allowed": false,
+    "decision": "gate-closed-missing-production-representative-runtime-reuse-baseline",
+    "scope": "optimized-test-fixture native loopback; not Internet/hardware/release qualification",
+    "denominator": "actual external register_call_ns + route_call_ns; not stage sum or runtime-subtracted estimate"
+  },
+  "repeatability": {
+    "commands": "commands.txt",
+    "inputs": "inputs.b3",
+    "samples": "recorded/samples.jsonl",
+    "measurement_source": "src/fabric_transport/cross_process/issue6_owner_probe.rs",
+    "collector_source": "src/fabric_transport/cross_process/effect/issue6_probe.rs",
+    "source_patch": "issue6-probe.patch",
+    "summary_program": "issue6-summary.jq"
+  },
+  "non_claims": [
+    "1024 bytes is an assumed typical payload, not observed production traffic.",
+    "4096 bytes is the actual admitted maximum of the selected fixture profile, not a universal transport bound.",
+    "Current path still creates/destroys a thread/runtime per frame; no production-reuse baseline is measured.",
+    "Owner denominator is external register-call plus route-call elapsed time, including destructors and instrumentation.",
+    "Nested stage spans are not additive; concurrent server hashing is not owner CPU time.",
+    "Actual route exposes a canonical receipt ref, not materialized receipt bytes; the reference receipt and returned ref/state were compared.",
+    "Not Internet, cross-host, physical-hardware, deployed-service or release qualification."
+  ]
+}

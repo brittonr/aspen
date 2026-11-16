@@ -1,0 +1,41 @@
+{
+  "name": "worker-loss",
+  "tasks": [
+    {
+      "component": "ad371b4b4bf34c80c6a63d693ee30de04c3aade9dc6c0f637ce2b394b721a4cc",
+      "dependencies": [],
+      "fuel": 1000000,
+      "id": "a",
+      "inputs": [],
+      "max_attempts": 2,
+      "max_output_bytes": 1024,
+      "required_labels": {},
+      "resources": {
+        "cpu_millis": 1000,
+        "memory_bytes": 16777216,
+        "slots": 1
+      },
+      "retry_delay_ticks": 1,
+      "timeout_ms": 5000
+    },
+    {
+      "component": "b87c48d226e078c67a83d07139a1e9d348bf94dcead48227c6a14c5b04e79a26",
+      "dependencies": [
+        "a"
+      ],
+      "fuel": 1000000000,
+      "id": "b",
+      "inputs": [],
+      "max_attempts": 2,
+      "max_output_bytes": 1024,
+      "required_labels": {},
+      "resources": {
+        "cpu_millis": 1000,
+        "memory_bytes": 16777216,
+        "slots": 1
+      },
+      "retry_delay_ticks": 1,
+      "timeout_ms": 60000
+    }
+  ]
+}

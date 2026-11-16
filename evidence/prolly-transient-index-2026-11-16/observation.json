@@ -1,0 +1,545 @@
+{
+  "schema": "aspen.prolly-transient-index-observation.v1",
+  "observed_date": "2026-11-16",
+  "decision": "keep-current-btree-map",
+  "runtime_adoption": false,
+  "owner": "molten-core Prolly maintainers",
+  "source_index_tree": "bae6acf4fa500369ca25cd7a1e094add419efe53",
+  "source_head": "166ecaf40a307bedd22694e4a027e616e03e21cf",
+  "upstream": {
+    "repository": "https://github.com/XiangpengHao/bbtree.git",
+    "revision": "8adae97a0ed97e5c98fa2790312eb0aec9719846",
+    "tree": "e1ca30ee99c89ac4c4df22d935ddfef6452e2eb4",
+    "version": "0.1.5",
+    "license": "MIT OR Apache-2.0",
+    "source_patches": [],
+    "api": "unsync BBTreeMap<Vec<u8>, Vec<u8>>"
+  },
+  "cohort": {
+    "rustc": "1.98.0-nightly",
+    "rustc_commit": "31a9463c6e2794a59ce57a8f37abc6966afc2a58",
+    "rust_channel": "nightly-2026-05-26",
+    "cargo": "1.98.0-nightly (4d1f98451 2026-05-15)",
+    "host": "x86_64-unknown-linux-gnu",
+    "kernel": "Linux 6.18.60",
+    "cpu": "AMD Ryzen 9 9950X3D",
+    "rustflags": "-C target-cpu=x86-64",
+    "release": {
+      "opt_level": 3,
+      "lto": false,
+      "codegen_units": 16,
+      "debug": false
+    },
+    "bbtree_optional_features": false
+  },
+  "profile": {
+    "ref": "blake3:820d0424eac0ce727d80750e485dcaac320137baa5b4ef21d0d67708ca8a41d5",
+    "max_key_bytes": 64,
+    "max_value_bytes": 1024,
+    "max_entries": 4096,
+    "representative_entries": 256,
+    "representative_value_bytes": 64
+  },
+  "execution": {
+    "standalone_upstream_build": "passed",
+    "isolated_lock_catalog": "passed with no new identity",
+    "plain_semantic_cases": 26,
+    "allocation_semantic_cases": 26,
+    "processes": 42,
+    "observation_rows": 3360,
+    "repeats": 7,
+    "fixtures": 8,
+    "phases": 10
+  },
+  "predeclared_gate": {
+    "paired_pipeline_median_ratio_max": 0.9,
+    "successful_pairs_min": 6,
+    "pairs": 7,
+    "relative_median_absolute_deviation_max": 0.05,
+    "peak_and_retained_memory_regression_max": 0.05,
+    "memory_scope": "every phase, per-process high-water RSS, post-phase RSS and incremental retained RSS; zero retained baseline permits zero growth",
+    "semantic_regressions_allowed": 0
+  },
+  "measured": {
+    "candidate": {
+      "fixtures": [
+        {
+          "fixture": "maximum-mixed",
+          "paired_time_ratios": [
+            1.03171027050162,
+            0.9913679036302668,
+            0.9786436770477491,
+            0.8938565535240787,
+            1.0063157593563705,
+            1.016888571625819,
+            1.0258683351119842
+          ],
+          "median_time_ratio": 1.0063157593563705,
+          "baseline_relative_mad": 0.03373880743994508,
+          "variant_relative_mad": 0.0225289796289928,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-prefix",
+          "paired_time_ratios": [
+            1.0247113935238448,
+            0.9730462069356195,
+            0.99546147358006,
+            0.9267487610092019,
+            0.9702031370930889,
+            0.9785296100776211,
+            1.013389767037389
+          ],
+          "median_time_ratio": 0.9785296100776211,
+          "baseline_relative_mad": 0.01128629847778603,
+          "variant_relative_mad": 0.0035730991826907884,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-random",
+          "paired_time_ratios": [
+            0.9669960241581316,
+            0.7769294351293679,
+            0.9741051137310756,
+            0.8916181519907981,
+            1.0708515165885402,
+            0.8973017735860287,
+            1.036331606406432
+          ],
+          "median_time_ratio": 0.9669960241581316,
+          "baseline_relative_mad": 0.02350733258208566,
+          "variant_relative_mad": 0.030003982820089654,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-sequential",
+          "paired_time_ratios": [
+            0.7705079844832563,
+            0.759542763619484,
+            0.96353241036804,
+            1.2399700148062371,
+            0.9590809975192808,
+            0.9503728785594986,
+            0.7771965994855324
+          ],
+          "median_time_ratio": 0.9503728785594986,
+          "baseline_relative_mad": 0.023801103490261367,
+          "variant_relative_mad": 0.0482454491051115,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "representative-mixed",
+          "paired_time_ratios": [
+            0.8053854493545615,
+            0.9608454933894751,
+            0.8641349734292936,
+            0.9855508340204224,
+            1.2372706686712038,
+            0.9839268675551726,
+            0.9907099483997404
+          ],
+          "median_time_ratio": 0.9839268675551726,
+          "baseline_relative_mad": 0.017442211209947982,
+          "variant_relative_mad": 0.010118247100916035,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-prefix",
+          "paired_time_ratios": [
+            1.0495785706569334,
+            0.9731338008724943,
+            1.0029426846802763,
+            1.2597915363244465,
+            1.0443807072014193,
+            1.0152247784256034,
+            1.0111463781224377
+          ],
+          "median_time_ratio": 1.0152247784256034,
+          "baseline_relative_mad": 0.013631789382479827,
+          "variant_relative_mad": 0.009899040133087463,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-random",
+          "paired_time_ratios": [
+            1.0084970832773528,
+            0.9484427155338548,
+            0.9813074072084654,
+            0.9616342357915392,
+            0.9446669391091131,
+            1.000755475627665,
+            0.9872538237772308
+          ],
+          "median_time_ratio": 0.9813074072084654,
+          "baseline_relative_mad": 0.014260241226533361,
+          "variant_relative_mad": 0.020456207644475696,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-sequential",
+          "paired_time_ratios": [
+            0.9829608473595823,
+            0.9614194244615836,
+            1.0515786912839935,
+            0.9360413300034278,
+            0.9461536489379431,
+            0.954940098293551,
+            0.9952062335347392
+          ],
+          "median_time_ratio": 0.9614194244615836,
+          "baseline_relative_mad": 0.006983007688164145,
+          "variant_relative_mad": 0.017470323921936825,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        }
+      ],
+      "process_peak_rss_gate": true,
+      "measured_gates_pass": false,
+      "decision": "KEEP pending parent review of semantic, platform, source and complete measurements"
+    },
+    "sorted": {
+      "fixtures": [
+        {
+          "fixture": "maximum-mixed",
+          "paired_time_ratios": [
+            1.0263778484872477,
+            1.0146096942742924,
+            0.9925949934042089,
+            0.9430652465520173,
+            1.0384700795448507,
+            0.9598963926256806,
+            1.0217164608760823
+          ],
+          "median_time_ratio": 1.0146096942742924,
+          "baseline_relative_mad": 0.03373880743994508,
+          "variant_relative_mad": 0.014613294914029093,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-prefix",
+          "paired_time_ratios": [
+            1.0139889831964184,
+            0.948832749928664,
+            1.0000815718196114,
+            0.9941425694254913,
+            1.0065120284247029,
+            0.9988943686850844,
+            1.0469431666511748
+          ],
+          "median_time_ratio": 1.0000815718196114,
+          "baseline_relative_mad": 0.01128629847778603,
+          "variant_relative_mad": 0.02151564012061738,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-random",
+          "paired_time_ratios": [
+            0.9775295271948448,
+            0.9532772511458603,
+            0.7966470865721508,
+            0.9181003056811626,
+            1.0557184542898894,
+            0.9177540356511451,
+            1.0909957468564162
+          ],
+          "median_time_ratio": 0.9532772511458603,
+          "baseline_relative_mad": 0.02350733258208566,
+          "variant_relative_mad": 0.01689418153453954,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "maximum-sequential",
+          "paired_time_ratios": [
+            0.9354319863849111,
+            0.9404229647861272,
+            0.793493988175344,
+            1.1910231876068185,
+            0.9964750452899852,
+            0.9248228719945433,
+            1.042159211119652
+          ],
+          "median_time_ratio": 0.9404229647861272,
+          "baseline_relative_mad": 0.023801103490261367,
+          "variant_relative_mad": 0.019101059048650778,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        },
+        {
+          "fixture": "representative-mixed",
+          "paired_time_ratios": [
+            0.8244272391090874,
+            0.9591707539011184,
+            0.9344869826797537,
+            1.124277288006596,
+            1.0002495274573775,
+            0.9535338114438733,
+            1.043298857977741
+          ],
+          "median_time_ratio": 0.9591707539011184,
+          "baseline_relative_mad": 0.017442211209947982,
+          "variant_relative_mad": 0.031975112014526255,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-prefix",
+          "paired_time_ratios": [
+            1.0241330645624698,
+            0.9563819095477387,
+            0.9838018279501419,
+            1.1142249637138697,
+            1.0123129226815673,
+            1.0292063033628767,
+            1.1687309549794906
+          ],
+          "median_time_ratio": 1.0241330645624698,
+          "baseline_relative_mad": 0.013631789382479827,
+          "variant_relative_mad": 0.023721487140527846,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-random",
+          "paired_time_ratios": [
+            1.0022683884755867,
+            1.1249726550699362,
+            1.0048911652537686,
+            1.2996130097253693,
+            0.9836231818250617,
+            0.9940677100921178,
+            1.01045743131118
+          ],
+          "median_time_ratio": 1.0048911652537686,
+          "baseline_relative_mad": 0.014260241226533361,
+          "variant_relative_mad": 0.02610060473633188,
+          "time_gate": false,
+          "requested_live_and_rss_gate": false
+        },
+        {
+          "fixture": "representative-sequential",
+          "paired_time_ratios": [
+            1.0100563796703577,
+            0.9631694480780962,
+            1.0387670296144338,
+            0.9709400453781238,
+            0.9575193246933046,
+            1.0124724608585693,
+            1.0357156900009175
+          ],
+          "median_time_ratio": 1.0100563796703577,
+          "baseline_relative_mad": 0.006983007688164145,
+          "variant_relative_mad": 0.024996695932815668,
+          "time_gate": false,
+          "requested_live_and_rss_gate": true
+        }
+      ],
+      "process_peak_rss_gate": true,
+      "measured_gates_pass": false,
+      "decision": "KEEP pending parent review of semantic, platform, source and complete measurements"
+    }
+  },
+  "pipeline_memory_and_time": [
+    {
+      "fixture": "maximum-mixed",
+      "current": {
+        "median_pipeline_ns": 93530099,
+        "peak_requested_live_bytes": 51769134,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 77816
+      },
+      "candidate": {
+        "median_pipeline_ns": 92186998,
+        "peak_requested_live_bytes": 51797176,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 78264
+      },
+      "sorted": {
+        "median_pipeline_ns": 92989364,
+        "peak_requested_live_bytes": 51769134,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 77808
+      }
+    },
+    {
+      "fixture": "maximum-prefix",
+      "current": {
+        "median_pipeline_ns": 97965334,
+        "peak_requested_live_bytes": 53564417,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 80604
+      },
+      "candidate": {
+        "median_pipeline_ns": 96604931,
+        "peak_requested_live_bytes": 53592443,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 81004
+      },
+      "sorted": {
+        "median_pipeline_ns": 96904112,
+        "peak_requested_live_bytes": 53564417,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 80604
+      }
+    },
+    {
+      "fixture": "maximum-random",
+      "current": {
+        "median_pipeline_ns": 53048639,
+        "peak_requested_live_bytes": 33923244,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 52032
+      },
+      "candidate": {
+        "median_pipeline_ns": 51297823,
+        "peak_requested_live_bytes": 33937974,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 52348
+      },
+      "sorted": {
+        "median_pipeline_ns": 51856611,
+        "peak_requested_live_bytes": 33923244,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 52028
+      }
+    },
+    {
+      "fixture": "maximum-sequential",
+      "current": {
+        "median_pipeline_ns": 50204521,
+        "peak_requested_live_bytes": 32542428,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 49712
+      },
+      "candidate": {
+        "median_pipeline_ns": 47415125,
+        "peak_requested_live_bytes": 32556886,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 50016
+      },
+      "sorted": {
+        "median_pipeline_ns": 48340461,
+        "peak_requested_live_bytes": 32542428,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 49700
+      }
+    },
+    {
+      "fixture": "representative-mixed",
+      "current": {
+        "median_pipeline_ns": 812225,
+        "peak_requested_live_bytes": 486436,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3728
+      },
+      "candidate": {
+        "median_pipeline_ns": 788180,
+        "peak_requested_live_bytes": 488230,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3912
+      },
+      "sorted": {
+        "median_pipeline_ns": 806815,
+        "peak_requested_live_bytes": 486436,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3716
+      }
+    },
+    {
+      "fixture": "representative-prefix",
+      "current": {
+        "median_pipeline_ns": 886384,
+        "peak_requested_live_bytes": 576117,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3896
+      },
+      "candidate": {
+        "median_pipeline_ns": 908876,
+        "peak_requested_live_bytes": 579399,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 4084
+      },
+      "sorted": {
+        "median_pipeline_ns": 891133,
+        "peak_requested_live_bytes": 576117,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3892
+      }
+    },
+    {
+      "fixture": "representative-random",
+      "current": {
+        "median_pipeline_ns": 642135,
+        "peak_requested_live_bytes": 345465,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3524
+      },
+      "candidate": {
+        "median_pipeline_ns": 637166,
+        "peak_requested_live_bytes": 346147,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3712
+      },
+      "sorted": {
+        "median_pipeline_ns": 649870,
+        "peak_requested_live_bytes": 345465,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3512
+      }
+    },
+    {
+      "fixture": "representative-sequential",
+      "current": {
+        "median_pipeline_ns": 612630,
+        "peak_requested_live_bytes": 286006,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3384
+      },
+      "candidate": {
+        "median_pipeline_ns": 596440,
+        "peak_requested_live_bytes": 286688,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3580
+      },
+      "sorted": {
+        "median_pipeline_ns": 612881,
+        "peak_requested_live_bytes": 286006,
+        "retained_requested_live_bytes": 0,
+        "max_pipeline_rss_kib": 3372
+      }
+    }
+  ],
+  "measured_binary_blake3": [
+    "539246c56e28d40c22d7f3e894b09d92f57669c9d8b78c9b3096431d6336189a  results/issue3-probe-plain",
+    "7dcc103ca41097312f0472c8fe685c16f49e46907c64b2ce9b8498a27097ba97  results/issue3-probe-alloc"
+  ],
+  "repeatability": {
+    "commands": "commands.txt",
+    "inputs": "inputs.b3",
+    "source_files": 179,
+    "observations": "recorded/all-observations.json",
+    "baseline": "experiment/current",
+    "candidate": "experiment/candidate",
+    "sorted": "experiment/sorted",
+    "fixture": "experiment/probe/src/runner.rs"
+  },
+  "scope": "actual copied pure plan_edits/diff_maps and canonical construction, not full product dependency integration",
+  "non_claims": [
+    "No cache-index experiment; no hot-set/scan/churn or disabled-cache qualification.",
+    "Sorted baseline leaves diff_maps unchanged as a downstream control.",
+    "Mixed product vstd graph remains incompatible; isolated execution does not resolve it.",
+    "Generic x86-64 permits applicable SSE tag matching and scalar fallbacks, not native AVX512 qualification.",
+    "Other targets, AArch64/NEON, Miri, Verus, cold-cache, concurrency and deployed storage are unqualified.",
+    "Upstream proofs do not certify this adapter.",
+    "Shared-host timings do not establish production latency or broad speedup."
+  ]
+}

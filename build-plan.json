@@ -1,30 +1,30 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0",
-    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0",
+    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "07d401a75af1f76014a4570fa9d0349ce76d5ff64e9acbd9bf020f91d33fe5fb",
-  "inputsHash": "113c37d9782fe8e496ce4a33b5399449d4c1b57e22e084cfe9f9b11f5db410cc",
+  "cargoLockHash": "1f9d8e745edcb926f3bf31e8371f1ad66c1a168115b1ed7a9c7130ab653cfaab",
+  "inputsHash": "a409de2896dc753dbbc493a4c43eee42988db295d3e18f138d6d2624f072ed92",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -1757,7 +1757,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1766,7 +1766,9 @@
         "type": "local",
         "path": "."
       },
-      "features": [],
+      "features": [
+        "test-fixtures"
+      ],
       "dependencies": [
         {
           "packageId": "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
@@ -1873,11 +1875,11 @@
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -2074,7 +2076,7 @@
       "description": "Aspen: a Rust runtime for distributed systems with explicit authority, bounded effects, and deterministic replay",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2138,7 +2140,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -2158,7 +2160,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -2185,7 +2187,7 @@
       "description": "Capability-rooted node host boundary for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -2201,7 +2203,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -2229,7 +2231,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
       "crateName": "vm-cohort-core",
       "version": "0.1.0",
       "edition": "2024",

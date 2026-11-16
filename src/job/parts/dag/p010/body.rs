@@ -262,3 +262,24 @@ fn adjacent_chain_value(chain: &[String]) -> IoValue {
         ]),
     ])
 }
+
+fn plan_checks(input: &PlanOutcomeInput) -> Vec<(&'static str, &'static str)> {
+    let mut checks = vec![
+        ("target-closure-present", status(input.readiness.has_target_closure)),
+        ("trellis-topology", status(input.readiness.has_valid_topology)),
+        ("executable-artifact-gate", status(input.readiness.has_executable_artifacts)),
+        ("explicit-authority", status(input.has_explicit_authority)),
+        ("capability-authority-context", status(input.has_capability_authority)),
+        ("resource-profile", status(input.has_resource_profile)),
+        ("sync-evidence-bound", status(input.has_sync_evidence)),
+        (
+            "strict-octet-source-gate-bound",
+            status(input.has_source_gate_evidence && !input.is_unqualified_fixture_gate),
+        ),
+        ("no-execution", "pass"),
+    ];
+    if input.is_unqualified_fixture_gate {
+        checks.push(("unqualified-fixture-source-gate", status(input.has_source_gate_evidence)));
+    }
+    checks
+}

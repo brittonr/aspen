@@ -1,0 +1,9 @@
+{
+  "schema": "aspen.local-metadata-check-observation.v1",
+  "observed_on": "2026-11-16",
+  "documentation_links": {"command": ["python3", "scripts/check-doc-links.py"], "exit_code": 0, "files_checked": 315, "findings": 0},
+  "publication_guard": {"command": ["python3", "scripts/evidence-publication-guard.py", "--all"], "exit_code": 0, "files_scanned": 5386, "grandfathered": 1068, "rejected": 0, "stale_baseline_entries": 0},
+  "strict_cairn": {"policy_source": "explicit sibling-provider policy", "policy_blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9", "exit_code": 0, "valid": true, "active_changes": 13, "specs_validated": 95, "findings": 0, "receipt_hash": "2c1073ed461b1d8268e6a551c7dc7ff32c635284115081ab1e6aee46c9de4267"},
+  "changed_standalone_test_clippy": {"command": ["cargo", "clippy", "--locked", "--manifest-path", "pilots/orchestration/Cargo.toml", "-p", "molten-orchestrator-cli", "--test", "progress_e2e", "--", "-D", "warnings"], "environment": "Pinned pilot Nix shell; same-host warm target", "exit_code": 0},
+  "non_claim": "Scoped static/regression observations only. Historical exemptions remain explicit; no independent source authority, cold public bootstrap, VM/cross-host behavior or release qualification follows."
+}

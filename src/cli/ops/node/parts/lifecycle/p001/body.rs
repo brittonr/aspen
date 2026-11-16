@@ -1,3 +1,5 @@
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cli/ops/node/parts/lifecycle/p001/evidence.rs"));
+
 fn serve_live(
     input: super::command::base::Serve,
     supervisor_policy_value: Option<&preserves::IOValue>,
@@ -73,10 +75,35 @@ pub(crate) fn status(input: super::command::base::Status) -> molten::error::Resu
         state_root,
         health_out,
         receipt_out,
+        failure_receipt_out,
     } = input;
-    let status = molten::node_daemon::status_local(&molten::node_daemon::StatusInput {
+    let status = match molten::node_daemon::status_local(&molten::node_daemon::StatusInput {
         state_root: &state_root,
-    })?;
+    }) {
+        Ok(status) => status,
+        Err(error) => {
+            if let (
+                Some(out),
+                molten::error::Failure::NodeStatusHealthOpenDenied {
+                    path,
+                    errno: 13,
+                    startup_ref,
+                    config_ref,
+                    binding_ref,
+                },
+            ) = (failure_receipt_out.as_ref(), &error) {
+                publish_status_open_denial(&StatusOpenDenialInput {
+                    out,
+                    state_root: &state_root,
+                    target: path,
+                    startup_ref,
+                    config_ref,
+                    binding_ref,
+                })?;
+            }
+            return Err(error);
+        }
+    };
     if let Some(path) = health_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&status.health_value)?)?;
     }
@@ -86,6 +113,41 @@ pub(crate) fn status(input: super::command::base::Status) -> molten::error::Resu
         status.status, status.health_ref, status.control_receipt_ref
     );
     Ok(())
+}
+
+fn publish_status_open_denial(input: &StatusOpenDenialInput<'_>) -> molten::error::Result<()> {
+    let StatusOpenDenialInput { out, state_root, target, startup_ref, config_ref, binding_ref } = *input;
+    let parent = out.parent().ok_or_else(|| molten::error::Failure::invalid_harness("attempt output needs a parent"))?;
+    let parent = std::fs::canonicalize(parent).map_err(molten::error::Failure::from)?;
+    let root = std::fs::canonicalize(state_root).map_err(molten::error::Failure::from)?;
+    if !out.is_absolute() || parent.starts_with(&root) {
+        return Err(molten::error::Failure::invalid_harness("attempt output must be outside the protected root"));
+    }
+    let identity = capture_process_identity()?;
+    let executable = std::env::current_exe().map_err(molten::error::Failure::from)?;
+    let executable_path = executable.to_str()
+        .ok_or_else(|| molten::error::Failure::invalid_harness("executing binary path is not UTF-8"))?;
+    let executable_ref = capture_process_executable_ref()?;
+    let root_path = root.to_str()
+        .ok_or_else(|| molten::error::Failure::invalid_harness("state root path is not UTF-8"))?;
+    let value = molten::nixos_vm::node_state_permission_attempt_value(&molten::nixos_vm::NodeStateAttemptInput {
+        state_root: root_path,
+        target,
+        startup_ref,
+        config_ref,
+        binding_ref,
+        executable_path,
+        executable_ref: &executable_ref,
+        effective_uid: identity.uid,
+        effective_gid: identity.gid,
+        groups: &identity.groups,
+        cap_eff: &identity.cap_eff,
+        errno: 13,
+    })?;
+    let name = out.file_name().and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| molten::error::Failure::invalid_harness("attempt output needs a UTF-8 leaf"))?;
+    let output = molten::node_state::DirectoryRoot::open_existing(&parent)?;
+    output.write_new(&molten::node_state::RelativePath::parse(name)?, molten::preserves_rail::to_text(&value)?.as_bytes())
 }
 
 pub(crate) fn control_history(input: super::command::base::History) -> molten::error::Result<()> {

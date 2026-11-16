@@ -9,6 +9,7 @@ const ELECTION_MAX_TICKS: u64 = 8;
 const COMMAND_BYTE_LIMIT: u64 = 4_096;
 const IN_FLIGHT_LIMIT: u32 = 8;
 const EFFECT_LIMIT: usize = 16;
+pub(super) const TEST_REQUEST_RETENTION_ENTRIES: u64 = 2_048;
 const EXPECTED_INITIAL_EFFECT_COUNT: usize = 2;
 const EXPECTED_SINGLE_LOG_ENTRY: usize = 1;
 const STALE_EPOCH_STEP: u64 = 1;
@@ -117,6 +118,8 @@ fn profile(group: &crate::fabric_consistency::Group) -> ReplicaProfile {
         election_min_ticks: ELECTION_MIN_TICKS,
         election_max_ticks: ELECTION_MAX_TICKS,
         max_log_entries: MAX_REPLICA_LOG_ENTRIES,
+        snapshot_threshold_entries: MAX_REPLICA_LOG_ENTRIES / 2,
+        request_retention_entries: TEST_REQUEST_RETENTION_ENTRIES,
         max_message_entries: MAX_REPLICA_MESSAGE_ENTRIES,
         max_effects_per_step: EFFECT_LIMIT,
     }

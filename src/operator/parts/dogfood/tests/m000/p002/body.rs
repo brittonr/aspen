@@ -123,3 +123,61 @@
         std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
+
+    fn assert_release_binding_search(case: &NixCase) {
+        let catalog_registry = case.root.join("catalog-registry");
+        let release_ledger = case.root.join("release-ledger");
+        crate::ledger::import_artifact(&release_ledger, case.run.release_gate_value.as_ref().expect("release gate"))
+            .expect("import release gate");
+        crate::ledger::import_artifact(&release_ledger, case.run.replay_verify_value.as_ref().expect("replay verify"))
+            .expect("import replay verify");
+        crate::ledger::import_artifact(&release_ledger, case.run.replay_index_value.as_ref().expect("replay index"))
+            .expect("import replay index");
+        crate::ledger::import_artifact(&release_ledger, &case.evidence).expect("import Nix evidence");
+        crate::ledger::import_artifact(&release_ledger, &case.bundle_verify.value).expect("import bundle verify");
+        let replay_binding_request = crate::catalog_mcp::mcp_request_value("search_replay_evidence", vec![
+            crate::preserves_rail::record("stage", vec![crate::preserves_rail::string("release-binding")]),
+            crate::preserves_rail::record("release-replay-index-ref", vec![crate::preserves_rail::string(
+                &case.parsed.replay_index_ref,
+            )]),
+        ])
+        .expect("replay binding request");
+        let replay_binding =
+            crate::catalog_mcp::call(&catalog_registry, Some(&release_ledger), &replay_binding_request)
+                .expect("replay binding search");
+        assert_eq!(replay_binding.decision, "pass");
+        assert!(
+            to_text(&replay_binding.response_value)
+                .expect("replay binding response")
+                .contains("deterministic-replay:release-binding")
+        );
+    }
+
+    fn signed_members(case: &NixCase) -> Vec<IoValue> {
+        vec![
+            sign_member(&case.run.report_value),
+            sign_member(case.run.release_gate_value.as_ref().expect("release gate")),
+            sign_member(case.run.replay_verify_value.as_ref().expect("replay verify")),
+            sign_member(case.run.replay_index_value.as_ref().expect("replay index")),
+            sign_member(&case.evidence),
+            sign_member(&case.receipt.value),
+        ]
+    }
+
+    fn sign_member(receipt: &IoValue) -> IoValue {
+        sign_receipt(&SignReceiptInput {
+            receipt,
+            signer: "release-signer",
+            purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            trust_root: "release-root",
+            key: "release-key",
+            parents: &[],
+        })
+        .expect("sign member")
+    }
+
+    fn signed_bundle_pass(case: &NixCase, signed_members: &[IoValue]) -> ReleaseEvidenceBundleVerifyReceipt {
+        let signed_bundle_verify = required_bundle_verify(case, signed_members, Some("release-signer"), None);
+        assert_eq!(signed_bundle_verify.decision, "pass");
+        signed_bundle_verify
+    }

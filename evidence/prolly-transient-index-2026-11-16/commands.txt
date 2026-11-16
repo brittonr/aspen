@@ -1,0 +1,20 @@
+Run in a fresh task-owned copy of this evidence directory, inside the repository's pinned Nix development shell. The recorded compiler is rustc 1.98.0-nightly (31a9463c6e2794a59ce57a8f37abc6966afc2a58), nightly-2026-05-26, generic x86-64, Linux x86_64. Builds can fetch only the exact locked dependencies. Do not run measurements on a modified source or cohort and call them this observation.
+
+b3sum --check inputs.b3
+git clone https://github.com/XiangpengHao/bbtree.git upstream
+git -C upstream checkout --detach 8adae97a0ed97e5c98fa2790312eb0aec9719846
+test "$(git -C upstream rev-parse 'HEAD^{tree}')" = e1ca30ee99c89ac4c4df22d935ddfef6452e2eb4
+mkdir results
+export CARGO_TARGET_DIR="$PWD/target-experiment" CARGO_INCREMENTAL=0
+export RUSTFLAGS='-C target-cpu=x86-64'
+unset CARGO_ENCODED_RUSTFLAGS RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+timeout --kill-after=10s 600s cargo build --locked --release --lib --package bbtree --manifest-path upstream/Cargo.toml
+timeout --kill-after=10s 900s cargo build --locked --release --package issue3-probe --manifest-path experiment/Cargo.toml
+cp target-experiment/release/issue3-probe results/issue3-probe-plain
+timeout --kill-after=10s 900s cargo build --locked --release --package issue3-probe --features allocation-counters --manifest-path experiment/Cargo.toml
+cp target-experiment/release/issue3-probe results/issue3-probe-alloc
+timeout --kill-after=10s 240s results/issue3-probe-plain semantics
+timeout --kill-after=10s 240s results/issue3-probe-alloc semantics
+python3 measure.py
+
+The original intake additionally canonicalized a source-derived seed lock with Cargo and rejected every identity outside dependency-catalog.json before compiling. The retained experiment/Cargo.lock is that actual resolved lock, not the unexecuted seed. The retained measure.py enforces a 300-second total measurement deadline, kills only its child process groups, requires all 42 processes/3,360 rows, and applies the predeclared gates. recorded/ preserves the original run; never overwrite it. The sorted candidate changes the edit planner but deliberately keeps the current diff algorithm. Cache indexes and the full product's mixed-vstd dependency graph are not qualified.

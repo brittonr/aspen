@@ -1,0 +1,3 @@
+orchestrator ready id=b621ffdbd3784114ccba128ecb92008862d245763b0f77e16f7da523ad4d2f6e
+orchestrator injected-process-fault point=before-terminal-commit
+orchestrator ready id=b621ffdbd3784114ccba128ecb92008862d245763b0f77e16f7da523ad4d2f6e

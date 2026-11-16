@@ -42,8 +42,22 @@ fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IoValue> {
 }
 
 pub fn admission_loopback(target_registry: &FilePath, request_value: &IoValue) -> Result<JobAdmissionLoopback> {
-    let plan = admission_plan_value(target_registry, request_value)?;
-    let checks = [
+    loopback_receipt_for(admission_plan_value(target_registry, request_value)?)
+}
+
+/// Local dogfood admission over an unqualified fixture gate instead of strict Octet evidence. The plan
+/// and receipt record the strict source-gate check as failed and carry the fixture marker.
+// r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+pub(crate) fn admission_loopback_with_unqualified_fixture_gate(
+    target_registry: &FilePath,
+    request_value: &IoValue,
+    fixture: &crate::octet_gate::UnqualifiedFixtureGate,
+) -> Result<JobAdmissionLoopback> {
+    loopback_receipt_for(admission_plan_with_gate(target_registry, request_value, Some(fixture))?)
+}
+
+fn loopback_receipt_for(plan: JobAdmissionPlan) -> Result<JobAdmissionLoopback> {
+    let mut checks = vec![
         ("target-closure-present", status(plan.decision == "pass" || !plan.closure_refs.is_empty())),
         ("trellis-topology", status(plan.stage_verdicts.iter().all(|verdict| verdict.decision == "pass"))),
         (
@@ -65,11 +79,17 @@ pub fn admission_loopback(target_registry: &FilePath, request_value: &IoValue) -
         ),
         (
             "strict-octet-source-gate-bound",
-            status(plan.request.evidence_refs.iter().any(|reference| reference != &plan.request.sync_ref)),
+            status(
+                !plan.is_unqualified_fixture_gate
+                    && plan.request.evidence_refs.iter().any(|reference| reference != &plan.request.sync_ref),
+            ),
         ),
         ("loopback-admission", "pass"),
         ("no-execution", "pass"),
     ];
+    if plan.is_unqualified_fixture_gate {
+        checks.push(("unqualified-fixture-source-gate", status(plan.decision == "pass")));
+    }
     let receipt_value = job_admission_receipt_value(JobAdmissionReceiptValueInput {
         operation: "admit-loopback",
         decision: &plan.decision,
@@ -244,42 +264,3 @@ pub fn execution_loopback_with_node_state(
     })
 }
 
-fn check_receipt_bindings(
-    request: &JobExecutionRequest,
-    admission: &JobAdmissionReceipt,
-    diagnostics: &mut impl crate::bounded::VecSink<String>,
-    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
-) {
-    let has_matching_admission_ref = admission.receipt_ref == request.admission_ref;
-    push_check(checks, "admission-ref-binding", has_matching_admission_ref);
-    if !has_matching_admission_ref {
-        diagnostics.push_item(format!(
-            "job execution request admission ref {} does not match receipt {}",
-            request.admission_ref, admission.receipt_ref
-        ));
-    }
-
-    let is_admission_pass = admission.decision == "pass";
-    push_check(checks, "admission-pass", is_admission_pass);
-    if !is_admission_pass {
-        diagnostics.push_item(format!("job execution admission decision is {}", admission.decision));
-    }
-
-    let has_matching_job_ref = admission.job_ref == request.job_ref;
-    push_check(checks, "job-ref-binding", has_matching_job_ref);
-    if !has_matching_job_ref {
-        diagnostics.push_item(format!(
-            "job execution request job {} does not match admission job {}",
-            request.job_ref, admission.job_ref
-        ));
-    }
-
-    let has_matching_target_peer = admission.target_peer == request.target_peer;
-    push_check(checks, "target-peer-binding", has_matching_target_peer);
-    if !has_matching_target_peer {
-        diagnostics.push_item(format!(
-            "job execution target peer {} does not match admission target peer {}",
-            request.target_peer, admission.target_peer
-        ));
-    }
-}

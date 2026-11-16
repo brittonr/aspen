@@ -78,7 +78,6 @@ fn deny_commit_receipt(
         index: runtime.committed_index,
         command_ref: &envelope.envelope_ref,
         log_entry_ref: None,
-        quorum_refs: &[],
         append_predicate_ref: None,
         commit_predicate_ref: None,
         diagnostics: &all_diagnostics,
@@ -173,8 +172,9 @@ fn parse_raft_log_entry(value: &IoValue) -> Result<RaftLogEntry> {
 fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IoValue> {
     require_ref(input.group_ref, "raft commit group ref")?;
     require_ref(input.command_ref, "raft commit command ref")?;
-    validate_refs(input.quorum_refs, "raft commit quorum ref")?;
-    Ok(record("raft-commit-receipt-v1", vec![
+    // v2 drops the v1 `quorum` member list and `quorum-commit` check: the in-process registry commits without
+    // collecting acknowledgements from any member.
+    Ok(record("raft-commit-receipt-v2", vec![
         string(crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("group", vec![string(input.group_ref)]),
@@ -182,18 +182,17 @@ fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IoValue> 
         record("index", vec![u64_value(input.index)]),
         record("command", vec![string(input.command_ref)]),
         record("log-entry", vec![optional_ref_value(input.log_entry_ref)]),
-        record("quorum", vec![strings_sequence(input.quorum_refs)]),
         record("append-predicate", vec![optional_ref_value(input.append_predicate_ref)]),
         record("commit-predicate", vec![optional_ref_value(input.commit_predicate_ref)]),
         record("diagnostics", vec![strings_sequence(input.diagnostics)]),
-        checks_value(&[("quorum-commit", input.decision), ("decision-before-apply", "pass")]),
+        checks_value(&[("registry-commit", input.decision), ("decision-before-apply", "pass")]),
     ]))
 }
 
 fn parse_commit_receipt(value: &IoValue) -> Result<RaftCommitReceipt> {
     let fields = value
-        .collect_simple_record("raft-commit-receipt-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-commit-receipt-v1 ...>"))?;
+        .collect_simple_record("raft-commit-receipt-v2", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-commit-receipt-v2 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA, "raft commit receipt schema")?;
     Ok(RaftCommitReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -261,7 +260,7 @@ fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IoValue>
     validate_non_empty(input.predicate, "raft predicate")?;
     require_ref(input.group_ref, "raft predicate group ref")?;
     validate_refs(input.subjects, "raft predicate subject ref")?;
-    Ok(record("raft-predicate-receipt-v1", vec![
+    Ok(record("raft-predicate-receipt-v2", vec![
         string(crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA),
         record("predicate", vec![string(input.predicate)]),
         record("decision", vec![string(input.decision)]),
@@ -276,10 +275,10 @@ fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IoValue>
 
 fn parse_predicate_receipt(value: &IoValue) -> Result<RaftPredicateReceipt> {
     let fields = value
-        .collect_simple_record("raft-predicate-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-predicate-receipt-v1 ...>"))?;
+        .collect_simple_record("raft-predicate-receipt-v2", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-predicate-receipt-v2 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA, "raft predicate receipt schema")?;
-    require_check(&parse_checks(&fields[8])?, "trellis-predicate", "raft predicate receipt")?;
+    require_check(&parse_checks(&fields[8])?, IN_PROCESS_REGISTRY_CHECK, "raft predicate receipt")?;
     Ok(RaftPredicateReceipt {
         predicate_ref: canonical_hash(value)?,
         predicate: record_string(&fields[1], "predicate")?,

@@ -89,6 +89,8 @@ pub struct StartupReceiptValueInput<'a> {
     pub resource_receipt_refs: &'a [String],
     pub version_refs: &'a [String],
     pub diagnostics: &'a [String],
+    /// The source gate is an unqualified fixture, not authenticated Octet evidence.
+    pub is_unqualified_fixture_gate: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

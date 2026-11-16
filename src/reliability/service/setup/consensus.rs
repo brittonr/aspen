@@ -125,6 +125,8 @@ pub struct Replica {
     pub election_min_ticks: u64,
     pub election_max_ticks: u64,
     pub max_log_entries: usize,
+    pub snapshot_threshold_entries: usize,
+    pub request_retention_entries: u64,
     pub max_message_entries: usize,
     pub max_effects_per_step: usize,
 }
@@ -149,6 +151,8 @@ impl Replica {
             election_min_ticks: self.election_min_ticks,
             election_max_ticks: self.election_max_ticks,
             max_log_entries: self.max_log_entries,
+            snapshot_threshold_entries: self.snapshot_threshold_entries,
+            request_retention_entries: self.request_retention_entries,
             max_message_entries: self.max_message_entries,
             max_effects_per_step: self.max_effects_per_step,
         }

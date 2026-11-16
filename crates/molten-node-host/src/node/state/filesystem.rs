@@ -104,7 +104,17 @@ pub(super) fn write_regular_file(
     }
     let mut options = cap_std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true).follow(cap_fs_ext::FollowSymlinks::No);
-    let mut file = parent.open_with(leaf, &options).map_err(crate::error::Failure::from)?;
+    let mut file = parent.open_with(leaf, &options).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::PermissionDenied
+            && let Some(errno) = error.raw_os_error()
+        {
+            return crate::error::Failure::NodeStateWriteOpenDenied {
+                path: path.display().to_string(),
+                errno,
+            };
+        }
+        crate::error::Failure::from(error)
+    })?;
     if !file.metadata().map_err(crate::error::Failure::from)?.is_file() {
         return Err(super::invalid(format!(
             "node state write leaf {} changed away from a regular file",
@@ -284,3 +294,7 @@ pub(super) fn validate_write_size(bytes: &[u8], max_bytes: u64) -> crate::error:
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "filesystem/tests.rs"]
+mod tests;

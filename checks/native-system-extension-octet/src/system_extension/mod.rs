@@ -3,6 +3,11 @@
     reason = "the focused shim preserves exact Molten system-extension names for the real native-host core"
 )]
 
+mod generation;
+
+pub use generation::Generation;
+pub use generation::Incarnation;
+
 const MAX_TEXT_CHARS: usize = 256;
 const BLAKE3_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_CHARS: usize = 64;
@@ -43,8 +48,8 @@ pub enum HealthState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleState {
-    pub generation: u64,
-    pub incarnation: u64,
+    pub generation: Generation,
+    pub incarnation: Incarnation,
     pub phase: LifecyclePhase,
     pub restart_attempts: u64,
     pub health: HealthState,

@@ -1,0 +1,27 @@
+byte-api-intake ok (sampled, not exhaustive or a proof)
+semantic-equivalence ok representative-sequential
+semantic-equivalence ok representative-random
+semantic-equivalence ok representative-mixed
+semantic-equivalence ok representative-prefix
+semantic-equivalence ok maximum-sequential
+semantic-equivalence ok maximum-random
+semantic-equivalence ok maximum-mixed
+semantic-equivalence ok maximum-prefix
+semantic-equivalence ok empty
+semantic-equivalence ok single
+semantic-equivalence ok small
+semantic-equivalence ok key-lengths
+semantic-equivalence ok value-lengths
+semantic-equivalence ok all-update
+semantic-equivalence ok repeated-edits
+semantic-equivalence ok insert-existing
+semantic-equivalence ok update-missing
+semantic-equivalence ok delete-missing
+semantic-equivalence ok error-precedence
+semantic-equivalence ok empty-key-denied
+semantic-equivalence ok oversize-key-denied
+semantic-equivalence ok oversize-value-denied
+semantic-equivalence ok edit-count-denied
+semantic-equivalence ok corrupt-block-denied
+semantic-equivalence ok wrong-count-denied
+semantic-equivalence ok duplicate-block-denied

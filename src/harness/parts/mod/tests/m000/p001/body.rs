@@ -119,7 +119,7 @@
         assert!(receipt_text.contains("chain-evidence"));
         assert!(receipt_text.contains("chain-link-v1"));
         assert!(receipt_text.contains("chain-verify-receipt-v1"));
-        assert!(receipt_text.contains("chain-checkpoint-v1"));
+        assert!(receipt_text.contains("chain-checkpoint-v2"));
         let receipt = parse_receipt(&receipt_value).expect("parse chained gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "chain-continuity"));
         assert!(receipt.checks.iter().any(|check| check == "chain-anchor-descent"));

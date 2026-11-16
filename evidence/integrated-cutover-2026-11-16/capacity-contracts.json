@@ -1,0 +1,222 @@
+{
+  "schema": "aspen.capacity-authoring-execution.v1",
+  "observed_on": "2026-11-16",
+  "toolchain": "nickel-lang-cli nickel 1.17.0 (rev 1320a98)",
+  "source_blake3": {
+    "config/compute-capacity/contracts.ncl": "b00a8097e4d697d7eb2c7427f91fb1711032858d8a459ba570a8bb1097c03278",
+    "docs/nickel-contract-prelude.ncl": "fcee9caf8284b1a33ec5802f240a37b53002e43319792c60f4ec8486f80a2451",
+    "config/compute-capacity/profile.ncl": "a5d5df39df06a9346c64aa438fc2f809a3208bbd25cf3e14c5c53e4983d7b4c4",
+    "config/compute-capacity/fixtures/positive/agent-a-serving-b.ncl": "275123c54f8a2661d328a869c37ec7c2a394b8b38798f1a6f739e35cc6182449",
+    "config/compute-capacity/fixtures/positive/serving-allocation.ncl": "95cc94d5ba2fc877ff8d13daf2656ad48825cd79c747177d1cbc0b0b8dc0c594",
+    "config/compute-capacity/fixtures/positive/serving-readback.ncl": "a94ebd0ee1414cdfc7e5861052d85a83ccaf3a22adbec2bdebf9630e7173580c",
+    "config/compute-capacity/fixtures/positive/tt-overlap.ncl": "80981296981e63b0564c0a07451c1ebd67a48c843bd6c359100801454c3b247a",
+    "config/compute-capacity/fixtures/negative/unknown-runtime.ncl": "a918f3fcc1081d6b427a5290676c0019e5232b5d145464a7a1b19ff6ccbe0dd5",
+    "config/compute-capacity/fixtures/negative/unobserved-free.ncl": "64cb3e55e84af2bd6672beecb621d9275be312e132046fab7fe5528066a3dfd7",
+    "config/compute-capacity/fixtures/negative/unsupported-tt-mesh.ncl": "7760abecfdab48fcde4b41dc6da9a4c50b68d1aecfc99b2b8bad200da652c546",
+    "config/compute-capacity/fixtures/negative/weak-label-authority.ncl": "658f0d2f1a126d1b1063ee3f22ecb1d2143af6e60044c74fe26bdf05f1998fd6",
+    "config/compute-capacity/fixtures/negative/duplicate-physical-pool.ncl": "82fef63ac80fb9904455d370aa2745df2a644f27706f4209b6fc746442c7d58c",
+    "config/compute-capacity/fixtures/negative/empty-qualification-refs.ncl": "8c89d0782b6a67abab454b3804eacd780037b681ed9670fd2b019ee8a01b63fb",
+    "config/compute-capacity/fixtures/negative/expired-offer.ncl": "21e1b7c40e11393e0cd4722ef014129ceec71077228cdb24b696023665274a99",
+    "config/compute-capacity/fixtures/negative/false-live-qualification.ncl": "6b70048de4ef9a7a9636866a00a2f437afd803555258b852d4ee93dba6c98b19",
+    "config/compute-capacity/fixtures/negative/noncanonical-profile-ref.ncl": "a29dcb61cb415abd2401771d9c954a4388d1f96e86ec64bef1b7763c905b4fb3"
+  },
+  "cases": [
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/profile.ncl"
+      ],
+      "expected": "accept",
+      "exit_code": 0,
+      "contract_denial": false,
+      "matches": true,
+      "diagnostic_excerpt": ""
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/positive/agent-a-serving-b.ncl"
+      ],
+      "expected": "accept",
+      "exit_code": 0,
+      "contract_denial": false,
+      "matches": true,
+      "diagnostic_excerpt": ""
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/positive/serving-allocation.ncl"
+      ],
+      "expected": "accept",
+      "exit_code": 0,
+      "contract_denial": false,
+      "matches": true,
+      "diagnostic_excerpt": ""
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/positive/serving-readback.ncl"
+      ],
+      "expected": "accept",
+      "exit_code": 0,
+      "contract_denial": false,
+      "matches": true,
+      "diagnostic_excerpt": ""
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/positive/tt-overlap.ncl"
+      ],
+      "expected": "accept",
+      "exit_code": 0,
+      "contract_denial": false,
+      "matches": true,
+      "diagnostic_excerpt": ""
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/unknown-runtime.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by a value\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/unknown-runtime.ncl:4:1\n   \u2502  \n 4 \u2502 \u256d (Base & {\n 5 \u2502 \u2502   offers | force = std.array.map (fun offer =>\n 6 \u2502 \u2502     if offer.host_id == \"host-b\" then offer & {\n 7 \u2502 \u2502       compatibility | force = offer.compatibility & { runtime | force = null },\n   \u00b7 \u2502\n10 \u2502 \u2502   steps | force = [Serving],\n11 \u2502 \u2502 }) | Contracts.Consumer\n   \u2502 \u2502      ------------------ expected type\n   \u2502 \u2570\u2500\u2500' evaluated to this expression\n   \u2502"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/unobserved-free.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by a value\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/unobserved-free.ncl:4:1\n   \u2502  \n 4 \u2502 \u256d (Base & {\n 5 \u2502 \u2502   offers | force = std.array.map (fun offer =>\n 6 \u2502 \u2502     if offer.host_id == \"host-b\" then offer & {\n 7 \u2502 \u2502       pools | force = std.array.map (fun pool =>\n   \u00b7 \u2502\n15 \u2502 \u2502   steps | force = [Serving],\n16 \u2502 \u2502 }) | Contracts.Consumer\n   \u2502 \u2502      ------------------ expected type\n   \u2502 \u2570\u2500\u2500' evaluated to this expression\n   \u2502  \n   \u250c\u2500 <unknown> (generated b"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/unsupported-tt-mesh.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by a value\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/unsupported-tt-mesh.ncl:5:1\n   \u2502  \n 5 \u2502 \u256d {\n 6 \u2502 \u2502   schema = TT.schema,\n 7 \u2502 \u2502   profile_id = TT.profile_id,\n 8 \u2502 \u2502   offers = TT.offers,\n   \u00b7 \u2502\n20 \u2502 \u2502   synthetic_only = true,\n21 \u2502 \u2502 } | Contracts.Consumer\n   \u2502 \u2502     ------------------ expected type\n   \u2502 \u2570\u2500' evaluated to this expression\n   \u2502  \n   \u250c\u2500 <unknown> (generated by evaluation):1:1\n   \u2502  \n 1 \u2502 \u256d {\n 2 \u2502 \u2502   offers\n 3 \u2502 \u2502     | std.contract.Seque"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/weak-label-authority.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by a value\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/weak-label-authority.ncl:4:1\n   \u2502  \n 4 \u2502 \u256d (Base & {\n 5 \u2502 \u2502   offers | force = std.array.map (fun offer =>\n 6 \u2502 \u2502     if offer.host_id == \"host-b\" then offer & { label_authority | force = \"advisory\" } else offer\n 7 \u2502 \u2502   ) Base.offers,\n 8 \u2502 \u2502   steps | force = [Serving],\n 9 \u2502 \u2502 }) | Contracts.Consumer\n   \u2502 \u2502      ------------------ expected type\n   \u2502 \u2570\u2500\u2500' evaluated to this expression\n   \u2502  \n   \u250c\u2500 <unkno"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/duplicate-physical-pool.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by the value of `offers`\n    \u250c\u2500 <workspace>/config/compute-capacity/contracts.ncl:196:12\n    \u2502\n196 \u2502   offers | std.contract.Sequence [Prelude.contract (Prelude.is_non_empty_bounded_array 128), Array OfferContract],\n    \u2502            ------------------------------------------------------------------------------------------------------ expected type\n    \u2502\n    \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/duplicate-physical-pool.ncl:5:39\n    \u2502  \n  5 \u2502       if offe"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/empty-qualification-refs.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by the value of `qualification_refs`\n   \u250c\u2500 <workspace>/config/compute-capacity/contracts.ncl:46:24\n   \u2502\n46 \u2502   qualification_refs | QualificationRefs,\n   \u2502                        ----------------- expected type\n   \u2502\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/empty-qualification-refs.ncl:7:84\n   \u2502\n 7 \u2502       compatibility | force = offer.compatibility & { qualification_refs | force = [] },\n   \u2502                                                                "
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/expired-offer.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by a value\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/expired-offer.ncl:4:1\n   \u2502  \n 4 \u2502 \u256d (Base & {\n 5 \u2502 \u2502   offers | force = std.array.map (fun offer =>\n 6 \u2502 \u2502     if offer.host_id == \"host-b\" then offer & { expires_at | force = 20 } else offer\n 7 \u2502 \u2502   ) Base.offers,\n 8 \u2502 \u2502   steps | force = [Serving],\n 9 \u2502 \u2502 }) | Contracts.Consumer\n   \u2502 \u2502      ------------------ expected type\n   \u2502 \u2570\u2500\u2500' evaluated to this expression\n   \u2502  \n   \u250c\u2500 <unknown> (generated by ev"
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/false-live-qualification.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by the value of `live_qualification`\n    \u250c\u2500 <workspace>/config/compute-capacity/contracts.ncl:246:24\n    \u2502\n246 \u2502   live_qualification | Prelude.contract (fun value => value == false),\n    \u2502                        ---------------------------------------------- expected type\n    \u2502\n    \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/false-live-qualification.ncl:3:40\n    \u2502\n  3 \u2502 (Base & { live_qualification | force = true }) | Contracts.Profile\n    \u2502                  "
+    },
+    {
+      "argv": [
+        "nickel",
+        "export",
+        "--format",
+        "json",
+        "config/compute-capacity/fixtures/negative/noncanonical-profile-ref.ncl"
+      ],
+      "expected": "contract-denial",
+      "exit_code": 1,
+      "contract_denial": true,
+      "matches": true,
+      "diagnostic_excerpt": "error: contract broken by the value of `provider_profile_ref`\n   \u250c\u2500 <workspace>/config/compute-capacity/contracts.ncl:55:26\n   \u2502\n55 \u2502   provider_profile_ref | Ref,\n   \u2502                          --- expected type\n   \u2502\n   \u250c\u2500 <workspace>/config/compute-capacity/fixtures/negative/noncanonical-profile-ref.ncl:6:80\n   \u2502\n 6 \u2502     if offer.host_id == \"host-b\" then offer & { provider_profile_ref | force = \"synthetic-provider-host-b\" }\n   \u2502                                                                  "
+    }
+  ],
+  "non_claim": "Synthetic authoring contracts only; no grant, physical allocation, live host/device observation or release qualification."
+}

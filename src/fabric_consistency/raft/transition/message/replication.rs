@@ -200,12 +200,6 @@ fn advance_leader_commit(transition: &mut MessagePlan) {
     }));
 }
 
-fn record_completed_requests(state: &mut ReplicaState, entries: &[ReplicatedEntry]) {
-    for entry in entries {
-        state.completed_requests.insert(entry.request_ref.clone(), entry.index);
-    }
-}
-
 // r[impl molten.project.release_overflow_checks]
 fn highest_quorum_index(state: &ReplicaState) -> u64 {
     let last = support::last_log_index(state);

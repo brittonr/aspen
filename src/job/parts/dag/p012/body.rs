@@ -255,3 +255,43 @@ fn checked_pairs<'a>(input: &JobWorkerScheduleReceiptValueInput<'a>) -> Vec<(&'a
     checks.push(("canonical-receipt", "pass"));
     checks
 }
+
+fn check_receipt_bindings(
+    request: &JobExecutionRequest,
+    admission: &JobAdmissionReceipt,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
+) {
+    let has_matching_admission_ref = admission.receipt_ref == request.admission_ref;
+    push_check(checks, "admission-ref-binding", has_matching_admission_ref);
+    if !has_matching_admission_ref {
+        diagnostics.push_item(format!(
+            "job execution request admission ref {} does not match receipt {}",
+            request.admission_ref, admission.receipt_ref
+        ));
+    }
+
+    let is_admission_pass = admission.decision == "pass";
+    push_check(checks, "admission-pass", is_admission_pass);
+    if !is_admission_pass {
+        diagnostics.push_item(format!("job execution admission decision is {}", admission.decision));
+    }
+
+    let has_matching_job_ref = admission.job_ref == request.job_ref;
+    push_check(checks, "job-ref-binding", has_matching_job_ref);
+    if !has_matching_job_ref {
+        diagnostics.push_item(format!(
+            "job execution request job {} does not match admission job {}",
+            request.job_ref, admission.job_ref
+        ));
+    }
+
+    let has_matching_target_peer = admission.target_peer == request.target_peer;
+    push_check(checks, "target-peer-binding", has_matching_target_peer);
+    if !has_matching_target_peer {
+        diagnostics.push_item(format!(
+            "job execution target peer {} does not match admission target peer {}",
+            request.target_peer, admission.target_peer
+        ));
+    }
+}

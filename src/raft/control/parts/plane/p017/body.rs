@@ -6,10 +6,10 @@ pub fn default_raft_engine_descriptor() -> Result<ConsensusEngineDescriptor> {
         profile_version: CONSENSUS_PROFILE_VERSION_RAFT,
         implementation_id: "in-process-raft-control-registry-v1",
         enabled: true,
-        supported_read_consistency_modes: vec![READ_CONSISTENCY_LINEARIZABLE, READ_CONSISTENCY_LOCAL_STALE],
+        supported_read_consistency_modes: vec![READ_CONSISTENCY_LOCAL_COMMITTED, READ_CONSISTENCY_LOCAL_STALE],
         capabilities: vec![
             ENGINE_CAPABILITY_PROPOSAL,
-            ENGINE_CAPABILITY_LINEARIZABLE_READ,
+            ENGINE_CAPABILITY_LOCAL_COMMITTED_READ,
             ENGINE_CAPABILITY_LOCAL_STALE_READ,
             ENGINE_CAPABILITY_SNAPSHOT,
             ENGINE_CAPABILITY_RECOVERY,
@@ -18,7 +18,7 @@ pub fn default_raft_engine_descriptor() -> Result<ConsensusEngineDescriptor> {
             ENGINE_CAPABILITY_READBACK_SUMMARY,
             ENGINE_CAPABILITY_SWITCHOVER,
         ],
-        currentness_evidence_classes: vec![CURRENTNESS_CLASS_RAFT_QUORUM_COMMIT, CURRENTNESS_CLASS_READ_INDEX],
+        currentness_evidence_classes: vec![CURRENTNESS_CLASS_LOCAL_COMMIT],
         membership_capabilities: vec![MEMBERSHIP_CAPABILITY_JOINT_CONSENSUS, MEMBERSHIP_CAPABILITY_DENY_UNSUPPORTED],
         production_admission_status: PRODUCTION_STATUS_MODEL_ONLY,
         required_evidence_refs: vec![

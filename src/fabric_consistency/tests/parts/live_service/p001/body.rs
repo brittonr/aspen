@@ -80,7 +80,12 @@ impl ReplicaDurabilityEffects for DurabilityPort {
         Ok(test_ref("service-commit"))
     }
 
-    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot, _is_suffix_retained: bool) -> crate::error::Result<String> {
+    fn persist_snapshot(
+        &mut self,
+        _snapshot: &ReplicaSnapshot,
+        _is_suffix_retained: bool,
+        _retained: &crate::fabric_consistency::raft::ReplicaRetainedState<'_>,
+    ) -> crate::error::Result<String> {
         Ok(test_ref("service-snapshot"))
     }
 }

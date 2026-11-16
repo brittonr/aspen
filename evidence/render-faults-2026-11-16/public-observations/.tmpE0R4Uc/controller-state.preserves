@@ -1,0 +1,352 @@
+´³ molten.orchestration.document.v1±controller-state.v1´³o.mapµ´³o.field±attempts´³o.mapµ´³o.field±@20ea796cb7175abb831cfa84f5dbaf6263ee940cf506a0ba7bd5cf1c1b36a6bc´³o.mapµ´³o.field±execution_revision´³	o.integer±3„„´³o.field±phase´³o.mapµ´³o.field±Terminal´³o.mapµ´³o.field±result´³o.mapµ´³o.field±outcome´³o.string±	Cancelled„„´³o.field±request_ref´³o.string±@efc6bc9dea57ce20bb882ed9388d8c310a1f590df8c2e085c3d9f8c09928b10e„„´³o.field±stopped´³o.true„„„„„´³o.field±
+result_ref´³o.string±@a273aa9a0a051a03d9c2cd7f8f4a8db159c96f0cf43c6539c139735045a38fdb„„„„„„„„´³o.field±request´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±fence´³o.mapµ´³o.field±
+assignment´³o.string±@20ea796cb7175abb831cfa84f5dbaf6263ee940cf506a0ba7bd5cf1c1b36a6bc„„´³o.field±cluster´³o.string±@76b0f125dc12e149e471f8a20919dbc5fa78e58d79eec27b46fc9fdd605bd387„„´³o.field±epoch´³	o.integer±1„„´³o.field±
+generation´³	o.integer±1„„´³o.field±node´³o.string±@3adafb4830d47af3a60dbc0a083aa9d0728d81af625b32d7a075b8e2445a254b„„´³o.field±run´³o.string±@5b5499af2d3dbc36147b75597c571186fae8537d75f99def8e058cd879b4bfab„„´³o.field±spec_ref´³o.string±@9936a1035fdc7a86c3d06802e53586768454adc73018dd596e67416f39dc9dd2„„´³o.field±task´³o.string±tile-001„„„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@c5a142178b7be5b34864aed4977132fa91b7074a09a1e110ecf39a967dfe3e3c„„„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±
+policy_ref´³o.string±@a107f3efe0b3369858b7658952b37ea8881621471a3a42d4e914eabb1ce09c58„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„„´³o.field±request_ref´³o.string±@efc6bc9dea57ce20bb882ed9388d8c310a1f590df8c2e085c3d9f8c09928b10e„„´³o.field±reservation_held´³o.false„„„„„´³o.field±@a4360ff73d07333bcf255d521b1ab70f464e04593f30fde6e15e7e657f3ab690´³o.mapµ´³o.field±execution_revision´³	o.integer±3„„´³o.field±phase´³o.mapµ´³o.field±Terminal´³o.mapµ´³o.field±result´³o.mapµ´³o.field±outcome´³o.string±	Cancelled„„´³o.field±request_ref´³o.string±@4c1f082bc2dd82695e5c56f2a5b6b2bf3adf00e5722f5dff46d6b31d5698ba5b„„´³o.field±stopped´³o.true„„„„„´³o.field±
+result_ref´³o.string±@7ed9c870c3473584968380dc0cb65605e853cfd303a3580573d72f1ccd657756„„„„„„„„´³o.field±request´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±fence´³o.mapµ´³o.field±
+assignment´³o.string±@a4360ff73d07333bcf255d521b1ab70f464e04593f30fde6e15e7e657f3ab690„„´³o.field±cluster´³o.string±@76b0f125dc12e149e471f8a20919dbc5fa78e58d79eec27b46fc9fdd605bd387„„´³o.field±epoch´³	o.integer±1„„´³o.field±
+generation´³	o.integer±1„„´³o.field±node´³o.string±@3adafb4830d47af3a60dbc0a083aa9d0728d81af625b32d7a075b8e2445a254b„„´³o.field±run´³o.string±@5b5499af2d3dbc36147b75597c571186fae8537d75f99def8e058cd879b4bfab„„´³o.field±spec_ref´³o.string±@9936a1035fdc7a86c3d06802e53586768454adc73018dd596e67416f39dc9dd2„„´³o.field±task´³o.string±tile-000„„„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@23356432504a6c228e5276e269061fda6db12278649a41a56543440157a276b2„„„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±
+policy_ref´³o.string±@a107f3efe0b3369858b7658952b37ea8881621471a3a42d4e914eabb1ce09c58„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„„´³o.field±request_ref´³o.string±@4c1f082bc2dd82695e5c56f2a5b6b2bf3adf00e5722f5dff46d6b31d5698ba5b„„´³o.field±reservation_held´³o.false„„„„„„„„´³o.field±cluster´³o.string±@76b0f125dc12e149e471f8a20919dbc5fa78e58d79eec27b46fc9fdd605bd387„„´³o.field±freshness_ticks´³	o.integer±3„„´³o.field±
+generation´³	o.integer±1„„´³o.field±nodes´³o.mapµ´³o.field±@3adafb4830d47af3a60dbc0a083aa9d0728d81af625b32d7a075b8e2445a254b´³o.mapµ´³o.field±boot´³	o.integer±1„„´³o.field±capacity´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±2000„„´³o.field±memory_bytes´³	o.integer±	536870912„„´³o.field±slots´³	o.integer±2„„„„„´³o.field±draining´³o.false„„´³o.field±enabled´³o.true„„´³o.field±id´³o.string±@3adafb4830d47af3a60dbc0a083aa9d0728d81af625b32d7a075b8e2445a254b„„´³o.field±labels´³o.mapµ„„„´³o.field±	last_seen´³	o.integer±24„„„„„„„„´³o.field±
+policy_ref´³o.string±@a107f3efe0b3369858b7658952b37ea8881621471a3a42d4e914eabb1ce09c58„„´³o.field±revision´³	o.integer±61„„´³o.field±runs´³o.mapµ´³o.field±@5b5499af2d3dbc36147b75597c571186fae8537d75f99def8e058cd879b4bfab´³o.mapµ´³o.field±cancel_requested´³o.true„„´³o.field±id´³o.string±@5b5499af2d3dbc36147b75597c571186fae8537d75f99def8e058cd879b4bfab„„´³o.field±spec´³o.mapµ´³o.field±name´³o.string±render-cancel-active„„´³o.field±tasks´³
+o.sequenceµ´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ´³o.string±tile-000„´³o.string±tile-001„´³o.string±tile-002„´³o.string±tile-003„´³o.string±tile-004„´³o.string±tile-005„´³o.string±tile-006„´³o.string±tile-007„´³o.string±tile-008„´³o.string±tile-009„´³o.string±tile-010„´³o.string±tile-011„´³o.string±tile-012„´³o.string±tile-013„´³o.string±tile-014„´³o.string±tile-015„´³o.string±tile-016„´³o.string±tile-017„´³o.string±tile-018„´³o.string±tile-019„´³o.string±tile-020„´³o.string±tile-021„´³o.string±tile-022„´³o.string±tile-023„´³o.string±tile-024„´³o.string±tile-025„´³o.string±tile-026„´³o.string±tile-027„´³o.string±tile-028„´³o.string±tile-029„´³o.string±tile-030„´³o.string±tile-031„„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±assemble„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@f603cf59fefa3c36559a6c4b2ff532af236d9a1440ae823e5edb577dd3966636„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±691280„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-000„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@23356432504a6c228e5276e269061fda6db12278649a41a56543440157a276b2„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-001„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@c5a142178b7be5b34864aed4977132fa91b7074a09a1e110ecf39a967dfe3e3c„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-002„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@c357d798c80ff04e540cc903c27c357861987ea67b888f11e08806313c5c4621„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-003„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@307f1bd9fe8ef539ddbc2d1ce9bacf6660a401dc3d034b0a78df835e224b3def„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-004„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@5c119001bc92457a45eef3c5af89d5da218c07224b5c68d4af5ed2794c681d6d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-005„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@66df6ebea9928f68576e75d5ec83ded7b537ee3ea10894b92ccbd16ebb433d91„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-006„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@858e65e7cad5c73aedf8dfc5dff237a4e5af9f67deb03472c49fbda890ab10a8„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-007„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@efa5858d7aa3d6a061c91ef1fbcbb3d92e7686ca4e6bcbd696b738cea278a25d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-008„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@1d42d3795b9945b5307e444445bf74ab27cd9732b67150754510a73125d91f29„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-009„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b02a5ed623c74f92ee08a54223d09b6a2ca7304d9329203987f4c43d752e3c2d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-010„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0889d9c939e79c3746b2727df8f28ad841a0ce35d097e74261ebeaf664386f23„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-011„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@34d4b685e2da9366eb3c1f9d6ca0fa8002fa439ac40aa4c29a30e1cd07b579c0„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-012„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@d90bdb4834e409e69e1f201339e6089910e63fb90705136d93300b8e8d4b196f„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-013„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@7aad5be7d88b95f0f4ce65d4654c808f14117165be26fa573f373b8ee06d8671„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-014„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@079ed64a5ff881fd7d27075841495e9b181fb542ccd8e70ad0bdf9617772b3d7„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-015„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@83fc57a2d73f4b17a108e5cafef1ff9b88c8b4b44391679ba1c3f531fed1f19a„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-016„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@13e9c2254e35201aa98b341256be394d01542854260ef1463e688797ed0b8e16„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-017„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@3e8113a2973f05bfca6466b8864d7a09af3abb0111380d3696e760ab2211e206„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-018„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0cb05c688212b7959688d9bd15813c8e1f3d0095765125b85de51884bcbbc937„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-019„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@89fa9c9e8144f8ae79462b40ee2173f4cbb5c3fa3fdc48f22724727b9082d23e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-020„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@fe6e91fbaba799abd3d14c5d97a5a04079938c07e4c88680fa1d88f4b77bc794„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-021„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@686a0e8e6692e3d04b30a8d033cf0fbe90a47480df37530a796a479b5700ce6e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-022„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@206a637ba19e2eb714470b772894994499f7e15e4a2b07882ec17153965f90d0„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-023„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@e8abdbc6e67b8b5a033816d0cb41b47c2ea6c41d243e5987de45d246580cb905„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-024„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@730f9a5d76a4f7dfe90510e03a2ab57c4627cb2a89a366769ac2409ee68ec009„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-025„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0fed6a22fc1901a092c0338fc9d3ec75ff0697527e1c3178c6577f209edb173e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-026„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@458c05aaeed97ef0022fb5d107e7ef0add688e625dea7be7cf7c0bd51f5c8f91„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-027„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@a60f2d9041ef0960f372e62eb07ca34b21cabc7a4909a2dab2150071b62cf06d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-028„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b7e81f231415a500015c77500e876a273ac7e13e8cb5edaccca27f1be6636543„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-029„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b6b845121bcfd379fa38d12295d7c4240ccf0e34852a08f527fb4632b39934c9„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-030„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@8fdb7d8cfa8d7198d4e3ab044c7b15b12d05ba2b525fc36fbafb581f55d49cfc„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-031„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@fc0d92450662946efb465b8521a1d36270fc6802fb339e64a1dc75b8dfc506fd„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„„„„„„„´³o.field±spec_ref´³o.string±@9936a1035fdc7a86c3d06802e53586768454adc73018dd596e67416f39dc9dd2„„´³o.field±tasks´³o.mapµ´³o.field±assemble´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-000´³o.mapµ´³o.field±number´³	o.integer±1„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-001´³o.mapµ´³o.field±number´³	o.integer±1„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-002´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-003´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-004´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-005´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-006´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-007´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-008´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-009´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-010´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-011´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-012´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-013´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-014´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-015´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-016´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-017´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-018´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-019´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-020´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-021´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-022´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-023´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-024´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-025´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-026´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-027´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-028´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-029´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-030´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-031´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„„„„„„„´³o.field±@e6a9dba2c58e85779a75c0a83abf5953c9bb1c47b1ddf36d11f80fa62015ede6´³o.mapµ´³o.field±cancel_requested´³o.true„„´³o.field±id´³o.string±@e6a9dba2c58e85779a75c0a83abf5953c9bb1c47b1ddf36d11f80fa62015ede6„„´³o.field±spec´³o.mapµ´³o.field±name´³o.string±render-cancel-pending„„´³o.field±tasks´³
+o.sequenceµ´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ´³o.string±tile-000„´³o.string±tile-001„´³o.string±tile-002„´³o.string±tile-003„´³o.string±tile-004„´³o.string±tile-005„´³o.string±tile-006„´³o.string±tile-007„´³o.string±tile-008„´³o.string±tile-009„´³o.string±tile-010„´³o.string±tile-011„´³o.string±tile-012„´³o.string±tile-013„´³o.string±tile-014„´³o.string±tile-015„´³o.string±tile-016„´³o.string±tile-017„´³o.string±tile-018„´³o.string±tile-019„´³o.string±tile-020„´³o.string±tile-021„´³o.string±tile-022„´³o.string±tile-023„´³o.string±tile-024„´³o.string±tile-025„´³o.string±tile-026„´³o.string±tile-027„´³o.string±tile-028„´³o.string±tile-029„´³o.string±tile-030„´³o.string±tile-031„„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±assemble„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@f603cf59fefa3c36559a6c4b2ff532af236d9a1440ae823e5edb577dd3966636„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±691280„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-000„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@23356432504a6c228e5276e269061fda6db12278649a41a56543440157a276b2„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-001„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@c5a142178b7be5b34864aed4977132fa91b7074a09a1e110ecf39a967dfe3e3c„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-002„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@c357d798c80ff04e540cc903c27c357861987ea67b888f11e08806313c5c4621„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-003„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@307f1bd9fe8ef539ddbc2d1ce9bacf6660a401dc3d034b0a78df835e224b3def„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-004„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@5c119001bc92457a45eef3c5af89d5da218c07224b5c68d4af5ed2794c681d6d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-005„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@66df6ebea9928f68576e75d5ec83ded7b537ee3ea10894b92ccbd16ebb433d91„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-006„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@858e65e7cad5c73aedf8dfc5dff237a4e5af9f67deb03472c49fbda890ab10a8„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-007„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@efa5858d7aa3d6a061c91ef1fbcbb3d92e7686ca4e6bcbd696b738cea278a25d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-008„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@1d42d3795b9945b5307e444445bf74ab27cd9732b67150754510a73125d91f29„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-009„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b02a5ed623c74f92ee08a54223d09b6a2ca7304d9329203987f4c43d752e3c2d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-010„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0889d9c939e79c3746b2727df8f28ad841a0ce35d097e74261ebeaf664386f23„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-011„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@34d4b685e2da9366eb3c1f9d6ca0fa8002fa439ac40aa4c29a30e1cd07b579c0„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-012„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@d90bdb4834e409e69e1f201339e6089910e63fb90705136d93300b8e8d4b196f„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-013„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@7aad5be7d88b95f0f4ce65d4654c808f14117165be26fa573f373b8ee06d8671„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-014„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@079ed64a5ff881fd7d27075841495e9b181fb542ccd8e70ad0bdf9617772b3d7„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-015„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@83fc57a2d73f4b17a108e5cafef1ff9b88c8b4b44391679ba1c3f531fed1f19a„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-016„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@13e9c2254e35201aa98b341256be394d01542854260ef1463e688797ed0b8e16„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-017„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@3e8113a2973f05bfca6466b8864d7a09af3abb0111380d3696e760ab2211e206„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-018„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0cb05c688212b7959688d9bd15813c8e1f3d0095765125b85de51884bcbbc937„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-019„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@89fa9c9e8144f8ae79462b40ee2173f4cbb5c3fa3fdc48f22724727b9082d23e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-020„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@fe6e91fbaba799abd3d14c5d97a5a04079938c07e4c88680fa1d88f4b77bc794„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-021„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@686a0e8e6692e3d04b30a8d033cf0fbe90a47480df37530a796a479b5700ce6e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-022„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@206a637ba19e2eb714470b772894994499f7e15e4a2b07882ec17153965f90d0„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-023„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@e8abdbc6e67b8b5a033816d0cb41b47c2ea6c41d243e5987de45d246580cb905„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-024„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@730f9a5d76a4f7dfe90510e03a2ab57c4627cb2a89a366769ac2409ee68ec009„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-025„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@0fed6a22fc1901a092c0338fc9d3ec75ff0697527e1c3178c6577f209edb173e„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-026„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@458c05aaeed97ef0022fb5d107e7ef0add688e625dea7be7cf7c0bd51f5c8f91„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-027„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@a60f2d9041ef0960f372e62eb07ca34b21cabc7a4909a2dab2150071b62cf06d„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-028„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b7e81f231415a500015c77500e876a273ac7e13e8cb5edaccca27f1be6636543„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-029„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@b6b845121bcfd379fa38d12295d7c4240ccf0e34852a08f527fb4632b39934c9„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-030„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@8fdb7d8cfa8d7198d4e3ab044c7b15b12d05ba2b525fc36fbafb581f55d49cfc„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„´³o.mapµ´³o.field±	component´³o.string±@d47e721c566b15f02409074054dffac166c4f6e3dfc0e6999de49c716fd6d8ce„„´³o.field±dependencies´³
+o.sequenceµ„„„´³o.field±fuel´³	o.integer±
+1000000000„„´³o.field±id´³o.string±tile-031„„´³o.field±inputs´³
+o.sequenceµ´³o.string±@fc0d92450662946efb465b8521a1d36270fc6802fb339e64a1dc75b8dfc506fd„„„„´³o.field±max_attempts´³	o.integer±3„„´³o.field±max_output_bytes´³	o.integer±21724„„´³o.field±required_labels´³o.mapµ„„„´³o.field±	resources´³o.mapµ´³o.field±
+cpu_millis´³	o.integer±1000„„´³o.field±memory_bytes´³	o.integer±67108864„„´³o.field±slots´³	o.integer±1„„„„„´³o.field±retry_delay_ticks´³	o.integer±1„„´³o.field±
+timeout_ms´³	o.integer±60000„„„„„„„„„„´³o.field±spec_ref´³o.string±@b988a6724fa84d5bb7c46a44de3c12559db7068972ca35b3fba8bfb11e43495f„„´³o.field±tasks´³o.mapµ´³o.field±assemble´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-000´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-001´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-002´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-003´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-004´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-005´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-006´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-007´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-008´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-009´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-010´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-011´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-012´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-013´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-014´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-015´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-016´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-017´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-018´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-019´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-020´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-021´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-022´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-023´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-024´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-025´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-026´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-027´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-028´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-029´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-030´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„´³o.field±tile-031´³o.mapµ´³o.field±number´³	o.integer±0„„´³o.field±phase´³o.string±	Cancelled„„„„„„„„„„„„„„´³o.field±submissions´³o.mapµ´³o.field±render-cancel-active´³o.mapµ´³o.field±run´³o.string±@5b5499af2d3dbc36147b75597c571186fae8537d75f99def8e058cd879b4bfab„„´³o.field±spec_ref´³o.string±@9936a1035fdc7a86c3d06802e53586768454adc73018dd596e67416f39dc9dd2„„„„„´³o.field±render-cancel-pending´³o.mapµ´³o.field±run´³o.string±@e6a9dba2c58e85779a75c0a83abf5953c9bb1c47b1ddf36d11f80fa62015ede6„„´³o.field±spec_ref´³o.string±@b988a6724fa84d5bb7c46a44de3c12559db7068972ca35b3fba8bfb11e43495f„„„„„„„„´³o.field±tick´³	o.integer±24„„„„„

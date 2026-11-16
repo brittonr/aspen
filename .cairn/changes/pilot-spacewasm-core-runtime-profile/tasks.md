@@ -11,15 +11,13 @@
 - [ ] [depends:spacewasm-core-receipts] Add operator status/readback that keeps SpaceWasm pilot, Wasmtime core, and component evidence distinct and reports promotion blockers. r[molten.spacewasm_core.nonclaims]
 - [ ] [depends:spacewasm-core-fixtures] Run focused pure-core/shell/ABI/resource/resume/replay tests, executor conformance, positive and negative fixtures, Octet and Chaos evidence checks, Cairn validation, proposal/design/tasks gates, and the smallest relevant workspace/Nix checks. r[molten.spacewasm_core.validation]
 
-## Prerequisite status (2026-10-31)
+## Prerequisite status (2026-11-16)
 
 The engine prerequisite is closed: Molten and the shared hardened runtime are both on the
 patched Wasmtime 49.0.5 cohort (archived `adopt-patched-wasmtime-line`), so the SpaceWasm
 differential no longer needs an advisory exception. Remaining before this change can execute
 evidence-bearing acceptance:
 
-- the exact Mantle SpaceWasm reference bundle identity pinned in the pilot cohort (the published
-  bundle `774331f6…` exists; this change must pin it through its own cohort record);
-- the Octet `add-spacewasm-mvp-artifact-profile` archive identity;
-- the ChaosControl `add-spacewasm-mvp-differential-rail`, which must move to the same 49.0.5
-  cohort in its own repository before the differential observations are comparable.
+- Mantle's independently admitted immutable revision/bundle publication binding. Its 2026-10-30 local integration verified bundle `774331f6c2defe75e30c354b2b3080838cf56438bbd99268779fe4590f8c9f39`, but `materialize-molten-spacewasm-abi` still leaves publication unchecked; a local materialization is not an authorized trust pin;
+- exact-member static receipts and independently selected immutable verifier identity for Octet's archived `spacewasm-molten-abi-pilot` profile (`b3:2fd08aba3959f85f58aaac323758df3e286872cf14e7b52985a1b8d7c4647956`);
+- a compatible ChaosControl full-Molten-ABI differential producer/report and independent verifier/probe pins. The inspected archived/current rail is hostless, uses `chaoscontrol.spacewasm-mvp-differential-report.v1` and Wasmtime 41.0.3; it is not the required `chaoscontrol.spacewasm-molten-abi-differential.v1` / Wasmtime 49.0.5 cohort.

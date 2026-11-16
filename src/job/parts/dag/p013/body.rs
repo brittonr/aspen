@@ -247,3 +247,27 @@ fn blob_ref_job_status_value(
         checks_value_from_pairs(&status_checks),
     ]))
 }
+
+fn explicit_admission_authority(
+    request: &JobAdmissionRequest,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> bool {
+    let mut has_explicit_authority = true;
+    if request.policy_refs.is_empty() {
+        has_explicit_authority = false;
+        diagnostics.push_item("job admission missing explicit policy refs".to_string());
+    }
+    if request.capability_refs.is_empty() {
+        has_explicit_authority = false;
+        diagnostics.push_item("job admission missing explicit capability refs".to_string());
+    }
+    if request.evidence_refs.is_empty() {
+        has_explicit_authority = false;
+        diagnostics.push_item("job admission missing explicit evidence refs".to_string());
+    }
+    if request.resource_refs.is_empty() {
+        has_explicit_authority = false;
+        diagnostics.push_item("job admission missing explicit resource refs".to_string());
+    }
+    has_explicit_authority
+}

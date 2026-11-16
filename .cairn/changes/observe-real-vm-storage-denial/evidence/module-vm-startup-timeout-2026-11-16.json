@@ -1,0 +1,15 @@
+{
+  "schema": "aspen.module-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "command": ["nix", "run", "--option", "builders", "", "--option", "extra-substituters", "", "--option", "substituters", "https://cache.nixos.org", "--max-jobs", "1", "--cores", "2", ".#nixos-vm-molten-module"],
+  "test_derivation": "/nix/store/dali2mvypn6d2qrm6l27bs8x5kwdin4k-vm-test-run-molten-module.drv",
+  "selected_binding_derivation": "/nix/store/8nqhjg4lxk8qlmqw549x5csjdqmnvx4p-molten-node-source-binding-v1.drv",
+  "resources": {"vcpus": 2, "memory_mib": 2048},
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 7200,
+  "observed": ["VM booted and the fixture trust unit completed.", "Node init emitted config, identity and profile-resolution references.", "The initial molten.service active-state wait timed out after 3600.98 seconds; lifecycle and trust-denial assertions were not reached."],
+  "exit_code": 1,
+  "raw_log_blake3": "d67691fa12b32bfdc4eb8ad9a76995a13cbb83a14c99a76255892fc70be12b44",
+  "next_declared_profile": {"vcpus": 8, "memory_mib": 8192, "startup_deadline_seconds": 3600, "aggregate_driver_deadline_seconds": 7200},
+  "non_claim": "The observed timeout does not prove a resource root cause, passing source admission, bounded stop, trust denial, independent operator trust or module qualification. Larger fixture resources and failure diagnostics are not a passing result or a relaxed product deadline."
+}

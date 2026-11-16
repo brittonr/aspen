@@ -66,6 +66,9 @@ pub const SEGMENT_NO_FORK_PREDICATE: &str = "molten.chain.segment_no_fork.v1";
 pub const DESCENDS_FROM_ANCHOR_PREDICATE: &str = "molten.chain.descends_from_anchor.v1";
 pub const CHECKPOINT_COVERS_RANGE_PREDICATE: &str = "molten.chain.checkpoint_covers_range.v1";
 pub const CHAIN_EVIDENCE_PURPOSE: &str = "chain-evidence";
+/// Checkpoint control-plane mode: the checkpoint is accepted into the local ledger, not through a replicated
+/// Raft command. v1 checkpoints named this `trellis-raft`, which no code path implemented.
+pub const CHECKPOINT_CONTROL_PLANE_MODE: &str = "local-checkpoint";
 
 const MAX_EVIDENCE_CHAIN_LINKS: usize = 100_000;
 

@@ -106,6 +106,8 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IoValue> {
                 "no-hidden-bypass",
                 status(workflow.checks.iter().any(|(name, status)| name == "no-hidden-bypass" && status == "pass")),
             ),
+            // r[impl molten.operator_dogfood_node_workflow.spec.unqualified_fixture_gate]
+            (UNQUALIFIED_FIXTURE_SOURCE_GATE_CHECK, "pass"),
         ]),
     ]))
 }
@@ -175,6 +177,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IoValu
             ("retention-gc-review-bound", "pass"),
             ("retention-gc-is-evidence-only", "pass"),
             ("no-text-oracle", "pass"),
+            (UNQUALIFIED_FIXTURE_SOURCE_GATE_CHECK, "pass"),
         ]),
     ]))
 }
@@ -279,21 +282,3 @@ struct NixObservation {
     is_output_observed: bool,
 }
 
-fn fallback_nix_output(
-    output_path: String,
-    output_path_ref: String,
-    evidence: &NixDogfoodEvidence,
-) -> ObservedNixDogfoodOutput {
-    ObservedNixDogfoodOutput {
-        output_path,
-        output_path_ref,
-        report_ref: evidence.report_ref.clone(),
-        release_gate_ref: evidence.release_gate_ref.clone(),
-        replay_verify_ref: evidence.replay_verify_ref.clone(),
-        replay_index_ref: evidence.replay_index_ref.clone(),
-        summary_ref: evidence.summary_ref.clone(),
-        nextest_marker_ref: evidence.nextest_marker_ref.clone(),
-        nextest_check_path: evidence.nextest_check_path.clone(),
-        file_refs: evidence.file_refs.clone(),
-    }
-}

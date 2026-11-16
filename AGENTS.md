@@ -13,7 +13,7 @@ Non-negotiable boundaries:
 - **Deterministic playback:** identical artifacts, dependency closure, initial state, policy/schema refs, handler profile, and seed or recorded effect log reproduce identical canonical traces, receipts, outputs, and final-state hashes.
 - **Identity:** BLAKE3 over canonical packed Preserves bytes, never Rust layout, debug output, or rendered logs.
 - **Authority:** identity, verification, connectivity, and successful output do not grant permission. Logs/JUnit cannot override canonical deny receipts.
-- **Consistency:** Trellis-backed Raft is for control-plane state, not ordinary actor traffic. OpenRaft is not used.
+- **Consistency:** the in-tree replicated Raft (`fabric_consistency::raft`) backs the reliability and collaboration-scope services; coordination locks/leases/registries and job scheduling run on the single-process control registry (`raft_control_plane`), which serves `local-committed`/`local-stale` reads and denies `linearizable`. Neither calls Trellis (Trellis backs choreography and `job_dag` helpers). Consensus is for control-plane state, not ordinary actor traffic. OpenRaft is not used.
 
 ## Architecture & Data Flow
 

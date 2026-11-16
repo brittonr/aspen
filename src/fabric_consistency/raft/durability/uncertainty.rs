@@ -181,8 +181,13 @@ impl ReplicaDurabilityEffects for UncertaintyPorts {
         self.durable.persist_commit(index)
     }
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot, is_suffix_retained: bool) -> crate::error::Result<String> {
-        self.durable.persist_snapshot(snapshot, is_suffix_retained)
+    fn persist_snapshot(
+        &mut self,
+        snapshot: &ReplicaSnapshot,
+        is_suffix_retained: bool,
+        retained: &ReplicaRetainedState<'_>,
+    ) -> crate::error::Result<String> {
+        self.durable.persist_snapshot(snapshot, is_suffix_retained, retained)
     }
 }
 

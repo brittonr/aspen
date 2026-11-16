@@ -13,8 +13,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 const BIN: &str = env!("CARGO_BIN_EXE_molten-orchestrator");
 fn invoke(args: &[&str]) -> Output {
     Command::new(BIN).args(args).output().unwrap()
@@ -298,7 +298,9 @@ impl Fixture {
             }
         }
         let observed = last.map(|status| &status["phase"]);
-        panic!("run {run_id} did not reach {phase}: {reason}; last phase={observed:?}; task phases={counts:?}; retained wait-* and controller-state diagnostics");
+        panic!(
+            "run {run_id} did not reach {phase}: {reason}; last phase={observed:?}; task phases={counts:?}; retained wait-* and controller-state diagnostics"
+        );
     }
     fn page(&self, cursor: &Value) -> Value {
         let path = self.base.path().join("cursor.json");
@@ -521,28 +523,42 @@ fn exhaustion_and_running_cancellation_have_authoritative_terminal_observations(
     f.call("cancel", &["--run", &id]);
     f.wait(&id, "Cancelled");
     let raw = f.call("status", &["--raw"]);
-    assert!(raw["attempts"]
-        .as_object()
-        .unwrap()
-        .values()
-        .filter(|a| a["request"]["fence"]["run"] == id)
-        .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true));
+    assert!(
+        raw["attempts"]
+            .as_object()
+            .unwrap()
+            .values()
+            .filter(|a| a["request"]["fence"]["run"] == id)
+            .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true)
+    );
 }
 // r[verify molten.observations.cursors]
 #[test]
 fn progress_retention_overflow_requires_a_new_consistent_snapshot() {
     let f = Fixture::new(None);
+    // Exercise event eviction, not max-size job throughput. Keep the existing
+    // event capacity and per-run deadline while filling it with bounded jobs.
+    let tasks_per_run = 16;
+    let evicting_runs = molten_batch_core::MAX_BATCH_PROGRESS_EVENTS / (tasks_per_run + 1) + 1;
     let component = f.put("constant.wat", include_bytes!("../../examples/constant.wat"));
-    let (first, _) = f.submit("retention-00", (0..64).map(|n| task(&format!("tile-{n:02}"), &component)).collect());
+    let (first, _) =
+        f.submit("retention-00", (0..tasks_per_run).map(|n| task(&format!("tile-{n:02}"), &component)).collect());
     f.wait(&first, "Succeeded");
     let snapshot = f.call("progress", &["--run", &first]);
     let cursor = start_cursor(&snapshot);
-    for n in 1..4 {
-        let (id, _) = f
-            .submit(&format!("retention-{n:02}"), (0..64).map(|t| task(&format!("tile-{t:02}"), &component)).collect());
+    let mut is_evicted = false;
+    for n in 1..=evicting_runs {
+        let (id, _) = f.submit(
+            &format!("retention-{n:02}"),
+            (0..tasks_per_run).map(|t| task(&format!("tile-{t:02}"), &component)).collect(),
+        );
         f.wait(&id, "Succeeded");
+        if f.page(&cursor).get("ResnapshotRequired").is_some() {
+            is_evicted = true;
+            break;
+        }
     }
-    assert!(f.page(&cursor).get("ResnapshotRequired").is_some());
+    assert!(is_evicted, "bounded completed jobs did not evict the saved cursor");
     let fresh = f.call("progress", &["--run", &first]);
     assert!(fresh["tasks"].as_object().unwrap().values().all(|t| t.get("Accepted").is_some()));
     assert!(f.page(&fresh["watermark"])["Events"]["events"].as_array().unwrap().is_empty());
@@ -694,7 +710,9 @@ fn real_renderer_pending_and_active_cancellation_do_not_confuse_disconnect_with_
         .filter(|a| a["request"]["fence"]["run"] == active)
         .collect::<Vec<_>>();
     assert!(!attempts.is_empty());
-    assert!(attempts
-        .iter()
-        .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true));
+    assert!(
+        attempts
+            .iter()
+            .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true)
+    );
 }

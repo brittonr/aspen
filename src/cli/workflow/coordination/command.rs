@@ -35,7 +35,7 @@ pub(crate) enum Command {
         client_session: String,
         #[arg(long)]
         operation_id_ref: String,
-        #[arg(long, default_value = molten::coordination::READ_CONSISTENCY_LINEARIZABLE)]
+        #[arg(long, default_value = molten::coordination::READ_CONSISTENCY_LOCAL_COMMITTED)]
         read_consistency_mode: String,
         #[arg(long)]
         payload: Option<FilePath>,

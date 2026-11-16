@@ -32,7 +32,6 @@
 
 ## Blocker
 
-The KVM producer and import tasks depend on archived versioned ChaosControl
-SMR chain-workload and protocol-observation-cohort contracts. Multi-node behavior tasks also require an admitted
-cross-process Molten consensus guest. Missing either dependency must remain a
-typed blocker and cannot be replaced by a local in-process consensus model.
+The SMR workload and protocol-observation contracts are archived in ChaosControl as `2026-08-07-add-smr-chain-workload` and `2026-11-05-add-protocol-observation-cohorts`; they are no longer missing producer specifications. A consumer integration pin and exact projection/envelope handoff remain to be selected and reconciled.
+
+Actual campaigns and imported execution evidence still require a measured cross-process Molten guest cohort with admitted distinct-guest transport and persistent-device mappings, complete source/build/runtime closure and actual committed-apply/independent-oracle observations. The current memory-backed supervisor and native three-child signal directory do not supply that contract. Neither an in-process model, native stdout, historical release receipt nor strict-SMP rejection can substitute for a supported single-vCPU-per-guest multi-VM observation.

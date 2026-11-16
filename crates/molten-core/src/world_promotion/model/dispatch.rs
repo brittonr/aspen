@@ -67,6 +67,9 @@ pub struct WorldPromotionTransactionFacts {
     pub authority_generation: u64,
     pub policy_ref: WorldHeadPolicyRef,
     pub intent_closure_complete: bool,
+    /// Every plan intent's content-addressed material was read at application time and matches the
+    /// plan's semantic, handler, adapter, and release classification exactly.
+    pub intent_material_available: bool,
     pub reservation_refs: Vec<WorldReleaseReservationRef>,
 }
 

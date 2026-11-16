@@ -57,6 +57,7 @@
         assert_eq!(checkpoint.range_predicate_ref, checkpoint_range_predicate(&root, &verified));
         validate_chain_checkpoint_freshness(&root, &chain, &checkpoint.checkpoint_ref, Some(&second.link_ref))
             .expect("fresh checkpoint");
+        assert_v1_trellis_checkpoint_rejected(&crate::ledger::read_artifact(&root, &checkpoint.checkpoint_ref).expect("checkpoint"));
 
         let third_value = chain_link_value(&ChainLinkInput::append(
             &second,
@@ -69,6 +70,25 @@
         let stale = validate_chain_checkpoint_freshness(&root, &chain, &checkpoint.checkpoint_ref, None)
             .expect_err("checkpoint becomes stale after head advances");
         assert!(stale.to_string().contains("stale"));
+    }
+
+    /// The accepted checkpoint parses; the same checkpoint claiming the v1 `trellis-raft` control-plane mode,
+    /// under either label, does not.
+    fn assert_v1_trellis_checkpoint_rejected(accepted: &IoValue) {
+        assert!(parse_chain_checkpoint(accepted).is_ok());
+        let fields = accepted.collect_simple_record("chain-checkpoint-v2", Some(9)).expect("checkpoint fields");
+        let fields = (0..9).map(|index| value_to_iovalue(&fields[index])).collect::<Vec<_>>();
+        let mut trellis_mode = fields.clone();
+        trellis_mode[6] = record("control-plane", vec![
+            record("mode", vec![string("trellis-raft")]),
+            record("command", vec![string("accept-chain-head")]),
+        ]);
+        let error = parse_chain_checkpoint(&record("chain-checkpoint-v2", trellis_mode.clone()))
+            .expect_err("trellis-raft mode rejected");
+        assert!(error.to_string().contains("trellis-raft"));
+        let mut v1 = trellis_mode;
+        v1[0] = string("molten.evidence.chain-checkpoint.v1");
+        assert!(parse_chain_checkpoint(&record("chain-checkpoint-v1", v1)).is_err());
     }
 
     #[test]

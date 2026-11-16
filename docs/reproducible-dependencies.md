@@ -114,8 +114,9 @@ export GIT_CONFIG_COUNT=1 \
   GIT_CONFIG_VALUE_0=ssh://git@github.com/
 ```
 
-The hosted `Reproducible dependencies` workflow sets the same three variables for
-its job. With a fresh empty home (no SSH keys, agent, Git configuration or Nix
+The hosted `Reproducible dependencies` workflow sets the same three variables,
+does not persist checkout credentials, and runs `nix develop --command cargo build --locked`
+before `nix flake check`. With a fresh empty home (no SSH keys, agent, Git configuration or Nix
 fetcher cache), evaluating the default development shell failed at exactly that
 fetch without the rewrite and succeeded with it, fetching the same commit over
 HTTPS ([observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-octet-transport-20261115.json)).
@@ -132,6 +133,13 @@ Hosted storage [run 43693265859](https://github.com/brittonr/aspen/actions/runs/
 The storage workflow selects `nix develop .#object-storage-ci`: the unchanged pinned Rust compiler plus compiler/linker support, Git and Python, without unrelated proof-producer packages. Its dependency guard, tests, optional feature and canonical receipt requirements are unchanged. This is an explicit storage-profile boundary, not a source rewrite, a new Octet cohort or a qualification of the unchanged default development shell. The [retained hosted observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261115.json) keeps failure and artifact evidence separate from any subsequent pass. Aspen's workflow maintainers own this shell and repeatability through the existing hosted workflow; issue #23 remains open for the full public graph.
 
 The repaired hosted [storage run 43695373650](https://github.com/brittonr/aspen/actions/runs/43695373650) at `4055bab940178c300c66b635cd00f2cda0188cf3` initialized that shell and passed its dependency guard. Before the first Rust test, Cargo attempted the optional `vm-cohort-core` source and failed because `git-remote-rad` was absent. Optional feature selection did not prevent this cold metadata fetch. A [fresh credential-free direct attempt](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-vm-source-20261115.json) to acquire the unchanged VM Cohort commit through its recorded seed returned HTTP 500; the workspace catalog advertises no GitHub source. The all-required-default-acquisition task is reopened. No test or canonical conformance receipt was produced, and neither source-acquisition counts nor the tool-shell fix satisfy the clean-public-build criterion.
+
+The later full-flake [run 43816346417](https://github.com/brittonr/aspen/actions/runs/43816346417)
+at `d2c4359d79b287514f054a799a7edd576b90f351` acquired the public source graph and
+reached `molten` production/test crate builds before reporting “The operation was canceled.”
+The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/observations.json)
+binds that result and the original diagnostic log digest. It establishes neither the cancellation
+cause nor a successful cold build, passing tests, or a passing full flake check; #23 remains open.
 
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`

@@ -1,4 +1,6 @@
 
+// Used only to fabricate test receipts; compiled with the synthetic fixture.
+#[cfg(any(test, feature = "test-fixtures"))]
 const PASS_CHECKS: &[Check] = &[
     Check {
         name: "artifacts-dir-present",

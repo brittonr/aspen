@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 TARGET="${CARGO_TARGET_DIR:-$PWD/target}"
 export MOLTEN_RENDER_COMPONENT="$TARGET/guests/render.component.wasm"
 [[ -f "$MOLTEN_RENDER_COMPONENT" ]] || { echo 'Build the real renderer component first.' >&2; exit 1; }
-RUN="$(mktemp -d "${TMPDIR:-/tmp}/aspen-render-faults.XXXXXX")"
+# Build-shell TMPDIR is removed on shell exit; retained observations need a separate root.
+RUN="$(mktemp -d "${RENDER_RETAIN_ROOT:-/tmp}/aspen-render-faults.XXXXXX")"
 chmod 700 "$RUN"
 export MOLTEN_BATCH_EVIDENCE_DIR="$RUN/public-observations"
 mkdir "$MOLTEN_BATCH_EVIDENCE_DIR"

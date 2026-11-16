@@ -1,0 +1,18 @@
+{
+  "schema": "aspen.hermetic-source-check-observation.v1",
+  "observed_on": "2026-11-16",
+  "initial_command": ["nix", "flake", "check", "--keep-going", "-L", "--option", "builders", "", "--option", "extra-substituters", "", "--option", "substituters", "https://cache.nixos.org", "--max-jobs", "1", "--cores", "4"],
+  "initial_exit_code": 1,
+  "initial_log_blake3": "098616fec7ec02319e325cc5aaa4b7f98b985a8e14ef8567984d79c1e216e207",
+  "failed_attribute": "checks.x86_64-linux.addressable-actor-octet-deny-all",
+  "failure": "The generated focused facade mounted Generation under generation, causing two path_segment_repetition findings (library and library-test targets).",
+  "repair": "Mount the unchanged production Generation/Incarnation file through the neutral private counters namespace. Public names and implementations are unchanged. No lint suppression was added.",
+  "repair_command": ["nix", "build", "--no-link", "--option", "builders", "", "--option", "extra-substituters", "", "--option", "substituters", "https://cache.nixos.org", "--max-jobs", "1", "--cores", "4", ".#checks.x86_64-linux.addressable-actor-octet-deny-all", "-L"],
+  "repair_derivation": "/nix/store/mq1fnwvx6jb48zn1wx421iaqdma9z4bj-octet-consumer-check.drv",
+  "repair_exit_code": 0,
+  "repair_status": "clean",
+  "repair_findings": 0,
+  "repair_warnings": 0,
+  "repair_errors": 0,
+  "non_claim": "The original full invocation failed and is preserved as failed. This records the narrow corrected consumer check, not a new passing full-flake invocation, public bootstrap, runtime qualification or release authority."
+}

@@ -107,7 +107,7 @@ fn write_dogfood_summary(fixture: &DogfoodCliFixture) {
     fs::write(
         fixture.dir.join("dogfood-summary.txt"),
         format!(
-            "dogfood local-node decision=pass report={} release-gate={}\n",
+            "dogfood local-node decision=pass report={} release-gate={} source-gate=unqualified-fixture\n",
             fixture.report_ref,
             canonical_hash(&read_preserves_file(&fixture.release_gate).expect("release gate value"))
                 .expect("release ref")

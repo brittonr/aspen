@@ -23,6 +23,7 @@ fn retry_plan_rebuilds_the_original_plan_and_requires_duplicate_risk_acknowledge
     let plan = plan_retry_for_reservation(RetryPlanInput {
         store: &state.store,
         request: &request,
+        operator: &current_operator(&request),
         reservation_ref: &reservation.reservation_ref,
         attempt_ref: &attempt.attempt_ref,
         next_attempt_ref: next.clone(),
@@ -36,6 +37,7 @@ fn retry_plan_rebuilds_the_original_plan_and_requires_duplicate_risk_acknowledge
         plan_retry_for_reservation(RetryPlanInput {
             store: &state.store,
             request: &request,
+            operator: &current_operator(&request),
             reservation_ref: &reservation.reservation_ref,
             attempt_ref: &attempt.attempt_ref,
             next_attempt_ref: WorldReleaseAttemptRef::new(reference("retry-attempt-three"))
@@ -58,8 +60,14 @@ fn deny_transitions_a_committed_reservation_and_abandon_updates_the_attempt() {
     })
     .expect("promotion");
     let reservation = state.store.list_reservations().expect("reservations").pop().expect("reservation");
-    let denied = denied_reservation(&reservation);
-    state.store.update_reservation(&denied).expect("deny");
+    let denied = deny_reservation(DenyInput {
+        store: &mut state.store,
+        request: &request,
+        operator: &current_operator(&request),
+        reservation_ref: &reservation.reservation_ref,
+    })
+    .expect("deny");
+    assert_eq!(denied.state, WorldReleaseState::Denied);
     let stored = state
         .store
         .read_reservation(&reservation.reservation_ref)
@@ -79,6 +87,7 @@ fn deny_transitions_a_committed_reservation_and_abandon_updates_the_attempt() {
     let abandoned = abandon_uncertain_for_attempt(AbandonInput {
         store: &mut state.store,
         request: &request,
+        operator: &current_operator(&request),
         attempt_ref: &attempt.attempt_ref,
         is_unknown_outcome_acknowledged: true,
     })
@@ -94,6 +103,7 @@ fn deny_transitions_a_committed_reservation_and_abandon_updates_the_attempt() {
         abandon_uncertain_for_attempt(AbandonInput {
             store: &mut state.store,
             request: &request,
+            operator: &current_operator(&request),
             attempt_ref: &attempt.attempt_ref,
             is_unknown_outcome_acknowledged: true,
         })
@@ -142,6 +152,7 @@ fn dispatcher_error_records_uncertain_attempt_and_reservation() {
     let retry = plan_retry_for_reservation(RetryPlanInput {
         store: &state.store,
         request: &request,
+        operator: &current_operator(&request),
         reservation_ref: &reservation.reservation_ref,
         attempt_ref: &stored_attempt.attempt_ref,
         next_attempt_ref: next.clone(),
@@ -153,6 +164,7 @@ fn dispatcher_error_records_uncertain_attempt_and_reservation() {
     let abandoned = abandon_uncertain_for_attempt(AbandonInput {
         store: &mut state.store,
         request: &request,
+        operator: &current_operator(&request),
         attempt_ref: &stored_attempt.attempt_ref,
         is_unknown_outcome_acknowledged: true,
     })
@@ -175,63 +187,10 @@ fn dispatcher_error_with_recording_failure_surfaces_both_errors() {
     let reservation = promoted.committed_reservations[0].clone();
     let attempt_ref = expected_initial_attempt(&reservation);
 
-    struct FailingStore {
-        inner: LocalWorldPromotionStore,
-    }
-    impl WorldPromotionCommitPort for FailingStore {
-        fn commit_promotion(
-            &mut self,
-            plan: &WorldPromotionPlan,
-            canonical_plan: &CanonicalWorldPromotionRecord,
-            reservations: &[CanonicalWorldPromotionRecord],
-            facts: &WorldPromotionTransactionFacts,
-        ) -> crate::error::Result<WorldPromotionCommitObservation> {
-            self.inner.commit_promotion(plan, canonical_plan, reservations, facts)
-        }
-        fn read_back_promotion(&self, plan: &WorldPromotionPlan) -> crate::error::Result<WorldPromotionReadBackObservation> {
-            self.inner.read_back_promotion(plan)
-        }
-    }
-    impl WorldPromotionBookkeepingPort for FailingStore {
-        fn read_reservation(&self, reservation_ref: &WorldReleaseReservationRef) -> crate::error::Result<Option<WorldReleaseReservation>> {
-            self.inner.read_reservation(reservation_ref)
-        }
-        fn list_reservations(&self) -> crate::error::Result<Vec<WorldReleaseReservation>> {
-            self.inner.list_reservations()
-        }
-        fn claim_reservation(&mut self, reservation_ref: &WorldReleaseReservationRef) -> crate::error::Result<Option<WorldReleaseReservation>> {
-            self.inner.claim_reservation(reservation_ref)
-        }
-        fn update_reservation(&mut self, reservation: &WorldReleaseReservation) -> crate::error::Result<()> {
-            self.inner.update_reservation(reservation)
-        }
-        fn store_attempt(&mut self, attempt: &WorldAttemptRecord) -> crate::error::Result<()> {
-            // Admit the pre-dispatch `attempting` write; fail only the post-error uncertain record.
-            if attempt.state == WorldReleaseState::Uncertain {
-                return Err(crate::error::Failure::invalid_harness("store boom"));
-            }
-            self.inner.store_attempt(attempt)
-        }
-        fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> crate::error::Result<Option<WorldAttemptRecord>> {
-            self.inner.read_attempt(attempt_ref)
-        }
-        fn list_attempts_in_progress(&self) -> crate::error::Result<Vec<WorldAttemptRecord>> {
-            self.inner.list_attempts_in_progress()
-        }
-        fn read_promotion_identity(&self, operation_ref: &WorldPromotionOperationRef) -> crate::error::Result<Option<StoredPromotionIdentity>> {
-            self.inner.read_promotion_identity(operation_ref)
-        }
-    }
 
     // move store out
     let mut failing_store = FailingStore { inner: state.store };
     let mut admission = Admission { facts: dispatch_facts() };
-    struct FailingDispatcher;
-    impl WorldEffectDispatcherPort for FailingDispatcher {
-        fn dispatch(&mut self, _plan: &WorldDispatchPlan) -> crate::error::Result<WorldAttemptObservation> {
-            Err(crate::error::Failure::invalid_harness("dispatcher boom"))
-        }
-    }
     let mut dispatcher = FailingDispatcher;
     let mut dispatch_receipts = receipts();
     let result = dispatch_world_reservation(&promoted.plan, &reservation.reservation_ref, &attempt_ref, WorldDispatchPorts {
@@ -296,6 +255,7 @@ fn recovery_classifies_attempts_interrupted_before_their_result_was_recorded() {
     let abandoned = abandon_uncertain_for_attempt(AbandonInput {
         store: &mut state.store,
         request: &request,
+        operator: &current_operator(&request),
         attempt_ref: &attempt_ref,
         is_unknown_outcome_acknowledged: true,
     })

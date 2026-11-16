@@ -1,0 +1,68 @@
+^[[36;1m  python3 docs/content-store-adapter/dependency-guard.py^[[0m
+^[[36;1m  cargo test --locked -p molten-core content_store_adapter::^[[0m
+^[[36;1m  cargo test --locked -p molten --lib --features content-store-object-storage content_store_adapter::^[[0m
+^[[36;1m  cargo test --locked -p molten --lib --features content-store-object-storage content_store_adapter::live_object::live -- --ignored --test-threads=1^[[0m
+^[[36;1m  cargo test --locked -p molten --lib --features content-store-object-storage content_store_adapter::live_object::completion_tests::live_command_conformance_emits_canonical_receipt -- --ignored --exact^[[0m
+^[[36;1m  cargo test --locked -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored^[[0m
+     Running unittests src/lib.rs (target/debug/deps/molten_core-2f3203c275ea1cae)
+running 9 tests
+test content_store_adapter::tests::object_storage_is_a_distinct_adapter_class_wire_name ... ok
+test content_store_adapter::tests::protection_handles_pins_and_unprotect_never_grant_read_or_delete_authority ... ok
+test content_store_adapter::tests::provider_throttle_is_retryable_and_put_disconnect_tracks_remote_acknowledgement ... ok
+test content_store_adapter::tests::repeated_chunk_refs_preserve_order_without_changing_manifest_identity ... ok
+test content_store_adapter::tests::preflight_is_bounded_capability_checked_and_range_specific ... ok
+test content_store_adapter::tests::tier_recovery_capacity_is_independent_and_fails_closed ... ok
+test content_store_adapter::tests::verification_advances_in_order_and_corruption_never_becomes_available ... ok
+test content_store_adapter::tests::unsupported_transform_overbound_queue_reordering_and_truncation_deny_before_availability ... ok
+test content_store_adapter::tests::verified_partial_state_resumes_and_disconnect_is_uncertain ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 745 filtered out
+     Running unittests src/lib.rs (target/debug/deps/molten-3dcb2533e6266255)
+running 40 tests
+test content_store_adapter::live_cache::tests::cold_get_at_capacity_is_verified_remote_only ... ok
+test content_store_adapter::live_cache::tests::corrupt_remote_bytes_are_not_cached ... ok
+test content_store_adapter::live_cache::tests::latency_summary_separates_local_and_remote_reads ... ok
+test content_store_adapter::live_cache::tests::local_hit_makes_no_remote_request ... ok
+test content_store_adapter::live_object::completion_tests::remote_lifecycle_loss_of_protected_chunk_fails_even_with_local_copy ... ok
+test content_store_adapter::live_object::completion_tests::command_local_hit_makes_no_remote_request ... ok
+test content_store_adapter::live_object::fault_tests::bounded_latency_does_not_change_verified_identity ... ok
+test content_store_adapter::live_object::fault_tests::corruption_never_enters_cache_or_verified_payload ... ok
+test content_store_adapter::live_object::fault_tests::disconnect_fails_without_verified_payload ... ok
+test content_store_adapter::live_object::completion_tests::put_timeout_remains_uncertain_without_local_growth ... ok
+test content_store_adapter::live_object::fault_tests::provider_throttle_remains_retryable_without_cached_bytes ... ok
+test content_store_adapter::live_object::fault_tests::missing_object_is_never_available_or_cached ... ok
+test content_store_adapter::live_object::completion_tests::put_faults_use_shared_terminal_classifier ... ok
+test content_store_adapter::live_object::publish_tests::corrupt_remote_chunk_fails_without_verified_payload ... ok
+test content_store_adapter::live_object::fault_tests::truncation_fails_without_verified_payload ... ok
+test content_store_adapter::live_object::fault_tests::timeout_fails_without_verified_payload ... ok
+test content_store_adapter::live_object::publish_tests::publish_puts_every_verified_chunk ... ok
+test content_store_adapter::live_object::retention_tests::unprotected_delete_removes_remote_and_local_copy ... ok
+test content_store_adapter::live_object::tests::fetch_runs_the_command_transition_against_a_local_endpoint ... ok
+test content_store_adapter::live_s3::tests::hostnames_are_not_admitted ... ok
+test content_store_adapter::live_s3::tests::chunked_get_without_content_length_stops_at_the_bound ... ok
+test content_store_adapter::live_object::retention_tests::protected_delete_makes_no_remote_request ... ok
+test content_store_adapter::live_s3::tests::signing_matches_the_published_sigv4_example_vector ... ok
+test content_store_adapter::live_tier::tests::retained_root_replacement_does_not_redirect_cache_writes ... ok
+test content_store_adapter::live_tier::tests::tier_respects_capacity_and_rejects_corruption ... ok
+test content_store_adapter::tests::and_exchange_ports_are_exact_versioned_and_backend_neutral ... ok
+test content_store_adapter::live_s3::tests::connection_cap_denies_before_dispatch ... ok
+test content_store_adapter::live_s3::tests::put_and_get_are_bounded_and_signed ... ok
+test content_store_adapter::tests::deterministic_simulation_matches_verified_trace_and_models_failure_without_exposure ... ok
+test content_store_adapter::tests::capability_local_stream_and_range_expose_only_verified_bounded_bytes ... ok
+test content_store_adapter::tests::simulated_put_classifies_throttle_torn_put_and_multipart_abort ... ok
+test content_store_adapter::tests::status_and_backend_protection_are_redacted_bounded_and_non_authoritative ... ok
+test content_store_adapter::live_s3::tests::plain_http_is_admitted_only_for_loopback_endpoints ... ok
+test content_store_adapter::tests::live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitted_transport_key ... ok
+test result: ok. 34 passed; 0 failed; 6 ignored; 0 measured; 2120 filtered out
+     Running unittests src/lib.rs (target/debug/deps/molten-3dcb2533e6266255)
+running 2 tests
+test content_store_adapter::live_object::live_fault_tests::live_corrupt_remote_chunk_fails_without_verified_payload ... ok
+test content_store_adapter::live_object::live_tests::live_publish_and_fetch_run_the_transition_core ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2158 filtered out
+     Running unittests src/lib.rs (target/debug/deps/molten-3dcb2533e6266255)
+running 1 test
+test content_store_adapter::live_object::completion_tests::live_command_conformance_emits_canonical_receipt ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2159 filtered out
+     Running unittests src/lib.rs (target/debug/deps/molten-3dcb2533e6266255)
+running 1 test
+test content_store_adapter::live_cache::tests::live_endpoint_roundtrip ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2159 filtered out

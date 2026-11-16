@@ -1,0 +1,75 @@
+{
+  "schema": "aspen.issue6.plan.v1",
+  "issue": "https://github.com/brittonr/aspen/issues/6",
+  "premeasurement_status": "prepared-not-executed",
+  "root_head_at_intake": "166ecaf40a307bedd22694e4a027e616e03e21cf",
+  "source_index_tree": "bae6acf4fa500369ca25cd7a1e094add419efe53",
+  "source_origin": "<workspace>",
+  "source_archive": "source-index.tar",
+  "scratch_owner": "PrepareFrameOwnerProbe; parent owns execution and removal of this exact scratch directory",
+  "pinned_original_nix_shell": "path:<workspace>",
+  "parent_intake_correction": "Before measurement, select the exact matching staged-source integration flake, not the differing canonical checkout. Preserve prepared SHA256 checksums as historical; bind execution inputs and binary using BLAKE3.",
+  "toolchain": "nightly-2026-05-26; actual rustc/cargo -vV and source-input BLAKE3 recorded by driver",
+  "profile": "release-optimized cfg(test) native loopback diagnostic; existing fixture profile and protocol unchanged",
+  "cargo_selection": "cargo test --frozen --offline --release -p molten --lib --no-run --message-format=json",
+  "features": "manifest defaults, no added feature or dependency",
+  "warmups_per_size": 3,
+  "measured_trials_per_size": 20,
+  "operations_total": 46,
+  "size_schedule": "each round both sizes; typical then max on even rounds, max then typical on odd rounds",
+  "typical_bytes": 1024,
+  "typical_scope": "explicit assumed typical workload, not a claim of production traffic representativeness",
+  "actual_admitted_max_bytes": 4096,
+  "maximum_derivation": "unchanged fixture profile, protocol framing and endpoint resources all admit 4096 bytes; OpenStream credit 4096; inflight budget 8192 and queue budget 16384 do not lower it",
+  "payload_pattern": "byte[index] = index % 251; fresh canonical owner and listener per operation",
+  "fixture_identity": [
+    "src/fabric_transport/cross_process/parts/tests/p000/body.rs",
+    "src/fabric_transport/cross_process/parts/tests/p001/body.rs:accept_one_and_drain,effect_port_ids,setup_commands",
+    "src/fabric_transport/cross_process/iroh/parts/shell/p002/body.rs:bind_explicit_endpoint,run_client_exchange,run_server_exchange"
+  ],
+  "timeouts": {
+    "fixture_stage_seconds": 10,
+    "build_wall_seconds": 3600,
+    "experiment_wall_seconds": 600,
+    "kill_grace_seconds": 15
+  },
+  "resources": {
+    "cargo_jobs": 2,
+    "outer_tokio_workers": 2,
+    "per_frame_tokio_workers": 2,
+    "test_threads": 1,
+    "open_files_per_process": 4096,
+    "virtual_memory_per_process_KiB": 16777216,
+    "cargo_incremental": false,
+    "target_dir": "scratch/target-issue6",
+    "network": "fresh task-owned user+network namespace, only loopback enabled, existing Minimal Iroh preset with relay disabled and explicit IPv4 loopback binds",
+    "concurrency": "one exchange at a time; no source patches or upstream effects"
+  },
+  "measurement": {
+    "owner_held_ns": "sum of external register and route call durations including local destructors, not a sum of stage timers",
+    "whole_operation_ns": "external elapsed from immediately before register to immediately after route, excludes fixture setup, canonical oracle, server join and serialization",
+    "register_body_and_route_body_ns": "near-return internal spans, not used as full-owner denominators",
+    "stage_ns": "validation pre/post hash, admission frame_ref, payload copy, submit transition, input copy, thread dispatch, runtime build, real block_on exchange, runtime shutdown, evidence clone+match, acknowledgement transition, client/server shell frame_ref",
+    "overhead": "Instant calls and shared collector Mutex writes perturb instrumented operations and are included in external owner time. No timing subtraction or overhead de-bias is authorized. Timers do not emit I/O in owner path. Stage spans are nested, not additive. Server-side hash is concurrent and cannot be summed as owner CPU.",
+    "canonical_checks": "actual ACK transition ref and final TransportState equal direct canonical reference SendFrame then AcknowledgeFrame; reference pending/ack deliveries checked Pending/Delivered; actual client and listener Delivered evidence have request-bound payload/ACK refs, exact byte count, zero retries; inflight zero; listener cleanup Clean",
+    "output": "46 JSONL rows on successful completion, including 6 warmups and 40 measured rows; no success summary on partial/failing run"
+  },
+  "predeclared_decision": {
+    "threshold": "strictly greater than 0.10 at BOTH sizes: sum(register_hash_ns)/sum(owner_held_ns) over measured successful canonical-checked Delivered operations",
+    "required_baseline": "production-representative runtime reuse/amortization with preserved canonical transitions, receipts and frame_ref; review and record that baseline identity before measuring it",
+    "current_missing_capability": "Registered::route_effect invokes private run_exchange; run_exchange always spawns a thread and creates/drops Tokio Runtime per frame; no injected runtime or reuse/amortization API exists on this path",
+    "prerequisite_policy": "do not silently redesign runtime ownership or subtract measured runtime creation/shutdown from current-path results as a substitute",
+    "adoption": "NEVER adopt begin/commit from this diagnostic fixture profile, even if measured fraction exceeds 0.10; production baseline and canonical behavior qualification are separate prerequisites",
+    "current_decision": "gate-closed-awaiting-production-representative-runtime-baseline"
+  },
+  "non_claims": [
+    "not executed by preparer",
+    "no product changes",
+    "not Internet qualification",
+    "not cross-host or hardware qualification",
+    "not release/deployment qualification",
+    "not a production runtime-reuse profile",
+    "not deterministic clock/replay evidence"
+  ],
+  "cleanup_owner": "Transport maintainers own the retained evidence; task-owned scratch can be removed after private source retention."
+}

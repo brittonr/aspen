@@ -11,7 +11,7 @@ mod namespace;
 #[path = "state/process.rs"]
 mod process;
 #[path = "state/publication.rs"]
-mod publication;
+pub(crate) mod publication;
 
 pub use authority::DirectoryRoot;
 pub use authority::EntryKind;
@@ -24,9 +24,6 @@ pub use namespace::Scope;
 pub use process::Executable;
 pub use process::MAX_EXECUTABLE_BYTES;
 pub use process::Workspace;
-pub(crate) use publication::Replacement;
-pub(crate) use publication::is_publication_stage;
-pub(crate) use publication::publish_regular_file;
 
 const MAX_NODE_STATE_ENTRIES: usize = 100_000;
 pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16 * 1_024 * 1_024;

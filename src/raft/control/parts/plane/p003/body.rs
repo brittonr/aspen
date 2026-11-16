@@ -144,11 +144,11 @@ fn pass_draft(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) 
         .checked_add(1)
         .ok_or_else(|| MoltenError::invalid_harness("raft committed index overflow"))?;
     let append_predicate = pass_predicate(
-        "trellis-append-consistency",
+        "registry-append-consistency",
         runtime,
         next_index,
         std::slice::from_ref(&envelope.envelope_ref),
-        &[("trellis-predicate", "pass"), ("prior-log-binding", "pass")],
+        &[(IN_PROCESS_REGISTRY_CHECK, "pass"), ("prior-log-binding", "pass")],
     )?;
     let log_entry_value = raft_log_entry_value(&LogEntryValueInput {
         group_ref: &runtime.manifest.manifest_ref,
@@ -160,15 +160,16 @@ fn pass_draft(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) 
         append_predicate_ref: &append_predicate.predicate_ref,
     })?;
     let log_entry = parse_raft_log_entry(&log_entry_value)?;
+    // The registry is one process: a commit is a local apply of the next log index, not a quorum decision.
     let commit_predicate =
-        pass_predicate("trellis-quorum-commit", runtime, next_index, std::slice::from_ref(&log_entry.entry_ref), &[
-            ("trellis-predicate", "pass"),
-            ("quorum-members", "pass"),
+        pass_predicate("registry-local-commit", runtime, next_index, std::slice::from_ref(&log_entry.entry_ref), &[
+            (IN_PROCESS_REGISTRY_CHECK, "pass"),
+            ("log-entry-bound", "pass"),
         ])?;
     let advancement_subjects = [runtime.state.state_ref.clone(), log_entry.entry_ref.clone()];
     let advancement_predicate =
-        pass_predicate("trellis-commit-advancement", runtime, next_index, &advancement_subjects, &[
-            ("trellis-predicate", "pass"),
+        pass_predicate("registry-commit-advancement", runtime, next_index, &advancement_subjects, &[
+            (IN_PROCESS_REGISTRY_CHECK, "pass"),
             ("monotonic-index", "pass"),
         ])?;
     let commit_receipt = pass_commit(PassCommitInput {
@@ -217,7 +218,6 @@ fn pass_commit(input: PassCommitInput<'_>) -> Result<RaftCommitReceipt> {
         index: input.index,
         command_ref: &input.envelope.envelope_ref,
         log_entry_ref: Some(&input.log_entry.entry_ref),
-        quorum_refs: &input.runtime.manifest.members,
         append_predicate_ref: Some(&input.append_predicate.predicate_ref),
         commit_predicate_ref: Some(&input.commit_predicate.predicate_ref),
         diagnostics: &[],

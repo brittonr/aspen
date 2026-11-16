@@ -12,12 +12,14 @@
 mod dispatch;
 mod model;
 mod observation;
+mod operator;
 mod planning;
 mod reconciliation;
 
 pub use dispatch::*;
 pub use model::*;
 pub use observation::*;
+pub use operator::*;
 pub use planning::*;
 pub use reconciliation::*;
 

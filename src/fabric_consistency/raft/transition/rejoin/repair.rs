@@ -223,12 +223,10 @@ fn admit(transition: &mut MessagePlan) -> crate::error::Result<()> {
         transition.effects.push(ReplicaEffect::PersistCommit {
             through_index: commit_index,
         });
-        for entry in &entries {
-            transition.next.completed_requests.insert(entry.request_ref.clone(), entry.index);
-        }
-        transition.effects.push(ReplicaEffect::ApplyCommitted { entries });
         transition.next.commit_index = commit_index;
         transition.next.last_applied = commit_index;
+        record_completed_requests(&mut transition.next, &entries);
+        transition.effects.push(ReplicaEffect::ApplyCommitted { entries });
     }
     // Persist a self vote as a conservative fence: an older vote may have been lost.
     // The next campaign advances the term before granting any voting authority.

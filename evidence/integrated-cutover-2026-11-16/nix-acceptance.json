@@ -1,0 +1,23 @@
+{
+  "schema": "aspen.local-nix-acceptance-observation.v1",
+  "observed_on": "2026-11-16",
+  "command": ["nix", "flake", "check", "--keep-going", "-L", "--option", "builders", "", "--option", "extra-substituters", "", "--option", "substituters", "https://cache.nixos.org", "--max-jobs", "1", "--cores", "4"],
+  "system": "x86_64-linux",
+  "exit_code": 0,
+  "wall_seconds": 3187.01,
+  "terminal_observation": "all checks passed!",
+  "default_package_derivation_evaluated": "/nix/store/0nwzmrn7nq2a73l0mb8h0bd1f236brlj-rust_molten-0.1.0.drv",
+  "nextest_check_derivation": "/nix/store/hj1wlf5wa12hy178wl1c79n8mr86f7x6-molten-nextest.drv",
+  "license_boundary": {"result": "valid", "rules": 22},
+  "raw_log_blake3": "c6abb1710c1d817e506103b598b0f9305f79092068a2c48b3608e5ca6c1c23d0",
+  "omitted_incompatible_systems": ["aarch64-darwin", "aarch64-linux", "x86_64-darwin"],
+  "later_changes_outside_this_capture": [
+    "Opt-in module fixture resource/failure-diagnostic changes and local read-only Nix store images for both opt-in VM campaigns.",
+    "Associated VM design/documentation and separate attempt/acceptance observation records."
+  ],
+  "non_claims": [
+    "Not a clean anonymous public-runner result.",
+    "Not a passing opt-in signed-startup, module, storage-denial, two-host or release-qualification result.",
+    "The evaluated default package derivation alone is not an observation of a completed default-package build."
+  ]
+}

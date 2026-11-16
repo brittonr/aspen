@@ -12,13 +12,15 @@ pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<Coordination
 }
 
 // r[impl molten.coordination.read_consistency_modes]
+/// v2: `committed-state-bound` passes for `local-committed` assertions; v1 passed it for `linearizable`
+/// assertions the in-process runtime could not back with a read index.
 pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IoValue> {
     validate_service(input.service)?;
     validate_key(input.key)?;
     validate_read_consistency_mode(input.read_consistency_mode)?;
     validate_ref(input.state_ref, "coordination assertion state ref")?;
     validate_ref(input.receipt_ref, "coordination assertion receipt ref")?;
-    Ok(record("coordination-status-assertion-v1", vec![
+    Ok(record("coordination-status-assertion-v2", vec![
         string(COORDINATION_STATUS_ASSERTION_SCHEMA),
         record("service", vec![string(input.service)]),
         record("key", vec![string(input.key)]),
@@ -29,13 +31,13 @@ pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> R
         checks_value(&[
             ("dataspace-observation-only", "pass"),
             ("read-consistency-declared", "pass"),
-            ("committed-state-bound", if input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
+            ("committed-state-bound", if input.read_consistency_mode == READ_CONSISTENCY_LOCAL_COMMITTED { "pass" } else { "diagnostic" }),
         ]),
     ]))
 }
 
 pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<CoordinationStatusAssertion> {
-    let fields = simple_record(value, "coordination-status-assertion-v1", 8)?;
+    let fields = simple_record(value, "coordination-status-assertion-v2", 8)?;
     require_schema(&fields[0], COORDINATION_STATUS_ASSERTION_SCHEMA, "coordination assertion schema")?;
     let service = record_string(&fields[1], "service")?;
     let key = record_string(&fields[2], "key")?;
@@ -73,7 +75,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
     validate_receipt_transition(input.decision, input.state_ref, input.transition)?;
     validate_refs(input.dataspace_assertion_refs, "coordination receipt assertion ref")?;
     ensure_count_at_most(input.diagnostics.len(), MAX_COORDINATION_DIAGNOSTICS, "coordination receipt diagnostics")?;
-    Ok(record("coordination-receipt-v1", vec![
+    Ok(record("coordination-receipt-v2", vec![
         string(COORDINATION_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("service", vec![string(input.service)]),
@@ -91,7 +93,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
 }
 
 pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt> {
-    let fields = simple_record(value, "coordination-receipt-v1", COORDINATION_RECEIPT_FIELD_COUNT)?;
+    let fields = simple_record(value, "coordination-receipt-v2", COORDINATION_RECEIPT_FIELD_COUNT)?;
     require_schema(&fields[0], COORDINATION_RECEIPT_SCHEMA, "coordination receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let service = record_string(&fields[2], "service")?;

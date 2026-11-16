@@ -186,6 +186,11 @@ fn experimental_recipe_binds_limits_and_preserves_explicit_authority() {
     let profiles = experimental(input.clone()).unwrap();
     assert_eq!(profiles.protocol.registration_authority_ref, input.registration_authority_ref);
     assert_eq!(profiles.namespace.value_schema_ref, input.value_schema_ref);
+    // r[verify molten.consensus.durable_log_compaction]
+    let retention = profiles.namespace.retention_authority_ref.clone().expect("explicit retention authority");
+    let mut other_grant = input.clone();
+    other_grant.registration_authority_ref = content_ref("other-signed-grant");
+    assert_ne!(experimental(other_grant).unwrap().namespace.retention_authority_ref, Some(retention));
     let mut changed = input.clone();
     changed.operation_deadline_ticks += 1;
     let changed_profiles = experimental(changed).unwrap();

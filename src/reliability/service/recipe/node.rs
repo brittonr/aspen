@@ -10,7 +10,8 @@ pub(super) fn configuration(
     let admission = super::super::runtime::HostAdmission {
         run_id: input.run_id.clone(),
         endpoint: node.endpoint,
-        max_connections: 65536,
+        // Simultaneously served public connections; later connections wait in the listen backlog.
+        max_connections: RELIABILITY_MAX_CONCURRENT_CONNECTIONS,
         peers: input.nodes.iter().map(|node| (node.node_id.clone(), node.endpoint)).collect(),
         profile: input.workload.clone(),
     };
@@ -52,7 +53,8 @@ pub(super) fn configuration(
         admission,
         handler_ref: input.handler_ref.clone(),
         ingress_capacity: 128,
-        ingress_delivery_limit: 65536,
+        ingress_delivery_limit: RELIABILITY_INGRESS_DELIVERIES_PER_WINDOW,
+        ingress_delivery_window_ms: RELIABILITY_INGRESS_DELIVERY_WINDOW_MS,
         health_path: node.health_path.clone(),
         peer_probes,
     })
@@ -88,7 +90,9 @@ fn replica(
         heartbeat_ticks: 5,
         election_min_ticks: 20,
         election_max_ticks: 40,
-        max_log_entries: 4096,
+        max_log_entries: RELIABILITY_MAX_LOG_ENTRIES,
+        snapshot_threshold_entries: RELIABILITY_SNAPSHOT_THRESHOLD_ENTRIES,
+        request_retention_entries: RELIABILITY_REQUEST_RETENTION_ENTRIES,
         max_message_entries: 128,
         max_effects_per_step: 128,
     };
@@ -110,3 +114,14 @@ fn store_ref(
     super::identity(&serde_json::json!({ "schema": "molten.experimental-replica-store.v1", "kind": kind,
         "namespace": mechanisms.namespace, "storage_namespace": node.storage_namespace, "node_id": node.node_id }))
 }
+
+// The reliability registry is a long-running service: these are rates, concurrency and retention
+// bounds, not lifetime totals.
+const RELIABILITY_MAX_CONCURRENT_CONNECTIONS: u64 = 16;
+const RELIABILITY_INGRESS_DELIVERIES_PER_WINDOW: u64 = 4096;
+const RELIABILITY_INGRESS_DELIVERY_WINDOW_MS: u64 = 1000;
+const RELIABILITY_MAX_LOG_ENTRIES: usize = 4096;
+const RELIABILITY_SNAPSHOT_THRESHOLD_ENTRIES: usize = RELIABILITY_MAX_LOG_ENTRIES / 2;
+// Leave room for complete dedup state, snapshot metadata and the enclosing InstallSnapshot in
+// the selected 64-KiB protocol frame, including maximum-width long-running applied positions.
+const RELIABILITY_REQUEST_RETENTION_ENTRIES: u64 = 256;

@@ -5,12 +5,13 @@ use super::*;
 #[test]
 fn retained_native_healthy_control() {
     let workspace = crate::test_support::process_workspace("client-native-healthy").expect("workspace");
+    let executable = measure_running_executable().expect("original running image");
     let input = crate::fabric_simulation::bounded_client::Input::native(
         NATIVE_RECOVERY_TICKS,
         crate::fabric_simulation::bounded_client::SemanticControl::Healthy,
     )
     .expect("input");
-    let history = run(&input, &workspace).expect("real native execution");
+    let history = run(&input, &workspace, &executable).expect("real native execution");
     let check = crate::fabric_simulation::bounded_client::check_history(&input, &history, true);
     persist_check(&workspace, &history, &check).expect("retain check");
     retain(&workspace, "healthy").expect("retain native artifacts");
@@ -47,8 +48,9 @@ fn retained_native_mutant_repeats_reduces_and_requires_its_property() {
         crate::fabric_simulation::bounded_client::SemanticControl::DuplicateApplication,
     )
     .expect("input");
+    let executable = measure_running_executable().expect("original running image");
     let original = crate::test_support::process_workspace("client-native-original").expect("original workspace");
-    let history = run(&input, &original).expect("original real native execution");
+    let history = run(&input, &original, &executable).expect("original real native execution");
     let check = crate::fabric_simulation::bounded_client::check_history(&input, &history, true);
     persist_check(&original, &history, &check).expect("original check");
     let expected = crate::fabric_simulation::bounded_client::SemanticControlVerdict::ReachedDetected {
@@ -73,7 +75,7 @@ fn retained_native_mutant_repeats_reduces_and_requires_its_property() {
     // run() returns only after its children exited or were reaped. This fresh
     // process set uses the same immutable test executable, not saved outcomes.
     let repeated = crate::test_support::process_workspace("client-native-repeat").expect("repeat workspace");
-    let repeated_history = run(&input, &repeated).expect("independent native repeat");
+    let repeated_history = run(&input, &repeated, &executable).expect("independent native repeat");
     let repeated_check = crate::fabric_simulation::bounded_client::check_history(&input, &repeated_history, true);
     persist_check(&repeated, &repeated_history, &repeated_check).expect("repeat check");
     retain(&repeated, "original-repeat").expect("retain repeat");
@@ -88,7 +90,7 @@ fn retained_native_mutant_repeats_reduces_and_requires_its_property() {
 
     let reduction = crate::fabric_simulation::bounded_client::reduce_valid_prefix(&input, crate::fabric_simulation::bounded_client::APPLY_ONCE_PROPERTY, |candidate, property| {
         let workspace = crate::test_support::process_workspace("client-native-reduction")?;
-        let history = run(candidate, &workspace)?;
+        let history = run(candidate, &workspace, &executable)?;
         let check = crate::fabric_simulation::bounded_client::check_history(candidate, &history, true);
         persist_check(&workspace, &history, &check)?;
         retain(&workspace, &format!("reduction-prefix-{}", candidate.steps.len()))?;
@@ -131,10 +133,12 @@ fn native_precheckpoint_prefixes_remain_incomplete_without_io_abort() {
         crate::fabric_simulation::bounded_client::SemanticControl::DuplicateApplication,
     )
     .expect("input");
+    let executable = measure_running_executable().expect("original running image");
     for length in 1..=2 {
         let input = full.valid_prefix(length).expect("valid precheckpoint prefix");
         let workspace = crate::test_support::process_workspace("client-native-precheckpoint").expect("workspace");
-        let history = run(&input, &workspace).expect("prefix execution without nonexistent checkpoint read");
+        let history =
+            run(&input, &workspace, &executable).expect("prefix execution without nonexistent checkpoint read");
         assert_eq!(
             history.executed_requests,
             input.steps.iter().map(|step| step.request_ref.clone()).collect::<Vec<_>>()

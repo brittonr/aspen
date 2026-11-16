@@ -1,12 +1,26 @@
+mod flow;
 mod recovery;
 
 use super::*;
+
+/// The last compaction step a snapshot persistence carries out; `None` stops after the snapshot
+/// itself. Production persistence runs every step; tests stop earlier to model a crash between two
+/// durable steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum CompactionStep {
+    BaseStarted,
+    BaseEntriesWritten(usize),
+    BaseWritten,
+    SnapshotsRetired,
+    RecordsTruncated,
+}
 
 #[derive(Debug)]
 pub struct RedbReplicaPort {
     adapter: crate::fabric_durability::RedbDurableStateAdapter,
     durable_log_ref: String,
     snapshot_store_ref: String,
+    retention_authority_ref: Option<String>,
 }
 
 impl RedbReplicaPort {
@@ -21,7 +35,23 @@ impl RedbReplicaPort {
             adapter,
             durable_log_ref,
             snapshot_store_ref,
+            retention_authority_ref: None,
         })
+    }
+
+    /// Admit compaction of snapshot-covered records under the namespace's explicit retention
+    /// authority. Without it, snapshots are persisted but no record or snapshot is ever removed, so
+    /// the durable namespace's record and snapshot limits bound the replica's lifetime.
+    // r[impl molten.consensus.durable_log_compaction]
+    pub fn with_retention_authority(mut self, authority_ref: String) -> crate::error::Result<Self> {
+        crate::preserves_rail::validate_content_ref(&authority_ref)?;
+        if self.adapter.state().descriptor.retention_authority_ref.as_deref() != Some(authority_ref.as_str()) {
+            return Err(crate::error::Failure::invalid_harness(
+                "live Raft retention authority does not match the durable namespace",
+            ));
+        }
+        self.retention_authority_ref = Some(authority_ref);
+        Ok(self)
     }
 
     pub const fn adapter(&self) -> &crate::fabric_durability::RedbDurableStateAdapter {
@@ -68,11 +98,13 @@ impl RedbReplicaPort {
             adapter,
             durable_log_ref,
             snapshot_store_ref,
+            retention_authority_ref,
         } = self;
         Ok(Self {
             adapter: adapter.reconcile_repaired_on_open()?,
             durable_log_ref,
             snapshot_store_ref,
+            retention_authority_ref,
         })
     }
 
@@ -214,34 +246,9 @@ impl ReplicaDurabilityEffects for RedbReplicaPort {
         &mut self,
         snapshot: &ReplicaSnapshot,
         is_suffix_retained: bool,
+        retained: &ReplicaRetainedState<'_>,
     ) -> crate::error::Result<String> {
-        if snapshot.snapshot_ref != snapshot_ref(snapshot)? {
-            return Err(crate::error::Failure::invalid_harness(
-                "live Raft snapshot identity mismatch before persistence",
-            ));
-        }
-        let value = snapshot_value(snapshot);
-        let bytes = crate::preserves_rail::canonical_bytes(&value)?;
-        let content_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
-        self.append_value(
-            crate::preserves_rail::record("raft-snapshot-suffix-v1", vec![
-                crate::preserves_rail::string(&snapshot.snapshot_ref),
-                crate::preserves_rail::bool_value(is_suffix_retained),
-            ]),
-            crate::fabric_durability::DurabilityLevel::MachineLoss,
-        )?;
-        let generation = self.adapter.state().descriptor.generation;
-        let covered_log_sequence = self.adapter.state().durable_log.last().map(|record| record.sequence);
-        let request = crate::fabric_durability::SnapshotRequest {
-            kind: crate::fabric_durability::SnapshotKind::Snapshot,
-            generation,
-            snapshot_ref: snapshot.snapshot_ref.clone(),
-            content_ref,
-            ordered_state_ref: snapshot.application_state_ref.clone(),
-            covered_log_sequence,
-            durability: crate::fabric_durability::DurabilityLevel::MachineLoss,
-        };
-        Ok(self.adapter.create_snapshot(&request, &bytes)?.transition_ref)
+        self.persist_snapshot_through(snapshot, is_suffix_retained, retained, Some(CompactionStep::RecordsTruncated))
     }
 }
 

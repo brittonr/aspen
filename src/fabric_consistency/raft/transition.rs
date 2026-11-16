@@ -122,3 +122,34 @@ pub(super) fn finish(next: ReplicaState, effects: Vec<ReplicaEffect>) -> crate::
 pub(super) fn validate_recovered_replica_state(state: &ReplicaState) -> crate::error::Result<()> {
     validation::validate_replica_state(state)
 }
+
+/// The highest applied index outside the duplicate-request window ending at `applied`.
+pub(super) const fn request_window_floor(applied: u64, window: u64) -> u64 {
+    applied.saturating_sub(window)
+}
+
+/// Record newly applied requests, then keep exactly the refs committed in (last_applied - W,
+/// last_applied]. The result depends only on the applied log prefix, never on local snapshot
+/// timing.
+// r[impl molten.consensus.bounded_request_dedup]
+pub(super) fn record_completed_requests<'a>(
+    state: &mut ReplicaState,
+    entries: impl IntoIterator<Item = &'a ReplicatedEntry>,
+) {
+    for entry in entries {
+        state.completed_requests.insert(entry.request_ref.clone(), entry.index);
+    }
+    let floor = request_window_floor(state.last_applied, state.profile.request_retention_entries);
+    state.completed_requests.retain(|_request_ref, index| *index > floor);
+}
+
+/// Whether a running voter retains at least its profile's snapshot threshold of applied entries, so
+/// its hosting service should issue `ReplicaEvent::CreateSnapshot`.
+// r[impl molten.consensus.snapshot_threshold]
+pub fn is_snapshot_due(state: &ReplicaState) -> bool {
+    let boundary = state.snapshot.as_ref().map_or(INITIAL_COMMIT_INDEX, |snapshot| snapshot.last_included_index);
+    let retained_applied = state.last_applied.saturating_sub(boundary);
+    state.lifecycle == ReplicaLifecycle::Running
+        && matches!(state.rejoin, ReplicaRejoin::Voter)
+        && u64::try_from(state.profile.snapshot_threshold_entries).is_ok_and(|threshold| retained_applied >= threshold)
+}

@@ -67,6 +67,7 @@ async fn run_fresh_node(
         accept_timeout: std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS),
         event_capacity: INGRESS_EVENT_CAPACITY,
         delivery_limit: INGRESS_DELIVERY_LIMIT,
+        delivery_window: INGRESS_DELIVERY_WINDOW,
     })?;
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "ready")?;
     if node_id == super::super::tests::NODE_A {
