@@ -211,3 +211,9 @@ nix build
 nix flake check
 nix build .#checks.x86_64-linux.verified-node-replication-pilot --no-link -L
 ```
+
+## Release builds
+
+r[impl molten.project.release_overflow_checks] Molten-owned crates (`molten`, `molten-core`, `molten-node-host`, `molten-release-policy`) trap integer overflow in release builds. `Cargo.toml` sets `overflow-checks = true` for each in `[profile.release.package.*]`, and `flake.nix` passes `-C overflow-checks=on` to the same crates through `workspaceCrateOverrides`, because nixpkgs `buildRustCrate` ignores Cargo profiles. The `release-overflow-checks` flake check fails if a member crate's derivation lacks the option. Third-party crates keep their own release defaults in both builds.
+
+A trap fails closed instead of wrapping an index, counter or budget. Arithmetic that can legitimately reach a bound still uses checked or saturating operations with an explicit outcome, and code reachable from an `extern "C"` entry point, such as the SpaceWasm allocator, never relies on a trap. Overflow checks do not police lossy `as` conversions. The cost was not measured; reopen the choice with paired representative measurements if a profile shows a regression.

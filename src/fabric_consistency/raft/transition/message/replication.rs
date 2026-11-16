@@ -206,9 +206,14 @@ fn record_completed_requests(state: &mut ReplicaState, entries: &[ReplicatedEntr
     }
 }
 
+// r[impl molten.project.release_overflow_checks]
 fn highest_quorum_index(state: &ReplicaState) -> u64 {
     let last = support::last_log_index(state);
-    for candidate in ((state.commit_index + NEXT_LOG_INDEX_STEP)..=last).rev() {
+    // At the largest representable commit index no higher candidate exists.
+    let Some(first_candidate) = state.commit_index.checked_add(NEXT_LOG_INDEX_STEP) else {
+        return state.commit_index;
+    };
+    for candidate in (first_candidate..=last).rev() {
         if support::term_at(state, candidate) != Some(state.current_term) {
             continue;
         }
@@ -248,4 +253,15 @@ fn merge_entries(
     let appended = incoming.into_iter().skip(first_change).collect::<Vec<_>>();
     state.log.extend(appended.iter().cloned());
     Ok((truncate_from, appended))
+}
+
+#[cfg(test)]
+mod tests {
+    // r[verify molten.project.release_overflow_checks]
+    #[test]
+    fn quorum_search_at_the_maximum_commit_index_returns_it_without_overflow() {
+        let mut state = crate::fabric_consistency::raft::tests::committed_leader();
+        state.commit_index = u64::MAX;
+        assert_eq!(super::highest_quorum_index(&state), u64::MAX);
+    }
 }

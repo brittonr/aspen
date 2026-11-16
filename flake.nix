@@ -759,7 +759,21 @@
             cargo = unit2nixRust;
             rustc = unit2nixRust;
           };
-        workspaceCrateOverrides = {
+        # Molten-owned crates trap integer overflow in release builds, matching the Cargo release-profile
+        # package overrides; buildRustCrate does not read Cargo profiles.
+        moltenOwnedCrates = [
+          "molten"
+          "molten-core"
+          "molten-node-host"
+          "molten-release-policy"
+        ];
+        overflowCheckedCrate = attrs: {
+          extraRustcOpts = (attrs.extraRustcOpts or [ ]) ++ [
+            "-C"
+            "overflow-checks=on"
+          ];
+        };
+        workspaceCrateOverrides = pkgs.lib.genAttrs moltenOwnedCrates (_name: overflowCheckedCrate) // {
           # nickel-lang-core's Nix FFI is disabled in this workspace.
           nickel-lang-core = attrs: { };
           # verus_prettyplease vendors its implementation; no native library is needed.
@@ -3366,6 +3380,22 @@
                   python3 scripts/generate-atlas.py "$TMPDIR/atlas.json" --check
                   touch "$out"
                 '';
+            # Every Molten-owned crate derivation carries the release overflow option (docs/development.md).
+            release-overflow-checks =
+              let
+                missing = builtins.filter (
+                  name: !(builtins.elem "overflow-checks=on" (ws.workspaceMembers.${name}.build.extraRustcOpts or [ ]))
+                ) moltenOwnedCrates;
+              in
+              pkgs.runCommand "molten-release-overflow-checks" { } (
+                if missing == [ ] then
+                  ''touch "$out"''
+                else
+                  ''
+                    echo "release overflow checks missing for: ${builtins.concatStringsSep " " missing}" >&2
+                    exit 1
+                  ''
+              );
             release-dependency-profile = releaseDependencyProfileCheck;
             # Generated plans must carry the metadata-free `pkgs.fetchgit` identity for every git source.
             git-source-hash-binding =

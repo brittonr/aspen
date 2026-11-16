@@ -180,3 +180,17 @@ flux-profiler = { git = "https://github.com/gattaca-com/flux", rev = "2a1916465a
 [patch."ssh://git@github.com/OnixResearch/onix-artifact.git"]
 artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52" }
 artifact-auth-ed25519 = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52" }
+
+# Molten-owned crates trap integer overflow in release builds; flake.nix passes the same option to
+# these crates because nixpkgs buildRustCrate ignores Cargo profiles (docs/development.md).
+[profile.release.package.molten]
+overflow-checks = true
+
+[profile.release.package.molten-core]
+overflow-checks = true
+
+[profile.release.package.molten-node-host]
+overflow-checks = true
+
+[profile.release.package.molten-release-policy]
+overflow-checks = true

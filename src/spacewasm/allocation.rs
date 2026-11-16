@@ -14,6 +14,8 @@ pub struct Usage {
     pub ir_limit: usize,
     pub ir_allocated: usize,
     pub ir_peak: usize,
+    /// Frees larger than the recorded usage. After one, every allocation in the session is denied.
+    pub accounting_faults: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,10 +96,7 @@ impl Drop for Budget {
             let mut current = state.get();
             if let Some((pointer, layout)) = current.reserved.take() {
                 unsafe { alloc::dealloc(pointer.as_ptr(), layout) };
-                current.usage.allocated -= layout.size();
-                if is_ir(layout) {
-                    current.usage.ir_allocated -= layout.size();
-                }
+                uncharge(&mut current.usage, layout);
             }
             current.active = false;
             state.set(current);
@@ -132,6 +131,34 @@ fn is_ir(layout: alloc::Layout) -> bool {
     layout == alloc::Layout::new::<::spacewasm::TextPage>()
 }
 
+/// Uncharges a freed allocation without arithmetic that can trap. A free larger than the recorded
+/// usage breaks the allocator contract; it is counted, the usage stops at zero, and the session
+/// denies every later allocation, because a panic here would abort through the `extern "C"`
+/// boundary.
+// r[impl molten.project.release_overflow_checks]
+fn uncharge(usage: &mut Usage, layout: alloc::Layout) {
+    let mut is_faulted = false;
+    match usage.allocated.checked_sub(layout.size()) {
+        Some(allocated) => usage.allocated = allocated,
+        None => {
+            usage.allocated = 0;
+            is_faulted = true;
+        }
+    }
+    if is_ir(layout) {
+        match usage.ir_allocated.checked_sub(layout.size()) {
+            Some(ir_allocated) => usage.ir_allocated = ir_allocated,
+            None => {
+                usage.ir_allocated = 0;
+                is_faulted = true;
+            }
+        }
+    }
+    if is_faulted {
+        usage.accounting_faults = usage.accounting_faults.saturating_add(1);
+    }
+}
+
 fn allocate(layout: alloc::Layout) -> Result<ptr::NonNull<u8>, ::spacewasm::AllocError> {
     STATE.with(|state| {
         let mut current = state.get();
@@ -144,6 +171,7 @@ fn allocate(layout: alloc::Layout) -> Result<ptr::NonNull<u8>, ::spacewasm::Allo
             return Ok(pointer);
         }
         if !current.active
+            || current.usage.accounting_faults != 0
             || layout.size() > current.usage.limit - current.usage.allocated
             || (is_ir(layout) && layout.size() > current.usage.ir_limit - current.usage.ir_allocated)
         {
@@ -196,10 +224,7 @@ pub unsafe extern "C" fn __spacewasm_dealloc(pointer: *mut u8, size: usize, alig
         unsafe { alloc::dealloc(pointer, layout) };
         STATE.with(|state| {
             let mut current = state.get();
-            current.usage.allocated -= size;
-            if is_ir(layout) {
-                current.usage.ir_allocated -= size;
-            }
+            uncharge(&mut current.usage, layout);
             state.set(current);
         });
     }
@@ -282,6 +307,22 @@ mod tests {
         let fresh = super::Budget::enter(4).unwrap();
         assert_eq!(fresh.usage().allocated, 0);
         assert_eq!(fresh.usage().peak, 0);
+    }
+
+    // r[verify molten.project.release_overflow_checks]
+    #[test]
+    fn a_free_larger_than_recorded_usage_faults_the_session_instead_of_wrapping() {
+        let budget = super::Budget::enter(64).unwrap();
+        let mut error = 0;
+        let small = unsafe { super::__spacewasm_alloc(8, 8, &mut error) };
+        assert!(!small.is_null());
+        let large = std::alloc::Layout::from_size_align(16, 8).unwrap();
+        let foreign = unsafe { std::alloc::alloc(large) };
+        unsafe { super::__spacewasm_dealloc(foreign, 16, 8) };
+        assert_eq!(budget.usage().allocated, 0);
+        assert_eq!(budget.usage().accounting_faults, 1);
+        assert!(unsafe { super::__spacewasm_alloc(1, 1, &mut error) }.is_null(), "a faulted session denies");
+        unsafe { std::alloc::dealloc(small, std::alloc::Layout::from_size_align(8, 8).unwrap()) };
     }
 
     #[test]
