@@ -1,0 +1,5 @@
+# Reviewed evidence-publication exemptions (issue #52). One row per exempted text:
+# path<TAB>exact matched text, or opaque-container:<blake3><TAB>reviewed reason.
+# A row exempts that text anywhere in that one file. Add rows only for genuine,
+# non-identifying examples, and name the reviewer's reason.
+# path	match	reason

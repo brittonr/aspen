@@ -26,7 +26,9 @@ qualified by this repository. See the open issues for their current status.
   connectivity evidence, not membership or authority.
 - Logs, receipts, and replay artifacts can contain workload data. Review and
   redact artifacts before sharing them; preserve exact originals privately when
-  redaction would invalidate an identity you need to reproduce.
+  redaction would invalidate an identity you need to reproduce. Evidence
+  committed to this repository uses the placeholders and publication guard in
+  [CONTRIBUTING.md](CONTRIBUTING.md#publishing-evidence).
 - Run the repository's dependency, source, and lifecycle gates against the
   candidate you actually intend to use. Old passing output is not a current
   advisory assessment.

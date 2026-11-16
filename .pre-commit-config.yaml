@@ -24,6 +24,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: evidence-publication-guard
+        name: reject host-specific material in published evidence
+        # Staged evidence, release and docs files; see CONTRIBUTING.md (Publishing evidence).
+        entry: python3 scripts/evidence-publication-guard.py
+        language: system
+        files: ^(evidence/|release/|docs/|\.cairn/(changes|archive)/[^/]+/evidence/)
+
       - id: cargo-fmt-check
         name: cargo fmt --check
         entry: cargo fmt --check

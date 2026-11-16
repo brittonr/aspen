@@ -119,14 +119,19 @@ archive commit is `git log --follow --oneline -- .cairn/archive/1970-01-01-<name
 **Prevention.** Archive with an explicit date,
 `CAIRN_ARCHIVE_DATE=$(date -u +%F) cairn archive ... --execute`. The
 `cairn-archive-date` pre-commit hook rejects any newly added
-`.cairn/archive/1970-01-01-*` path.
+`.cairn/archive/1970-01-01-*` path, and the `epoch-archive-dates` flake check
+enforces the same rule in CI: the 88 historical names are recorded in
+`tools/repository-hygiene/epoch-archives.txt`, and any other epoch-dated
+archive, or a missing recorded one, fails the check.
 
 ### Retained evidence and the orchestration archive
 
-**Decision: keep `evidence/` and `aspen-orchestration-batch-implementation.zip`
-unchanged.** Both are already public in history, so redacting or deleting the
-current copies would not remove them, while it would change the bytes that
-receipts and manifests bind by hash. `docs/external-pilot-tracker.md` and
+**Decision: keep `evidence/`, the archived change evidence and
+`aspen-orchestration-batch-implementation.zip` unchanged.** `AGENTS.md`
+preserves `.cairn/archive/`, `cairn/archive/` and historical evidence. The files
+are already public in history, so redacting or deleting the current copies would
+not remove them, while it would change the bytes that receipts and manifests
+bind by hash. `docs/external-pilot-tracker.md` and
 `pilots/orchestration/source.ncl` reference the zip.
 
 A scan of the tracked evidence, archives, pilots and the zip on 2026-11-15
@@ -134,8 +139,20 @@ found no private-key blocks or GitHub, AWS, Slack, OpenAI, Anthropic, Google or
 GitLab tokens. `evidence/cairn-source-remediation-2026-10-15/` (42.5 MB, 1,193
 files) holds 25,932 absolute `/home/<user>` paths, 1,068 occurrences of the
 host name `aspen1.local`, and one captured `sudo -l` policy listing; those are
-host-configuration disclosures, not credentials. New evidence follows
-`SECURITY.md` and records home directories and host names as placeholders.
+host-configuration disclosures, not credentials.
+
+**Recurrence guard.** New and modified evidence must use the placeholders in
+[CONTRIBUTING.md](../CONTRIBUTING.md#publishing-evidence). The
+`evidence-publication-guard` pre-commit hook and the `evidence-publication`
+flake check run `scripts/evidence-publication-guard.py`, which rejects home
+paths, `/dev/shm` run paths, `.local` and observed host names, and RFC 1918 or
+CGNAT/tailnet IPv4 addresses under `evidence/`, `release/` and change or archive
+evidence (home and scratch paths also under `docs/`); the public GitHub-hosted
+runner home is not a finding. The 1,068 files that held such material at
+`fcbf60a3d` (636 in `evidence/`, 425 in `.cairn/archive/`, 4 in
+`.cairn/changes/`, 3 in `docs/`) are grandfathered in
+`tools/repository-hygiene/evidence-publication-baseline.tsv` by path and
+BLAKE3, so an edit to any of them must redact it.
 
 Reopen if a scan finds a credential (rotate it first; deleting the file does not
 remove it from history) or if a release needs a redacted evidence export.

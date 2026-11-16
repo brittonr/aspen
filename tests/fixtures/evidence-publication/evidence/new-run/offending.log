@@ -1,0 +1,5 @@
+run started
+cwd: /home/alice/git/aspen
+peer: builder.local:7000
+tailnet peer 100.100.7.9:4433
+lan peer 192.168.1.20 via /dev/shm/aspen-run-20261116/state

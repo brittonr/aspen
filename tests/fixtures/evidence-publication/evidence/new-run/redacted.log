@@ -1,0 +1,8 @@
+run started
+cwd: <workspace>
+peer: <host>:7000
+tailnet peer <private-ip>:4433
+lan peer <private-ip> via <scratch>/state
+public resolver 9.9.9.9; service bound to 127.0.0.1; version 10.2.3
+hosted runner checkout /home/runner/work/aspen/aspen; macOS /Users/runner/work
+object put took 10.094311 s; p99 192.168 ms; ratio 100.64

@@ -3396,6 +3396,48 @@
                     exit 1
                   ''
               );
+            # r[impl molten.project.evidence_publication.host_material]
+            # Host paths, host names and private addresses stay out of new published evidence (#52).
+            evidence-publication =
+              pkgs.runCommand "molten-evidence-publication"
+                {
+                  nativeBuildInputs = [
+                    pkgs.b3sum
+                    pkgs.python3
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_evidence_publication_guard.py
+                  python3 scripts/evidence-publication-guard.py --all
+                  touch "$out"
+                '';
+            # r[impl molten.project.evidence_publication.archive_dates]
+            # Only the recorded historical archives may carry Cairn's 1970-01-01 fallback date (#52).
+            epoch-archive-dates =
+              pkgs.runCommand "molten-epoch-archive-dates"
+                {
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  grep -v '^#' tools/repository-hygiene/epoch-archives.txt > "$TMPDIR/recorded"
+                  LC_ALL=C sort -uc "$TMPDIR/recorded"
+                  find .cairn/archive -mindepth 1 -maxdepth 1 -name '1970-01-01-*' -printf '%f\n' \
+                    | LC_ALL=C sort > "$TMPDIR/present"
+                  LC_ALL=C comm -23 "$TMPDIR/present" "$TMPDIR/recorded" > "$TMPDIR/unexpected"
+                  LC_ALL=C comm -13 "$TMPDIR/present" "$TMPDIR/recorded" > "$TMPDIR/missing"
+                  if [ -s "$TMPDIR/unexpected" ] || [ -s "$TMPDIR/missing" ]; then
+                    sed 's|^|epoch-dated archive not in the historical set (archive with CAIRN_ARCHIVE_DATE): |' \
+                      "$TMPDIR/unexpected" >&2
+                    sed 's|^|recorded historical archive is missing (archives are preserved): |' "$TMPDIR/missing" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
             release-dependency-profile = releaseDependencyProfileCheck;
             # Generated plans must carry the metadata-free `pkgs.fetchgit` identity for every git source.
             git-source-hash-binding =
@@ -4663,6 +4705,8 @@
             # scripts/git-source-hashes.sh binds metadata-free git source hashes for unit2nix.
             pkgs.nix-prefetch-git
             pkgs.jq
+            # The evidence-publication pre-commit hook checks grandfathered files by BLAKE3.
+            pkgs.b3sum
             fastpathQuint.quint
             # Octet lint evidence comes from the catalogued octet-toolchain pin, never an ambient install.
             octet-toolchain.packages.${system}.cargo-octet
