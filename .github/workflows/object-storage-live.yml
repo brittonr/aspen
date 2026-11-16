@@ -36,6 +36,9 @@ jobs:
           nohup bash docs/content-store-adapter/endpoint-fixture.sh serve "$RUNNER_TEMP/object-storage" \
             > "$RUNNER_TEMP/object-storage/weed.log" 2>&1 &
           bash docs/content-store-adapter/endpoint-fixture.sh bucket "$RUNNER_TEMP/object-storage"
+      # The receipt directory is an explicit operator-supplied root; tests do not create it.
+      - name: Create the explicit receipt directory
+        run: mkdir -p "$MOLTEN_CONTENT_RECEIPT_DIR"
       - name: Check dependency policy and command parity
         run: |
           nix develop --no-update-lock-file .#object-storage-ci -c bash -euo pipefail -c '
