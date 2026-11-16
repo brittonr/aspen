@@ -92,5 +92,5 @@ produced by the corresponding runnable fixtures before making those claims.
 - [Production signed network records](../../../src/federation/envelope/network.rs)
 - [Supervised pull execution](../../../src/federation/transfer/execution.rs)
 - [Local import policy](../../../src/federation/admission/rules.rs)
-- [Owner-defined DAG binding](../../../src/dag_sync/binding.rs)
+- [Owner-defined DAG binding descriptor and ports](../../../src/dag_sync/ports.rs)
 - [Historical simulation-only federation fixtures](../../../src/federation/parts/mod/p000/body.rs)

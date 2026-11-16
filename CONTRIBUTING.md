@@ -23,7 +23,9 @@ Aspen is the public project name. Molten is its internal codename; the current
   request. File an issue first, then prepare a repository-local change.
 - Significant behavior, contract, or evidence changes use the Cairn lifecycle
   under `.cairn/`: proposal, design, tasks, implementation, validation, review,
-  sync, and archive. Use `cairn change list --root .` for the active set.
+  sync, and archive. Use `cairn change list --root .` for the active set. Archive
+  with an explicit date (`CAIRN_ARCHIVE_DATE=$(date -u +%F)`); without it Cairn
+  names the archive `1970-01-01-*`, which the pre-commit hook rejects.
 - Keep commits repository-local and preserve unrelated work. State the exact
   checks you actually ran; do not present a plan, a fixture, or an old receipt as
   a new execution result.

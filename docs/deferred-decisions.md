@@ -100,3 +100,57 @@ without a named query.
 
 Reopen with a concrete workflow question, a bounded input snapshot, and a
 comparison against the current first-blocker diagnostics.
+
+## #52 Repository hygiene
+
+### Epoch archive dates
+
+**Cause.** The 88 `.cairn/archive/1970-01-01-*` entries come from Cairn's
+`archive_date()` (`crates/cairn-cli/src/support/mutation.rs` in the Cairn
+repository): it reads `CAIRN_ARCHIVE_DATE`, then `IRONSPEC_ARCHIVE_DATE`, and
+falls back to the literal `1970-01-01` when neither is set. The development
+shell sets neither, and `SOURCE_DATE_EPOCH` does not affect this path. The
+fallback is a Cairn defect; Aspen does not patch it here.
+
+**Decision: keep the existing names.** Renaming archives would break their
+links and the archive-preservation rule in `AGENTS.md`. Each entry's real
+archive commit is `git log --follow --oneline -- .cairn/archive/1970-01-01-<name>`.
+
+**Prevention.** Archive with an explicit date,
+`CAIRN_ARCHIVE_DATE=$(date -u +%F) cairn archive ... --execute`. The
+`cairn-archive-date` pre-commit hook rejects any newly added
+`.cairn/archive/1970-01-01-*` path.
+
+### Retained evidence and the orchestration archive
+
+**Decision: keep `evidence/` and `aspen-orchestration-batch-implementation.zip`
+unchanged.** Both are already public in history, so redacting or deleting the
+current copies would not remove them, while it would change the bytes that
+receipts and manifests bind by hash. `docs/external-pilot-tracker.md` and
+`pilots/orchestration/source.ncl` reference the zip.
+
+A scan of the tracked evidence, archives, pilots and the zip on 2026-11-15
+found no private-key blocks or GitHub, AWS, Slack, OpenAI, Anthropic, Google or
+GitLab tokens. `evidence/cairn-source-remediation-2026-10-15/` (42.5 MB, 1,193
+files) holds 25,932 absolute `/home/<user>` paths, 1,068 occurrences of the
+host name `aspen1.local`, and one captured `sudo -l` policy listing; those are
+host-configuration disclosures, not credentials. New evidence follows
+`SECURITY.md` and records home directories and host names as placeholders.
+
+Reopen if a scan finds a credential (rotate it first; deleting the file does not
+remove it from history) or if a release needs a redacted evidence export.
+
+### Fragment layout
+
+**Decision: keep the `parts/**/body.rs` + `#[path]` + `include!` layout for now.**
+
+Measured costs at the reviewed commit: 1,262 `parts/**/body.rs` fragments (src
+1,220, crates 4, tests 38); 549 `#[path = "..."]` remaps; 207 `include!` lists
+with two or more fragments, 65 of them not in numeric order. These cost
+navigation and long `super::` chains; they do not cause build or correctness
+failures.
+
+Reopen when a feature requires restructuring a fragmented module, when
+diagnostics or review navigation become a measured bottleneck, or when a
+fragment exceeds the 300-line bound. A reopening must preserve `// r[...]`
+traceability and rerun the focused test rail.

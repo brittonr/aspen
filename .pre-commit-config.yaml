@@ -17,6 +17,13 @@ repos:
           - pre-commit
           - pre-push
 
+      - id: cairn-archive-date
+        name: reject epoch-dated Cairn archives
+        # Cairn names archives 1970-01-01 unless CAIRN_ARCHIVE_DATE is set.
+        entry: sh -c '! git diff --cached --name-only --diff-filter=A -- .cairn/archive | grep "^\.cairn/archive/1970-01-01-"'
+        language: system
+        pass_filenames: false
+
       - id: cargo-fmt-check
         name: cargo fmt --check
         entry: cargo fmt --check
