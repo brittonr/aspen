@@ -536,3 +536,232 @@ fn provider_parity_detects_drift_without_cross_profile_state_leakage() {
             .expect_err("view drift detected");
     assert!(issues.contains(&MembershipIssue::ProviderParityMismatch("membership-view")));
 }
+
+fn admitted_with_nodes_zones(nodes: usize, zones: usize) -> AdmittedMembershipView {
+    let profile = profile(MembershipProviderKind::Static);
+    let descriptors: Vec<NodeDescriptor> = (0..nodes)
+        .map(|i| {
+            descriptor(&format!("node-{:04}", i), &format!("zone-{}", i % zones), &format!("descriptor-node-{:04}", i))
+        })
+        .collect();
+    let view = view(&profile, &descriptors);
+    validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+        .expect("admitted membership view")
+}
+
+fn placement_request_with(admitted: &AdmittedMembershipView, replicas: u32) -> PlacementRequest {
+    PlacementRequest {
+        requirements: RoleRequirements {
+            extension_id: "extension-a".to_string(),
+            service_id: "service-a".to_string(),
+            role_kind: "replica".to_string(),
+            replica_count: replicas,
+            per_replica: ResourceAmount {
+                cpu_millis: CPU_REQUEST,
+                memory_bytes: MEMORY_REQUEST,
+                storage_bytes: STORAGE_REQUEST,
+            },
+            required_features: vec!["system-extension-v1".to_string()],
+            required_labels: vec![HardLabelConstraint {
+                key: "region".to_string(),
+                value: Some("east".to_string()),
+                minimum_authority: LabelAuthority::OperatorDeclared,
+            }],
+            preferred_labels: Vec::new(),
+            anti_affinity_label_keys: vec!["zone".to_string()],
+            distinct_nodes: true,
+            avoid_suspected: true,
+            allow_degraded: false,
+            policy_ref: test_ref("placement-policy"),
+        },
+        current_assignments: Vec::new(),
+        current_reservations: Vec::new(),
+        failure_observations: Vec::new(),
+        detector_profiles: vec![detector_profile()],
+        tie_break_order: admitted.view.members.iter().map(|member| member.node_id.clone()).collect(),
+        conflicting_view_refs: Vec::new(),
+        now_ticks: NOW,
+    }
+}
+
+// r[verify molten.fabric_membership.placement]
+#[test]
+fn placement_modest_unsatisfiable_views_return_unsatisfied() {
+    for (nodes, zones, replicas) in [(30usize, 3usize, 4u32), (16usize, 4usize, 5u32)] {
+        let admitted = admitted_with_nodes_zones(nodes, zones);
+        let request = placement_request_with(&admitted, replicas);
+        let outcome = plan_placement(&admitted, &request).expect("unsatisfied outcome");
+        let PlacementOutcome::Unsatisfied(unsatisfied) = outcome else {
+            panic!("expected unsatisfied outcome")
+        };
+        assert!(
+            unsatisfied
+                .constraints
+                .iter()
+                .any(|constraint| constraint.kind == UnsatisfiedConstraintKind::AntiAffinity),
+            "expected anti-affinity constraint"
+        );
+    }
+}
+
+// r[verify molten.fabric_membership.placement]
+#[test]
+fn placement_joint_anti_affinity_unsatisfiable_reaches_search_limit() {
+    // Two anti-affinity keys whose individual distinct values are sufficient
+    // but whose joint feasibility fails: zones {0,1,2} only racks {0,1},
+    // zones {3,4} racks {2,3,4}. 5 replicas impossible.
+    let nodes_per_pair = 20usize;
+    let mut descriptors = Vec::new();
+    for zone in 0..3usize {
+        for rack in 0..2usize {
+            for _ in 0..nodes_per_pair {
+                let idx = descriptors.len();
+                let mut d =
+                    descriptor(&format!("node-{:05}", idx), &format!("zone-{}", zone), &format!("descriptor-{}", idx));
+                // Labels stay strictly ordered by key: rack < region < zone.
+                d.labels.insert(
+                    0,
+                    label("rack", &format!("rack-{}", rack), LabelAuthority::Authoritative, &format!("rack-{}", idx)),
+                );
+                descriptors.push(d);
+            }
+        }
+    }
+    for zone in 3..5usize {
+        for rack in 2..5usize {
+            for _ in 0..nodes_per_pair {
+                let idx = descriptors.len();
+                let mut d =
+                    descriptor(&format!("node-{:05}", idx), &format!("zone-{}", zone), &format!("descriptor-{}", idx));
+                d.labels.insert(
+                    0,
+                    label("rack", &format!("rack-{}", rack), LabelAuthority::Authoritative, &format!("rack-{}", idx)),
+                );
+                descriptors.push(d);
+            }
+        }
+    }
+    // sort descriptors by node_id for view ordering
+    descriptors.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+    let profile = profile(MembershipProviderKind::Static);
+    let view = view(&profile, &descriptors);
+    let admitted = validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+        .expect("admitted membership view");
+
+    let mut request = PlacementRequest {
+        requirements: RoleRequirements {
+            extension_id: "extension-a".to_string(),
+            service_id: "service-a".to_string(),
+            role_kind: "replica".to_string(),
+            replica_count: 5,
+            per_replica: ResourceAmount {
+                cpu_millis: CPU_REQUEST,
+                memory_bytes: MEMORY_REQUEST,
+                storage_bytes: STORAGE_REQUEST,
+            },
+            required_features: vec!["system-extension-v1".to_string()],
+            required_labels: Vec::new(),
+            preferred_labels: Vec::new(),
+            anti_affinity_label_keys: vec!["rack".to_string(), "zone".to_string()],
+            distinct_nodes: true,
+            avoid_suspected: true,
+            allow_degraded: false,
+            policy_ref: test_ref("placement-policy"),
+        },
+        current_assignments: Vec::new(),
+        current_reservations: Vec::new(),
+        failure_observations: Vec::new(),
+        detector_profiles: Vec::new(),
+        tie_break_order: admitted.view.members.iter().map(|m| m.node_id.clone()).collect(),
+        conflicting_view_refs: Vec::new(),
+        now_ticks: NOW,
+    };
+
+    let result = plan_placement(&admitted, &request);
+    assert!(result.is_err(), "expected search limit exceeded");
+    let issues = result.unwrap_err();
+    assert!(issues.contains(&MembershipIssue::SearchLimitExceeded));
+
+    // Same view with 4 replicas returns a plan.
+    request.requirements.replica_count = 4;
+    let outcome = plan_placement(&admitted, &request).expect("plan");
+    assert!(matches!(outcome, PlacementOutcome::Planned(_)));
+}
+
+// r[verify molten.fabric_membership.placement]
+#[test]
+fn placement_precheck_counts_held_anti_values() {
+    let admitted = admitted_with_nodes_zones(4, 2);
+    // Two distinct zones among candidates; one held assignment occupies zone-0.
+    let mut request = placement_request_with(&admitted, 2);
+    // hold node-0000 (zone-0)
+    request.current_assignments = vec![CurrentRoleAssignment {
+        assignment_ref: test_ref("current-assignment-node-0000"),
+        node_id: "node-0000".to_string(),
+        service_id: "service-a".to_string(),
+        role_kind: "replica".to_string(),
+        assignment_epoch: ASSIGNMENT_EPOCH,
+        active: true,
+    }];
+    let outcome = plan_placement(&admitted, &request).expect("unsatisfied");
+    let PlacementOutcome::Unsatisfied(u) = outcome else {
+        panic!("expected unsatisfied")
+    };
+    assert!(u.constraints.iter().any(|c| c.kind == UnsatisfiedConstraintKind::AntiAffinity));
+}
+
+/// Exhaustively compares the candidate-set search with the previous ordering search on small views.
+// r[verify molten.fabric_membership.placement]
+#[test]
+fn placement_set_search_matches_the_ordering_search_on_small_views() {
+    let profile = profile(MembershipProviderKind::Static);
+    let mut compared = 0_usize;
+    for nodes in 1..=5_usize {
+        for zones in 1..=3_usize {
+            let descriptors: Vec<NodeDescriptor> = (0..nodes)
+                .map(|i| {
+                    descriptor(&format!("node-{i:04}"), &format!("zone-{}", i % zones), &format!("descriptor-{i}"))
+                })
+                .collect();
+            let view = view(&profile, &descriptors);
+            let admitted = validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+                .expect("admitted membership view");
+            for replicas in 1..=4_u32 {
+                for distinct_nodes in [true, false] {
+                    for anti_affinity in [Vec::new(), vec!["zone".to_string()]] {
+                        for assigned in 0..=nodes.min(2) {
+                            let mut request = placement_request_with(&admitted, replicas);
+                            request.requirements.distinct_nodes = distinct_nodes;
+                            request.requirements.anti_affinity_label_keys = anti_affinity.clone();
+                            request.current_assignments = (0..assigned)
+                                .map(|i| CurrentRoleAssignment {
+                                    assignment_ref: test_ref(&format!("current-assignment-{i}")),
+                                    node_id: format!("node-{i:04}"),
+                                    service_id: "service-a".to_string(),
+                                    role_kind: "replica".to_string(),
+                                    assignment_epoch: ASSIGNMENT_EPOCH,
+                                    active: true,
+                                })
+                                .collect();
+                            let ordering = plan_placement_by_orderings(&admitted, &request);
+                            if ordering
+                                .as_ref()
+                                .is_err_and(|issues| issues.contains(&MembershipIssue::SearchLimitExceeded))
+                            {
+                                continue;
+                            }
+                            assert_eq!(
+                                plan_placement(&admitted, &request),
+                                ordering,
+                                "nodes={nodes} zones={zones} replicas={replicas} distinct={distinct_nodes} \
+                                 anti={anti_affinity:?} assigned={assigned}"
+                            );
+                            compared += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(compared > 500, "compared {compared} cases");
+}

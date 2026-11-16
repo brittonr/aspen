@@ -715,10 +715,21 @@ fn validate_observation(
     }
 }
 
+/// Placement search strategy. `Orderings` is the previous search, kept only as a test reference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchOrder {
+    /// Each candidate set once, after the distinct anti-affinity value pre-check.
+    Sets,
+    /// Every ordering of every candidate set, without the pre-check.
+    #[cfg(test)]
+    Orderings,
+}
+
 // r[impl molten.fabric_membership.placement]
-pub fn plan_placement(
+fn plan_placement_with(
     admitted: &AdmittedMembershipView,
     request: &PlacementRequest,
+    order: SearchOrder,
 ) -> Result<PlacementOutcome, Vec<MembershipIssue>> {
     let mut issues = validate_placement_request(admitted, request);
     let observations = match reduce_failure_observations(
@@ -752,7 +763,11 @@ pub fn plan_placement(
 
     let candidates = eligible_candidates(admitted, request, &observations, &residual);
     let mut search = PlacementSearch::new(admitted, request, &candidates, &mut residual);
-    let found = search.select(0)?;
+    let found = match order {
+        SearchOrder::Sets => !search.lacks_anti_affinity_values() && search.select(0, 0)?,
+        #[cfg(test)]
+        SearchOrder::Orderings => search.select_permutation(0)?,
+    };
     if !found {
         let partial_selection = search.selected.iter().map(|candidate| candidate.node_id.clone()).collect();
         drop(search);
@@ -791,6 +806,22 @@ pub fn plan_placement(
         degraded,
         advisory_only: true,
     }))
+}
+
+// r[impl molten.fabric_membership.placement]
+pub fn plan_placement(
+    admitted: &AdmittedMembershipView,
+    request: &PlacementRequest,
+) -> Result<PlacementOutcome, Vec<MembershipIssue>> {
+    plan_placement_with(admitted, request, SearchOrder::Sets)
+}
+
+#[cfg(test)]
+fn plan_placement_by_orderings(
+    admitted: &AdmittedMembershipView,
+    request: &PlacementRequest,
+) -> Result<PlacementOutcome, Vec<MembershipIssue>> {
+    plan_placement_with(admitted, request, SearchOrder::Orderings)
 }
 
 #[derive(Debug, Clone)]
@@ -1021,7 +1052,45 @@ impl<'a> PlacementSearch<'a> {
         }
     }
 
-    fn select(&mut self, ordinal: u32) -> Result<bool, Vec<MembershipIssue>> {
+    fn select(&mut self, ordinal: u32, start: usize) -> Result<bool, Vec<MembershipIssue>> {
+        if ordinal == self.request.requirements.replica_count {
+            return Ok(true);
+        }
+        for (index, candidate) in self.candidates.iter().enumerate().skip(start) {
+            self.search_steps = self
+                .search_steps
+                .checked_add(1)
+                .ok_or_else(|| vec![MembershipIssue::ArithmeticOverflow("placement-search-steps")])?;
+            if self.search_steps > MAX_PLACEMENT_SEARCH_STEPS {
+                return Err(vec![MembershipIssue::SearchLimitExceeded]);
+            }
+            if !self.can_select(candidate) {
+                continue;
+            }
+            let prior_capacity = self.residual[&candidate.node_id];
+            let next_capacity = prior_capacity
+                .checked_sub(self.request.requirements.per_replica)
+                .expect("candidate capacity checked before selection");
+            let inserted_anti = self.insert_anti_values(candidate);
+            *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = next_capacity;
+            let candidate_degraded =
+                candidate.reasons.iter().any(|reason| reason == "degraded-failure-observation-accepted");
+            let prior_degraded = self.degraded;
+            self.degraded |= candidate_degraded;
+            self.selected.push(candidate.clone());
+            if self.select(ordinal.saturating_add(1), index)? {
+                return Ok(true);
+            }
+            self.selected.pop();
+            self.degraded = prior_degraded;
+            *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = prior_capacity;
+            self.remove_anti_values(inserted_anti);
+        }
+        Ok(false)
+    }
+
+    #[cfg(test)]
+    fn select_permutation(&mut self, ordinal: u32) -> Result<bool, Vec<MembershipIssue>> {
         if ordinal == self.request.requirements.replica_count {
             return Ok(true);
         }
@@ -1047,7 +1116,7 @@ impl<'a> PlacementSearch<'a> {
             let prior_degraded = self.degraded;
             self.degraded |= candidate_degraded;
             self.selected.push(candidate.clone());
-            if self.select(ordinal.saturating_add(1))? {
+            if self.select_permutation(ordinal.saturating_add(1))? {
                 return Ok(true);
             }
             self.selected.pop();
@@ -1056,6 +1125,25 @@ impl<'a> PlacementSearch<'a> {
             self.remove_anti_values(inserted_anti);
         }
         Ok(false)
+    }
+
+    /// Every new replica needs, for each anti-affinity key, a value that no other selected replica
+    /// and no active assignment of this role holds (`can_select` also requires the label).
+    /// Fewer such values among the candidates than requested replicas therefore makes the
+    /// request unsatisfiable.
+    fn lacks_anti_affinity_values(&self) -> bool {
+        let replicas = usize::try_from(self.request.requirements.replica_count).unwrap_or(usize::MAX);
+        self.request.requirements.anti_affinity_label_keys.iter().any(|key| {
+            let held = self.anti_values.get(key);
+            let available: BTreeSet<&str> = self
+                .candidates
+                .iter()
+                .filter_map(|candidate| self.admitted.descriptors.get(&candidate.node_id)?.label(key))
+                .map(|label| label.value.as_str())
+                .filter(|value| !held.is_some_and(|held| held.contains(*value)))
+                .collect();
+            available.len() < replicas
+        })
     }
 
     fn can_select(&self, candidate: &PlacementCandidate) -> bool {

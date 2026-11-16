@@ -17,7 +17,7 @@ The typed source profile is [`fabric-membership-placement/profile.ncl`](fabric-m
 
 - source-profile, view, descriptor, label-authority, compatibility, ordering, and freshness validation;
 - failure-observation validation and deterministic reduction;
-- capacity accounting, required features and labels, scored preferences, anti-affinity, split-view denial, and bounded deterministic placement search;
+- capacity accounting, required features and labels, scored preferences, anti-affinity, split-view denial, a pre-check that reports too few distinct anti-affinity values as unsatisfied, and bounded deterministic placement search over candidate sets rather than orderings;
 - explicit propose, reserve, assign, acknowledge, activate, drain, replace, release, fail, and quarantine transitions;
 - generation, epoch, token, authority-profile, and enforcement-strength fencing checks;
 - bounded drain decisions and live/simulation parity comparison.
