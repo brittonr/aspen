@@ -1815,7 +1815,6 @@ specification	source_area	class	requirement_id
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.nix_gate
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.raw_claim_policy
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.source_model
-.cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.stale_receipt_denial
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_first_cluster_harness.run_index_intake_bound
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.redacted_repro_export_profiles.encrypted_ref_validation
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.redacted_repro_export_profiles.profile_schema

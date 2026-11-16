@@ -51,6 +51,72 @@
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic == "negative-run-did-not-deny"));
     }
 
+    // r[verify molten.testing.receipt_driven_traceability.stale_receipt_denial]
+    #[test]
+    fn invalid_negative_runs_never_qualify_as_negative_coverage() {
+        let positive = build_verification_run_receipt(&receipt_input(REQUIREMENT_ID, "positive", "positive", 0))
+            .expect("positive receipt");
+        let mut missing_artifact = receipt_input(REQUIREMENT_ID, "negative", "negative-missing-artifact", 1);
+        missing_artifact.artifact_refs.clear();
+        for (negative, reason) in [
+            (receipt_input(REQUIREMENT_ID, "negative", "negative-did-not-deny", 0), "negative-run-did-not-deny"),
+            (missing_artifact, "missing-produced-artifact-ref"),
+        ] {
+            let negative = build_verification_run_receipt(&negative).expect("invalid run keeps a receipt");
+            assert_eq!(negative.decision, "deny");
+            let coverage = coverage_from_verification_receipts(&[
+                ReceiptCoverageSource {
+                    value: positive.value.clone(),
+                    target_exists: true,
+                },
+                ReceiptCoverageSource {
+                    value: negative.value,
+                    target_exists: true,
+                },
+            ])
+            .expect("invalid receipts stay parseable for audit");
+            let manifest = build_traceability_manifest(&TraceabilityInput {
+                requirements: vec![requirement(REQUIREMENT_ID, "evidence", true)],
+                coverage,
+                require_receipt_backed: true,
+            })
+            .expect("manifest");
+            assert_eq!(manifest.decision, "deny", "{reason}");
+            assert!(manifest.summary.covered.is_empty(), "{reason}");
+            assert_eq!(manifest.summary.stale_reference, vec![REQUIREMENT_ID.to_string()], "{reason}");
+            let diagnostics = &manifest.entries[0].diagnostics;
+            assert!(
+                diagnostics.iter().any(|diagnostic| diagnostic.starts_with("stale-negative-invalid-run:")
+                    && diagnostic.ends_with(reason)),
+                "{reason}: {diagnostics:?}"
+            );
+        }
+    }
+
+    // r[verify molten.testing.receipt_driven_traceability.coverage_derivation]
+    #[test]
+    fn a_receipt_with_a_dropped_run_diagnostic_is_rejected() {
+        let input = receipt_input(REQUIREMENT_ID, "negative", "negative-did-not-deny", 0);
+        let tampered = verification_run_receipt_value(&input, "deny", &[]).expect("tampered receipt value");
+        assert!(
+            coverage_from_verification_receipts(&[ReceiptCoverageSource {
+                value: tampered,
+                target_exists: true,
+            }])
+            .is_err()
+        );
+        let mut missing_artifact = receipt_input(REQUIREMENT_ID, "negative", "negative-missing-artifact", 1);
+        missing_artifact.artifact_refs.clear();
+        let tampered = verification_run_receipt_value(&missing_artifact, "deny", &[]).expect("tampered receipt value");
+        assert!(
+            coverage_from_verification_receipts(&[ReceiptCoverageSource {
+                value: tampered,
+                target_exists: true,
+            }])
+            .is_err()
+        );
+    }
+
     #[test]
     fn aggregate_proof_requires_all_children_and_subjects() {
         let subject = local_ref("subject");

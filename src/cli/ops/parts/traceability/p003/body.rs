@@ -118,6 +118,7 @@ fn evidence_from_fields(
         source: "compatibility".to_string(),
         receipt_ref: None,
         expected_decision: "compatibility".to_string(),
+        receipt_diagnostics: Vec::new(),
     })
 }
 

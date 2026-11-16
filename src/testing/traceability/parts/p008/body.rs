@@ -156,6 +156,16 @@ fn collect_evidence_decision_diagnostics(
             "traceability entry diagnostics",
         )?;
     }
+    // r[impl molten.testing.receipt_driven_traceability.stale_receipt_denial]
+    // A negative run's expected `deny` decision and an invalid run's `deny` share one string; the
+    // receipt's run diagnostics tell them apart, and an invalid run never qualifies.
+    for reason in &item.receipt_diagnostics {
+        diagnostics.push_limited(
+            format!("stale-{label}-invalid-run:{}:{reason}", item.target),
+            MAX_TRACEABILITY_ENTRY_DIAGNOSTICS,
+            "traceability entry diagnostics",
+        )?;
+    }
     Ok(())
 }
 

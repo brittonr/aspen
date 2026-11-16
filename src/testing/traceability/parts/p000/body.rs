@@ -77,6 +77,9 @@ pub struct VerificationEvidence {
     pub source: String,
     pub receipt_ref: Option<String>,
     pub expected_decision: String,
+    /// Diagnostics of the verification run receipt this evidence came from. A valid run has none; any
+    /// diagnostic marks an invalid run that cannot qualify as coverage.
+    pub receipt_diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

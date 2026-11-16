@@ -154,15 +154,20 @@ fn validate_verification_run_input(input: &VerificationRunInput) -> Result<()> {
 }
 
 fn verification_run_diagnostics(input: &VerificationRunInput) -> Result<Vec<String>> {
+    run_diagnostics(&input.coverage_kind, input.exit_status, &input.artifact_refs)
+}
+
+/// The run-validity diagnostics a receipt with these facts must carry; empty only for a valid run.
+fn run_diagnostics(coverage_kind: &str, exit_status: i64, artifact_refs: &[String]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    let is_success = input.exit_status == 0;
-    match input.coverage_kind.as_str() {
+    let is_success = exit_status == 0;
+    match coverage_kind {
         "positive" if !is_success => diagnostics.push("positive-run-exited-nonzero".to_string()),
         "negative" if is_success => diagnostics.push("negative-run-did-not-deny".to_string()),
         "positive" | "negative" => {}
         other => return Err(MoltenError::invalid_harness(format!("unsupported coverage kind {other}"))),
     }
-    if input.artifact_refs.is_empty() {
+    if artifact_refs.is_empty() {
         diagnostics.push("missing-produced-artifact-ref".to_string());
     }
     Ok(diagnostics)
@@ -190,12 +195,20 @@ fn verification_run_receipt_value(
     ]))
 }
 
+// r[impl molten.testing.receipt_driven_traceability.coverage_derivation]
 fn validate_verification_receipt_decision(
     decision: &str,
     coverage_kind: &str,
     exit_status: i64,
+    artifact_refs: &[String],
     diagnostics: &[String],
 ) -> Result<()> {
+    // Diagnostics are derived from the receipt's own facts, so a receipt cannot drop one to look valid.
+    if diagnostics != run_diagnostics(coverage_kind, exit_status, artifact_refs)? {
+        return Err(MoltenError::invalid_harness(
+            "verification receipt diagnostics do not match its coverage kind, exit status and artifacts",
+        ));
+    }
     let expected = if diagnostics.is_empty() {
         match coverage_kind {
             "positive" if exit_status == 0 => "pass",
@@ -219,20 +232,23 @@ fn evidence_from_verification_receipt(
     receipt: &VerificationRunReceipt,
     target_exists: bool,
 ) -> Result<VerificationEvidence> {
-    let artifact_ref = receipt.artifact_refs.first().cloned().unwrap_or_else(|| receipt.receipt_ref.clone());
+    // The receipt's own hash is not a produced artifact, and an empty artifact list proves no presence.
+    let artifact_ref = receipt.artifact_refs.first().cloned().unwrap_or_default();
     Ok(VerificationEvidence {
         target: receipt.target.clone(),
         command: receipt.argv.join(" "),
         artifact_ref,
         artifact_refs: receipt.artifact_refs.clone(),
         target_exists,
-        artifact_present: receipt
-            .artifact_refs
-            .iter()
-            .all(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok()),
+        artifact_present: !receipt.artifact_refs.is_empty()
+            && receipt
+                .artifact_refs
+                .iter()
+                .all(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok()),
         source: "verification-run-receipt".to_string(),
         receipt_ref: Some(receipt.receipt_ref.clone()),
         expected_decision: receipt.decision.clone(),
+        receipt_diagnostics: receipt.diagnostics.clone(),
     })
 }
 

@@ -106,6 +106,7 @@
             source: "verification-run-receipt".to_string(),
             receipt_ref: Some(artifact_ref),
             expected_decision: expected_trace_decision(kind).to_string(),
+            receipt_diagnostics: Vec::new(),
         }
     }
 

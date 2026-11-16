@@ -20,7 +20,7 @@ pub fn parse_verification_run_receipt(value: &IoValue) -> Result<VerificationRun
     let stderr_ref = record_ref(&fields[10], "stderr")?;
     let artifact_refs = record_ref_sequence(&fields[11], "artifacts")?;
     let diagnostics = record_string_sequence(&fields[12], "diagnostics")?;
-    validate_verification_receipt_decision(&decision, &coverage_kind, exit_status, &diagnostics)?;
+    validate_verification_receipt_decision(&decision, &coverage_kind, exit_status, &artifact_refs, &diagnostics)?;
     Ok(VerificationRunReceipt {
         decision,
         requirement_id,
@@ -128,6 +128,7 @@ pub fn coverage_from_aggregate_proof(
                 source: "aggregate-proof".to_string(),
                 receipt_ref: Some(manifest.manifest_ref.clone()),
                 expected_decision: obligation_expected_decision(&obligation.class)?.to_string(),
+                receipt_diagnostics: Vec::new(),
             };
             match kind {
                 "positive" => entry.positive.push(evidence),
