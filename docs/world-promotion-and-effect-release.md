@@ -74,7 +74,9 @@ The dispatcher claims only a committed reservation. It then rechecks:
 - semantic handler identity; and
 - adapter identity.
 
-The shell stores an `attempting` record before it calls the adapter. It stores the returned observation after the call. A denial changes the reservation to `blocked` and does not call the adapter.
+The shell stores an `attempting` record before it calls the adapter. It stores the returned observation after the call with an explicit `succeeded`, `failed` or `unknown` outcome; only a succeeded observation can be acknowledged or committed as external completion. A denial changes the reservation to `blocked` and does not call the adapter. A dispatcher error records the attempt and reservation as `uncertain` before the error is returned, so retry and abandon apply; if that recording fails, the error reports both failures.
+
+Attempt records use schema `molten.world-release-attempt.v2`. A seven-field v1 attempt cannot express whether the release succeeded, so parsing rejects it rather than defaulting its outcome; re-run the promotion to obtain a v2 record. No production dispatcher has written v1 attempts, so no migration is provided.
 
 ## Reconciliation
 
@@ -87,7 +89,7 @@ Molten maps commit and read-back observations into Transactional Reconciliation 
 
 Unknown, repair, corrupt, missing, or inconsistent observations enter quarantine. The shell reopens the store and checks the exact predecessor or complete successor reservation set before it permits dispatch.
 
-A lost acknowledgment keeps the attempt uncertain. Retry requires explicit duplicate-risk acknowledgment and a new attempt identity. It keeps the same logical reservation identity. Abandonment requires explicit unknown-outcome acknowledgment and does not invent an effect result.
+A lost acknowledgment keeps the attempt uncertain. An attempt left `attempting` by a process that stopped before recording the dispatcher result is classified `uncertain` by `reconcile`, which holds the store exclusively, so no dispatcher can still own it. Retry requires explicit duplicate-risk acknowledgment and a new attempt identity. It keeps the same logical reservation identity. Abandonment requires explicit unknown-outcome acknowledgment and does not invent an effect result.
 
 ## Effect-log and successor boundary
 
@@ -113,7 +115,7 @@ An unknown, unacknowledged, mismatched, unchanged, or malformed observation fail
 - `promote` fails closed until a current authority adapter is composed.
 - `outbox-inspect` reads bounded reservation state.
 - `retry-plan` inspects exact reservation and attempt identities, then fails closed without the current plan and authority adapters.
-- `reconcile` reports unresolved reservations without automatic retry.
+- `reconcile` classifies interrupted attempts as uncertain, then reports unresolved reservations without automatic retry.
 - `deny` and `abandon` fail closed until current operator authority is composed.
 
 ## Failure behavior

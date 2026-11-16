@@ -12,9 +12,11 @@ use std::path::PathBuf;
 
 use molten::error::Failure;
 use molten::error::Result;
+use molten::world_promotion::LocalPromotionReceipts;
 use molten::world_promotion::LocalWorldPromotionStore;
 use molten::world_promotion::WorldPromotionBookkeepingPort;
 use molten::world_promotion::canonical_promotion_plan;
+use molten::world_promotion::recover_interrupted_attempts;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_head::WorldBranchClass;
 use molten_core::world_head::WorldBranchId;
@@ -204,7 +206,10 @@ fn inspect_outbox(state_root: &Path) -> Result<()> {
 }
 
 fn reconcile(state_root: &Path) -> Result<()> {
-    let store = open_store(state_root)?;
+    let mut store = open_store(state_root)?;
+    // This process holds the store, so an attempt still marked attempting was interrupted.
+    let mut receipts = LocalPromotionReceipts::open(state_root)?;
+    let recovered = recover_interrupted_attempts(&mut store, &mut receipts)?;
     let reservations = store.list_reservations()?;
     let unresolved = reservations
         .iter()
@@ -215,6 +220,10 @@ fn reconcile(state_root: &Path) -> Result<()> {
             )
         })
         .count();
+    println!("recovered_interrupted_attempts={}", recovered.len());
+    for attempt in &recovered {
+        println!("recovered_attempt={}", attempt.attempt_ref);
+    }
     println!("reservation_count={}", reservations.len());
     println!("unresolved_count={unresolved}");
     println!("observation_first=true");

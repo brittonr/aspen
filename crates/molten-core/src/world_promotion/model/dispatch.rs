@@ -100,12 +100,39 @@ pub enum WorldAttemptObservation {
     Duplicate(WorldReleaseObservationRef),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WorldAttemptOutcome {
+    Unknown,
+    Succeeded,
+    Failed,
+}
+
+impl WorldAttemptOutcome {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "unknown" => Some(Self::Unknown),
+            "succeeded" => Some(Self::Succeeded),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldAttemptRecord {
     pub reservation_ref: WorldReleaseReservationRef,
     pub attempt_ref: WorldReleaseAttemptRef,
     pub state: WorldReleaseState,
     pub observation_ref: Option<WorldReleaseObservationRef>,
+    pub outcome: WorldAttemptOutcome,
     pub external_completion_proven: bool,
 }
 

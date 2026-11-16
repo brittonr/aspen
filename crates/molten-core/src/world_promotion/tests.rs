@@ -172,6 +172,22 @@ fn terminal_acknowledgment_and_abandonment_do_not_claim_exactly_once() {
     assert!(plan.non_claims.iter().any(|claim| claim.contains("exactly-once")));
 }
 
+// r[verify molten.world_promotion.dispatch]
+#[test]
+fn failed_observation_has_failed_outcome_and_is_not_acknowledgeable() {
+    let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");
+    let mut reservation = plan.reservations[0].clone();
+    reservation.state = WorldReleaseState::Committed;
+    let attempt_ref = expected_attempt_ref(&reservation).expect("attempt ref");
+    let dispatch = plan_world_dispatch(&plan, &reservation, &dispatch_facts(), &attempt_ref).expect("dispatch plan");
+    let failed_observation = WorldReleaseObservationRef::new(reference("failed-observation")).expect("observation ref");
+    let failed = classify_attempt_observation(&dispatch, WorldAttemptObservation::Failed(failed_observation));
+    assert_eq!(failed.state, WorldReleaseState::Observed);
+    assert_eq!(failed.outcome, WorldAttemptOutcome::Failed);
+    assert!(!failed.external_completion_proven);
+    assert_eq!(acknowledge_attempt(&failed), Err(WorldPromotionIssue::ReservationNotCommitted));
+}
+
 fn promotion_request() -> WorldPromotionRequest {
     let policy_ref = WorldHeadPolicyRef::new(reference("promotion-policy")).expect("policy ref");
     WorldPromotionRequest {

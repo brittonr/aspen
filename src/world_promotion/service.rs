@@ -178,10 +178,28 @@ where
         attempt_ref: dispatch.attempt_ref.clone(),
         state: WorldReleaseState::Attempting,
         observation_ref: None,
+        outcome: WorldAttemptOutcome::Unknown,
         external_completion_proven: false,
     };
     ports.transaction.store_attempt(&attempting)?;
-    let observation = ports.dispatcher.dispatch(&dispatch)?;
+    let observation = match ports.dispatcher.dispatch(&dispatch) {
+        Ok(observation) => observation,
+        Err(error) => {
+            return Err(
+                match record_uncertain_attempt(
+                    &attempting_reservation,
+                    &dispatch.attempt_ref,
+                    ports.transaction,
+                    ports.receipts,
+                ) {
+                    Ok(_) => error,
+                    Err(recording_error) => Failure::invalid_harness(format!(
+                        "world dispatch failed: {error}; recording its uncertain outcome also failed: {recording_error}"
+                    )),
+                },
+            );
+        }
+    };
     let attempt = classify_attempt_observation(&dispatch, observation);
     ports.transaction.store_attempt(&attempt)?;
     let mut terminal_reservation = attempting_reservation;
@@ -196,6 +214,55 @@ where
         issue_codes: Vec::new(),
         canonical_receipt,
     })
+}
+
+/// Classify attempts a previous process left `attempting` (it stopped between storing the attempt
+/// and recording the dispatcher's result) as uncertain, so retry and abandon apply. The local store
+/// is held by one process at a time, so no dispatcher can still own such an attempt.
+// r[impl molten.world_promotion.reconciliation]
+pub fn recover_interrupted_attempts<T, R>(transaction: &mut T, receipts: &mut R) -> Result<Vec<WorldAttemptRecord>>
+where
+    T: WorldPromotionTransactionPort,
+    R: WorldPromotionReceiptPort,
+{
+    let mut recovered = Vec::new();
+    for attempt in transaction.list_attempts_in_progress()? {
+        let reservation = transaction
+            .read_reservation(&attempt.reservation_ref)?
+            .ok_or_else(|| Failure::invalid_harness("an in-progress world attempt has no reservation"))?;
+        recovered.push(record_uncertain_attempt(&reservation, &attempt.attempt_ref, transaction, receipts)?);
+    }
+    Ok(recovered)
+}
+
+/// The external effect's outcome is unknown: record the attempt and its reservation as uncertain
+/// and publish that observation receipt.
+fn record_uncertain_attempt<T, R>(
+    reservation: &WorldReleaseReservation,
+    attempt_ref: &WorldReleaseAttemptRef,
+    transaction: &mut T,
+    receipts: &mut R,
+) -> Result<WorldAttemptRecord>
+where
+    T: WorldPromotionTransactionPort,
+    R: WorldPromotionReceiptPort,
+{
+    let attempt = WorldAttemptRecord {
+        reservation_ref: reservation.reservation_ref.clone(),
+        attempt_ref: attempt_ref.clone(),
+        state: WorldReleaseState::Uncertain,
+        observation_ref: None,
+        outcome: WorldAttemptOutcome::Unknown,
+        external_completion_proven: false,
+    };
+    transaction.store_attempt(&attempt)?;
+    if reservation.state == WorldReleaseState::Attempting {
+        let mut uncertain = reservation.clone();
+        uncertain.state = WorldReleaseState::Uncertain;
+        transaction.update_reservation(&uncertain)?;
+    }
+    receipts.publish_promotion_receipt(&canonical_observation(&attempt)?)?;
+    Ok(attempt)
 }
 
 fn block_dispatch<T, R>(

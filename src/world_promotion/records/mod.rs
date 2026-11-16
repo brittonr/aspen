@@ -14,7 +14,7 @@ use crate::error::Result;
 pub const WORLD_PROMOTION_PLAN_SCHEMA: &str = "molten.world-promotion-plan.v2";
 pub const WORLD_PROMOTION_PLAN_SCHEMA_V1: &str = "molten.world-promotion-plan.v1";
 pub const WORLD_RELEASE_RESERVATION_SCHEMA: &str = "molten.world-release-reservation.v1";
-pub const WORLD_RELEASE_ATTEMPT_SCHEMA: &str = "molten.world-release-attempt.v1";
+pub const WORLD_RELEASE_ATTEMPT_SCHEMA: &str = "molten.world-release-attempt.v2";
 pub const WORLD_RELEASE_OBSERVATION_SCHEMA: &str = "molten.world-release-observation.v1";
 pub const WORLD_PROMOTION_RECONCILIATION_SCHEMA: &str = "molten.world-promotion-reconciliation.v1";
 
@@ -24,7 +24,7 @@ const ATTEMPT_RECORD: &str = "world-release-attempt";
 const OBSERVATION_RECORD: &str = "world-release-observation";
 const RECONCILIATION_RECORD: &str = "world-promotion-reconciliation";
 const RESERVATION_FIELD_COUNT: u64 = 11;
-const ATTEMPT_FIELD_COUNT: u64 = 7;
+const ATTEMPT_FIELD_COUNT: u64 = 8;
 
 #[derive(Debug, Clone)]
 pub struct CanonicalWorldPromotionRecord {
@@ -121,6 +121,7 @@ fn canonical_attempt_record(
         named("attempt-ref", string(record.attempt_ref.as_str())),
         named("state", string(record.state.as_str())),
         named("observation-ref", optional(record.observation_ref.as_ref().map(WorldReleaseObservationRef::as_str))),
+        named("outcome", string(record.outcome.as_str())),
         named("external-completion-proven", boolean(record.external_completion_proven)),
         non_claims(),
     ]))
@@ -130,7 +131,7 @@ pub fn parse_attempt(bytes: &[u8]) -> Result<WorldAttemptRecord> {
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields = crate::preserves_rail::simple_record_fields(&decoded.value, ATTEMPT_RECORD, ATTEMPT_FIELD_COUNT)?;
     require_schema(&fields[0], WORLD_RELEASE_ATTEMPT_SCHEMA)?;
-    let non_claim_field = named_value(&fields[6], "non-claims")?;
+    let non_claim_field = named_value(&fields[7], "non-claims")?;
     let non_claim_values =
         crate::preserves_rail::required_sequence_field(&non_claim_field, "world promotion non-claims")?;
     let parsed_non_claims = non_claim_values
@@ -151,7 +152,9 @@ pub fn parse_attempt(bytes: &[u8]) -> Result<WorldAttemptRecord> {
         .map(WorldReleaseObservationRef::new)
         .transpose()
         .map_err(reference_error)?,
-        external_completion_proven: bool_field(&fields[5], "external-completion-proven")?,
+        outcome: WorldAttemptOutcome::parse(&string_field(&fields[5], "outcome")?)
+            .ok_or_else(|| Failure::invalid_harness("unsupported world attempt outcome"))?,
+        external_completion_proven: bool_field(&fields[6], "external-completion-proven")?,
     };
     let canonical = canonical_attempt(&record)?;
     if canonical.bytes != decoded.canonical_bytes {

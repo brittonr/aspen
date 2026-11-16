@@ -22,6 +22,26 @@ pub(super) fn read_reservation(
         .transpose()
 }
 
+/// Each reservation has at most one in-progress attempt, so the reservation bound also bounds this
+/// scan's result.
+pub(super) fn list_attempts_in_progress(database: &redb::Database) -> Result<Vec<WorldAttemptRecord>> {
+    let read = database.begin_read().map_err(store_error)?;
+    let table = read.open_table(ATTEMPTS_TABLE).map_err(store_error)?;
+    let mut attempts = Vec::new();
+    for entry in table.iter().map_err(store_error)? {
+        let (_key, value) = entry.map_err(store_error)?;
+        let attempt = parse_attempt(value.value())?;
+        if attempt.state != WorldReleaseState::Attempting {
+            continue;
+        }
+        if attempts.len() >= MAX_WORLD_PROMOTION_INTENTS {
+            return Err(Failure::invalid_harness("in-progress world attempts exceed the reservation bound"));
+        }
+        attempts.push(attempt);
+    }
+    Ok(attempts)
+}
+
 pub(super) fn list_reservations(database: &redb::Database) -> Result<Vec<WorldReleaseReservation>> {
     let read = database.begin_read().map_err(store_error)?;
     let table = read.open_table(RESERVATIONS_TABLE).map_err(store_error)?;

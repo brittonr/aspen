@@ -50,6 +50,9 @@ pub trait WorldPromotionBookkeepingPort {
 
     fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> Result<Option<WorldAttemptRecord>>;
 
+    /// Attempts still recorded as `attempting`, in attempt-reference order.
+    fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>>;
+
     fn read_promotion_identity(
         &self,
         operation_ref: &WorldPromotionOperationRef,

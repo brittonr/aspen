@@ -85,25 +85,36 @@ pub fn classify_attempt_observation(
     dispatch: &WorldDispatchPlan,
     observation: WorldAttemptObservation,
 ) -> WorldAttemptRecord {
-    let (state, observation_ref) = match observation {
-        WorldAttemptObservation::Succeeded(reference) | WorldAttemptObservation::Failed(reference) => {
-            (WorldReleaseState::Observed, Some(reference))
+    let (state, observation_ref, outcome) = match observation {
+        WorldAttemptObservation::Succeeded(reference) => {
+            (WorldReleaseState::Observed, Some(reference), WorldAttemptOutcome::Succeeded)
         }
-        WorldAttemptObservation::Unknown => (WorldReleaseState::Uncertain, None),
-        WorldAttemptObservation::Duplicate(reference) => (WorldReleaseState::Uncertain, Some(reference)),
-        WorldAttemptObservation::Conflict(reference) => (WorldReleaseState::Conflict, Some(reference)),
+        WorldAttemptObservation::Failed(reference) => {
+            (WorldReleaseState::Observed, Some(reference), WorldAttemptOutcome::Failed)
+        }
+        WorldAttemptObservation::Unknown => (WorldReleaseState::Uncertain, None, WorldAttemptOutcome::Unknown),
+        WorldAttemptObservation::Duplicate(reference) => {
+            (WorldReleaseState::Uncertain, Some(reference), WorldAttemptOutcome::Unknown)
+        }
+        WorldAttemptObservation::Conflict(reference) => {
+            (WorldReleaseState::Conflict, Some(reference), WorldAttemptOutcome::Unknown)
+        }
     };
     WorldAttemptRecord {
         reservation_ref: dispatch.reservation_ref.clone(),
         attempt_ref: dispatch.attempt_ref.clone(),
         state,
         observation_ref,
+        outcome,
         external_completion_proven: false,
     }
 }
 
 pub fn acknowledge_attempt(record: &WorldAttemptRecord) -> Result<WorldAttemptRecord, WorldPromotionIssue> {
-    if record.state != WorldReleaseState::Observed || record.observation_ref.is_none() {
+    if record.state != WorldReleaseState::Observed
+        || record.observation_ref.is_none()
+        || record.outcome != WorldAttemptOutcome::Succeeded
+    {
         return Err(WorldPromotionIssue::ReservationNotCommitted);
     }
     let mut acknowledged = record.clone();

@@ -193,6 +193,10 @@ impl WorldPromotionBookkeepingPort for UnknownTransaction {
         Ok(None)
     }
 
+    fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
+        Ok(Vec::new())
+    }
+
     fn read_promotion_identity(
         &self,
         _operation_ref: &WorldPromotionOperationRef,

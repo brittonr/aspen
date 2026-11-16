@@ -171,6 +171,10 @@ impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
         super::outbox::read_attempt(self.database(), attempt_ref)
     }
 
+    fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
+        super::outbox::list_attempts_in_progress(self.database())
+    }
+
     fn read_promotion_identity(
         &self,
         operation_ref: &WorldPromotionOperationRef,

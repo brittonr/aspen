@@ -101,3 +101,30 @@ fn observation_commit_request() -> WorldPromotionObservationCommitRequest {
         observation_byte_length: OBSERVATION_BYTES,
     }
 }
+
+// r[verify molten.world_promotion.dispatch]
+#[test]
+fn observation_commit_rejects_failed_outcome() {
+    let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");
+    let mut reservation = plan.reservations[0].clone();
+    reservation.state = WorldReleaseState::Committed;
+    let attempt_ref = expected_attempt_ref(&reservation).expect("attempt ref");
+    let dispatch = plan_world_dispatch(&plan, &reservation, &dispatch_facts(), &attempt_ref).expect("dispatch plan");
+    let failed_observation = WorldReleaseObservationRef::new(reference("failed-observation")).expect("observation ref");
+    let failed = classify_attempt_observation(&dispatch, WorldAttemptObservation::Failed(failed_observation));
+    let mut attempt = failed;
+    attempt.state = WorldReleaseState::Acknowledged;
+    attempt.external_completion_proven = true;
+    let request = WorldPromotionObservationCommitRequest {
+        reservation,
+        attempt,
+        successor_commit: commit("observation-successor"),
+        logical_profile_ref: SnapshotProfileRef::new(reference("logical-profile")).expect("profile ref"),
+        observation_schema_ref: reference("observation-schema"),
+        observation_byte_length: OBSERVATION_BYTES,
+    };
+    assert!(matches!(
+        plan_world_promotion_observation_commit(&request),
+        Err(issues) if issues.contains(&WorldPromotionIssue::ObservationNotAcknowledged)
+    ));
+}

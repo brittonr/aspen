@@ -65,7 +65,10 @@ fn validate_observation_request(
     if !reservation_can_record_observation(request.reservation.state) {
         issues.push(WorldPromotionIssue::ReservationNotCommitted);
     }
-    if request.attempt.state != WorldReleaseState::Acknowledged || !request.attempt.external_completion_proven {
+    if request.attempt.state != WorldReleaseState::Acknowledged
+        || !request.attempt.external_completion_proven
+        || request.attempt.outcome != WorldAttemptOutcome::Succeeded
+    {
         issues.push(WorldPromotionIssue::ObservationNotAcknowledged);
     }
     let observation_ref = request.attempt.observation_ref.clone();
