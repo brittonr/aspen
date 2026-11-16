@@ -2,33 +2,12 @@ type BtreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
-type PathBuf = std::path::PathBuf;
+type StoreLocator = crate::local_store::Locator;
+type StoreMemberKind = crate::local_store::MemberKind;
+type UpgradeStore = crate::local_store::UpgradeStoreRoot;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
-
-mod fs {
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
-        std::fs::read_dir(path)
-    }
-
-    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-}
 
 pub const SUPPORTED_TASK_KINDS: &[&str] = &[
     "install-artifact",

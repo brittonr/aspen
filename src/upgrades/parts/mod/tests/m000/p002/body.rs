@@ -2,7 +2,7 @@
     #[test]
     fn cleanup_task_requires_retention_and_dependency_impact_evidence() {
         let root = temp_dir("upgrade-cleanup-evidence");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let ledger_root = root.join("ledger");
         let artifact = crate::ledger::import_artifact(&ledger_root, &parse_text("<old-artifact>").expect("artifact"))
             .expect("import artifact")
@@ -107,7 +107,7 @@
     fn protocol_drain_task_requires_passing_protocol_gate_evidence() {
         let root = temp_dir("upgrade-protocol-drain");
         let ledger_root = root.join("ledger");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let gate = protocol_drain_gate();
         let gate_ref = crate::ledger::import_artifact(&ledger_root, &gate.value).expect("import gate").artifact_ref;
         assert_eq!(gate_ref, gate.receipt_ref);
@@ -127,7 +127,7 @@
     fn protocol_drain_task_denies_missing_stale_or_mismatched_gate_evidence() {
         let root = temp_dir("upgrade-protocol-drain-deny");
         let ledger_root = root.join("ledger");
-        let missing_store = root.join("missing-upgrades");
+        let missing_store = UpgradeStore::open(&root.join("missing-upgrades")).expect("upgrade store");
         let gate = protocol_drain_gate();
         let new_protocol_ref = test_ref("protocol-v2");
         let missing_gate_ref = test_ref("missing-protocol-gate");
@@ -139,7 +139,7 @@
         assert_eq!(missing.receipt.decision, "deny");
         assert!(to_text(&missing.receipt.value).expect("missing text").contains("not readable from ledger"));
 
-        let denied_store = root.join("denied-upgrades");
+        let denied_store = UpgradeStore::open(&root.join("denied-upgrades")).expect("upgrade store");
         let denied_gate = protocol_drain_gate_with_diagnostics(vec!["stale protocol lifecycle evidence".to_string()]);
         let denied_gate_ref = crate::ledger::import_artifact(&ledger_root, &denied_gate.value)
             .expect("import denied gate")
@@ -152,7 +152,7 @@
         assert_eq!(denied.receipt.decision, "deny");
         assert!(to_text(&denied.receipt.value).expect("denied text").contains("denied with decision"));
 
-        let mismatch_store = root.join("mismatch-upgrades");
+        let mismatch_store = UpgradeStore::open(&root.join("mismatch-upgrades")).expect("upgrade store");
         let gate_ref =
             crate::ledger::import_artifact(&ledger_root, &gate.value).expect("import pass gate").artifact_ref;
         let wrong_protocol_ref = test_ref("wrong-protocol");
@@ -164,7 +164,7 @@
         assert_eq!(mismatch.receipt.decision, "deny");
         assert!(to_text(&mismatch.receipt.value).expect("mismatch text").contains("expected one of"));
 
-        let stale_store = root.join("stale-compat-upgrades");
+        let stale_store = UpgradeStore::open(&root.join("stale-compat-upgrades")).expect("upgrade store");
         let mut stale_input = protocol_drain_plan_input(&gate_ref, &gate.protocol_ref, &new_protocol_ref);
         stale_input.compatibility.old_refs = vec![test_ref("stale-protocol-v1")];
         let stale_plan = upgrade_plan_value(&stale_input).expect("stale compatibility plan");
@@ -174,7 +174,7 @@
         assert_eq!(stale.receipt.decision, "deny");
         assert!(to_text(&stale.receipt.value).expect("stale text").contains("stale compatibility ref"));
 
-        let empty_terminal_store = root.join("empty-terminal-upgrades");
+        let empty_terminal_store = UpgradeStore::open(&root.join("empty-terminal-upgrades")).expect("upgrade store");
         let empty_terminal_gate = protocol_drain_gate_with_terminal_state_refs(&gate, Vec::new());
         let empty_terminal_gate_ref = crate::ledger::import_artifact(&ledger_root, &empty_terminal_gate)
             .expect("import empty terminal gate")
@@ -203,7 +203,7 @@
     fn denied_protocol_drain_and_cutover_preserve_pre_cutover_state() {
         let root = temp_dir("upgrade-protocol-no-mutation");
         let ledger_root = root.join("ledger");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let gate = protocol_drain_gate();
         let new_protocol_ref = test_ref("protocol-v2");
         let missing_gate_ref = test_ref("missing-protocol-gate");
@@ -245,7 +245,7 @@
     fn cleanup_passes_only_without_active_references() {
         let root = temp_dir("upgrade-cleanup");
         let ledger_root = root.join("ledger");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let artifact =
             crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"unused\">").expect("artifact"))
                 .expect("import artifact")
@@ -256,3 +256,108 @@
         let deny = cleanup_admission(&store, &ledger_root, &artifact).expect("cleanup deny");
         assert_eq!(deny.decision, "deny");
     }
+
+    fn name_move_fixture(root: &std::path::Path) -> (PathBuf, IoValue) {
+        let ledger_root = root.join("ledger");
+        let old = crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"old\">").expect("old artifact"))
+            .expect("import old")
+            .artifact_ref;
+        let new = crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"new\">").expect("new artifact"))
+            .expect("import new")
+            .artifact_ref;
+        let plan_value = name_move_plan_value(&ledger_root, &NameMovePlanInput {
+            session_id: "session-capability-store".to_string(),
+            name: "app/main".to_string(),
+            from_ref: old,
+            to_ref: new,
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("transcript-pass")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("plan value");
+        (ledger_root, plan_value)
+    }
+
+    // r[verify molten.upgrades.capability_rooted_store]
+    #[test]
+    fn content_addressed_members_are_published_once_and_never_rewritten() {
+        let root = temp_dir("upgrade-immutable-members");
+        let store_dir = root.join("upgrades");
+        let store = UpgradeStore::open(&store_dir).expect("upgrade store");
+        let (_ledger_root, plan_value) = name_move_fixture(&root);
+        let created = create_session(&store, &plan_value).expect("create session");
+        create_session(&store, &plan_value).expect("identical plan republishes idempotently");
+        let plan_file = store_dir.join(plan_path(&created.plan.plan_ref).expect("plan path").as_path());
+        std::fs::write(&plan_file, "<tampered>").expect("tamper with stored plan");
+        let conflict = create_session(&store, &plan_value).expect_err("a different stored plan is a conflict");
+        assert!(conflict.to_string().contains("already holds different content"), "{conflict}");
+        assert_eq!(std::fs::read_to_string(&plan_file).expect("stored plan"), "<tampered>");
+    }
+
+    // r[verify molten.upgrades.capability_rooted_store]
+    #[test]
+    fn pointer_replacement_is_whole_and_leaves_no_stage() {
+        let root = temp_dir("upgrade-pointer-replacement");
+        let store_dir = root.join("upgrades");
+        let store = UpgradeStore::open(&store_dir).expect("upgrade store");
+        set_name_pointer(&store, "app/main", &test_ref("first")).expect("first pointer");
+        set_name_pointer(&store, "app/main", &test_ref("second")).expect("second pointer");
+        let pointer = read_name_pointer(&store, "app/main").expect("read pointer").expect("pointer exists");
+        assert_eq!(pointer.artifact_ref, test_ref("second"));
+        assert_eq!(pointer.previous_ref.as_deref(), Some(test_ref("first").as_str()));
+        let names = std::fs::read_dir(store_dir.join("names")).expect("names directory");
+        for entry in names {
+            let name = entry.expect("name entry").file_name().to_string_lossy().into_owned();
+            assert!(!name.starts_with('.'), "no publication stage remains: {name}");
+        }
+        let receipt = read_stored_receipt(&store, &pointer.receipt_ref).expect("pointer receipt is stored");
+        assert_eq!(receipt.operation, "name-pointer-set");
+    }
+
+    // r[verify molten.upgrades.capability_rooted_store]
+    #[test]
+    fn interrupted_publication_stages_are_invisible_to_store_scans() {
+        let root = temp_dir("upgrade-stage-scan");
+        let store_dir = root.join("upgrades");
+        let store = UpgradeStore::open(&store_dir).expect("upgrade store");
+        let (_ledger_root, plan_value) = name_move_fixture(&root);
+        create_session(&store, &plan_value).expect("create session");
+        let before = upgrade_state_snapshot_ref(&store).expect("snapshot before");
+        std::fs::write(store_dir.join("names").join(".blake3_00.preserves.stage-1-0"), "<partial")
+            .expect("plant an interrupted stage");
+        assert_eq!(upgrade_state_snapshot_ref(&store).expect("snapshot after"), before);
+        assert!(read_name_pointers(&store).expect("pointers").is_empty());
+    }
+
+    // r[verify molten.upgrades.capability_rooted_store]
+    #[cfg(unix)]
+    #[test]
+    fn links_inside_the_store_are_refused_for_reads_scans_and_writes() {
+        let root = temp_dir("upgrade-store-links");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&outside).expect("outside directory");
+        let store_dir = root.join("upgrades");
+        let store = UpgradeStore::open(&store_dir).expect("upgrade store");
+        set_name_pointer(&store, "app/main", &test_ref("first")).expect("first pointer");
+        let leaf = store_dir.join(name_pointer_path("app/main").expect("pointer path").as_path());
+        std::fs::remove_file(&leaf).expect("remove pointer leaf");
+        std::os::unix::fs::symlink(outside.join("pointer.preserves"), &leaf).expect("plant leaf link");
+        assert!(set_name_pointer(&store, "app/main", &test_ref("second")).is_err(), "a linked leaf is not replaced");
+        assert!(!outside.join("pointer.preserves").exists(), "nothing is written through the link");
+        assert!(read_name_pointer(&store, "app/main").is_err(), "a linked leaf is not read");
+        assert!(read_name_pointers(&store).is_err(), "a scan refuses the link");
+
+        std::fs::remove_file(&leaf).expect("remove leaf link");
+        let (ledger_root, plan_value) = name_move_fixture(&root);
+        let created = create_session(&store, &plan_value).expect("create session");
+        std::fs::remove_dir_all(store_dir.join("status")).expect("remove status directory");
+        std::os::unix::fs::symlink(&outside, store_dir.join("status")).expect("plant directory link");
+        assert!(
+            execute_task(&store, &ledger_root, &created.plan.plan_ref, "compatibility-alias").is_err(),
+            "status is not published through a linked directory"
+        );
+        assert!(std::fs::read_dir(&outside).expect("outside entries").next().is_none(), "outside stays empty");
+    }
+

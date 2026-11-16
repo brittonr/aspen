@@ -86,7 +86,7 @@ fn plan_name_move(command: Command) -> Outcome<()> {
 
 fn create(plan: FilePath, store: FilePath, receipt_out: Option<FilePath>) -> Outcome<()> {
     let plan_value = super::io::read_preserves_file(&plan)?;
-    let created = molten::upgrades::create_session(&store, &plan_value)?;
+    let created = molten::upgrades::create_session(&molten::local_store::UpgradeStoreRoot::open(&store)?, &plan_value)?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "upgrade receipt", &created.receipt.value)?;
     println!(
         "upgrade create ok session={} plan={} tasks={} store={}",
@@ -99,7 +99,11 @@ fn create(plan: FilePath, store: FilePath, receipt_out: Option<FilePath>) -> Out
 }
 
 fn set_name(store: FilePath, name: String, artifact_ref: String, receipt_out: Option<FilePath>) -> Outcome<()> {
-    let receipt = molten::upgrades::set_name_pointer(&store, &name, &artifact_ref)?;
+    let receipt = molten::upgrades::set_name_pointer(
+        &molten::local_store::UpgradeStoreRoot::open(&store)?,
+        &name,
+        &artifact_ref,
+    )?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "upgrade receipt", &receipt.value)?;
     println!("upgrade set-name ok name={} artifact={} store={}", name, artifact_ref, store.display());
     Ok(())
@@ -112,7 +116,12 @@ fn run_task(
     task_id: String,
     receipt_out: Option<FilePath>,
 ) -> Outcome<()> {
-    let executed = molten::upgrades::execute_task(&store, &ledger, &plan_ref, &task_id)?;
+    let executed = molten::upgrades::execute_task(
+        &molten::local_store::UpgradeStoreRoot::open(&store)?,
+        &ledger,
+        &plan_ref,
+        &task_id,
+    )?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "upgrade receipt", &executed.receipt.value)?;
     println!(
         "upgrade run-task ok plan={} task={} kind={} decision={}",
@@ -122,7 +131,8 @@ fn run_task(
 }
 
 fn rollback(store: FilePath, plan_ref: String, task_id: String, receipt_out: Option<FilePath>) -> Outcome<()> {
-    let receipt = molten::upgrades::rollback_task(&store, &plan_ref, &task_id)?;
+    let receipt =
+        molten::upgrades::rollback_task(&molten::local_store::UpgradeStoreRoot::open(&store)?, &plan_ref, &task_id)?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "upgrade receipt", &receipt.value)?;
     println!(
         "upgrade rollback {} plan={} task={} receipt={}",
@@ -132,7 +142,7 @@ fn rollback(store: FilePath, plan_ref: String, task_id: String, receipt_out: Opt
 }
 
 fn status(store: FilePath, plan_ref: String) -> Outcome<()> {
-    let status = molten::upgrades::status(&store, &plan_ref)?;
+    let status = molten::upgrades::status(&molten::local_store::UpgradeStoreRoot::open_existing(&store)?, &plan_ref)?;
     println!(
         "upgrade status session={} plan={} remaining={}",
         status.session_id,
@@ -158,8 +168,12 @@ fn cleanup_check(
     artifact_ref: String,
     receipt_out: Option<FilePath>,
 ) -> Outcome<()> {
-    let receipt =
-        molten::upgrades::cleanup_admission_with_registry(&store, &ledger, registry.as_deref(), &artifact_ref)?;
+    let receipt = molten::upgrades::cleanup_admission_with_registry(
+        &molten::local_store::UpgradeStoreRoot::open(&store)?,
+        &ledger,
+        registry.as_deref(),
+        &artifact_ref,
+    )?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "upgrade receipt", &receipt.value)?;
     println!(
         "upgrade cleanup-check {} artifact={} receipt={}",

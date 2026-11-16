@@ -41,7 +41,7 @@ fn pass_fail(is_pass: bool) -> &'static str {
     if is_pass { "pass" } else { "fail" }
 }
 
-pub fn status(root: &Path, plan_ref: &str) -> Result<UpgradeStatus> {
+pub fn status(root: &UpgradeStore, plan_ref: &str) -> Result<UpgradeStatus> {
     let plan = read_plan(root, plan_ref)?;
     ensure_count_at_most(plan.tasks.len(), MAX_UPGRADE_TASKS, "upgrade plan tasks")?;
     let mut tasks = Vec::with_capacity(plan.tasks.len());
@@ -72,9 +72,9 @@ pub fn status(root: &Path, plan_ref: &str) -> Result<UpgradeStatus> {
     })
 }
 
-fn read_plan(root: &Path, plan_ref: &str) -> Result<UpgradePlan> {
+fn read_plan(root: &UpgradeStore, plan_ref: &str) -> Result<UpgradePlan> {
     validate_ref(plan_ref, "upgrade plan ref")?;
-    parse_upgrade_plan(&read_preserves(&plan_path(root, plan_ref)?)?)
+    parse_upgrade_plan(&read_store_preserves(root, &plan_path(plan_ref)?)?)
 }
 
 fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>> {

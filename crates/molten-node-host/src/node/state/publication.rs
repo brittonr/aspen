@@ -9,6 +9,12 @@ const STAGE_INFIX: &str = ".stage-";
 
 static STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+/// Whether a directory entry is a stage of an in-progress or interrupted publication; scans skip
+/// it.
+pub(crate) fn is_publication_stage(name: &str) -> bool {
+    name.starts_with('.') && name.contains(STAGE_INFIX)
+}
+
 // r[impl molten.audit_f03.recover_publication]
 // An error after creation retains the partial member for explicit reconciliation.
 pub(super) fn write_new_regular_file(
@@ -30,7 +36,7 @@ pub(super) fn write_new_regular_file(
 
 /// How a staged publication treats an existing destination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Replacement {
+pub(crate) enum Replacement {
     /// The destination must not exist; an existing file is never overwritten.
     NoReplace,
     /// An existing regular-file destination is replaced in one step.
@@ -43,7 +49,7 @@ pub(super) enum Replacement {
 /// (replacement) onto the leaf, and the directory is synchronized. A failure after the leaf changed
 /// is reported as an uncertain outcome.
 // r[impl molten.crypto_identity.atomic_key_publication]
-pub(super) fn publish_regular_file(
+pub(crate) fn publish_regular_file(
     dir: &cap_std::fs::Dir,
     path: &std::path::Path,
     bytes: &[u8],

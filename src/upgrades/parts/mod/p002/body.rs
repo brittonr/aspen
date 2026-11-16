@@ -1,5 +1,5 @@
 
-fn cutover_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+fn cutover_result(root: &UpgradeStore, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let readiness = evaluate_cutover_readiness(root, plan, task)?;
     Ok((readiness.decision, readiness.diagnostics, readiness.checks))
 }
@@ -89,7 +89,7 @@ fn policy_or_handler_update_result(task: &UpgradeTask) -> Result<UpgradeTaskOutc
     }
 }
 
-fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+fn move_result(root: &UpgradeStore, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let from_ref =
         task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
     let to_ref = task.to_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing to ref"))?;
@@ -109,14 +109,14 @@ fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<Up
 
     let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
     let pointer = name_pointer_value(&task.subject, "name", to_ref, Some(from_ref), &pending_receipt_ref)?;
-    write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+    publish_mutable(root, &name_pointer_path(&task.subject)?, &pointer)?;
     Ok(("pass", Vec::new(), vec![
         ("metadata-pointer-move", "pass"),
         ("artifact-content-immutable", "pass"),
     ]))
 }
 
-fn cleanup_result(root: &Path, ledger_root: &Path, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+fn cleanup_result(root: &UpgradeStore, ledger_root: &Path, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let cleanup_ref = task.to_ref.as_deref().or(task.from_ref.as_deref()).unwrap_or(&task.subject);
     let has_retention_evidence = !task.precondition_refs.is_empty();
     let has_dependency_impact_evidence = !task.postcondition_refs.is_empty();
@@ -145,7 +145,7 @@ fn cleanup_result(root: &Path, ledger_root: &Path, task: &UpgradeTask) -> Result
     }
 }
 
-pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeReceipt> {
+pub fn rollback_task(root: &UpgradeStore, plan_ref: &str, task_id: &str) -> Result<UpgradeReceipt> {
     ensure_dirs(root)?;
     let plan = read_plan(root, plan_ref)?;
     let task = plan
@@ -164,7 +164,7 @@ pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<Upgra
         let pointer =
             name_pointer_value(&task.subject, "name", from_ref, task.to_ref.as_deref(), &rollback_receipt_ref)?;
         if matches!(task.kind.as_str(), "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer") {
-            write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+            publish_mutable(root, &name_pointer_path(&task.subject)?, &pointer)?;
         }
         ("pass", Vec::new(), vec![("reversible-metadata-only", "pass"), ("rollback-pointer", "pass")])
     } else {
@@ -185,12 +185,12 @@ pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<Upgra
     Ok(receipt)
 }
 
-pub fn cleanup_admission(root: &Path, ledger_root: &Path, artifact_ref: &str) -> Result<UpgradeReceipt> {
+pub fn cleanup_admission(root: &UpgradeStore, ledger_root: &Path, artifact_ref: &str) -> Result<UpgradeReceipt> {
     cleanup_admission_with_registry(root, ledger_root, None, artifact_ref)
 }
 
 pub fn cleanup_admission_with_registry(
-    root: &Path,
+    root: &UpgradeStore,
     ledger_root: &Path,
     registry_root: Option<&Path>,
     artifact_ref: &str,
@@ -208,7 +208,7 @@ pub fn cleanup_admission_with_registry(
             )?;
         }
     }
-    if store_text_contains_ref(&root.join("plans"), artifact_ref)? {
+    if store_text_contains_ref(root, "plans", artifact_ref)? {
         push_bounded(
             &mut diagnostics,
             format!("upgrade plan retains {artifact_ref}"),
@@ -216,7 +216,7 @@ pub fn cleanup_admission_with_registry(
             "upgrade cleanup diagnostics",
         )?;
     }
-    if store_text_contains_ref(&root.join("receipts"), artifact_ref)? {
+    if store_text_contains_ref(root, "receipts", artifact_ref)? {
         push_bounded(
             &mut diagnostics,
             format!("upgrade receipt retains {artifact_ref}"),

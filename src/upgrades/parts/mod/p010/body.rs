@@ -1,58 +1,72 @@
 
-fn collect_upgrade_state_snapshot_entries(
-    root: &Path,
+// r[impl molten.upgrades.capability_rooted_store]
+// Every upgrades-store read, scan and write goes through the held store capability: relative locators,
+// no-follow leaf access, and staged publication. The operator-selected root is the only ambient path.
+
+/// Visits every regular member under `dir_name`, depth first. Links and other entry kinds are refused.
+fn visit_store_members(
+    root: &UpgradeStore,
     dir_name: &str,
-    entries: &mut impl crate::bounded::VecSink<(String, String)>,
+    visit: &mut impl FnMut(&StoreLocator) -> Result<bool>,
 ) -> Result<()> {
-    let snapshot_root = root.join(dir_name);
-    if !snapshot_root.exists() {
+    let store = root.root();
+    let start = StoreLocator::parse(dir_name)?;
+    if store.entry_kind_optional(&start)?.is_none() {
         return Ok(());
     }
-    let mut pending_dirs = vec![snapshot_root];
+    let mut pending_dirs = vec![start];
+    let mut scanned_entries = 0usize;
     while let Some(current_dir) = pending_dirs.pop() {
-        for entry in fs::read_dir(&current_dir).map_err(MoltenError::from)? {
-            let entry = entry.map_err(MoltenError::from)?;
-            let path = entry.path();
-            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
-                push_bounded(
-                    &mut pending_dirs,
-                    path,
-                    MAX_UPGRADE_POINTERS,
-                    "upgrade state snapshot dirs",
-                )?;
-                continue;
+        for member in store.list_entries(&current_dir)? {
+            scanned_entries = scanned_entries
+                .checked_add(1)
+                .ok_or_else(|| MoltenError::invalid_harness("upgrade store scan count overflow"))?;
+            ensure_count_at_most(scanned_entries, MAX_UPGRADE_POINTERS, "upgrade store scan entries")?;
+            match member.kind {
+                StoreMemberKind::Directory => {
+                    push_bounded(&mut pending_dirs, member.path, MAX_UPGRADE_POINTERS, "upgrade store scan dirs")?;
+                }
+                StoreMemberKind::File => {
+                    if !visit(&member.path)? {
+                        return Ok(());
+                    }
+                }
+                StoreMemberKind::Symlink | StoreMemberKind::Other => {
+                    return Err(MoltenError::invalid_harness(format!(
+                        "upgrade store member {} is not a regular file or directory",
+                        member.path.display()
+                    )));
+                }
             }
-            let relative_path = path
-                .strip_prefix(root)
-                .map_err(|error| MoltenError::invalid_harness(format!("upgrade snapshot path escaped root: {error}")))?;
-            let text = fs::read_to_string(&path).map_err(MoltenError::from)?;
-            let content_ref = canonical_hash(&record("upgrade-state-file-v1", vec![string(&text)]))?;
-            push_bounded(
-                entries,
-                (relative_path.to_string_lossy().into_owned(), content_ref),
-                MAX_UPGRADE_POINTERS,
-                "upgrade state snapshot entries",
-            )?;
         }
     }
     Ok(())
 }
 
-fn write_status(root: &Path, plan: &UpgradePlan, task: &UpgradeTask, receipt_ref: &str) -> Result<()> {
-    validate_ref(receipt_ref, "upgrade task status receipt ref")?;
-    let path = status_path(root, &plan.session_id, &task.task_id)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    }
-    fs::write(path, receipt_ref).map_err(MoltenError::from)
+fn collect_upgrade_state_snapshot_entries(
+    root: &UpgradeStore,
+    dir_name: &str,
+    entries: &mut impl crate::bounded::VecSink<(String, String)>,
+) -> Result<()> {
+    visit_store_members(root, dir_name, &mut |path| {
+        let text = root.root().read_to_string(path)?;
+        let content_ref = canonical_hash(&record("upgrade-state-file-v1", vec![string(&text)]))?;
+        push_bounded(entries, (path.display(), content_ref), MAX_UPGRADE_POINTERS, "upgrade state snapshot entries")?;
+        Ok(true)
+    })
 }
 
-fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Result<Option<String>> {
-    let path = status_path(root, &plan.session_id, task_id)?;
-    if !path.exists() {
+fn write_status(root: &UpgradeStore, plan: &UpgradePlan, task: &UpgradeTask, receipt_ref: &str) -> Result<()> {
+    validate_ref(receipt_ref, "upgrade task status receipt ref")?;
+    root.root().publish(&status_path(&plan.session_id, &task.task_id)?, receipt_ref.as_bytes())
+}
+
+fn read_status_receipt_ref(root: &UpgradeStore, plan: &UpgradePlan, task_id: &str) -> Result<Option<String>> {
+    let path = status_path(&plan.session_id, task_id)?;
+    if root.root().entry_kind_optional(&path)?.is_none() {
         return Ok(None);
     }
-    let receipt_ref = fs::read_to_string(path).map_err(MoltenError::from)?;
+    let receipt_ref = root.root().read_to_string(&path)?;
     validate_ref(&receipt_ref, "upgrade task status receipt ref")?;
     let Ok(receipt) = read_stored_receipt(root, &receipt_ref) else {
         return Ok(None);
@@ -64,9 +78,9 @@ fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Re
     }
 }
 
-fn read_stored_receipt(root: &Path, receipt_ref: &str) -> Result<UpgradeReceipt> {
+fn read_stored_receipt(root: &UpgradeStore, receipt_ref: &str) -> Result<UpgradeReceipt> {
     validate_ref(receipt_ref, "upgrade stored receipt ref")?;
-    let receipt = parse_upgrade_receipt(&read_preserves(&receipt_path(root, receipt_ref)?)?)?;
+    let receipt = parse_upgrade_receipt(&read_store_preserves(root, &receipt_path(receipt_ref)?)?)?;
     if receipt.receipt_ref == receipt_ref {
         Ok(receipt)
     } else {
@@ -77,90 +91,90 @@ fn read_stored_receipt(root: &Path, receipt_ref: &str) -> Result<UpgradeReceipt>
     }
 }
 
-fn read_name_pointers(root: &Path) -> Result<Vec<NamePointer>> {
-    let names = root.join("names");
-    if !names.exists() {
-        return Ok(Vec::new());
-    }
+fn read_name_pointers(root: &UpgradeStore) -> Result<Vec<NamePointer>> {
     let mut pointers = Vec::new();
-    for entry in fs::read_dir(names).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if entry.file_type().map_err(MoltenError::from)?.is_file() {
-            push_bounded(
-                &mut pointers,
-                parse_name_pointer(&read_preserves(&entry.path())?)?,
-                MAX_UPGRADE_POINTERS,
-                "upgrade name pointers",
-            )?;
-        }
-    }
+    visit_store_members(root, "names", &mut |path| {
+        push_bounded(
+            &mut pointers,
+            parse_name_pointer(&read_store_preserves(root, path)?)?,
+            MAX_UPGRADE_POINTERS,
+            "upgrade name pointers",
+        )?;
+        Ok(true)
+    })?;
     Ok(pointers)
 }
 
-fn store_text_contains_ref(dir: &Path, target_ref: &str) -> Result<bool> {
-    if !dir.exists() {
-        return Ok(false);
+fn store_text_contains_ref(root: &UpgradeStore, dir_name: &str, target_ref: &str) -> Result<bool> {
+    let mut is_found = false;
+    visit_store_members(root, dir_name, &mut |path| {
+        is_found = root.root().read_to_string(path)?.contains(target_ref);
+        Ok(!is_found)
+    })?;
+    Ok(is_found)
+}
+
+fn ensure_dirs(root: &UpgradeStore) -> Result<()> {
+    for dir_name in ["plans", "receipts", "names", "status"] {
+        root.root().create_dir_all(&StoreLocator::parse(dir_name)?)?;
     }
-    let mut pending_dirs = Vec::with_capacity(1);
-    pending_dirs.push(dir.to_path_buf());
-    let mut scanned_entries = 0usize;
-    while let Some(current_dir) = pending_dirs.pop() {
-        for entry in fs::read_dir(current_dir).map_err(MoltenError::from)? {
-            scanned_entries = scanned_entries
-                .checked_add(1)
-                .ok_or_else(|| MoltenError::invalid_harness("upgrade store scan count overflow"))?;
-            ensure_count_at_most(scanned_entries, MAX_UPGRADE_POINTERS, "upgrade store scan entries")?;
-            let entry = entry.map_err(MoltenError::from)?;
-            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
-                push_bounded(&mut pending_dirs, entry.path(), MAX_UPGRADE_POINTERS, "upgrade store scan dirs")?;
-            } else if fs::read_to_string(entry.path()).map_err(MoltenError::from)?.contains(target_ref) {
-                return Ok(true);
-            }
+    Ok(())
+}
+
+/// Plans and receipts are content-addressed: publication never replaces a member, and an existing member
+/// must already hold the same bytes.
+fn publish_immutable(root: &UpgradeStore, path: &StoreLocator, value: &IoValue) -> Result<()> {
+    let text = to_text(value)?;
+    let store = root.root();
+    if store.entry_kind_optional(path)?.is_none() {
+        match store.publish_new(path, text.as_bytes()) {
+            Ok(()) => return Ok(()),
+            // A concurrent publisher may have created it; the comparison below decides.
+            Err(error) if store.entry_kind_optional(path)?.is_none() => return Err(error),
+            Err(_) => {}
         }
     }
-    Ok(false)
-}
-
-fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root.join("plans")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("receipts")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("names")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("status")).map_err(MoltenError::from)
-}
-
-fn write_preserves(path: &Path, value: &IoValue) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+    if store.read(path)? == text.as_bytes() {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "upgrade store member {} already holds different content",
+            path.display()
+        )))
     }
-    fs::write(path, to_text(value)?).map_err(MoltenError::from)
 }
 
-fn read_preserves(path: &Path) -> Result<IoValue> {
-    parse_text(&fs::read_to_string(path).map_err(MoltenError::from)?)
+/// Name pointers are replaced in one step: across a crash a pointer holds its previous or its new value.
+fn publish_mutable(root: &UpgradeStore, path: &StoreLocator, value: &IoValue) -> Result<()> {
+    root.root().publish(path, to_text(value)?.as_bytes())
 }
 
-fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
+fn read_store_preserves(root: &UpgradeStore, path: &StoreLocator) -> Result<IoValue> {
+    parse_text(&root.root().read_to_string(path)?)
+}
+
+fn store_receipt(root: &UpgradeStore, receipt_value: &IoValue) -> Result<()> {
     let receipt_ref = canonical_hash(receipt_value)?;
-    write_preserves(&receipt_path(root, &receipt_ref)?, receipt_value)
+    publish_immutable(root, &receipt_path(&receipt_ref)?, receipt_value)
 }
 
-fn plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("plans").join(filename_for_ref(plan_ref)?))
+fn plan_path(plan_ref: &str) -> Result<StoreLocator> {
+    StoreLocator::parse(&format!("plans/{}", filename_for_ref(plan_ref)?))
 }
 
-fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("receipts").join(filename_for_ref(receipt_ref)?))
+fn receipt_path(receipt_ref: &str) -> Result<StoreLocator> {
+    StoreLocator::parse(&format!("receipts/{}", filename_for_ref(receipt_ref)?))
 }
 
-fn name_pointer_path(root: &Path, name: &str) -> Result<PathBuf> {
+fn name_pointer_path(name: &str) -> Result<StoreLocator> {
     let key = canonical_hash(&record("upgrade-name-pointer-key", vec![string(name)]))?;
-    Ok(root.join("names").join(filename_for_ref(&key)?))
+    StoreLocator::parse(&format!("names/{}", filename_for_ref(&key)?))
 }
 
-fn status_path(root: &Path, session_id: &str, task_id: &str) -> Result<PathBuf> {
+fn status_path(session_id: &str, task_id: &str) -> Result<StoreLocator> {
     let session = canonical_hash(&record("upgrade-session-status-key", vec![string(session_id)]))?;
     let task = canonical_hash(&record("upgrade-task-status-key", vec![string(task_id)]))?;
-    Ok(root.join("status").join(filename_for_ref(&session)?).join(filename_for_ref(&task)?))
+    StoreLocator::parse(&format!("status/{}/{}", filename_for_ref(&session)?, filename_for_ref(&task)?))
 }
 
 fn filename_for_ref(value_ref: &str) -> Result<String> {

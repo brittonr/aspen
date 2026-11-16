@@ -91,7 +91,8 @@
     }
 
     fn check_upgrade_result(dir: &Path, ledger_root: PathBuf, store: PathBuf, expected_ref: String) {
-        let pointer = molten::upgrades::read_name_pointer(&store, "app/main")
+        let store_root = molten::local_store::UpgradeStoreRoot::open_existing(&store).expect("upgrade store");
+        let pointer = molten::upgrades::read_name_pointer(&store_root, "app/main")
             .expect("read name pointer")
             .expect("name pointer exists");
         assert_eq!(pointer.artifact_ref, expected_ref);

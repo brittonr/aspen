@@ -132,7 +132,7 @@ fn task_refs(task: &UpgradeTask) -> Vec<String> {
     refs.into_iter().collect()
 }
 
-fn first_incomplete_prior_task(root: &Path, plan: &UpgradePlan, task_index: usize) -> Result<Option<String>> {
+fn first_incomplete_prior_task(root: &UpgradeStore, plan: &UpgradePlan, task_index: usize) -> Result<Option<String>> {
     for task in &plan.tasks[..task_index] {
         if read_status_receipt_ref(root, plan, &task.task_id)?.is_none() {
             return Ok(Some(task.task_id.clone()));
@@ -142,7 +142,7 @@ fn first_incomplete_prior_task(root: &Path, plan: &UpgradePlan, task_index: usiz
 }
 
 fn evaluate_cutover_readiness(
-    root: &Path,
+    root: &UpgradeStore,
     plan: &UpgradePlan,
     task: &UpgradeTask,
 ) -> Result<UpgradeCutoverReadinessDecision> {
@@ -200,7 +200,7 @@ fn evaluate_cutover_readiness(
     })
 }
 
-fn task_kind_completed_or_absent(root: &Path, plan: &UpgradePlan, kinds: &[&str]) -> Result<bool> {
+fn task_kind_completed_or_absent(root: &UpgradeStore, plan: &UpgradePlan, kinds: &[&str]) -> Result<bool> {
     let tasks: Vec<_> = plan.tasks.iter().filter(|task| kinds.contains(&task.kind.as_str())).collect();
     if tasks.is_empty() {
         return Ok(true);
@@ -213,7 +213,7 @@ fn task_kind_completed_or_absent(root: &Path, plan: &UpgradePlan, kinds: &[&str]
     Ok(true)
 }
 
-fn task_kind_completed(root: &Path, plan: &UpgradePlan, kind: &str) -> Result<bool> {
+fn task_kind_completed(root: &UpgradeStore, plan: &UpgradePlan, kind: &str) -> Result<bool> {
     let tasks: Vec<_> = plan.tasks.iter().filter(|task| task.kind == kind).collect();
     if tasks.is_empty() {
         return Ok(false);
@@ -274,7 +274,7 @@ fn evaluate_upgrade_no_mutation_boundary(
     })
 }
 
-fn upgrade_state_snapshot_ref(root: &Path) -> Result<String> {
+fn upgrade_state_snapshot_ref(root: &UpgradeStore) -> Result<String> {
     let mut entries = Vec::new();
     for dir_name in UPGRADE_STATE_SNAPSHOT_DIRS {
         collect_upgrade_state_snapshot_entries(root, dir_name, &mut entries)?;

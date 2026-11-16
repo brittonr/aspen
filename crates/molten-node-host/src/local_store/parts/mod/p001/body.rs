@@ -96,6 +96,30 @@ impl StorageRoot {
         file.flush().map_err(MoltenError::from)
     }
 
+    /// Replaces `path` through a synchronized stage in the same directory, so a crash leaves its previous
+    /// or its new content. A failure after the leaf changed is an uncertain external outcome.
+    pub fn publish(&self, path: &Locator, contents: &[u8]) -> Result<()> {
+        crate::node_state::publish_regular_file(
+            &self.dir,
+            path.as_path(),
+            contents,
+            None,
+            crate::node_state::Replacement::Replace,
+        )
+    }
+
+    /// Creates `path` through a synchronized stage without replacement: an existing member is never
+    /// overwritten, and a crash leaves the path absent or whole.
+    pub fn publish_new(&self, path: &Locator, contents: &[u8]) -> Result<()> {
+        crate::node_state::publish_regular_file(
+            &self.dir,
+            path.as_path(),
+            contents,
+            None,
+            crate::node_state::Replacement::NoReplace,
+        )
+    }
+
     pub fn remove_file(&self, path: &Locator) -> Result<()> {
         self.dir.remove_file(path.as_path()).map_err(MoltenError::from)
     }
@@ -126,6 +150,10 @@ impl StorageRoot {
         for entry_result in self.dir.read_dir(path.as_path()).map_err(MoltenError::from)? {
             let entry = entry_result.map_err(MoltenError::from)?;
             let name = entry.file_name().to_string_lossy().into_owned();
+            // A publication stage is never a member; the next publication of its leaf removes it.
+            if crate::node_state::is_publication_stage(&name) {
+                continue;
+            }
             let entry_path = path.join(&name)?;
             let kind = entry_kind(&entry.file_type().map_err(MoltenError::from)?);
             if entries.len() >= MAX_LOCAL_STORE_ENTRIES {
@@ -240,6 +268,7 @@ typed_root!(ExchangeStoreRoot, Kind::Exchange);
 typed_root!(LedgerStoreRoot, Kind::Ledger);
 typed_root!(DeliveryStoreRoot, Kind::Delivery);
 typed_root!(DurableStoreRoot, Kind::Durable);
+typed_root!(UpgradeStoreRoot, Kind::Upgrade);
 
 impl ArtifactStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {

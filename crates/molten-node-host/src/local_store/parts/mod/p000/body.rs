@@ -24,6 +24,7 @@ pub enum Kind {
     Ledger,
     Delivery,
     Durable,
+    Upgrade,
 }
 
 impl Kind {
@@ -37,6 +38,7 @@ impl Kind {
             Self::Ledger => "ledger",
             Self::Delivery => "delivery",
             Self::Durable => "durable",
+            Self::Upgrade => "upgrade",
         }
     }
 }

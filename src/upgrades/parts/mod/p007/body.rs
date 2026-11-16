@@ -1,6 +1,6 @@
 
 fn cutover_denied_for_incomplete_prior(
-    root: &Path,
+    root: &UpgradeStore,
     plan: &UpgradePlan,
     task: &UpgradeTask,
     prior_task_id: &str,
@@ -43,7 +43,7 @@ struct BoundarySinks<'a> {
     checks: &'a mut Vec<UpgradeCheckPair>,
 }
 
-fn append_no_mutation_boundary(root: &Path, operation: &str, decision: &str, before_state_ref: &str, input: BoundarySinks<'_>) -> Result<()> {
+fn append_no_mutation_boundary(root: &UpgradeStore, operation: &str, decision: &str, before_state_ref: &str, input: BoundarySinks<'_>) -> Result<()> {
     let BoundarySinks { refs, diagnostics, checks } = input;
     if decision != "deny" {
         return Ok(());
@@ -74,7 +74,7 @@ fn append_no_mutation_boundary(root: &Path, operation: &str, decision: &str, bef
     Ok(())
 }
 
-fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+fn task_result(root: &UpgradeStore, ledger_root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     match task.kind.as_str() {
         "compatibility-alias" => alias_result(root, plan, task),
         "transcript-rerun" => Ok(transcript_result(plan, task)),
@@ -96,7 +96,7 @@ fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &Upgra
     }
 }
 
-fn alias_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+fn alias_result(root: &UpgradeStore, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let to_ref = task
         .to_ref
         .as_deref()
@@ -104,7 +104,7 @@ fn alias_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<U
     let previous = task.from_ref.as_deref();
     let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
     let pointer = name_pointer_value(&task.subject, "alias", to_ref, previous, &pending_receipt_ref)?;
-    write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+    publish_mutable(root, &name_pointer_path(&task.subject)?, &pointer)?;
     Ok(("pass", Vec::new(), vec![("compatibility-alias", "pass"), ("old-and-new-coexist", "pass")]))
 }
 

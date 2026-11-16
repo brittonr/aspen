@@ -143,7 +143,7 @@ pub fn compute_impact_set(ledger_root: &Path, seed_refs: &[String]) -> Result<Ve
     Ok(impacted.into_iter().collect())
 }
 
-pub fn create_session(root: &Path, plan_value: &IoValue) -> Result<UpgradeSessionCreated> {
+pub fn create_session(root: &UpgradeStore, plan_value: &IoValue) -> Result<UpgradeSessionCreated> {
     ensure_dirs(root)?;
     let plan = parse_upgrade_plan(plan_value)?;
     if plan.policy_refs.is_empty() {
@@ -152,7 +152,7 @@ pub fn create_session(root: &Path, plan_value: &IoValue) -> Result<UpgradeSessio
     if plan.capability_refs.is_empty() {
         return Err(MoltenError::invalid_harness("upgrade session missing capability refs"));
     }
-    write_preserves(&plan_path(root, &plan.plan_ref)?, plan_value)?;
+    publish_immutable(root, &plan_path(&plan.plan_ref)?, plan_value)?;
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
         operation: "session-create",
         decision: "pass",
@@ -175,7 +175,7 @@ pub fn create_session(root: &Path, plan_value: &IoValue) -> Result<UpgradeSessio
     Ok(UpgradeSessionCreated { plan, receipt })
 }
 
-pub fn set_name_pointer(root: &Path, name: &str, artifact_ref: &str) -> Result<UpgradeReceipt> {
+pub fn set_name_pointer(root: &UpgradeStore, name: &str, artifact_ref: &str) -> Result<UpgradeReceipt> {
     ensure_dirs(root)?;
     validate_non_empty(name, "name pointer name")?;
     validate_ref(artifact_ref, "name pointer artifact ref")?;
@@ -192,20 +192,21 @@ pub fn set_name_pointer(root: &Path, name: &str, artifact_ref: &str) -> Result<U
     })?;
     let receipt = parse_upgrade_receipt(&receipt_value)?;
     let pointer = name_pointer_value(name, "name", artifact_ref, previous.as_deref(), &receipt.receipt_ref)?;
-    write_preserves(&name_pointer_path(root, name)?, &pointer)?;
+    // The receipt is published before the pointer it justifies, so a pointer never names a missing receipt.
     store_receipt(root, &receipt_value)?;
+    publish_mutable(root, &name_pointer_path(name)?, &pointer)?;
     Ok(receipt)
 }
 
-pub fn read_name_pointer(root: &Path, name: &str) -> Result<Option<NamePointer>> {
-    let path = name_pointer_path(root, name)?;
-    if !path.exists() {
+pub fn read_name_pointer(root: &UpgradeStore, name: &str) -> Result<Option<NamePointer>> {
+    let path = name_pointer_path(name)?;
+    if root.root().entry_kind_optional(&path)?.is_none() {
         return Ok(None);
     }
-    parse_name_pointer(&read_preserves(&path)?).map(Some)
+    parse_name_pointer(&read_store_preserves(root, &path)?).map(Some)
 }
 
-pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeTaskExecution> {
+pub fn execute_task(root: &UpgradeStore, ledger_root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeTaskExecution> {
     ensure_dirs(root)?;
     let plan = read_plan(root, plan_ref)?;
     let task_index = plan

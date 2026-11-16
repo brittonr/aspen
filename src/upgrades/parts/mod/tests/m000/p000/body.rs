@@ -1,4 +1,5 @@
     type AtomicU64 = std::sync::atomic::AtomicU64;
+    type PathBuf = std::path::PathBuf;
     type Ordering = std::sync::atomic::Ordering;
 
     type TestCase = hegel::TestCase;
@@ -9,7 +10,7 @@
     fn name_move_session_keeps_artifacts_immutable_and_receipted() {
         let root = temp_dir("upgrade-name-move");
         let ledger_root = root.join("ledger");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let old = crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"old\">").expect("old artifact"))
             .expect("import old")
             .artifact_ref;
@@ -87,7 +88,7 @@
     #[test]
     fn rollback_denies_irreversible_storage_migration_claims() {
         let root = temp_dir("upgrade-rollback");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let source_schema = test_ref("schema-v1");
         let recipe = test_ref("migration-recipe");
         let plan_value = upgrade_plan_value(&UpgradePlanInput {
@@ -211,16 +212,13 @@
     #[test]
     fn task_status_requires_matching_receipt_not_checkbox_metadata() {
         let root = temp_dir("upgrade-status-receipt-backed");
-        let store = root.join("upgrades");
+        let store = UpgradeStore::open(&root.join("upgrades")).expect("upgrade store");
         let old = test_ref("old");
         let new = test_ref("new");
         let plan_value = cutover_plan_value(&old, &new, vec![transcript_task_input("transcript", true)]);
         let created = create_session(&store, &plan_value).expect("create session");
-        let fake_status_path = status_path(&store, &created.plan.session_id, "transcript").expect("status path");
-        if let Some(parent) = fake_status_path.parent() {
-            fs::create_dir_all(parent).expect("status parent");
-        }
-        fs::write(fake_status_path, test_ref("fake-checkbox-receipt")).expect("write fake status");
+        let fake_status_path = status_path(&created.plan.session_id, "transcript").expect("status path");
+        store.root().publish(&fake_status_path, test_ref("fake-checkbox-receipt").as_bytes()).expect("write fake status");
         let cutover = execute_task(&store, &root.join("ledger"), &created.plan.plan_ref, "cutover")
             .expect("cutover denied for fake status");
         assert_eq!(cutover.receipt.decision, "deny");
@@ -230,7 +228,7 @@
     #[test]
     fn cutover_denies_failed_replay_and_incomplete_migration_receipts() {
         let root = temp_dir("upgrade-cutover-denials");
-        let failed_store = root.join("failed-replay");
+        let failed_store = UpgradeStore::open(&root.join("failed-replay")).expect("upgrade store");
         let old = test_ref("old");
         let new = test_ref("new");
         let failed_plan = cutover_plan_value(&old, &new, vec![transcript_task_input("transcript", false)]);
@@ -243,7 +241,7 @@
             .expect("cutover denied after failed replay");
         assert_eq!(cutover.receipt.decision, "deny");
 
-        let migration_store = root.join("incomplete-migration");
+        let migration_store = UpgradeStore::open(&root.join("incomplete-migration")).expect("upgrade store");
         let migration_plan = cutover_plan_value(&old, &new, vec![
             transcript_task_input("transcript", true),
             UpgradeTaskInput {
