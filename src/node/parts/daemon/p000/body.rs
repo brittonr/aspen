@@ -4,7 +4,6 @@ type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
-type SocketAddr = std::net::SocketAddr;
 
 trait NodeStateAuthority {
     fn acquire_node_state_root(&self) -> Result<crate::node_state::DirectoryRoot>;

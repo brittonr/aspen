@@ -12,6 +12,7 @@ mod adapters;
 mod canonical;
 mod consumer;
 pub(crate) mod cross_process;
+mod ip_hint;
 mod ports;
 mod shell;
 
@@ -22,6 +23,7 @@ pub use adapters::*;
 pub use canonical::*;
 pub use consumer::*;
 pub use cross_process::*;
+pub use ip_hint::*;
 pub use molten_core::fabric_transport::*;
 pub use ports::*;
 pub use shell::*;

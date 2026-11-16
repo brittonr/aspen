@@ -106,6 +106,9 @@ fn validate_exchange_refs(session_ref: &str, request_ref: &str) -> crate::error:
 fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> crate::error::Result<Vec<EndpointLocator>> {
     let mut locators = Vec::new();
     for address in &endpoint_addr.addrs {
+        if !crate::fabric_transport::is_exportable_transport_hint(address) {
+            continue;
+        }
         let class = match address {
             iroh::TransportAddr::Ip(_) => EndpointLocatorClass::Ip,
             iroh::TransportAddr::Relay(_) => EndpointLocatorClass::Relay,
@@ -144,15 +147,10 @@ fn endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::Endpoint
     for locator in &plan.locators {
         let address = match locator.class {
             EndpointLocatorClass::Ip => {
-                let address = locator
-                    .value
-                    .strip_prefix("ip:")
-                    .ok_or_else(|| {
-                        crate::error::Failure::invalid_harness("cross-process IP locator prefix mismatch")
-                    })?
-                    .parse::<std::net::SocketAddr>()
-                    .map_err(error)?;
-                iroh::TransportAddr::Ip(address)
+                let address = locator.value.strip_prefix("ip:").ok_or_else(|| {
+                    crate::error::Failure::invalid_harness("cross-process IP locator prefix mismatch")
+                })?;
+                iroh::TransportAddr::Ip(crate::fabric_transport::parse_ip_hint(address)?)
             }
             EndpointLocatorClass::Relay => {
                 let relay = locator

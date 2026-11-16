@@ -96,8 +96,13 @@ fn stable_live_endpoint_id(identity: &crate::node_identity::Identity) -> String 
     identity.endpoint_id.clone()
 }
 
+/// Only exchanged-hint-domain IP addresses are exported; relay addresses pass through.
 fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
-    addr.addrs.iter().map(ToString::to_string).collect()
+    addr.addrs
+        .iter()
+        .filter(|address| crate::fabric_transport::is_exportable_transport_hint(address))
+        .map(ToString::to_string)
+        .collect()
 }
 
 fn live_ticket_for_bound_endpoint(
@@ -252,9 +257,7 @@ fn live_ticket_endpoint_addr(ticket: &ControlLiveTicket) -> Result<iroh::Endpoin
     let mut addrs = Vec::with_capacity(ticket.address_refs.len());
     for address_ref in &ticket.address_refs {
         let addr = if let Some(ip_addr) = address_ref.strip_prefix("ip:") {
-            iroh::TransportAddr::Ip(ip_addr.parse::<SocketAddr>().map_err(|error| {
-                MoltenError::invalid_harness(format!("node control live ticket ip address parse failed: {error}"))
-            })?)
+            iroh::TransportAddr::Ip(crate::fabric_transport::parse_ip_hint(ip_addr)?)
         } else if let Some(relay_url) = address_ref.strip_prefix("relay:") {
             iroh::TransportAddr::Relay(relay_url.parse::<iroh::RelayUrl>().map_err(|error| {
                 MoltenError::invalid_harness(format!("node control live ticket relay address parse failed: {error}"))
