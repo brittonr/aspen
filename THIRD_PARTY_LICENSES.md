@@ -3,9 +3,10 @@
 The root `LICENSE` applies only to repository-owned Aspen source. Dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references remain under their original terms.
 
 Historical sparse `vendor/` snapshots record upstream `Cargo.toml.orig` material
-rather than changing its license. They are not tracked in the current Git tree;
-retain them only as historical local evidence and do not imply they ship with
-the current source. Current declared families are:
+rather than changing its license. Except for the exact snapshots selected by
+`vendor/sources.ncl` (currently `vendor/vm-cohort/`), they are not tracked in the
+current Git tree; retain them only as historical local evidence and do not imply
+they ship with the current source. Current declared families are:
 
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
@@ -18,6 +19,8 @@ the current source. Current declared families are:
 | Cargo packages `release-channel-index` and `release-channel-witness` from `OnixResearch/release-channel` revision `fa389e19d5c9bd84cd75df914cc5418c70d92bfb`, the governed independent world-head witness provider contract | MIT (workspace `license = "MIT"` and root `LICENSE`, copyright Release Channel contributors) |
 | `.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake/immutable-producer-snapshot.zip`, unchanged actual publication from Mantle's fixture and pipeline at revision `cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0` | AGPL-3.0-or-later |
 | Cargo packages `flux-profiler`, `flux-profiler-macros`, `flux-communication`, `flux-timing`, `flux-utils`, `type-hash`, and `type-hash-derive` from `gattaca-com/flux` revision `2a1916465ae6649aebef3758233cfea98e5d33db` | Apache-2.0 AND MIT |
+| `vendor/vm-cohort/`, an owner-approved exact source-only snapshot of VM Cohort (`rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3`) revision `31f1696ba9391bfda8577a58af84f72361d5573e`: the `vm-cohort-core` crate, the workspace manifests, `LICENSE`, `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`, `README.md`, and one archived ownership record, with per-file BLAKE3 and upstream Git blob identities in `vendor/sources.lock.json`. `crates/vm-cohort-core/Cargo.toml` is Aspen's inheritance-resolved manifest; the unchanged upstream manifest is `Cargo.toml.orig` | MIT OR Apache-2.0; the upstream `LICENSE`, `LICENSE-MIT`, `LICENSE-APACHE`, and `NOTICE` files are retained in the snapshot |
+| `tests/fixtures/executable-extent/executable-extent-bundle.valid.json` and `tests/fixtures/executable-extent/executable-extent-producer-receipt.valid.json`, copied unchanged from `schemas/machine-contracts/fixtures/` at Mantle (`rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb`) revision `2c636b1b25353a1b0befa5af48dc68615cd686dd`; upstream Git blob identities are recorded in `vendor/sources.lock.json` | AGPL-3.0-or-later |
 | `vendor/datafusion-*` | Apache-2.0; ASF source headers remain authoritative |
 | `vendor/iroh*`, `vendor/portmapper-*`, `vendor/postcard`, `vendor/genawaiter-*` | MIT OR Apache-2.0 (legacy `MIT/Apache-2.0` spelling is equivalent package metadata) |
 | `vendor/madsim-*`, `vendor/swarm-discovery` | Apache-2.0 |

@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/dev/shm/aspen-open-issues-20261113",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115",
   "roots": [
-    "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "20652e5d429df96913852800ebf8630bd6abc623db82f1cb3228d4bec1544d9c",
-  "inputsHash": "9d234529460d8c6f8a96a936aff993006114ee1ed57e22e9c970559b11e505b9",
+  "cargoLockHash": "07d401a75af1f76014a4570fa9d0349ce76d5ff64e9acbd9bf020f91d33fe5fb",
+  "inputsHash": "54b5424198812b4c5810740876e339b7a9a0e9a0093c89615caa0c8e83d0d9ca",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -790,7 +790,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-open-issues-20261113/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-public-build-20261115/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

@@ -1899,23 +1899,6 @@
         "type": "github"
       }
     },
-    "mantle-executable-extent-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1787765668,
-        "narHash": "sha256-4gM+Vv8h05EaRm9jp4ql5NxnMoa7981MNG3gc00lvIA=",
-        "ref": "refs/heads/main",
-        "rev": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
-        "revCount": 2616,
-        "type": "git",
-        "url": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb"
-      },
-      "original": {
-        "rev": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
-        "type": "git",
-        "url": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb"
-      }
-    },
     "mantle-wasm-verifier-src": {
       "flake": false,
       "locked": {
@@ -2664,7 +2647,6 @@
         "hardened-wasmtime-src": "hardened-wasmtime-src",
         "hegel-src": "hegel-src",
         "kamacite-src": "kamacite-src",
-        "mantle-executable-extent-src": "mantle-executable-extent-src",
         "mantle-wasm-verifier-src": "mantle-wasm-verifier-src",
         "nickel-cli": "nickel-cli",
         "nixpkgs": "nixpkgs_9",
@@ -2681,7 +2663,6 @@
         "unit2nix": "unit2nix",
         "valence-src": "valence-src",
         "verified-node-replication-octet": "verified-node-replication-octet",
-        "vm-cohort-src": "vm-cohort-src",
         "wrpc-src": "wrpc-src"
       }
     },
@@ -3944,23 +3925,6 @@
         "repo": "octet",
         "rev": "fc38f59330b626961d166febfdf1a5aa6575460f",
         "type": "github"
-      }
-    },
-    "vm-cohort-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1787851441,
-        "narHash": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
-        "ref": "refs/heads/main",
-        "rev": "31f1696ba9391bfda8577a58af84f72361d5573e",
-        "revCount": 8,
-        "type": "git",
-        "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
-      },
-      "original": {
-        "rev": "31f1696ba9391bfda8577a58af84f72361d5573e",
-        "type": "git",
-        "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
       }
     },
     "wrappers": {

@@ -1,6 +1,8 @@
 unstable_features = true
 edition = "2024"
 max_width = 120
+# Vendored snapshots stay byte-identical to their recorded upstream files.
+ignore = ["vendor"]
 
 reorder_imports = true
 imports_granularity = "Item"

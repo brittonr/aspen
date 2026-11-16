@@ -1,0 +1,46 @@
+{
+  "schema": "molten.anonymous-tool-transport-observation.v1",
+  "observed_on": "2026-11-15",
+  "source_tree": "cairn/public-build-20261115 working tree based on 1e9c36edc437fdf4118120776d94f71570190511 with vendored VM Cohort and both git+rad inputs removed",
+  "producer": {
+    "name": "octet-toolchain",
+    "revision": "3f7abb641ee604f54629da415bc7686f89662065",
+    "ssh_cargo_dependency": {
+      "repository": "ssh://git@github.com/OnixResearch/bounded-exec.git",
+      "revision": "44eb74eb639194665ee820562d5b2ce2c3ff6a94",
+      "github_visibility": "public"
+    }
+  },
+  "environment": "env -i with a fresh empty HOME (no SSH keys, agent, Nix fetcher cache or Git configuration), GIT_SSH_COMMAND=/bin/false, GIT_CONFIG_NOSYSTEM=1, GIT_TERMINAL_PROMPT=0, NIX_REMOTE=daemon; local builders only; eval-cache disabled",
+  "command": "nix eval --raw .#devShells.x86_64-linux.default.drvPath",
+  "cases": [
+    {
+      "name": "without-rewrite",
+      "exit_code": 1,
+      "key_diagnostics": [
+        "warning: could not read HEAD ref from repo at 'ssh://git@github.com/OnixResearch/bounded-exec.git', using 'master'",
+        "… while evaluating derivation 'cargo-git-ssh-git-github.com-OnixResearch-bounded-exec.git-44eb74eb639194665ee820562d5b2ce2c3ff6a94'",
+        "error: Failed to fetch git repository 'ssh://git@github.com/OnixResearch/bounded-exec.git'"
+      ]
+    },
+    {
+      "name": "with-rewrite",
+      "extra_environment": {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "url.https://github.com/.insteadOf",
+        "GIT_CONFIG_VALUE_0": "ssh://git@github.com/"
+      },
+      "exit_code": 0,
+      "https_fetches": [
+        "From https://github.com/OnixResearch/bounded-exec",
+        "From https://github.com/trailofbits/dylint"
+      ],
+      "result_drv": "/nix/store/brkk7r7zsfp01ka8d4vlxsij48gflhc2-nix-shell.drv"
+    }
+  ],
+  "non_claims": [
+    "Evaluation-level source acquisition only; the existing local store already held build outputs, so this is not a cold build.",
+    "A hosted clean-runner run is required for cold-build evidence.",
+    "The rewrite changes transport only: producer revision, source bytes and lint behavior are unchanged."
+  ]
+}

@@ -6,10 +6,10 @@ The optional Cargo feature is `executable-extents`. Default builds keep this pil
 
 ## Published inputs
 
-The consumer pins these private Radicle sources:
+The consumer pins these Radicle-identified sources:
 
-- executable-extent: `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB`
-- Mantle producer: `rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb`
+- executable-extent: `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB`, fetched through its seed's anonymous HTTPS endpoint
+- Mantle producer: `rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb`; Aspen's copies of its bundle and detached receipt fixtures are bound to the exact producer files by upstream Git blob identity in [`vendor/sources.lock.json`](../vendor/sources.lock.json), so builds need no producer checkout
 
 The archived executable-extent revision is `025d9636f0161777710dac37b3c210ca0ad9483f`.
 

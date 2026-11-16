@@ -1,0 +1,42 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/vm-cohort-core",
+  "crates/vm-cohort-kvm",
+  "crates/vm-cohort-conformance",
+  "crates/vm-cohort-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
+publish = false
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+
+[workspace.dependencies]
+blake3 = { version = "1.8.2", default-features = false }
+clap = { version = "4.5", features = ["derive"] }
+kvm-bindings = "0.10"
+kvm-ioctls = "0.19"
+libc = "0.2"
+memfd = "0.6"
+memmap2 = "0.9"
+serde = { version = "1", default-features = false, features = ["alloc", "derive", "rc"] }
+serde_json = "1"
+vm-cohort-core = { path = "crates/vm-cohort-core" }
+vm-cohort-kvm = { path = "crates/vm-cohort-kvm" }
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"

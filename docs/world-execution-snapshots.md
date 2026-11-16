@@ -8,7 +8,7 @@ Aspen owns world meaning, logical roots, restore ordering, current admission, ac
 
 ChaosControl owns exact machine-snapshot meaning, completeness, compatibility, and machine reconstruction for an admitted opaque cohort.
 
-VM Cohort owns the pinned copy-on-write planning contract at `31f1696ba9391bfda8577a58af84f72361d5573e`. Aspen retains workload, authority, scheduling, retention, and release decisions.
+VM Cohort owns the pinned copy-on-write planning contract at `31f1696ba9391bfda8577a58af84f72361d5573e`; the exact selected source ships in [`vendor/vm-cohort/`](../vendor/vm-cohort/). Aspen retains workload, authority, scheduling, retention, and release decisions.
 
 No snapshot profile owns current authority or mutable branch heads.
 

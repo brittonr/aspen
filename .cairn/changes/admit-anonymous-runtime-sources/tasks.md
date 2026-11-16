@@ -9,6 +9,9 @@
 - [ ] [serial] Acquire every current required default Git cohort and primary default Nix source anonymously; enumerate the complete fixed Nix input inventory, migrate its verified nested Artifact SSH source without changing the revision/NAR, and retain the two actual unavailable optional-source outcomes without inferring a clean full build. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Run focused positive/negative source checks and available candidate build rails, documenting exact remaining public-build blockers before review/sync/archive. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Isolate the existing storage CI command set from unrelated producer tooling, preserve all dependency/test/receipt gates, and retain an actual hosted outcome with its artifacts without claiming a clean default/full public build. r[molten.project.reproducible_dependencies.exact_pins]
+- [x] [serial] Ship the owner-approved exact VM Cohort snapshot and bind the Mantle producer fixtures by upstream blob identity; remove both `git+rad` inputs, the VM `rad://` Cargo source, its crate hash and its Git-transport profile row through their owning generators; add the `vendored-sources` check with positive and negative tests. r[molten.project.reproducible_dependencies.exact_pins]
+- [x] [serial] Fetch the pinned Octet producer's public SSH-named dependency anonymously through an environment-scoped HTTPS rewrite in the documented setup and hosted workflow, retaining fresh-home negative and positive observations. r[molten.project.reproducible_dependencies.exact_pins]
+- [ ] [serial] Retain passing cold hosted `Reproducible dependencies` and `Object storage live` runs for the published source before archiving. r[molten.project.reproducible_dependencies.exact_pins]
 
 ## Parent observation (2026-11-13)
 

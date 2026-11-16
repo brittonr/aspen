@@ -20,11 +20,18 @@ Cargo.lock.bak
 # Generated/local artifacts
 tests/*.tmp
 vendor/
+# Historical local vendor snapshots stay untracked; only reviewed exact snapshots ship.
+!/vendor/
+/vendor/*
+!/vendor/sources.ncl
+!/vendor/sources.lock.json
+!/vendor/vm-cohort/
 .agent/
 .claude/
 .dogfood-runs/
 .pre-commit-cache/
 mutants.out/
 *.orig
+!/vendor/vm-cohort/**/Cargo.toml.orig
 crates/**/tests/ui/**/Cargo.lock
 docs/simulations/*.json

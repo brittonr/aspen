@@ -58,10 +58,6 @@
       url = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85";
       flake = false;
     };
-    vm-cohort-src = {
-      url = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e";
-      flake = false;
-    };
     executable-extent-src = {
       url = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
@@ -70,10 +66,6 @@
       url = "github:OnixResearch/octet/cf04e894e53eb0947230118a086ef6066ddba38c";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.cairn.inputs.artifact.url = "git+https://github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be";
-    };
-    mantle-executable-extent-src = {
-      url = "git+rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb?rev=2c636b1b25353a1b0befa5af48dc68615cd686dd";
-      flake = false;
     };
     kamacite-src = {
       url = "github:OnixResearch/kamacite/d76fe4abe543724d8fc0ac4b362187caf2e27622";
@@ -156,10 +148,8 @@
       artifact-src,
       choregraph-src,
       chaoscontrol-src,
-      vm-cohort-src,
       executable-extent-src,
       executable-extent-octet,
-      mantle-executable-extent-src,
       kamacite-src,
       cairn-src,
       hegel-src,
@@ -424,15 +414,23 @@
         );
         vmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e";
         vmCohortRepository = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3";
-        vmCohortDependency = artifactRootDependencies."vm-cohort-core";
-        vmCohortExpectedLockSource = "git+${vmCohortRepository}?rev=${vmCohortRevision}#${vmCohortRevision}";
-        vmCohortLockPackages = builtins.filter (
-          package: (package.source or "") == vmCohortExpectedLockSource
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
-        vmCohortCoreManifest = builtins.fromTOML (
-          builtins.readFile (vm-cohort-src + "/crates/vm-cohort-core/Cargo.toml")
+        # Owner-approved exact source snapshot; vendor/sources.lock.json binds every file to the revision.
+        vendoredSources = builtins.fromJSON (builtins.readFile ./vendor/sources.lock.json);
+        vmCohortVendored = builtins.head (
+          builtins.filter (source: source.name == "vm-cohort") vendoredSources.sources
         );
-        vmCohortWorkspaceManifest = builtins.fromTOML (builtins.readFile (vm-cohort-src + "/Cargo.toml"));
+        vmCohortSource = ./vendor/vm-cohort;
+        vmCohortDependency = artifactRootDependencies."vm-cohort-core";
+        vmCohortLockPackages = builtins.filter (package: package.name == "vm-cohort-core") (
+          builtins.fromTOML (builtins.readFile ./Cargo.lock)
+        ).package;
+        vmCohortCoreManifest = builtins.fromTOML (
+          builtins.readFile (vmCohortSource + "/crates/vm-cohort-core/Cargo.toml")
+        );
+        vmCohortOriginalCoreManifest = builtins.fromTOML (
+          builtins.readFile (vmCohortSource + "/crates/vm-cohort-core/Cargo.toml.orig")
+        );
+        vmCohortWorkspaceManifest = builtins.fromTOML (builtins.readFile (vmCohortSource + "/Cargo.toml"));
         worldSnapshotSources =
           assert pkgs.lib.assertMsg (
             chaosControlDependency.git == chaosControlRepository
@@ -443,20 +441,21 @@
             && (builtins.head chaosControlLockPackages).name == "chaoscontrol-snapshot-descriptor"
             && chaosControlDescriptorManifest.package.name == "chaoscontrol-snapshot-descriptor"
             && chaosControlDescriptorManifest.package.license == "AGPL-3.0-or-later"
-            && vmCohortDependency.git == vmCohortRepository
-            && vmCohortDependency.rev == vmCohortRevision
+            && vmCohortDependency.path == "vendor/vm-cohort/crates/vm-cohort-core"
             && vmCohortDependency.version == "0.1.0"
             && vmCohortDependency.optional
-            && vm-cohort-src.rev == vmCohortRevision
+            && vmCohortVendored.repository == vmCohortRepository
+            && vmCohortVendored.revision == vmCohortRevision
             && builtins.length vmCohortLockPackages == 1
-            && (builtins.head vmCohortLockPackages).name == "vm-cohort-core"
+            && !((builtins.head vmCohortLockPackages) ? source)
             && vmCohortCoreManifest.package.name == "vm-cohort-core"
-            && vmCohortCoreManifest.package.license.workspace
+            && vmCohortCoreManifest.package.license == "MIT OR Apache-2.0"
+            && vmCohortOriginalCoreManifest.package.license.workspace
             && vmCohortWorkspaceManifest.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten world-snapshot ChaosControl and VM Cohort source identity drifted";
           {
             chaoscontrol = chaoscontrol-src;
-            vmCohort = vm-cohort-src;
+            vmCohort = vmCohortSource;
           };
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
         executableExtentRepository = "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git";
@@ -503,12 +502,37 @@
             && executableExtentWorkspace.workspace.dependencies.blake3.version == ">=1.8.2, <2"
           ) "Molten executable-extent Cargo/Nix source identity, package set, or hash cohort drifted";
           executable-extent-src;
+        mantleExecutableExtentRepository = "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb";
         mantleExecutableExtentRevision = "2c636b1b25353a1b0befa5af48dc68615cd686dd";
-        mantleExecutableExtentSource =
+        # Aspen's copies of the producer fixtures are bound to Mantle's exact upstream blobs.
+        mantleExecutableExtentFixtureBindings =
+          let
+            bindings = builtins.filter (
+              binding: binding.repository == mantleExecutableExtentRepository
+            ) vendoredSources.fixture_bindings;
+          in
           assert pkgs.lib.assertMsg (
-            mantle-executable-extent-src.rev == mantleExecutableExtentRevision
-          ) "Molten Mantle producer Nix source identity drifted";
-          mantle-executable-extent-src;
+            builtins.length bindings == 2
+            && builtins.all (binding: binding.revision == mantleExecutableExtentRevision) bindings
+          ) "Molten Mantle producer fixture identity drifted";
+          bindings;
+        vendoredSourcesCheck =
+          pkgs.runCommand "molten-vendored-sources"
+            {
+              src = ./.;
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.python3
+                nickelPackage
+              ];
+            }
+            ''
+              set -eu
+              cd "$src"
+              python3 scripts/test_vendored_sources.py
+              python3 scripts/vendored-sources.py check --root .
+              touch "$out"
+            '';
         kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
         kamaciteRepository = "https://github.com/OnixResearch/kamacite.git";
         kamaciteCargoDependencies = [
@@ -1025,7 +1049,7 @@
             "$out/vendor/chaoscontrol-snapshot-descriptor/Cargo.toml"
           cp -R ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/. \
             "$out/vendor/chaoscontrol-snapshot-descriptor/src/"
-          cp ${./checks/world-snapshot-octet/vm-cohort-core.Cargo.toml} \
+          cp ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/Cargo.toml \
             "$out/vendor/vm-cohort-core/Cargo.toml"
           cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
             "$out/vendor/vm-cohort-core/src/"
@@ -2664,7 +2688,7 @@
             clippy = ws.clippy.allWorkspaceMembers;
             executable-extent-consumer =
               assert executableExtentSource != null;
-              assert mantleExecutableExtentSource != null;
+              assert mantleExecutableExtentFixtureBindings != [ ];
               pkgs.runCommand "molten-executable-extent-consumer"
                 {
                   src = ./.;
@@ -2678,12 +2702,8 @@
                   set -eu
                   cd "$src"
 
-                  cmp \
-                    tests/fixtures/executable-extent/executable-extent-bundle.valid.json \
-                    ${mantleExecutableExtentSource}/schemas/machine-contracts/fixtures/executable-extent-bundle.valid.json
-                  cmp \
-                    tests/fixtures/executable-extent/executable-extent-producer-receipt.valid.json \
-                    ${mantleExecutableExtentSource}/schemas/machine-contracts/fixtures/executable-extent-producer-receipt.valid.json
+                  # The producer fixtures' exact Mantle blob identities are verified here.
+                  test -e ${vendoredSourcesCheck}
 
                   # Product source identities are admitted from parsed manifests and lockfiles above.
                   # The focused Octet snapshot retains its own vendored source carrier.
@@ -2725,6 +2745,7 @@
                     > /dev/null
                   touch "$out"
                 '';
+            vendored-sources = vendoredSourcesCheck;
             executable-extent-octet-deny-all =
               assert executableExtentOctetAdmitted;
               (executable-extent-octet.lib.mkConsumerCheck {

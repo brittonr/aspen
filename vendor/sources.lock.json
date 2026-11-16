@@ -1,0 +1,249 @@
+{
+  "fixture_bindings": [
+    {
+      "blake3": "5e86516b5d0a6059f8d3e28eb044e28dc0fbe60bc62d8343f2e9640e327a5920",
+      "bytes": 1625,
+      "git_blob": "1b5e7a89ed50cb6521a1ce698b1e95b61cad7baa",
+      "local_path": "tests/fixtures/executable-extent/executable-extent-bundle.valid.json",
+      "repository": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb",
+      "revision": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
+      "upstream_path": "schemas/machine-contracts/fixtures/executable-extent-bundle.valid.json"
+    },
+    {
+      "blake3": "dd0d2351627ee5dc698def806ab6cc22c5261cd67528ea6b7150e1418594997c",
+      "bytes": 1789,
+      "git_blob": "3174ed64f0f6824b2a12401ae1779743204fb5de",
+      "local_path": "tests/fixtures/executable-extent/executable-extent-producer-receipt.valid.json",
+      "repository": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb",
+      "revision": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
+      "upstream_path": "schemas/machine-contracts/fixtures/executable-extent-producer-receipt.valid.json"
+    }
+  ],
+  "schema": "molten.vendored-sources-lock.v1",
+  "sources": [
+    {
+      "destination": "vendor/vm-cohort",
+      "files": [
+        {
+          "blake3": "43277484d2d762517ef126c05d3fb2013e318ca8ece3664188d33f6597e535ae",
+          "bytes": 4859,
+          "executable": false,
+          "git_blob": "e068447ef4baafe44ed4800b5b047b6875fdbdfd",
+          "path": ".cairn/archive/1970-01-01-build-vm-cohort/tasks.md",
+          "role": "upstream",
+          "upstream_path": ".cairn/archive/1970-01-01-build-vm-cohort/tasks.md"
+        },
+        {
+          "blake3": "7c304f1fd062b80532f762848fdad90254b09793038deafb16d2761156729d67",
+          "bytes": 11134,
+          "executable": false,
+          "git_blob": "4d67b427cca842acce30ed2afcc7f17b058da8fd",
+          "path": "Cargo.lock",
+          "role": "upstream",
+          "upstream_path": "Cargo.lock"
+        },
+        {
+          "blake3": "7a31d88e9fc1b795f87e24b8e4046380bcccace6de3bb3d59fb52471c19b3b3b",
+          "bytes": 1083,
+          "executable": false,
+          "git_blob": "0ba41c8ed8800e1ac4228717e7c44f7187ecc5c9",
+          "path": "Cargo.toml",
+          "role": "upstream",
+          "upstream_path": "Cargo.toml"
+        },
+        {
+          "blake3": "7d9de1981c9bfba7919625c3c5716cb37db08ceda1b344df84253439de45c204",
+          "bytes": 124,
+          "executable": false,
+          "git_blob": "ca5d756f16d24c203c64f4cadeb6b3a63549a79b",
+          "path": "LICENSE",
+          "role": "upstream",
+          "upstream_path": "LICENSE"
+        },
+        {
+          "blake3": "83cb3a2fcf829b6138e095b083016c34ddcdfa07b68d38782722c14fcf85ace6",
+          "bytes": 11358,
+          "executable": false,
+          "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "path": "LICENSE-APACHE",
+          "role": "upstream",
+          "upstream_path": "LICENSE-APACHE"
+        },
+        {
+          "blake3": "4832be0355265c184eb7a2fc7f24e4d22d353bca2a83f630416ea9c54f994262",
+          "bytes": 1069,
+          "executable": false,
+          "git_blob": "ba7fd84f18ad3fbaf47686dfdfe40a248737aefa",
+          "path": "LICENSE-MIT",
+          "role": "upstream",
+          "upstream_path": "LICENSE-MIT"
+        },
+        {
+          "blake3": "234dfdef9475ca79af01cb073923f4e6b7e16bd55600043358ee9a761f683f2f",
+          "bytes": 733,
+          "executable": false,
+          "git_blob": "14a951c91f57a811f7c59b1510731f63fc8f7dc2",
+          "path": "NOTICE",
+          "role": "upstream",
+          "upstream_path": "NOTICE"
+        },
+        {
+          "blake3": "f14b0fcc15ba4893b295e4d6f0ba8e1af9a3070a7247448a766565e53a772be0",
+          "bytes": 2969,
+          "executable": false,
+          "git_blob": "605b76c4a1b70da81d1d636b4a5a4253ccce64fc",
+          "path": "README.md",
+          "role": "upstream",
+          "upstream_path": "README.md"
+        },
+        {
+          "blake3": "5ac15aa439794c7b6f52b77095c913e9a41d41fc3ca00b5c069df8794d6b7263",
+          "bytes": 619,
+          "executable": false,
+          "git_blob": "578663ec2a244901bbc5f00369b08197b61fdb1e",
+          "path": "crates/vm-cohort-core/Cargo.toml",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "6f5f5f2f9a2a2608bf8d25b66f670b5e45cc21427316e2a48b1e4ca193394db0",
+          "bytes": 357,
+          "executable": false,
+          "git_blob": "a94c35ba607d34d236110c6842f40dc0a7e7e054",
+          "path": "crates/vm-cohort-core/Cargo.toml.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/vm-cohort-core/Cargo.toml"
+        },
+        {
+          "blake3": "f204bb7356f3f47df311e09e1d3158137b5759176805ffc05b5c6f98c64c95d9",
+          "bytes": 3414,
+          "executable": false,
+          "git_blob": "f4a1bb99e668254ef85935c6194d71530d298641",
+          "path": "crates/vm-cohort-core/src/checkpoint.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/checkpoint.rs"
+        },
+        {
+          "blake3": "79990975c4042db219c7dd04220ee0c3395b2a2db09dac0a7477c80ff3432daa",
+          "bytes": 8627,
+          "executable": false,
+          "git_blob": "f22404b2b053117463c6f5c365901c5c22188108",
+          "path": "crates/vm-cohort-core/src/cohort.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/cohort.rs"
+        },
+        {
+          "blake3": "300b97f73e152232d3587ceb1420dd2e7646d535d22f11767488f58c3ed13735",
+          "bytes": 2147,
+          "executable": false,
+          "git_blob": "df13961adafd5bc6514b26e6dff2fcb0f11e0aa5",
+          "path": "crates/vm-cohort-core/src/cohort/retry.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/cohort/retry.rs"
+        },
+        {
+          "blake3": "be7ca0485e5245deb950761207e4fd585268ec55f214958e7ef484541a3361c6",
+          "bytes": 5625,
+          "executable": false,
+          "git_blob": "c8a75644da61834fca0c075e766c99d4846b22c4",
+          "path": "crates/vm-cohort-core/src/identity.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/identity.rs"
+        },
+        {
+          "blake3": "10cbd37665aa1b3fbfda630db46020e55c131224229507cf505deee7edd2db8a",
+          "bytes": 953,
+          "executable": false,
+          "git_blob": "da74b86ce13ed1e7b1e20d2eed15fc44af11edda",
+          "path": "crates/vm-cohort-core/src/lib.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/lib.rs"
+        },
+        {
+          "blake3": "032b9db616a8d19c5139388ad9d3dd685e4190bf6dcccee6ff80ff449912827c",
+          "bytes": 9354,
+          "executable": false,
+          "git_blob": "c1b452eab552112b6da3659c97ccd014fd452191",
+          "path": "crates/vm-cohort-core/src/lifecycle.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/lifecycle.rs"
+        },
+        {
+          "blake3": "fbd5636baf6963e6d26eb9e9c88001424b06e0e42702c6659935caa6170431e6",
+          "bytes": 4751,
+          "executable": false,
+          "git_blob": "9ee5e4c22c23db11b9c8da34784823af6c63060c",
+          "path": "crates/vm-cohort-core/src/lifecycle/model.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/lifecycle/model.rs"
+        },
+        {
+          "blake3": "a9272695fad2e36388e11f1f911905c21abbbb8ac49f3d0b64ebc5adb10d36a8",
+          "bytes": 7208,
+          "executable": false,
+          "git_blob": "c8b594035c1feca4cf7d23c578bb3fa95197bae7",
+          "path": "crates/vm-cohort-core/src/model.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/model.rs"
+        },
+        {
+          "blake3": "d8b151e750e92b868923d459db1027901560a24900e8f3682029d2fc07c97d73",
+          "bytes": 3896,
+          "executable": false,
+          "git_blob": "c135630709be293611e84a5f4c003f63629114b5",
+          "path": "crates/vm-cohort-core/src/model/reference.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/model/reference.rs"
+        },
+        {
+          "blake3": "d9f79ddc7e6a348ba94da325c2e27b0484386663427255e34b59992d9a9390eb",
+          "bytes": 5717,
+          "executable": false,
+          "git_blob": "8bab242126333b057f41342639b331c609ef4f76",
+          "path": "crates/vm-cohort-core/src/receipt.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/receipt.rs"
+        },
+        {
+          "blake3": "83bc4a8280f56078fc4f00de3af11d34deef977f2346e05581505cedce81df2a",
+          "bytes": 2929,
+          "executable": false,
+          "git_blob": "d5be8db1cb74b160ece5563c651e97ab390b57ce",
+          "path": "crates/vm-cohort-core/src/tests/checkpoint.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/tests/checkpoint.rs"
+        },
+        {
+          "blake3": "37517061ad081fbe77817bfa9ceb9bf07a6c06638ea4a2b9f3462015c4495b4a",
+          "bytes": 5162,
+          "executable": false,
+          "git_blob": "b63c522fc688fe4d1a144c9f1647f22a58eb0c0c",
+          "path": "crates/vm-cohort-core/src/tests/lifecycle.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/tests/lifecycle.rs"
+        },
+        {
+          "blake3": "372125a2019639fde3915b715f99770321d27924fc8deeb6d63ec013b50915ee",
+          "bytes": 44,
+          "executable": false,
+          "git_blob": "e0523553da6bc88f415cf2f48a6d6bc0a4d52d3d",
+          "path": "crates/vm-cohort-core/src/tests/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/tests/mod.rs"
+        },
+        {
+          "blake3": "f95948175c76156222b7d88b86b627eebb34842a28e690f848c494918bf98353",
+          "bytes": 2782,
+          "executable": false,
+          "git_blob": "88bb86356a5e357d2f7de17756a87d6909c9f147",
+          "path": "crates/vm-cohort-core/src/tests/support.rs",
+          "role": "upstream",
+          "upstream_path": "crates/vm-cohort-core/src/tests/support.rs"
+        }
+      ],
+      "name": "vm-cohort",
+      "repository": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3",
+      "revision": "31f1696ba9391bfda8577a58af84f72361d5573e"
+    }
+  ]
+}

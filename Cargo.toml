@@ -1,5 +1,6 @@
 [workspace]
 members = [".", "crates/molten-core", "crates/molten-node-host", "crates/molten-release-policy"]
+exclude = ["vendor"]
 resolver = "3"
 
 [workspace.package]
@@ -149,7 +150,7 @@ toml = "0.9"
 tracing = "0.1"
 trellis = { git = "https://github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.2.0", package = "verified-logic" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
-vm-cohort-core = { git = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3", rev = "31f1696ba9391bfda8577a58af84f72361d5573e", version = "0.1.0", optional = true }
+vm-cohort-core = { path = "vendor/vm-cohort/crates/vm-cohort-core", version = "0.1.0", optional = true }
 wasmparser = "0.240"
 wasmtime = "49.0.5"
 wasmtime-wasi = "49"

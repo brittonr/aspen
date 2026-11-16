@@ -26,15 +26,20 @@ The [architecture](docs/architecture.md) explains these boundaries; each subsyst
 
 The first example runs a local system-extension lifecycle and writes inspectable evidence. It requires a development environment that can resolve the repository's pinned dependencies.
 
-**Prerequisites:** Git, an x86_64 Linux development host, Nix with flakes enabled, and access to the exact source inputs selected by the lockfiles. The Nix shell supplies the Rust toolchain and development tools.
+**Prerequisites:** Git, an x86_64 Linux development host, and Nix with flakes enabled. No credentials, SSH keys, or Radicle node are needed: sources are fetched anonymously over HTTPS, and two exact sources without a public route ship as reviewed snapshots under `vendor/`. The Nix shell supplies the Rust toolchain and development tools.
 
-**Current setup limitation:** parts of the dependency graph still use Radicle transport (`rad://` and `git+rad://`). A standard anonymous clone and Nix installation are not yet a qualified setup path. Review [public-build work](https://github.com/brittonr/aspen/issues/23) and [environment troubleshooting](docs/handbook/contributing/diagnosing-development-environment-failures.md#shell-initialization-rejects-an-input-transport) before building. Preserve fetch errors rather than changing pinned inputs to get past them.
+One pinned development tool, the Octet source-gate checker, still names a public GitHub dependency by its SSH URL. In the shell you build from, export this rewrite so Git fetches the same commits over anonymous HTTPS. It changes no global configuration and does not affect `git@github.com:` remotes:
 
 ```sh
+export GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf \
+  GIT_CONFIG_VALUE_0=ssh://git@github.com/
 git clone --branch molten https://github.com/brittonr/aspen.git
 cd aspen
 nix develop
 ```
+
+The hosted [Reproducible dependencies](.github/workflows/reproducible-dependencies.yml) workflow exercises this path on a clean runner; [public-build work](https://github.com/brittonr/aspen/issues/23) and the [dependency policy](docs/reproducible-dependencies.md) record its evidence. If a fetch still fails, see [environment troubleshooting](docs/handbook/contributing/diagnosing-development-environment-failures.md#cargo-cannot-fetch-a-pinned-git-dependency) and preserve the error rather than changing pinned inputs.
 
 From the repository root inside that shell:
 

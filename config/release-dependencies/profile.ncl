@@ -8,8 +8,6 @@ let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
 let ChoregraphSource = "https://github.com/OnixResearch/choregraph.git" in
 let ChaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85" in
 let ChaosControlSource = "https://github.com/brittonr/chaoscontrol.git" in
-let VmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e" in
-let VmCohortSource = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let ExecutableExtentSource = "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
@@ -281,17 +279,6 @@ in
       nix_input = "chaoscontrol-src",
       transport_policy = "https",
       disposition = "runtime",
-    },
-    {
-      manifest_dependency = "vm-cohort-core",
-      package_name = "vm-cohort-core",
-      package_version = "0.1.0",
-      source_kind = "git",
-      source_coordinate = VmCohortSource,
-      immutable_revision = VmCohortRevision,
-      nix_input = "vm-cohort-src",
-      transport_policy = "private-radicle",
-      disposition = "optional-runtime",
     },
     {
       manifest_dependency = "kamacite-core",

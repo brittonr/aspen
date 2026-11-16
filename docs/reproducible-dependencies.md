@@ -6,8 +6,10 @@ The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
 transport policy. Public GitHub runtime dependencies use immutable HTTPS pins;
 that does not qualify every transitive development-tool source. The Artifact packages use one
-exact HTTPS Git pin and one non-flake Nix input. Private Radicle sources remain
-explicit and require the documented public seed or a local Radicle profile.
+exact HTTPS Git pin and one non-flake Nix input. No Cargo or Nix source uses
+`rad://` transport: Radicle-hosted cohorts are fetched through their seed's
+anonymous HTTPS Git endpoint, and the two exact sources without an anonymous
+route ship as [reviewed snapshots](#vendored-exact-sources).
 Bounded Exec uses the catalog-advertised anonymous GitHub source
 `https://github.com/OnixResearch/bounded-exec.git` at unchanged revision
 `29dac88ecded94457572db3fdfaaaab95fa91525` and one matching non-flake input.
@@ -65,14 +67,65 @@ Cairn Artifact input now uses verified public HTTPS at unchanged commit
 credentials. Frozen provider contents and verifier implementation pins are
 unchanged.
 
+## Vendored exact sources
+
 VM Cohort `31f1696ba9391bfda8577a58af84f72361d5573e` and the Mantle extent
-producer `2c636b1b25353a1b0befa5af48dc68615cd686dd` remain explicitly unavailable
-through the attempted anonymous paths. Their seed requests returned HTTP 500;
-the advertised Mantle GitHub repository also rejected its exact producer commit.
-Fresh public source publication for those unchanged bindings remains required.
-Source acquisition does not qualify optional features, a clean full public Nix
-build, legal distribution, runtime behavior, current authority or release
-eligibility.
+producer `2c636b1b25353a1b0befa5af48dc68615cd686dd` were unavailable through every
+attempted anonymous path: their seed requests returned HTTP 500, and the
+advertised Mantle GitHub repository rejected the exact producer commit. Neither
+revision changes:
+
+- [`vendor/vm-cohort/`](../vendor/vm-cohort/) ships an owner-approved,
+  source-only selection of the VM Cohort commit: the `vm-cohort-core` crate, the
+  workspace manifests, license and notice files, the README, and the archived
+  ownership record read by the world-snapshot identity check. Git history and all
+  other repository material stay unpublished. `vm-cohort-core` is an optional path
+  dependency outside the Aspen workspace; `crates/vm-cohort-core/Cargo.toml`
+  resolves the upstream workspace inheritance as `cargo vendor` would, and the
+  unchanged upstream manifest is kept beside it as `Cargo.toml.orig`.
+- Aspen's two executable-extent producer fixtures are bound to the exact Mantle
+  files by their upstream Git blob identities. No additional Mantle bytes are
+  published.
+
+[`vendor/sources.ncl`](../vendor/sources.ncl) is the reviewed selection policy.
+`scripts/vendored-sources.py import --source vm-cohort=CHECKOUT
+--fixture-repository rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb=CHECKOUT` regenerates
+[`vendor/sources.lock.json`](../vendor/sources.lock.json) from explicit local
+checkouts at the exact revisions. `scripts/vendored-sources.py check`, also run by
+the `vendored-sources` flake check, verifies every file's size, mode, upstream Git
+blob and BLAKE3 identity; rejects extra, missing, symlinked or undeclared files;
+and requires a `THIRD_PARTY_LICENSES.md` row naming each snapshot path at its
+exact revision. A snapshot is source identity only: it does not qualify the
+optional feature, runtime behavior, current authority, legal distribution, or
+release eligibility.
+
+## Pinned tool transport
+
+The pinned Octet producer `3f7abb641ee604f54629da415bc7686f89662065`, which
+supplies `cargo-octet` to the default development shell and several flake checks,
+declares Bounded Exec `44eb74eb639194665ee820562d5b2ce2c3ff6a94` by an
+`ssh://git@github.com/` URL inside its own Cargo manifest. Aspen cannot override
+that producer-internal source, but the repository and commit are public. Builds
+therefore set an environment-scoped Git URL rewrite:
+
+```sh
+export GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf \
+  GIT_CONFIG_VALUE_0=ssh://git@github.com/
+```
+
+The hosted `Reproducible dependencies` workflow sets the same three variables for
+its job. With a fresh empty home (no SSH keys, agent, Git configuration or Nix
+fetcher cache), evaluating the default development shell failed at exactly that
+fetch without the rewrite and succeeded with it, fetching the same commit over
+HTTPS ([observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-octet-transport-20261115.json)).
+This is transport only: the Octet revision, its source bytes and its lint behavior
+are unchanged. It is not a cold build; the hosted clean-runner result is the build
+evidence. Remove the rewrite once Octet publishes HTTPS or vendored coordinates for
+this dependency and Aspen adopts that release; Octet's published public release
+candidate `4aba4019f77f95cb9c3e25ff27964898d708cef0` already vendors it but diverges
+substantially from the current pin, so adopting it is a separate producer-cohort
+review.
 
 Hosted storage [run 43693265859](https://github.com/brittonr/aspen/actions/runs/43693265859) and full-flake [run 43693265823](https://github.com/brittonr/aspen/actions/runs/43693265823) at `2c4631bc88537d6d6323f738e8374683d7706cb4` failed before conformance. The pinned Octet CLI `3f7abb641ee604f54629da415bc7686f89662065` selects a separate Bounded Exec `44eb74eb639194665ee820562d5b2ce2c3ff6a94` through SSH in its Cargo manifest. The fixed Nix-input inventory above does not include this producer's internal Cargo sources. Full-flake evaluation also retained the unresolved VM Cohort and Mantle routes.
 

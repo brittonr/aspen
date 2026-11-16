@@ -37,3 +37,17 @@ r[molten.project.reproducible_dependencies.exact_pins] Every Git dependency in t
 - WHEN its root-owned nested input override is migrated
 - THEN the selected implementation revision and metadata-free NAR MUST remain unchanged, with no provider-source or frozen verifier edits
 - AND remaining unavailable optional sources MUST stay explicit rather than becoming an inferred clean Nix build.
+
+#### Scenario: An unavailable private provider ships as an owner-approved exact snapshot
+
+- GIVEN a required source has no anonymous route and its owner approves publishing exactly the build-required files
+- WHEN the consumer vendors them
+- THEN every shipped upstream file MUST match the exact revision by Git blob and BLAKE3 identity, and extra, missing, symlinked or undeclared files MUST fail the check
+- AND Aspen-owned derived files MUST be declared beside the unchanged originals, and the snapshot MUST NOT be treated as feature, runtime, authority or release qualification.
+
+#### Scenario: A pinned tool's public SSH-named source is fetched over HTTPS
+
+- GIVEN a pinned tool declares a public GitHub dependency by SSH URL that the consumer cannot override
+- WHEN builds rewrite only that transport to anonymous HTTPS
+- THEN the tool revision and fetched commit MUST be unchanged
+- AND the rewrite MUST be scoped to the build environment and documented with its removal trigger.

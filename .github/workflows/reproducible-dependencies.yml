@@ -7,6 +7,12 @@ on:
 jobs:
   flake-check:
     runs-on: ubuntu-latest
+    env:
+      # The pinned Octet producer names public GitHub dependencies by SSH URL; fetch the
+      # same commits anonymously over HTTPS. See docs/reproducible-dependencies.md.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+      GIT_CONFIG_VALUE_0: ssh://git@github.com/
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v19

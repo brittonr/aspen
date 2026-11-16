@@ -9060,7 +9060,6 @@ dependencies = [
 [[package]]
 name = "vm-cohort-core"
 version = "0.1.0"
-source = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e#31f1696ba9391bfda8577a58af84f72361d5573e"
 dependencies = [
  "blake3",
  "serde",

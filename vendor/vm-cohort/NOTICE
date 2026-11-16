@@ -1,0 +1,14 @@
+VM Cohort
+Copyright 2026 OnixResearch
+
+Licensed under MIT OR Apache-2.0. See LICENSE, LICENSE-MIT, and LICENSE-APACHE.
+
+The implementation semantically adapts product-neutral checkpoint, copy-on-write, and KVM restore behavior reviewed in:
+
+  brittonr/chaoscontrol
+  revision 7433557b85990f0f07a37ca44b97fef26c2a4c7e
+  reviewed public crate license AGPL-3.0-or-later
+
+OnixResearch, as owner of the controlled source, authorized this repository to adapt that source under this repository's dual license. This separate owner grant does not change ChaosControl's public license and does not apply to third-party or contributor-owned material.
+
+SmolVM v1.7.7 is an Apache-2.0 design reference only. No SmolVM source is copied or linked.
