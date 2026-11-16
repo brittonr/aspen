@@ -94,7 +94,7 @@ impl<'a> IrohEd25519<'a> {
             secret_key: iroh::SecretKey::generate(),
         };
         let encoded = encode_key_record(&record);
-        self.namespace.write_restricted(path, &encoded, OWNER_ONLY_SECRET_FILE_MODE)?;
+        self.namespace.write_new_restricted(path, &encoded, OWNER_ONLY_SECRET_FILE_MODE)?;
         self.resolved_key(purpose, &record, true, KeyPermissionStatus::Restricted)
     }
 

@@ -128,7 +128,7 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::Scope) -> Re
         }
         IrohSecretSourceDecisionKind::GenerateAndPersist => {
             let secret_record = crate::fabric_crypto_identity::generate_transport_key_record();
-            write_secret_restricted(root, &secret_path, &secret_record)?;
+            persist_new_secret(root, &secret_path, &secret_record)?;
             (secret_record, IrohSecretPermissionStatus::Restricted, true)
         }
         IrohSecretSourceDecisionKind::Deny => {

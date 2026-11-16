@@ -47,9 +47,11 @@ impl Scope {
 
     pub fn write(&self, path: &super::locator::RelativePath, bytes: &[u8]) -> crate::error::Result<()> {
         super::filesystem::validate_write_size(bytes, super::MAX_NODE_STATE_FILE_BYTES)?;
-        super::filesystem::write_regular_file(&self.dir, path.as_path(), bytes, None)
+        super::filesystem::write_regular_file(&self.dir, path.as_path(), bytes)
     }
 
+    /// Replaces a secret atomically: across a crash the file holds its previous or its new content,
+    /// owner-restricted.
     pub fn write_restricted(
         &self,
         path: &super::locator::RelativePath,
@@ -57,7 +59,31 @@ impl Scope {
         unix_mode: u32,
     ) -> crate::error::Result<()> {
         super::filesystem::validate_write_size(bytes, super::MAX_NODE_SECRET_BYTES)?;
-        super::filesystem::write_regular_file(&self.dir, path.as_path(), bytes, Some(unix_mode))
+        super::publication::publish_regular_file(
+            &self.dir,
+            path.as_path(),
+            bytes,
+            Some(unix_mode),
+            super::publication::Replacement::Replace,
+        )
+    }
+
+    /// Creates a secret atomically without replacement: across a crash it is absent or whole, never
+    /// partial.
+    pub fn write_new_restricted(
+        &self,
+        path: &super::locator::RelativePath,
+        bytes: &[u8],
+        unix_mode: u32,
+    ) -> crate::error::Result<()> {
+        super::filesystem::validate_write_size(bytes, super::MAX_NODE_SECRET_BYTES)?;
+        super::publication::publish_regular_file(
+            &self.dir,
+            path.as_path(),
+            bytes,
+            Some(unix_mode),
+            super::publication::Replacement::NoReplace,
+        )
     }
 
     pub fn try_exists(&self, path: &super::locator::RelativePath) -> crate::error::Result<bool> {

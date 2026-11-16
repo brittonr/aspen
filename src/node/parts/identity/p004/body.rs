@@ -57,12 +57,12 @@ fn validate_config(config: &Config) -> Result<()> {
     validate_refs(&config.policy_refs, "node identity policy ref")
 }
 
-fn write_secret_restricted(
+fn persist_new_secret(
     root: &crate::node_state::Scope,
     path: &crate::node_state::RelativePath,
     secret_record: &[u8],
 ) -> Result<()> {
-    root.write_restricted(path, secret_record, OWNER_ONLY_SECRET_FILE_MODE)
+    root.write_new_restricted(path, secret_record, OWNER_ONLY_SECRET_FILE_MODE)
 }
 
 fn read_observed_secret(observation: crate::node_state::FileObservation) -> Result<Vec<u8>> {

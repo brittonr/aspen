@@ -91,7 +91,6 @@ pub(super) fn write_regular_file(
     dir: &cap_std::fs::Dir,
     path: &std::path::Path,
     bytes: &[u8],
-    unix_mode: Option<u32>,
 ) -> crate::error::Result<()> {
     let (parent, leaf) = open_parent(dir, path, true)?;
     match parent.symlink_metadata(leaf) {
@@ -105,13 +104,6 @@ pub(super) fn write_regular_file(
     }
     let mut options = cap_std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true).follow(cap_fs_ext::FollowSymlinks::No);
-    #[cfg(unix)]
-    if let Some(mode) = unix_mode {
-        use cap_std::fs::OpenOptionsExt;
-        options.mode(mode);
-    }
-    #[cfg(not(unix))]
-    let _ = unix_mode;
     let mut file = parent.open_with(leaf, &options).map_err(crate::error::Failure::from)?;
     if !file.metadata().map_err(crate::error::Failure::from)?.is_file() {
         return Err(super::invalid(format!(

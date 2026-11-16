@@ -257,7 +257,7 @@ impl DirectoryRoot {
 
     pub fn write(&self, path: &super::locator::RelativePath, bytes: &[u8]) -> crate::error::Result<()> {
         super::filesystem::validate_write_size(bytes, super::MAX_NODE_STATE_FILE_BYTES)?;
-        super::filesystem::write_regular_file(&self.inner.dir, path.as_path(), bytes, None)
+        super::filesystem::write_regular_file(&self.inner.dir, path.as_path(), bytes)
     }
 
     /// Publish one new regular file in an existing parent, without replacement.

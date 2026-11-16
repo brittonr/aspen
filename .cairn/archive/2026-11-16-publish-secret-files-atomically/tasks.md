@@ -1,0 +1,9 @@
+## Phase 1: Implementation
+
+- [x] [serial] Add staged publication with no-replace link and atomic rename, owner-restricted stages, stale-stage removal and uncertain post-commit reporting. r[molten.crypto_identity.atomic_key_publication]
+- [x] [serial] Route secret replacement through it and add no-replace secret creation for first-boot production keys and the node transport identity. r[molten.crypto_identity.atomic_key_publication]
+- [x] [serial] Test creation, refusal to overwrite, whole replacement with restricted mode, stale stages and symlinked or non-regular destinations; document the guarantee; run the node-host, crypto-identity, node-identity and reliability suites, formatting, Clippy and source/lifecycle gates before review, sync and archive. r[molten.crypto_identity.atomic_key_publication]
+
+## Verification (2026-11-16)
+
+Integration tree at `1d43624d9` plus this change: `cargo fmt --check`; `cargo test -p molten-node-host` (lib 5 passed, including `no_replace_publication_creates_once_and_never_overwrites`, `replacement_swaps_whole_content_and_restricts_a_loose_existing_file`, `interrupted_stages_are_removed_and_never_become_the_key` and `a_symlinked_or_non_regular_destination_is_refused`; boundary tests 5 passed); `cargo test -p molten --lib fabric_crypto_identity` (12 passed, 1 ignored); `cargo test -p molten --lib identity` (95 passed, 1 ignored); `cargo test -p molten --lib reliability` (56 passed); `cargo clippy -p molten-node-host --lib --tests -- -D warnings` and `cargo clippy -p molten --lib --bins --tests -- -D warnings` passed. The previous in-place writer would fail the loose-mode replacement test, because its mode applied only to a newly created file. Crash atomicity follows from the staged protocol that the audit's `KeyFileCrash` model accepts; these tests do not inject a crash and do not establish hardware durability.
