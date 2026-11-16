@@ -172,3 +172,37 @@
         assert_eq!(barrier_release.receipt.decision, "pass");
         assert!(runtime.state.barriers.get("barrier:test").expect("barrier").is_released);
     }
+
+    // r[verify molten.coordination.rate_limit_semaphore]
+    #[test]
+    fn rate_limit_is_a_per_key_quota_that_later_operations_do_not_reset() {
+        let mut runtime = runtime();
+        let quota = runtime.manifest.rate_limit;
+        let mut sequence = 0;
+        let mut acquire = |runtime: &mut CoordinationRuntime, key: &str, label: &str, decision: &str| {
+            let request_value = request(
+                SERVICE_RATE_LIMIT,
+                OP_ACQUIRE,
+                key,
+                label,
+                next_trace_sequence(&mut sequence),
+                None,
+            );
+            if decision == COORDINATION_DECISION_DENY {
+                apply_generated_denial(runtime, &request_value, "rate-limit quota exhausted; it does not reset");
+            } else {
+                apply_generated_request(runtime, &request_value, decision);
+            }
+        };
+        for index in 0..quota {
+            acquire(&mut runtime, "rate:quota", &format!("quota-{index}"), COORDINATION_DECISION_PASS);
+        }
+        acquire(&mut runtime, "rate:quota", "quota-over", COORDINATION_DECISION_DENY);
+        // Later committed operations on another key do not reset the exhausted key, and that key has
+        // its own full quota.
+        for index in 0..quota {
+            acquire(&mut runtime, "rate:other", &format!("other-{index}"), COORDINATION_DECISION_PASS);
+        }
+        acquire(&mut runtime, "rate:quota", "quota-after", COORDINATION_DECISION_DENY);
+        assert_eq!(runtime.state.rates.get("rate:quota"), Some(&quota));
+    }

@@ -172,7 +172,7 @@
             next_trace_sequence(&mut sequence),
             None,
         );
-        apply_generated_denial(&mut runtime, &rate_exhausted, "rate limit exhausted");
+        apply_generated_denial(&mut runtime, &rate_exhausted, "rate-limit quota exhausted");
         assert_coordination_invariants(&runtime, &queue_key, &expected_queue);
 
         apply_generated_request(

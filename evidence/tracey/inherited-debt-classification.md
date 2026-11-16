@@ -18,10 +18,10 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 41 | `.cairn/specs/catalog/spec.md` |
 | 37 | `.cairn/specs/content-addressed-chunk-store/spec.md` |
 | 36 | `.cairn/specs/confidentiality/spec.md` |
-| 36 | `.cairn/specs/coordination/spec.md` |
 | 36 | `.cairn/specs/local-artifact-registry/spec.md` |
 | 36 | `.cairn/specs/local-schema-identity/spec.md` |
 | 35 | `.cairn/specs/consensus/spec.md` |
+| 35 | `.cairn/specs/coordination/spec.md` |
 | 34 | `.cairn/specs/job-dag/spec.md` |
 | 33 | `.cairn/specs/runtime-patterns/spec.md` |
 | 32 | `.cairn/specs/authority-identity-revocation/spec.md` |
@@ -83,10 +83,10 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 19 | `coordination_services_control_plane` |
 | 19 | `secrets_redaction_encrypted_refs` |
 | 18 | `iroh_sam_dataspace` |
-| 17 | `coordination` |
 | 17 | `node_identity` |
 | 16 | `authority` |
 | 16 | `catalog_mcp` |
+| 16 | `coordination` |
 | 16 | `delivery` |
 | 16 | `lifecycle` |
 | 16 | `local_rewrite` |

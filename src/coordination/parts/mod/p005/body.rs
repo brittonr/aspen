@@ -144,10 +144,14 @@ fn prepare_semaphore_release(runtime: &CoordinationRuntime, request: &Coordinati
     }
 }
 
+/// The `rate-limit` service is a per-key acquisition quota for the lifetime of the coordination state.
+/// Coordination state has no admitted logical time source, so nothing resets the count; the wire name
+/// stays `rate-limit` for manifest and receipt compatibility.
+// r[impl molten.coordination.rate_limit_semaphore]
 fn prepare_rate_acquire(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
     let used = runtime.state.rates.get(&request.key).copied().unwrap_or(0);
     if used >= runtime.manifest.rate_limit {
-        return Err(MoltenError::invalid_harness("coordination rate limit exhausted"));
+        return Err(MoltenError::invalid_harness("coordination rate-limit quota exhausted; it does not reset"));
     }
     let mut state = runtime.state.clone();
     state.rates.insert(request.key.clone(), used + 1);

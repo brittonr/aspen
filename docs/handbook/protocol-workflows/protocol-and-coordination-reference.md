@@ -38,7 +38,7 @@ The session source bounds item collections at 1,024 and script/replay steps at 2
 
 | Surface | Important inputs or output fields | Owner |
 | --- | --- | --- |
-| Service manifest | `service_id`, `services`, `control_group_ref`, queue/semaphore capacities, rate limit, barrier parties, policy/resource refs | Coordination part p001 |
+| Service manifest | `service_id`, `services`, `control_group_ref`, queue/semaphore capacities, rate-limit quota, barrier parties, policy/resource refs | Coordination part p001 |
 | Request | `service`, `operation`, `key`, `client_session`, `operation_id_ref`, `read_consistency_mode`, optional payload, authority/resource/policy refs | Coordination part p001 |
 | Receipt | Decision, request/state refs, optional Raft/token refs, transition kind, before/after/preserved state refs, output refs, optional prior receipt, assertions, diagnostics | Parts p002 and p013 |
 | Status assertion | Service, key, read-consistency mode, state ref, receipt ref | Part p002; observation-only |
@@ -47,6 +47,8 @@ The session source bounds item collections at 1,024 and script/replay steps at 2
 | `evidence-N.preserves` | Indexed canonical values, starting at index zero | CLI `write_indexed_values` |
 
 Supported service names are `lock`, `queue`, `semaphore`, `rate-limit`, `election`, `barrier`, and `registry`. Service membership does not imply every operation is valid for every service. Request read mode defaults to `READ_CONSISTENCY_LINEARIZABLE` in the CLI; the implementation also names `READ_CONSISTENCY_LOCAL_STALE`. Inspect the declared mode rather than interpreting every successful read as equivalent.
+
+Despite its wire name, `rate-limit` is a per-key acquisition quota for the lifetime of the coordination state: the manifest's `rate-limit` value is the number of acquisitions each key may make, and nothing resets the count. Coordination state carries no admitted logical clock, so there is no time window; an exhausted key is denied with `rate-limit quota exhausted; it does not reset` until a new coordination state or key is provisioned.
 
 ## Worked classification: a duplicate acquire
 

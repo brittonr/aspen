@@ -186,7 +186,6 @@ molten.coordination.property_tests
 molten.coordination.queue_tests
 molten.coordination.queue_visibility
 molten.coordination.raft_contract
-molten.coordination.rate_limit_semaphore
 molten.coordination.receipts
 molten.coordination.replay_backend
 molten.coordination.service_registry

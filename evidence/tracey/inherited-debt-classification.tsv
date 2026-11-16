@@ -245,7 +245,6 @@ specification	source_area	class	requirement_id
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.queue_tests
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.queue_visibility
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.raft_contract
-.cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.rate_limit_semaphore
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.receipts
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.replay_backend
 .cairn/specs/coordination/spec.md	coordination	accepted-implementation-unestablished	molten.coordination.service_registry
