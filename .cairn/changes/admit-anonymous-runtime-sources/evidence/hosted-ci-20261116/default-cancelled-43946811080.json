@@ -1,0 +1,117 @@
+{
+  "schema": "molten-hosted-ci-observations-v1",
+  "reproducible_dependencies_observation": {
+    "run_id": 43946811080,
+    "url": "https://github.com/brittonr/aspen/actions/runs/43946811080",
+    "source_commit": "afc8308bff9a8c50b2315cb4a17c9454252d7c45",
+    "created_at": "2026-11-16T20:09:29Z",
+    "updated_at": "2026-11-16T21:40:03Z",
+    "conclusion": "failure",
+    "observed_terminal": "The operation was canceled.",
+    "jobs": [
+      {
+        "completedAt": "2026-11-16T21:40:02Z",
+        "conclusion": "failure",
+        "databaseId": 133578552744,
+        "name": "flake-check",
+        "startedAt": "2026-11-16T20:09:33Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-16T20:09:36Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-16T20:09:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T20:09:45Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-16T20:09:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T20:09:50Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-16T20:09:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T20:49:22Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command cargo build --locked",
+            "number": 4,
+            "startedAt": "2026-11-16T20:09:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:15:33Z",
+            "conclusion": "success",
+            "name": "Run nix build --no-link",
+            "number": 5,
+            "startedAt": "2026-11-16T20:49:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:40:01Z",
+            "conclusion": "cancelled",
+            "name": "Run nix flake check",
+            "number": 6,
+            "startedAt": "2026-11-16T21:15:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:40:01Z",
+            "conclusion": "skipped",
+            "name": "Run nix develop --command python3 scripts/readme-quickstart.py --cargo",
+            "number": 7,
+            "startedAt": "2026-11-16T21:40:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:40:01Z",
+            "conclusion": "skipped",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 13,
+            "startedAt": "2026-11-16T21:40:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:40:01Z",
+            "conclusion": "skipped",
+            "name": "Post Run actions/checkout@v4",
+            "number": 14,
+            "startedAt": "2026-11-16T21:40:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:40:01Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-11-16T21:40:01Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43946811080/job/133578552744"
+      }
+    ],
+    "diagnostic_command": "gh run view 43946811080 --repo brittonr/aspen --job 133578552744 --log",
+    "diagnostic_output_blake3": "c90a3f55f67494bd0c562a6f2a379a7f9d7c3494d9197c8c2464317418ff5496",
+    "diagnostic_output_utf8_bytes": 2855453,
+    "original_log_retention": "operator-private local evidence; not republished",
+    "establishes": "The locked Cargo build and default Nix build passed for the exact published source. Full flake checks were canceled and verbatim README execution was skipped.",
+    "non_claims": [
+      "No successful full flake check",
+      "No passing test verdict inferred",
+      "No cancellation cause inferred",
+      "No README execution in this run",
+      "No runtime, authority or release qualification"
+    ]
+  }
+}

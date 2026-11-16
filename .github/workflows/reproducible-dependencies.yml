@@ -4,21 +4,41 @@ on:
   push:
   pull_request:
 
+env:
+  # The pinned Octet producer names public GitHub dependencies by SSH URL; fetch the
+  # same commits anonymously over HTTPS. See docs/reproducible-dependencies.md.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+  GIT_CONFIG_VALUE_0: ssh://git@github.com/
+
 jobs:
-  flake-check:
+  cargo-workflow:
     runs-on: ubuntu-latest
-    env:
-      # The pinned Octet producer names public GitHub dependencies by SSH URL; fetch the
-      # same commits anonymously over HTTPS. See docs/reproducible-dependencies.md.
-      GIT_CONFIG_COUNT: "1"
-      GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
-      GIT_CONFIG_VALUE_0: ssh://git@github.com/
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: DeterminateSystems/nix-installer-action@v19
       - run: nix develop --command cargo build --locked
+      - run: nix develop --command python3 scripts/readme-quickstart.py --cargo
+
+  nix-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@v19
       - run: nix build --no-link
       - run: nix flake check
-      - run: nix develop --command python3 scripts/readme-quickstart.py --cargo
+
+  flake-check:
+    if: ${{ always() }}
+    needs: [cargo-workflow, nix-acceptance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every acceptance job
+        env:
+          CARGO_RESULT: ${{ needs.cargo-workflow.result }}
+          NIX_RESULT: ${{ needs.nix-acceptance.result }}
+        run: test "$CARGO_RESULT" = success && test "$NIX_RESULT" = success

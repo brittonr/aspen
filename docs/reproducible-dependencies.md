@@ -114,9 +114,14 @@ export GIT_CONFIG_COUNT=1 \
   GIT_CONFIG_VALUE_0=ssh://git@github.com/
 ```
 
-The hosted `Reproducible dependencies` workflow sets the same three variables,
-does not persist checkout credentials, and runs `nix develop --command cargo build --locked`
-before `nix flake check`. With a fresh empty home (no SSH keys, agent, Git configuration or Nix
+The hosted `Reproducible dependencies` workflow sets the same three variables
+and does not persist checkout credentials. Its `cargo-workflow` job runs
+`nix develop --command cargo build --locked`, then the unchanged README commands
+through `scripts/readme-quickstart.py --cargo`. On a separate clean runner,
+`nix-acceptance` runs `nix build --no-link` followed by `nix flake check`.
+The existing required `flake-check` aggregate passes only when both jobs succeed;
+failure, cancellation or a skipped job cannot pass it. No check or timeout is relaxed.
+With a fresh empty home (no SSH keys, agent, Git configuration or Nix
 fetcher cache), evaluating the default development shell failed at exactly that
 fetch without the rewrite and succeeded with it, fetching the same commit over
 HTTPS ([observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-octet-transport-20261115.json)).
@@ -150,6 +155,14 @@ tree artifact now ships with the [frozen pilot](verified-node-replication-pilot.
 and is restored through its checked import script; source/verifier revisions,
 hashes and expected decisions are unchanged. This removes that live API fetch,
 but successful full checks and the verbatim workflow still require a new run.
+
+At `afc8308bff9a8c50b2315cb4a17c9454252d7c45`, hosted
+[run 43946811080](https://github.com/brittonr/aspen/actions/runs/43946811080)
+again passed both build commands, but full flake checks were canceled and README
+execution was skipped. The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-cancelled-43946811080.json)
+preserves those distinct outcomes and the original log identity without inferring
+the cancellation cause. The split jobs remove their serial dependency; successful
+full checks and README execution still require actual hosted results.
 
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`

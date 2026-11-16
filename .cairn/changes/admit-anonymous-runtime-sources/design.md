@@ -65,13 +65,19 @@ This satisfies the storage CI observation only. The default `Reproducible depend
 
 ### Decision: Execute the public commands, not only their packaged substitute
 
-The clean hosted workflow explicitly runs the locked Cargo build, default `nix build`, and full flake checks, then executes the README fixture and cleanup blocks unchanged through `scripts/readme-quickstart.py --cargo`. This mode runs in the checkout; the README's own `mktemp` creates the isolated output. The existing `--molten` mode remains the sandboxed packaged-binary smoke in a temporary working directory. Its result cannot substitute for the verbatim Cargo or cold-source result. Retain actual hosted outcomes before claiming either #23 or #25's clean-runner acceptance.
+The clean hosted workflow explicitly runs the locked Cargo build, default `nix build`, full flake checks and the README fixture and cleanup blocks unchanged through `scripts/readme-quickstart.py --cargo`. Cargo and its README execution share one clean runner; the default Nix build and full flake checks share a separate clean runner. The required `flake-check` aggregate succeeds only when both jobs succeed. The README mode runs in the checkout; its own `mktemp` creates the isolated output. The existing `--molten` mode remains the sandboxed packaged-binary smoke in a temporary working directory. Its result cannot substitute for the verbatim Cargo or cold-source result. Retain actual hosted outcomes before claiming either #23 or #25's clean-runner acceptance.
 
 ### Decision: Preserve the frozen tree artifact without a live API dependency
 
 Hosted run `43925658138` at `aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4` completed the locked Cargo build and default Nix build, then full flake checks failed fetching the frozen verified-node-replication tree API response with HTTP 403. The README workflow step did not execute. Preserve those separate outcomes; the response does not establish the HTTP denial's cause.
 
 The previously admitted 29,256-byte tree response for upstream `eb8e27244a4f1b7714defe55aa495c6173a1c330` already has an exact fixed-output `tree_api_hash`. Ship precisely those bytes in the pilot profile directory through `scripts/import-node-replication-tree.py`, which checks the unchanged hash before replacing the artifact. Nix consumes the local file under that same hash and retains its actual Verus-gitlink validation. No runtime source, source hash, frozen profile, verifier identity, expected decision, lock or build plan is changed; anonymous default checks no longer need a live GitHub tree API response. Only a new actual hosted result can complete public-check acceptance.
+
+### Decision: Separate independent acceptance paths without weakening the required gate
+
+At `afc8308bff9a8c50b2315cb4a17c9454252d7c45`, hosted run `43946811080` passed the locked Cargo build and default Nix build. The full-flake step was canceled after the serial job had run for 90 minutes; the README step was skipped. The retained metadata and original log establish neither the cancellation cause nor a failing check predicate.
+
+Run Cargo plus the unchanged README commands in `cargo-workflow`, and default Nix build plus full flake checks in `nix-acceptance`. Both use fresh checkouts without persisted credentials and the same environment-scoped anonymous transport rewrite. Keep the existing required status name `flake-check` as an always-evaluated aggregate that fails for either non-success result, including failure, cancellation or skipped execution. No command, test, timeout, source pin or expected verdict is removed or relaxed. This removes the serial dependency between independent paths and preserves Nix build reuse within its job; only actual hosted execution can establish the new outcome. Aspen workflow maintainers own the split and its repeatability evidence.
 
 ## Risks / Trade-offs
 
