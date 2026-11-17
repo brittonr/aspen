@@ -24,4 +24,5 @@ fn pinned_refs(root: &std::path::Path) -> crate::error::Result<Vec<String>> {
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ledger/parts/mod/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ledger/parts/mod/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ledger/parts/mod/tests/m000/p002/body.rs"));
 }

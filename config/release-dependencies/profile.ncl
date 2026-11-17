@@ -7,6 +7,7 @@ let DurableFilePublicationSource = "https://seed.radicle.garden/z3tAR4For7qw8Zir
 let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
 let ChoregraphSource = "https://github.com/OnixResearch/choregraph.git" in
 let ChaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85" in
+let ChaosControlConformanceRevision = "ec8aa799bad4735bf1028a092ca39feb08fb4bb7" in
 let ChaosControlSource = "https://github.com/brittonr/chaoscontrol.git" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let ExecutableExtentSource = "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git" in
@@ -279,6 +280,17 @@ in
       nix_input = "chaoscontrol-src",
       transport_policy = "https",
       disposition = "runtime",
+    },
+    {
+      manifest_dependency = "chaoscontrol-smr",
+      package_name = "chaoscontrol-smr",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ChaosControlSource,
+      immutable_revision = ChaosControlConformanceRevision,
+      nix_input = "chaoscontrol-conformance-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
     },
     {
       manifest_dependency = "kamacite-core",

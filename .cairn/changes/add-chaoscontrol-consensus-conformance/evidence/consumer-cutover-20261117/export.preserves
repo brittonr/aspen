@@ -1,0 +1,1 @@
+<ledger-export-receipt-v1 "molten.evidence.ledger-export-receipt.v1" <decision "pass"> <artifact-kind "artifact"> <artifact "blake3:b8931c91ca3104014adbfd770c68a12dc1af6af363f27373f8ac9374deb73a36"> <checks [<check "content-ref-found" "pass">, <check "canonical-export" "pass">]>>

@@ -1,0 +1,168 @@
+{
+  "schema": "aspen.chaoscontrol-consumer-cli-observation.v1",
+  "producer_revision": "ec8aa799bad4735bf1028a092ca39feb08fb4bb7",
+  "evidence_class": "instrumentation",
+  "receipt_ref": "blake3:b8931c91ca3104014adbfd770c68a12dc1af6af363f27373f8ac9374deb73a36",
+  "configuration": {
+    "participants": 2,
+    "operations": 2,
+    "observation_records": 4,
+    "lifecycle_generation": 7,
+    "virtual_progress_start": 0,
+    "virtual_progress_end": 10,
+    "seed": null
+  },
+  "cases": [
+    {
+      "case": "instrumentation-import",
+      "exit_code": 0,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "expected.json",
+        "--bundle",
+        "bundle.json",
+        "--ledger",
+        "$SCENARIO_ROOT/ledger"
+      ],
+      "stdout": "chaoscontrol status=bounded-instrumentation-valid evidence-class=instrumentation receipt=blake3:b8931c91ca3104014adbfd770c68a12dc1af6af363f27373f8ac9374deb73a36 guest-execution=false snapshot-replay=false\n",
+      "stderr": ""
+    },
+    {
+      "case": "retained-policy-status",
+      "exit_code": 0,
+      "argv": [
+        "status",
+        "--ledger",
+        "$SCENARIO_ROOT/ledger",
+        "--receipt-ref",
+        "blake3:b8931c91ca3104014adbfd770c68a12dc1af6af363f27373f8ac9374deb73a36"
+      ],
+      "stdout": "<map <entry \"authority\" #f> <entry \"binding_refs\" [\"blake3:561a4d85f1b6d2e86297c96748d286ac9276d97c04caed3e76a7ef845fa7bb05\", \"blake3:bafd0237f64127937f450ec177156149e5785aef975c32a10164b6d8f0035d5f\", \"blake3:48549e146d8d345d42222cdda970bfde2a36c08efc658c3f16af7c58b9f122c7\", \"blake3:c217a8171e26135d2230ae59085b86881794d1f42ecdcdcd56a799e696d199c7\"]> <entry \"claim\" \"bounded-instrumentation\"> <entry \"cohort_status\" <map <entry \"blockers\" []> <entry \"boundary_ref\" \"blake3:1ae826bcee2750110b4f22aedca02d98880674c02c641c1e941f4c62d2ed881f\"> <entry \"cohort_ref\" \"blake3:4b8d64169c5fd384f0cf60f3169a9732cdefcfe0ec7c85ed52f5aed934f375e0\"> <entry \"completeness\" \"complete\"> <entry \"gaps_truncated\" #f> <entry \"marker_reachable\" <null>> <entry \"missing_participants\" []> <entry \"novelty_ref\" \"blake3:e3f673b6341d992b74518cef18cfaa65b10db640ebd712e7a773c601f6c93b73\"> <entry \"oracle_verdict\" \"pass\"> <entry \"participants_present\" <integer \"2\">> <entry \"participants_required\" <integer \"2\">> <entry \"present_participants\" [\"blake3:ae4d1bcdd5635d97f5e4567b87c7a05618a98e126a12933656b50715c0c4b298\", \"blake3:e8267b664a7297bee8fba37c77a2ea8e6640616ef9fda00beb3fdbdb6aaae5ed\"]> <entry \"schema\" \"chaoscontrol.protocol-cohort-status.v1\"> <entry \"sequence_gaps\" [\"blake3:ae4d1bcdd5635d97f5e4567b87c7a05618a98e126a12933656b50715c0c4b298#1\", \"blake3:e8267b664a7297bee8fba37c77a2ea8e6640616ef9fda00beb3fdbdb6aaae5ed#1\"]>>> <entry \"consumer_failures\" []> <entry \"evidence_class\" \"instrumentation\"> <entry \"execution_ref\" \"blake3:2c65cb753a3abb52b57ef42b35b96e138c9c6925f3a74374da1a7636c2b125a5\"> <entry \"expected_ref\" \"blake3:70d4ccbfb863963551b07152fd1188fc1ff8d65198463965744fabedcdf7010e\"> <entry \"fault_outcomes\" []> <entry \"group_ref\" \"blake3:a6929c3f8f4652e8d216842b29e3661ab899a17af4f3af3f8163076b207ce0a1\"> <entry \"history_ref\" \"blake3:a9680d6b3c07f6520b8d574b7da83e7d9b28dc3e0fdc7d1eb058aa2101b5e365\"> <entry \"initial_state_ref\" \"blake3:84a045417953a5e36c8e356e0246ae931bca65007ced76b3d14b6ddfebe440f5\"> <entry \"liveness\" <map <entry \"blockers\" []> <entry \"progress\" <integer \"2\">> <entry \"verdict\" \"pass\">>> <entry \"molten\" <map <entry \"adapter_ref\" \"blake3:3f8d2c89bc590ccff3b8653edf2a4a1391a0c2f4d9b8e77f718995af1b44fed0\"> <entry \"build_ref\" \"blake3:508970b3b37f7d246c3e40c35d01a82ae211854a1a7174154a10c46138355b5f\"> <entry \"dependency_closure_ref\" \"blake3:469c43c4efeea5cf0c83daaf7975f28da4339ea081de7f017380823f52a06898\"> <entry \"observer_ref\" \"blake3:2319d3b27a59bf962444cb5cc0ebd776422ded321ea45ca0f6ebd28905119d58\"> <entry \"source_ref\" \"blake3:6b12339957505a838796a65a198a58943b3dcff61defa987b2b08d738b9ed0ea\">>> <entry \"non_claims\" [\"producer-attestation\", \"guest-execution\", \"snapshot-backed-replay\", \"policy\", \"authority\", \"resources\", \"durability\", \"deployment\", \"release-eligibility\", \"universal-consensus-correctness\", \"application-validity\", \"physical-fault-execution\", \"unexecuted-vm-qualification\"]> <entry \"observations_ref\" \"blake3:84569c6846fc142d47e19df072a57b31385b1f8028cf485fa5d35b1851050014\"> <entry \"oracle\" <map <entry \"cohort_ref\" \"blake3:4b8d64169c5fd384f0cf60f3169a9732cdefcfe0ec7c85ed52f5aed934f375e0\"> <entry \"diagnostics\" []> <entry \"oracle_ref\" \"blake3:17d3a19b4042f4ca603f9399c3f2c3ff27c322d33ad281703b1bd9ccc38566e8\"> <entry \"schema\" \"chaoscontrol.protocol-oracle-result.v1\"> <entry \"verdict\" \"pass\">>> <entry \"producer_revision\" \"ec8aa799bad4735bf1028a092ca39feb08fb4bb7\"> <entry \"proposals_ref\" \"blake3:7c91d3cfb8f60ff4b5e7ee2179bd934321e46c04c577ab192e746dedd5b31265\"> <entry \"protocol_bounds\" <map <entry \"boundaries\" <integer \"8\">> <entry \"cohort_backlog\" <integer \"8\">> <entry \"oracle_work\" <integer \"32\">> <entry \"record_bytes\" <integer \"8192\">> <entry \"records\" <integer \"32\">> <entry \"total_bytes\" <integer \"262144\">>>> <entry \"protocol_receipt_ref\" \"blake3:54a588e899b8200e45893729d2bc5d52e6b4477492d477285cdc6418ef5cd047\"> <entry \"replay_class\" \"not-requested\"> <entry \"replay_comparison\" <null>> <entry \"safety_verdict\" \"pass\"> <entry \"safety_violation_count\" <integer \"0\">> <entry \"schema\" \"molten.external-chaoscontrol-conformance.v1\"> <entry \"scope\" \"exact retained finite facts; import is not execution attestation\"> <entry \"source_ref\" \"blake3:dacc7f4fcbd84ed1aef92541f72946c7ac256fbc2c1aaae4f333fd8058791abb\"> <entry \"stabilization\" <map <entry \"committed_after\" <integer \"2\">> <entry \"committed_before\" <integer \"0\">> <entry \"disruptive_faults_active\" #f> <entry \"lifecycle_ready\" #t> <entry \"profile_id\" \"bounded-stabilization\"> <entry \"quorum_available\" #t> <entry \"virtual_progress_end\" <integer \"10\">> <entry \"virtual_progress_start\" <integer \"0\">>>> <entry \"status\" \"bounded-instrumentation-valid\"> <entry \"terminal_status\" \"completed\"> <entry \"workload_bounds\" <map <entry \"maximum_clients\" <integer \"2\">> <entry \"maximum_command_bytes\" <integer \"1024\">> <entry \"maximum_commands\" <integer \"4\">> <entry \"maximum_concurrency\" <integer \"2\">> <entry \"maximum_evidence_bytes\" <integer \"1048576\">> <entry \"maximum_fault_actions\" <integer \"4\">> <entry \"maximum_reduction_attempts\" <integer \"4\">> <entry \"maximum_replay_events\" <integer \"128\">> <entry \"maximum_trace_events\" <integer \"32\">> <entry \"maximum_virtual_progress\" <integer \"20\">>>> <entry \"workload_profile_ref\" \"blake3:b3717a84bf09228c93df9a69b80e316386b02ee0aee65de7a2431fc98cd238ea\">>\n",
+      "stderr": ""
+    },
+    {
+      "case": "guest-class-denied",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "expected.json",
+        "--bundle",
+        "guest.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-guest-class-denied"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: chaoscontrol-evidence-denied:claim\n"
+    },
+    {
+      "case": "traversal-denied",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "../expected.json",
+        "--bundle",
+        "bundle.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-traversal-denied"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: node state path ../expected.json cannot contain parent traversal\n"
+    },
+    {
+      "case": "symlink-denied",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "expected.json",
+        "--bundle",
+        "linked.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-symlink-denied"
+      ],
+      "stdout": "",
+      "stderr": "error: io error: Too many levels of symbolic links (os error 40)\n"
+    },
+    {
+      "case": "fifo-denied",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "expected.json",
+        "--bundle",
+        "fifo.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-fifo-denied"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: ChaosControl input is not a bounded regular file\n"
+    },
+    {
+      "case": "oversized-policy-denied",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "oversize.json",
+        "--bundle",
+        "bundle.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-oversized-policy-denied"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: ChaosControl input is not a bounded regular file\n"
+    },
+    {
+      "case": "parser-redaction",
+      "exit_code": 1,
+      "argv": [
+        "import",
+        "--source-root",
+        "$SCENARIO_ROOT",
+        "--expected",
+        "expected.json",
+        "--bundle",
+        "malformed.json",
+        "--ledger",
+        "$SCENARIO_ROOT/denied-parser-redaction"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: chaoscontrol-evidence-denied:decode\n"
+    },
+    {
+      "case": "forged-summary-denied",
+      "exit_code": 1,
+      "argv": [
+        "status",
+        "--ledger",
+        "$SCENARIO_ROOT/forged-ledger",
+        "--receipt-ref",
+        "blake3:5e58ec271f76f1d426ed3cddfe9120345555dc5b31af123e89327ef220c2da2d"
+      ],
+      "stdout": "",
+      "stderr": "error: invalid harness artifact: ChaosControl receipt summary differs from retained inputs\n"
+    }
+  ],
+  "non_claims": [
+    "No VM, transport, physical fault, admitted Raft execution or snapshot-backed replay ran.",
+    "Synthetic identities are diagnostic data, not source/build/execution attestation.",
+    "Status revalidates retained policy, not current external authority."
+  ],
+  "path_substitution": "$SCENARIO_ROOT is the task-owned temporary directory; argv contains that explicit substitution."
+}

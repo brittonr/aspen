@@ -86,11 +86,22 @@ Consensus execution, guest startup, Nix materialization, filesystem access, KVM 
 
 ## Dependencies and blocker
 
-The producer-contract prerequisite is available: ChaosControl archived `2026-08-07-add-smr-chain-workload` and `2026-11-05-add-protocol-observation-cohorts`. Inspection at provider checkout `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` found their schemas, pure validators, guest-intake hook, SDK emitter and VMM collector. This records source availability, not an adopted immutable consumer pin, an admitted Molten guest or execution evidence.
+The producer-contract prerequisite is available: ChaosControl archived `2026-08-07-add-smr-chain-workload` and `2026-11-05-add-protocol-observation-cohorts`. The optional source-side consumer now pins `chaoscontrol-smr` at `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` through its own Nix input and coordinated Cargo/lock/hash/plan/release-policy/notice bindings. Its admitted class is instrumentation only; this is not an admitted Molten guest or execution evidence.
 
-The remaining cutover requires the selected producer/schema/profile/evidence identities, an adapter on actual committed application and independent-oracle paths, and a measured multi-node Molten guest source/binary/image/kernel/runtime closure. The native three-child signal directory is not a cross-VM protocol; the current producer supervisor's memory-backed shared directories are not an admitted persistent-device mapping.
+The remaining execution cutover requires an adapter on actual committed application and independent-oracle paths and a measured multi-node Molten guest source/binary/image/kernel/runtime closure. The native three-child signal directory is not a cross-VM protocol; the current producer supervisor's memory-backed shared directories are not an admitted persistent-device mapping.
 
 The inspected SDK envelope emits no inline projection and uses a raw projection hash, while the core SMR guest-history intake requires inline bytes with the versioned protocol-projection identity. Resolve that exact producer/consumer representation handoff before treating emitted records as admitted history. Strict SMP rejection does not rule out a supported single-vCPU-per-guest multi-VM cohort, but neither native runs nor historical release receipts qualify that cohort.
+
+The source-side `conformance::wire` encoder resolves that handoff for supplied
+committed-apply facts: inline chain bytes use the producer projection domain,
+while a canonical sidecar retains Molten command/operation/generation/receipt
+provenance. The pure importer rechecks expected operation/state facts and actual
+contained source, history, cohort, liveness, fault and semantic-repeat data.
+The thin CLI persists the full canonical receipt through the existing ledger
+and revalidates retained inputs on status readback. Guest-execution and
+snapshot-backed claims reject rather than inheriting trust from coherent data.
+This completes a bounded instrumentation consumer, not the remaining guest,
+execution-attestation, campaign or physical replay requirements.
 
 ## Risks / Trade-offs
 

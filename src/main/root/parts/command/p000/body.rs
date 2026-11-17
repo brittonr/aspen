@@ -131,6 +131,11 @@ pub(crate) enum Runtime {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum Test {
+    #[cfg(feature = "chaoscontrol-conformance")]
+    Chaoscontrol {
+        #[command(subcommand)]
+        command: crate::cli_chaoscontrol::Command,
+    },
     Run {
         suite: std::path::PathBuf,
         #[arg(long)]

@@ -140,6 +140,48 @@ pub fn read_artifact_with_root(
     Ok(value)
 }
 
+/// Read one canonical artifact under an explicit byte bound before decoding.
+/// Opening the content directory and leaf never follows symbolic links.
+/// Packed structure is additionally limited to depth 32 and 65,536 tokens.
+pub fn read_artifact_bounded_with_root(
+    root: &CapabilityLedgerRoot,
+    artifact_ref: &str,
+    maximum_bytes: u64,
+) -> crate::error::Result<preserves::IOValue> {
+    use std::io::Read;
+
+    use cap_fs_ext::DirExt;
+    use cap_fs_ext::OpenOptionsFollowExt;
+    #[cfg(unix)]
+    use cap_std::fs::OpenOptionsExt;
+
+    let filename = filename_for_ref(artifact_ref)?;
+    let directory = root.root().try_clone_dir()?.open_dir_nofollow("content")
+        .map_err(crate::error::Failure::from)?;
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
+    #[cfg(unix)]
+    options.custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32);
+    let file = directory.open_with(filename, &options).map_err(crate::error::Failure::from)?;
+    let metadata = file.metadata().map_err(crate::error::Failure::from)?;
+    if !metadata.is_file() || metadata.len() > maximum_bytes {
+        return Err(crate::error::Failure::invalid_harness("ledger artifact is not a bounded regular file"));
+    }
+    let limit = maximum_bytes.checked_add(1)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("ledger read bound overflow"))?;
+    let capacity = usize::try_from(metadata.len())
+        .map_err(|_| crate::error::Failure::invalid_harness("ledger artifact size exceeds host size"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.take(limit).read_to_end(&mut bytes).map_err(crate::error::Failure::from)?;
+    let actual = u64::try_from(bytes.len())
+        .map_err(|_| crate::error::Failure::invalid_harness("ledger artifact size exceeds bound representation"))?;
+    if actual > maximum_bytes {
+        return Err(crate::error::Failure::invalid_harness("ledger artifact exceeds read bound"));
+    }
+    crate::preserves_rail::packed_bounds::preflight(&bytes, crate::preserves_rail::packed_bounds::MAX_VALUE_TOKENS)?;
+    Ok(crate::preserves_rail::strict_canonical_decode_with_ref(&bytes, artifact_ref, "bounded ledger read")?.value)
+}
+
 pub fn list_artifacts(root: &std::path::Path) -> crate::error::Result<Vec<Entry>> {
     let content = root.join("content");
     if !content.exists() {

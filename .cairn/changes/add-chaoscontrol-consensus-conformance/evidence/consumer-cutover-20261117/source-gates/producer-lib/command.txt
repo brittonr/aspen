@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir target/octet-chaoscontrol-lib-final -- --lib --features chaoscontrol-conformance

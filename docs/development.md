@@ -64,6 +64,14 @@ Operator receipt readback is available for local dogfood ledgers: `molten receip
 
 For revision-pinned OnixResearch Git dependencies, the flake uses reviewed immutable HTTPS source inputs. Authentication and binding use one unified Artifact input. The default source graph requires no GitHub SSH credentials; private Radicle sources remain explicit public-seed or local-profile prerequisites. Sibling checkouts can be substituted only through explicit development-time `--override-input` paths. The substitution filters generated and VCS-heavy directories such as `target/` and `.git/` before unit2nix sees the source. Release validation compares Cargo manifest, lockfile, Nix, release-policy, and generated-plan identities and rejects local paths as release evidence. See [`docs/reproducible-dependencies.md`](../docs/reproducible-dependencies.md). Historical August internal-pilot nextest output: `/nix/store/d50qlba4am1pb4f59l71djjg1bl6adhi-molten-nextest`.
 
+Source filters exclude the checkout's root `target/`, not every directory named
+`target`: Noble's reviewed `crates/noble-ngraph/src/belt/target/` contains source
+modules. `.gitignore` and the Nix source filters retain those six exact files.
+Restore that selection only with `scripts/vendored-sources.py import` from the
+admitted revision at `https://github.com/OnixResearch/noble-lang`; the generated
+lock checks bytes, upstream Git blobs, BLAKE3 and executable bits. This does not
+broaden the source-only grant recorded in [`vendor/sources.ncl`](../vendor/sources.ncl).
+
 The historical `0.1.0` limited-pilot candidate was commit `a4f111690b6962f04d9320fd93d09c7dd1ad2fd0`. Its source reference is `blake3:80e3ceb18784504c7573191fce72e121d0789613c6c5f7bdcecbdd9ae0e4cdb7`.
 
 The candidate gate passed as `blake3:9d15e7f99a34ba5f1a979d07cd7023025347144349db50caacca6ddbb90ab1e4`. The pilot decision is `blake3:ea03ddbada910b33a09fe3156e9908b2b7c1f1b0c6b14b39570ae05abdaf27cb`.
@@ -98,6 +106,13 @@ nix run "path:$CAIRN_ROOT#cairn" -- validate --root . \
   --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json" \
   --strict
 ```
+
+Directory-only corpus selection omits include-only modules from the producer's
+function-bearing `source_paths`. Keep the explicit filename inventory above, or
+pass the [required source-scope files](../src/octet/parts/gate/p000/body.rs)
+explicitly alongside source directories so `replay.command` retains their input
+selection. Include the owning `crates/*/src` directories for touched workspace
+packages. Missing scope inventory must remain a gate denial.
 
 The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. The dev shell provides `cargo-octet` from the catalogued `octet-toolchain` flake input (`OnixResearch/octet` `3f7abb641ee604f54629da415bc7686f89662065`, toolchain `nightly-2026-03-21`); an ambient `cargo-octet` elsewhere on `PATH` is not Octet evidence. The [nominal adoption record](../docs/nominal-authority-references.md#result-and-adoption-status) separates the approved focused acceptance from retained whole-core warning debt. The frozen verifier pilot independently retains its original Octet cohort through `verified-node-replication-octet`; see its [exact inputs](../docs/verified-node-replication-pilot.md#exact-inputs). The quarantine commands below are historical burn-down tooling: their example expiry dates have passed, and no baseline or review receipt admits current findings.
 

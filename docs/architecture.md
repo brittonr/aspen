@@ -22,6 +22,15 @@ The optional [compute-capacity service](compute-capacity.md) separates qualified
 
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
+The optional [ChaosControl offline consumer](chaoscontrol-bounded-client.md#offline-instrumentation-consumer)
+keeps versioned committed-apply encoding, independent expected-operation/state
+checks and external-data admission pure. Its CLI reads bounded no-follow source
+members and persists canonical receipts through the existing capability ledger;
+status revalidates retained policy and bundle bytes before readback. Only
+instrumentation data is admitted. Data coherence, distinct source IDs and
+semantic comparison do not attest guest execution, physical faults, authority,
+saved-snapshot replay or release readiness.
+
 The [standalone batch pilot](standalone-batch-orchestration.md) under
 `pilots/orchestration` is a separate workspace with its own explicit
 operator policy and Redb databases. Its controller/worker application ports compose

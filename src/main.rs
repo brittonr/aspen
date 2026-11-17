@@ -120,6 +120,9 @@ mod quorum_port;
 mod cli_raft {
     pub(crate) use super::quorum_port::*;
 }
+#[cfg(feature = "chaoscontrol-conformance")]
+#[path = "cli/evidence/chaoscontrol.rs"]
+mod cli_chaoscontrol;
 #[path = "cli/evidence/receipts.rs"]
 mod voucher_port;
 mod cli_receipts {

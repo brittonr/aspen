@@ -58,6 +58,10 @@
       url = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85";
       flake = false;
     };
+    chaoscontrol-conformance-src = {
+      url = "git+https://github.com/brittonr/chaoscontrol.git?rev=ec8aa799bad4735bf1028a092ca39feb08fb4bb7";
+      flake = false;
+    };
     executable-extent-src = {
       url = "git+https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
@@ -65,7 +69,8 @@
     executable-extent-octet = {
       url = "github:OnixResearch/octet/cf04e894e53eb0947230118a086ef6066ddba38c";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.cairn.inputs.artifact.url = "git+https://github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be";
+      inputs.cairn.inputs.artifact.url =
+        "git+https://github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be";
     };
     kamacite-src = {
       url = "github:OnixResearch/kamacite/d76fe4abe543724d8fc0ac4b362187caf2e27622";
@@ -86,7 +91,8 @@
     octet-toolchain = {
       url = "github:OnixResearch/octet?rev=3f7abb641ee604f54629da415bc7686f89662065";
       inputs.cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
-      inputs.cairn.inputs.artifact.url = "github:OnixResearch/onix-artifact/e41340bec587b6d049b5cc518ec7db925dde84be";
+      inputs.cairn.inputs.artifact.url =
+        "github:OnixResearch/onix-artifact/e41340bec587b6d049b5cc518ec7db925dde84be";
       inputs.valence.url = "github:OnixResearch/valence/7546a78b4eeef8686c6837e187aa12420f4f03bb";
     };
     # The frozen verifier pilot replays its original cohort, not the current lint provider.
@@ -191,13 +197,14 @@
           ".pytest_cache"
           "mutants.out"
           "result"
-          "target"
         ];
         cleanLocalGitSource =
           src:
           pkgs.lib.cleanSourceWith {
             inherit src;
-            filter = path: _type: !(builtins.elem (baseNameOf path) localSourceExcludedBaseNames);
+            filter =
+              path: _type:
+              !(builtins.elem (baseNameOf path) localSourceExcludedBaseNames) && path != "${toString src}/target";
           };
         # Relative path inputs outside the flake root can arrive as
         # /nix/store/...-source/../repo. Do not hand those unusable paths to
@@ -367,8 +374,7 @@
                 + "/.cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier/tasks.md"
               )
               && builtins.pathExists (
-                mantle-wasm-verifier-src
-                + "/.cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md"
+                mantle-wasm-verifier-src + "/.cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md"
               )
             )
             "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";
@@ -422,9 +428,9 @@
         );
         vmCohortSource = ./vendor/vm-cohort;
         vmCohortDependency = artifactRootDependencies."vm-cohort-core";
-        vmCohortLockPackages = builtins.filter (package: package.name == "vm-cohort-core") (
-          builtins.fromTOML (builtins.readFile ./Cargo.lock)
-        ).package;
+        vmCohortLockPackages = builtins.filter (
+          package: package.name == "vm-cohort-core"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         vmCohortCoreManifest = builtins.fromTOML (
           builtins.readFile (vmCohortSource + "/crates/vm-cohort-core/Cargo.toml")
         );
@@ -523,6 +529,7 @@
               src = ./.;
               nativeBuildInputs = [
                 pkgs.b3sum
+                pkgs.git
                 pkgs.python3
                 nickelPackage
               ];
@@ -777,13 +784,15 @@
         workspaceCrateOverrides = pkgs.lib.genAttrs moltenOwnedCrates (_name: overflowCheckedCrate) // {
           # Cargo's self dev-dependency unifies this feature into the unit graph.
           # Strip it and its Cargo metadata for non-test derivations.
-          molten = attrs:
+          molten =
+            attrs:
             let
-              features = pkgs.lib.filter
-                (feature: feature != "test-fixtures" || (attrs.buildTests or false))
-                (attrs.features or [ ]);
+              features = pkgs.lib.filter (feature: feature != "test-fixtures" || (attrs.buildTests or false)) (
+                attrs.features or [ ]
+              );
             in
-            (overflowCheckedCrate attrs) // {
+            (overflowCheckedCrate attrs)
+            // {
               inherit features;
               CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," features;
             };
@@ -824,12 +833,16 @@
           enableKache = false;
           resolvedJson = ./release-policy-build-plan.json;
         };
-        samplePgo = if system == "x86_64-linux" then import ./nix/sample-pgo-experiment.nix {
-          pkgs = unit2nixPkgsBase;
-          inherit unit2nix;
-          source = ./.;
-          extraCrateOverrides = workspaceCrateOverrides;
-        } else null;
+        samplePgo =
+          if system == "x86_64-linux" then
+            import ./nix/sample-pgo-experiment.nix {
+              pkgs = unit2nixPkgsBase;
+              inherit unit2nix;
+              source = ./.;
+              extraCrateOverrides = workspaceCrateOverrides;
+            }
+          else
+            null;
         dependencyAudit = import ./nix/dependency-audit.nix {
           inherit pkgs rustToolchain releasePolicyPkg;
         };
@@ -838,12 +851,14 @@
           src = fastpathQuint.mutateSource sourceForConfigChecks;
         };
         # Explicit test derivation: retain Cargo's test-support feature without enabling it in packages.
-        fastpathMutantTests = ((fastpathMutantWs.test.workspaceMembers."molten".build).override (old: {
-          buildTests = true;
-          features = (old.features or [ ]) ++ [ "test-fixtures" ];
-        })).overrideAttrs (old: {
-          CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
-        });
+        fastpathMutantTests =
+          ((fastpathMutantWs.test.workspaceMembers."molten".build).override (old: {
+            buildTests = true;
+            features = (old.features or [ ]) ++ [ "test-fixtures" ];
+          })).overrideAttrs
+            (old: {
+              CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
+            });
         kacheWs = mkUnit2nixWorkspace { enableKache = true; };
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
@@ -906,12 +921,14 @@
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
         # Test support is explicit here and removed by workspaceCrateOverrides from non-test builds.
-        moltenTestBinaries = ((ws.test.workspaceMembers."molten".build).override (old: {
-          buildTests = true;
-          features = (old.features or [ ]) ++ [ "test-fixtures" ];
-        })).overrideAttrs (old: {
-          CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
-        });
+        moltenTestBinaries =
+          ((ws.test.workspaceMembers."molten".build).override (old: {
+            buildTests = true;
+            features = (old.features or [ ]) ++ [ "test-fixtures" ];
+          })).overrideAttrs
+            (old: {
+              CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
+            });
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
         rustLibDir = "${rustToolchain}/lib/rustlib/${targetTriple}/lib";
         nextestCi = pkgs.writeShellApplication {
@@ -933,7 +950,7 @@
             let
               base = baseNameOf path;
             in
-            !(base == "target" || base == ".direnv" || base == ".git");
+            !(base == ".direnv" || base == ".git") && path != "${toString ./.}/target";
         };
         startupGatePkgs = import octet-toolchain.inputs.nixpkgs {
           inherit system;
@@ -945,11 +962,13 @@
           source = sourceForConfigChecks;
           gateCompiler = startupGateCompiler;
           buildCandidate = src: (mkUnit2nixWorkspace { inherit src; }).workspaceMembers."molten".build;
-          buildGate = source: import ./nix/startup-octet-cohort.nix {
-            inherit pkgs system source;
-            octet = octet-toolchain;
-            gateCompiler = startupGateCompiler;
-          };
+          buildGate =
+            source:
+            import ./nix/startup-octet-cohort.nix {
+              inherit pkgs system source;
+              octet = octet-toolchain;
+              gateCompiler = startupGateCompiler;
+            };
         };
         moltenReadinessVerifier = pkgs.writeShellScriptBin "onixos-molten-readiness-verifier" ''
           exec ${startupSourceBinding}/bin/molten reliability verify-readiness "$@"
@@ -1268,7 +1287,10 @@
             networking.hostName = nodeId;
             users.groups = lib.optionalAttrs provisionSourceGate { molten = { }; };
             users.users = lib.optionalAttrs provisionSourceGate {
-              molten = { isSystemUser = true; group = "molten"; };
+              molten = {
+                isSystemUser = true;
+                group = "molten";
+              };
             };
             networking.firewall.enable = false;
             networking.extraHosts = ''
@@ -1280,7 +1302,8 @@
               pkgs.coreutils
               pkgs.gnugrep
               pkgs.iputils
-            ] ++ lib.optionals provisionSourceGate [ pkgs.util-linux ];
+            ]
+            ++ lib.optionals provisionSourceGate [ pkgs.util-linux ];
             systemd.services.molten-node = {
               description = "Aspen node VM integration service";
               wantedBy = [ "multi-user.target" ];
@@ -1290,14 +1313,19 @@
                 nodeBinary
                 pkgs.coreutils
                 pkgs.gnugrep
-              ] ++ lib.optionals provisionSourceGate [ pkgs.nix pkgs.b3sum ];
+              ]
+              ++ lib.optionals provisionSourceGate [
+                pkgs.nix
+                pkgs.b3sum
+              ];
               serviceConfig = {
                 Type = "oneshot";
                 RemainAfterExit = true;
                 StateDirectory = "molten";
                 WorkingDirectory = "${sourceForConfigChecks}";
                 ExecStop = "${nodeBinary}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
-              } // lib.optionalAttrs provisionSourceGate {
+              }
+              // lib.optionalAttrs provisionSourceGate {
                 TimeoutStartSec = "3600";
                 User = "molten";
                 Group = "molten";
@@ -3404,20 +3432,24 @@
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             molten-module-eval =
               let
-                evaluateService = supplied: builtins.tryEval (nixpkgs.lib.nixosSystem {
-                  system = system;
-                  modules = [
-                    self.nixosModules.molten
-                    {
-                      boot.isContainer = true;
-                      services.molten = {
-                        enable = true;
-                        nodeId = "node:module-eval";
-                      } // supplied;
-                      system.stateVersion = "24.11";
-                    }
-                  ];
-                }).config.system.build.toplevel.drvPath;
+                evaluateService =
+                  supplied:
+                  builtins.tryEval
+                    (nixpkgs.lib.nixosSystem {
+                      system = system;
+                      modules = [
+                        self.nixosModules.molten
+                        {
+                          boot.isContainer = true;
+                          services.molten = {
+                            enable = true;
+                            nodeId = "node:module-eval";
+                          }
+                          // supplied;
+                          system.stateVersion = "24.11";
+                        }
+                      ];
+                    }).config.system.build.toplevel.drvPath;
                 admitted = evaluateService {
                   package = moltenPkg;
                   sourceTrustFile = "/run/molten/source-gate-trust.json";
@@ -3501,7 +3533,8 @@
             release-overflow-checks =
               let
                 missing = builtins.filter (
-                  name: !(builtins.elem "overflow-checks=on" (ws.workspaceMembers.${name}.build.extraRustcOpts or [ ]))
+                  name:
+                  !(builtins.elem "overflow-checks=on" (ws.workspaceMembers.${name}.build.extraRustcOpts or [ ]))
                 ) moltenOwnedCrates;
               in
               pkgs.runCommand "molten-release-overflow-checks" { } (
@@ -4733,63 +4766,65 @@
             };
           };
 
-        apps = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
-          sample-pgo-experiment = {
-            type = "app";
-            program = "${samplePgo.app}/bin/molten-sample-pgo-experiment";
-          };
-        } // {
-          dependency-audit = {
-            type = "app";
-            program = "${dependencyAudit.app}/bin/molten-dependency-audit";
-          };
-          dependency-audit-controls = {
-            type = "app";
-            program = "${dependencyAudit.controlsApp}/bin/molten-dependency-audit-controls";
-          };
-          # Opt-in: the signed startup rail against real NixOS VMs. It is deliberately not a
-          # check; a two-core VM needs far longer than a flake check's budget to measure the
-          # source closure, and it proves the gate's mechanism with a VM-local signer, not
-          # producer/operator independence.
-          nixos-vm-multinode-signed = {
-            type = "app";
-            program = "${pkgs.writeShellScript "molten-vm-source-gate-signed" ''
-              set -euo pipefail
-              exec nix build -L --no-link '${vmSignedSourceCheck.drvPath}'
-            ''}";
-          };
-          default = {
-            type = "app";
-            program = "${moltenPkg}/bin/molten";
-            meta = {
-              description = "Run the Aspen development CLI (molten)";
+        apps =
+          pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            sample-pgo-experiment = {
+              type = "app";
+              program = "${samplePgo.app}/bin/molten-sample-pgo-experiment";
+            };
+          }
+          // {
+            dependency-audit = {
+              type = "app";
+              program = "${dependencyAudit.app}/bin/molten-dependency-audit";
+            };
+            dependency-audit-controls = {
+              type = "app";
+              program = "${dependencyAudit.controlsApp}/bin/molten-dependency-audit-controls";
+            };
+            # Opt-in: the signed startup rail against real NixOS VMs. It is deliberately not a
+            # check; a two-core VM needs far longer than a flake check's budget to measure the
+            # source closure, and it proves the gate's mechanism with a VM-local signer, not
+            # producer/operator independence.
+            nixos-vm-multinode-signed = {
+              type = "app";
+              program = "${pkgs.writeShellScript "molten-vm-source-gate-signed" ''
+                set -euo pipefail
+                exec nix build -L --no-link '${vmSignedSourceCheck.drvPath}'
+              ''}";
+            };
+            default = {
+              type = "app";
+              program = "${moltenPkg}/bin/molten";
+              meta = {
+                description = "Run the Aspen development CLI (molten)";
+              };
+            };
+            molten = {
+              type = "app";
+              program = "${moltenPkg}/bin/molten";
+              meta = {
+                description = "Run the Aspen development CLI (molten)";
+              };
+            };
+            nixos-vm-molten-module = {
+              type = "app";
+              program = "${pkgs.writeShellScript "molten-module-vm" ''
+                set -euo pipefail
+                exec nix build -L --no-link '${vmMoltenModule.drvPath}'
+              ''}";
+              meta = {
+                description = "Boot the exported Aspen NixOS module in a VM (opt-in; not a flake check)";
+              };
+            };
+            nextest-ci = {
+              type = "app";
+              program = "${nextestCi}/bin/molten-nextest-ci";
+              meta = {
+                description = "Run Aspen's cargo-nextest CI profile";
+              };
             };
           };
-          molten = {
-            type = "app";
-            program = "${moltenPkg}/bin/molten";
-            meta = {
-              description = "Run the Aspen development CLI (molten)";
-            };
-          };
-          nixos-vm-molten-module = {
-            type = "app";
-            program = "${pkgs.writeShellScript "molten-module-vm" ''
-              set -euo pipefail
-              exec nix build -L --no-link '${vmMoltenModule.drvPath}'
-            ''}";
-            meta = {
-              description = "Boot the exported Aspen NixOS module in a VM (opt-in; not a flake check)";
-            };
-          };
-          nextest-ci = {
-            type = "app";
-            program = "${nextestCi}/bin/molten-nextest-ci";
-            meta = {
-              description = "Run Aspen's cargo-nextest CI profile";
-            };
-          };
-        };
 
         # Storage conformance does not execute the separately pinned proof producers.
         devShells.object-storage-ci = pkgs.mkShell {
@@ -4836,7 +4871,8 @@
 
         formatter = pkgs.nixpkgs-fmt;
       }
-    ) // {
+    )
+    // {
       nixosModules.molten = import ./nix/modules/molten.nix;
     };
 }

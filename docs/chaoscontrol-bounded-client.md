@@ -80,7 +80,7 @@ the measured guest/campaign task remains unchecked and the change stays active.
 
 The first requested executor profile is single-vCPU per guest, not SMP. Use the existing ChaosControl Rust guest image/process bundle and `chaoscontrol_smr::observation::guest::MultiNodeGuestIntake`, not a new control service or qualification report. At reviewed ChaosControl source ec8aa799bad4735bf1028a092ca39feb08fb4bb7 (issue baseline), GuestSource binds guest_id, executable_ref, source_revision_ref, adapter_ref and launch_contract_ref. The intake requires at least two distinct guest IDs and exact participant-source membership. Its shell must independently remeasure retained artifact bytes, emit actual protocol observations plus complete drains, and run the existing cohort/history validators. Those validators do not attest to execution or grant replay promotion.
 
-Carry exact client source, binary, image/initrd, kernel, complete build/runtime closure, adapter, independent oracle, property catalog, generator and workload schema identities into that existing evidence path. `guest_dependency_blockers` checks identity availability and the single-vCPU prerequisite only; empty blockers is preflight, never guest qualification. The existing root Cargo/Nix pin b8c440ea3b19df796542e58e8ee36200e1c3db85 supplies snapshot descriptors only; it is not a client SDK/executor pin and is not silently upgraded here.
+Carry exact client source, binary, image/initrd, kernel, complete build/runtime closure, adapter, independent oracle, property catalog, generator and workload schema identities into that existing evidence path. `guest_dependency_blockers` checks identity availability and the single-vCPU prerequisite only; empty blockers is preflight, never guest qualification. The existing root Cargo/Nix pin `b8c440ea3b19df796542e58e8ee36200e1c3db85` still supplies snapshot descriptors only. The separate optional offline consumer below pins `chaoscontrol-smr` at `ec8aa799bad4735bf1028a092ca39feb08fb4bb7`; neither input is guest-execution evidence.
 
 ### Exact remaining prerequisites
 
@@ -89,7 +89,84 @@ Carry exact client source, binary, image/initrd, kernel, complete build/runtime 
 - ChaosControl #19 must supply the admitted single-vCPU-per-guest topology, actual fault application and supported persistent-device/transport handoff for this client, and retain the source/build/closure/observation/horizon evidence. #14/#15/#18 own retained finding/replay, mutation corpus attribution and replay-ready handoff.
 - Actual SDK instrumentation quality, guest execution, producer-exit saved-evidence independent replay and qualification must run through those existing rails before cohort acceptance. Missing dependencies and unsupported profiles remain blockers, not waived tests.
 
-No root Cargo, lock, build plan or flake edits are needed for the native boundary. Parent documentation integration should link this page from README and the documentation map; do not add guest package aliases to unbuilt native fixtures. An actual guest cutover requires an immutable upstream source contract and real Nix closure packaging under the existing pin-update policy.
+The native boundary needs no guest package aliases or new runtime dependencies. The optional offline consumer has its own Cargo/Nix/release-policy/lock/hash/plan/notice bindings under the existing pin-update policy. An actual guest cutover still requires real Nix closure packaging and the prerequisites above.
+
+## Offline instrumentation consumer
+
+The opt-in `chaoscontrol-conformance` feature exposes
+`molten::fabric_consistency::chaoscontrol::conformance::{wire, admission}` and
+`molten test chaoscontrol`. It uses `chaoscontrol-smr` at immutable revision
+`ec8aa799bad4735bf1028a092ca39feb08fb4bb7` through the distinct
+`chaoscontrol-conformance-src` Nix input. Default packages and backends are unchanged.
+Aspen consensus/evidence maintainers own this consumer; ChaosControl owns the
+producer validators and their versioned projection/chain domains.
+
+`wire::project` encodes supplied committed-apply facts as an inline producer
+`ChainObservation`. `source_sequence` identifies the source event, not necessarily
+the committed command index. The producer's `projection_ref` domain identifies
+the exact inline bytes; raw BLAKE3 and hash-only SDK records reject without repair.
+The canonical `ApplyBinding` sidecar retains group, operation, packed command,
+lifecycle generation and application-receipt identity. A projection identifies
+supplied data; it does not prove that an application path ran.
+
+Author `ExpectedCohort` independently of candidate evidence, preferably in Nickel
+and export JSON for the CLI. It binds the producer revision, workload/protocol
+profiles, source/build/dependency closure, adapter/observer, exact distinct-source
+membership, group/scheduler/boundaries, finite operation corpus and fault policy.
+Each operation supplies a client-session/sequence, canonical packed command and
+command ref, expected index/state/boundary and transition class. `operation_ref`
+derives the canonical logical identity; producer proposals use that same ref as
+both `logical_operation_id` and `operation_id`, preserving retries without an
+ambiguous delimiter encoding. The complete serde schemas are the public
+[`admission` types](../src/fabric_consistency/chaoscontrol/conformance/admission/schema/model.rs).
+
+```sh
+nix develop -c cargo run --locked --features chaoscontrol-conformance -- \
+  test chaoscontrol import --source-root INPUTS \
+  --expected expected.json --bundle bundle.json --ledger LEDGER
+nix develop -c cargo run --locked --features chaoscontrol-conformance -- \
+  test chaoscontrol status --ledger LEDGER --receipt-ref blake3:RECEIPT_DIGEST
+```
+
+Input names are single relative leaves below the explicit source-root capability;
+symlinks and non-regular files reject. Unix nonblocking opens prevent a substituted
+FIFO from waiting for a writer. Input admission finishes before destination-ledger
+creation. Policy is limited to 1 MiB, candidate bundles to 16 MiB and their smaller
+declared workload limit, and canonical receipts to 18 MiB. Additional ceilings are
+64 participants, 4,096 operations, 16,384 observations, 65,536 command bytes and
+256 fault outcomes. JSON has depth/string/node/collection preflight; packed
+commands have depth 32 and 8,192-token preflight. Emitted receipts and bounded
+ledger readback share depth 32 and 65,536-token limits before recursive decoding.
+
+The importer reruns producer source/cohort/history/receipt validators, independent
+expected-command/state/apply-once checks, conditional liveness and retained
+original/repeat semantic comparison. A self-consistent oracle identity, pass
+boolean or selected fault is not execution/effect proof. Status distinguishes
+`bounded-instrumentation-valid`, `external-failure`, `observer-incomplete`,
+`not-evaluated` and `semantic-replay-mismatch`. It shows cohort identities and
+blockers, workload/protocol bounds, fault stages, safety, liveness, replay class
+and non-claims. Valid failed/incomplete observations remain importable as such.
+
+`external-chaoscontrol-conformance-receipt-v1` retains the canonical summary plus
+typed expected-policy and full bundle JSON string records. Its BLAKE3 identity
+covers canonical packed Preserves for the entire receipt. `status` reads the
+bounded canonical ledger artifact, reimports its retained inputs and requires
+the recomputed identity before rendering the summary. This checks retained
+policy, not current operator trust or independently measured execution.
+
+Only `instrumentation` with claim `bounded-instrumentation` is admitted.
+`guest-execution`, snapshot-backed replay, authority and release promotion reject
+explicitly; they are never downgraded into passing instrumentation. The current
+consumer can check and retain real semantic mismatches but cannot attest a VM,
+physical fault, independent guest run or saved-snapshot reconstruction. Guest
+packaging, actual Raft/application instrumentation and campaigns remain separate
+unchecked Cairn tasks. Reproduce the pure controls with
+`nix develop -c cargo test --locked --lib --features chaoscontrol-conformance chaoscontrol`.
+
+The [retained source/instrumentation checkpoint](../.cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/qualification.json)
+records the executed unit and CLI controls, source/package checks and canonical
+gate receipts. Its producer artifacts are retained byte-for-byte; the original
+guest, physical-fault and saved-snapshot obligations remain blocked.
 
 ## Non-claims
 

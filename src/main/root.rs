@@ -114,6 +114,8 @@ pub(crate) fn run_runtime_command(command: command::Runtime) -> molten::error::R
 
 pub(crate) fn run_test_command(command: command::Test) -> molten::error::Result<()> {
     match command {
+        #[cfg(feature = "chaoscontrol-conformance")]
+        command::Test::Chaoscontrol { command } => crate::cli_chaoscontrol::run(command),
         command::Test::Run { suite, report_out } => crate::cli_harness::run_harness_suite_command(suite, report_out),
         command::Test::Replay { report, failure_out } => {
             crate::cli_harness::run_harness_replay_command(report, failure_out)

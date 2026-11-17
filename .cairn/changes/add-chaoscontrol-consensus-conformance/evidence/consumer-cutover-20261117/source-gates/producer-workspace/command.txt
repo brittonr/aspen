@@ -1,0 +1,1 @@
+cargo octet check -p molten -p molten-node-host --artifact-dir target/octet-chaoscontrol-workspace-final -- --all-targets --features molten/chaoscontrol-conformance

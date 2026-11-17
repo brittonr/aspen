@@ -480,6 +480,23 @@
         "type": "github"
       }
     },
+    "chaoscontrol-conformance-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794180653,
+        "narHash": "sha256-BE2LOEEOiKEtMbttrpR4qRRh00eFlBlGL45E7epz5VE=",
+        "ref": "refs/heads/main",
+        "rev": "ec8aa799bad4735bf1028a092ca39feb08fb4bb7",
+        "revCount": 1640,
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git"
+      },
+      "original": {
+        "rev": "ec8aa799bad4735bf1028a092ca39feb08fb4bb7",
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git"
+      }
+    },
     "chaoscontrol-src": {
       "flake": false,
       "locked": {
@@ -2635,6 +2652,7 @@
         "basalt-src": "basalt-src",
         "bounded-exec-src": "bounded-exec-src",
         "cairn-src": "cairn-src",
+        "chaoscontrol-conformance-src": "chaoscontrol-conformance-src",
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
         "doltlite-src": "doltlite-src",

@@ -23,6 +23,7 @@ default-run = "molten"
 path = "src/lib.rs"
 
 [features]
+chaoscontrol-conformance = ["dep:chaoscontrol-smr"]
 doltlite-oracle = []
 component-rpc = [
   "dep:anyhow",
@@ -99,6 +100,7 @@ bytes = { version = "1", optional = true }
 durable-file-publication = { git = "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "8e05e74e24b45f752d77145c4455385daaf6d6ab", version = "0.1.0" }
 choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
 chaoscontrol-snapshot-descriptor = { git = "https://github.com/brittonr/chaoscontrol.git", rev = "b8c440ea3b19df796542e58e8ee36200e1c3db85", version = "0.1.0" }
+chaoscontrol-smr = { git = "https://github.com/brittonr/chaoscontrol.git", rev = "ec8aa799bad4735bf1028a092ca39feb08fb4bb7", version = "0.1.0", optional = true }
 cap-fs-ext = "3"
 cap-std = "3"
 data-encoding = { version = "2", optional = true }
@@ -136,7 +138,7 @@ replay-ledger-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF
 revocation-view-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59", version = "0.1.0" }
 release-channel-index = { git = "https://github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
 release-channel-witness = { git = "https://github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
-rustix = { version = "1", features = ["event", "time"] }
+rustix = { version = "1", features = ["event", "fs", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }

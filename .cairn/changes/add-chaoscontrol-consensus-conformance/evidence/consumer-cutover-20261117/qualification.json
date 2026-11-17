@@ -1,0 +1,223 @@
+{
+  "schema": "aspen.chaoscontrol-consumer-qualification.v1",
+  "date": "2026-11-17",
+  "scope": "source and offline instrumentation controls only",
+  "evidence_class": "instrumentation",
+  "guest_qualified": false,
+  "snapshot_replay_qualified": false,
+  "immediate_outcome": "The opt-in bounded consumer imports independently selected instrumentation facts and revalidates retained policy through the real receipt/status CLI.",
+  "durable_capability": "A version-pinned inline committed-apply encoder, bounded fail-closed importer, canonical ledger receipt and retained-policy status path; unsafe claims remain explicit denials.",
+  "maintenance_owner": "Aspen consensus/evidence maintainers own the consumer; ChaosControl owns producer validators and versioned observation domains.",
+  "producer": {
+    "repository": "https://github.com/brittonr/chaoscontrol",
+    "revision": "ec8aa799bad4735bf1028a092ca39feb08fb4bb7",
+    "feature": "chaoscontrol-conformance",
+    "snapshot_descriptor_revision_unchanged": "b8c440ea3b19df796542e58e8ee36200e1c3db85"
+  },
+  "repeatability": {
+    "controls": "cli-observation.json",
+    "expected": "expected.json",
+    "bundle": "bundle.json",
+    "canonical_receipt": "receipt.preserves",
+    "source_artifacts": "source-gates/",
+    "target_defaults_unchanged": true
+  },
+  "checks": [
+    {
+      "kind": "focused-unit",
+      "command": "nix develop --no-write-lock-file -c cargo test --locked --lib --features chaoscontrol-conformance chaoscontrol -- --nocapture",
+      "passed": 47,
+      "failed": 0
+    },
+    {
+      "kind": "bounded-ledger-regressions",
+      "command": "nix develop --no-write-lock-file -c cargo test --locked --lib --features chaoscontrol-conformance bounded_read -- --nocapture",
+      "passed": 3,
+      "failed": 0,
+      "cases": [
+        "exact byte limit and content-identity recheck",
+        "deep packed-value denial before allocation",
+        "symlink and FIFO denial without a writer"
+      ]
+    },
+    {
+      "kind": "clippy",
+      "command": "nix develop --no-write-lock-file -c cargo clippy --locked --all-targets --features chaoscontrol-conformance -- -D warnings",
+      "passed": true
+    },
+    {
+      "kind": "formatting",
+      "commands": [
+        "nix develop --no-write-lock-file -c cargo fmt --check",
+        "nix develop --no-write-lock-file -c nixfmt --check flake.nix"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "recorded-real-cli",
+      "record": "cli-observation.json",
+      "successful_commands": 2,
+      "denial_controls": 7,
+      "receipt_ref": "blake3:b8931c91ca3104014adbfd770c68a12dc1af6af363f27373f8ac9374deb73a36"
+    },
+    {
+      "kind": "octet-workspace",
+      "command_record": "source-gates/producer-workspace/command.txt",
+      "status_record": "source-gates/producer-workspace/status.json",
+      "status": "clean",
+      "warnings": 0,
+      "findings": 0
+    },
+    {
+      "kind": "octet-lib",
+      "command_record": "source-gates/producer-lib/command.txt",
+      "status_record": "source-gates/producer-lib/status.json",
+      "status": "clean",
+      "warnings": 0,
+      "findings": 0
+    },
+    {
+      "kind": "source-corpus",
+      "record": "source-gates/producer-workspace/object-corpus-receipt.json",
+      "function_bearing_source_paths": 2745,
+      "objects": 22566,
+      "pure_cache_blocked": 22566,
+      "object_set_hash": "b3:80e4c259cd81a926f6147c02e212474598398800d749c3ddf75fa59bb68a0b9a",
+      "boundary": "review/provenance identity only; not correctness, semantic equivalence, dependency resolution or pure-cache eligibility"
+    },
+    {
+      "kind": "strict-source-gate",
+      "profile": "strict-ci",
+      "artifact_import": "pass",
+      "gate": "pass",
+      "artifact_import_ref": "blake3:b0083f60b42f3de2dca30165f66abc53bd580d8b71ada543f5f6f0af8f52d8dc",
+      "gate_ref": "blake3:4c30d882d20f36847e31668bb888704f22aaf46e8074660fb719102dcec8d871",
+      "remediation_plan_ref": "blake3:efed6933ea9add46edc23cf29a821af90c081e21c460c847a1b5a1447e18223d"
+    },
+    {
+      "kind": "hermetic-nix",
+      "checks": [
+        "vendored-sources",
+        "release-dependency-profile",
+        "git-source-hash-binding",
+        "release-profile-validation",
+        "license-boundary",
+        "doc-links",
+        "evidence-publication",
+        "inherited-tracey-debt"
+      ],
+      "passed": true,
+      "release_profile_validation_output": "/nix/store/2sa7sr5xgpbvk1v4qy2pd00sv5xs06kl-molten-release-profile-validation",
+      "scope": "selected source/package/profile checks, not a full flake or VM campaign"
+    },
+    {
+      "kind": "documentation-links",
+      "command": "nix develop --no-write-lock-file -c python3 scripts/check-doc-links.py --root .",
+      "files_checked": 315,
+      "findings": 0
+    },
+    {
+      "kind": "pre-record-cairn-checkpoint",
+      "strict_validate": true,
+      "proposal": "PASS",
+      "design": "PASS",
+      "tasks": "PASS",
+      "policy_blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9",
+      "change_status_remains": "blocked"
+    }
+  ],
+  "source_packaging_repairs": {
+    "noble_repository": "https://github.com/OnixResearch/noble-lang",
+    "noble_revision": "f7af9e972aa2968d22978794a667d267cf2745e8",
+    "anonymous_fetch_observed": true,
+    "importer": "scripts/vendored-sources.py import --root . --source noble-pure=$NOBLE_CHECKOUT",
+    "path_substitution": "$NOBLE_CHECKOUT is an unchanged checkout at the recorded exact revision; it is an acquisition input, not a product runtime path.",
+    "locked_files_verified": 310,
+    "fixture_bindings_verified": 2,
+    "restored_selection": "vendor/noble-pure/crates/noble-ngraph/src/belt/target/{codec,execution,lower,machine,types,validate}.rs",
+    "license_grant_unchanged": true,
+    "filter_rule": "Exclude the checkout root target directory, not source modules merely named target.",
+    "packed_decoder_source": "src/preserves/packed/bounds.rs was admitted to the Git-backed Nix source before the corrected hermetic build."
+  },
+  "retained_failed_attempts": [
+    {
+      "record": "source-gates/artifact-ledger-deny-root-directory-corpus.preserves",
+      "receipt_ref": "blake3:f87c9e4bc864e362b03f770cfb32239282ed729bfe674f55de8bbca8c9d27420",
+      "reason": "Directory-only receipt omitted include-only critical files from the replay input inventory."
+    },
+    {
+      "record": "source-gates/artifact-ledger-deny-workspace-directory-corpus.preserves",
+      "receipt_ref": "blake3:c8a929c08d33fbad277b99e96883230b9fb695091429d5a65864069d307dfe33",
+      "reason": "Adding workspace directories did not replace the required explicit include-only source file inventory."
+    }
+  ],
+  "retained_byte_digests": [
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/artifact-ledger-accepted.preserves",
+      "byte_blake3": "e50827db438f76a36d28d885ec07fd35c0dc2da2b552dd3aad1cd3f5021ac8e7"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/gate-receipt.preserves",
+      "byte_blake3": "1fa05737263b2848c9b59f3ae76c948c3f2ef065d6d5f6a7b07ac3c2f10ef1fd"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/remediation-plan.preserves",
+      "byte_blake3": "ccf2fdaf56b7b45d49dafdbac1f5e21fb8b41ce65365d8e133a8212f5b0064dd"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/artifact-ledger-deny-root-directory-corpus.preserves",
+      "byte_blake3": "47bff6068a2a7741ad4cb413e7425281ad6e4ea89b5bb585f5b59fa7f7d375ad"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/artifact-ledger-deny-workspace-directory-corpus.preserves",
+      "byte_blake3": "93ee928576df8783dc1c06e40218c674d7492f4c1cc2288adfb9e8fb0204937d"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-workspace/command.txt",
+      "byte_blake3": "7d8a2018dd1ba6965d2d2dd6a17c59ef5f734f58fae01321cc4bce1cd6bbfb27"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-workspace/status.json",
+      "byte_blake3": "308901a1a65e1b14bf60e0322b5647bf83ad93caad341df7a989212bb6c285f3"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-workspace/summary.txt",
+      "byte_blake3": "1be41031c0ca9ace145d60ae400673495c1dc5153766f6cdcc8a5c5d7d91b5c8"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-workspace/provenance.jsonl",
+      "byte_blake3": "8aa3e0670009f2ce2624c49e4aba0bd1388d7403f470cbde7a165622cbea0a45"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-workspace/object-corpus-receipt.json",
+      "byte_blake3": "a2bdcf1dae2d540c8681d9e8e63299ae0c072e5a7e55572bc08b0b5f4cfb3456"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-lib/command.txt",
+      "byte_blake3": "1d2ca76b56bb940b0dcec00b500493971e5d328e36a709807b4dbc811dc9ff4a"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-lib/status.json",
+      "byte_blake3": "4a05a561943d7b8ad60d8338c518b64abe9a6fcc18754d7723e2c99639ccffd2"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-lib/summary.txt",
+      "byte_blake3": "861db27fce8f2d63a7aa81ac3b860d94970e76e7a0601c31ad94ebdfd7ef1119"
+    },
+    {
+      "path": ".cairn/changes/add-chaoscontrol-consensus-conformance/evidence/consumer-cutover-20261117/source-gates/producer-lib/provenance.jsonl",
+      "byte_blake3": "336a1ec5c5a7286b36ceb7a927e92145f9a83dec3c6e7c1d40e16c81b67667b9"
+    }
+  ],
+  "remaining_blockers": [
+    "Admitted measured multi-guest Molten source/binary/image/kernel/runtime closure.",
+    "Distinct-guest transport and persistent-device mappings; native signal directories and memory-backed shares are not that contract.",
+    "Actual Raft/application observations, physical fault/recovery campaigns and independently retained saved-snapshot replay."
+  ],
+  "non_claims": [
+    "No guest or cross-host execution ran for this consumer cutover.",
+    "Synthetic control identities are not source/build/execution attestation.",
+    "No physical-fault, snapshot-backed replay, authority, durability, production, deployment or release qualification is established.",
+    "The original uncompleted Cairn obligations remain unchecked; the change must not sync or archive as complete."
+  ]
+}

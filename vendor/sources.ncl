@@ -81,7 +81,7 @@ in
       },
       {
         name = "noble-pure",
-        repository = "https://github.com/OnixResearch/noble",
+        repository = "https://github.com/OnixResearch/noble-lang",
         revision = "f7af9e972aa2968d22978794a667d267cf2745e8",
         license = "AGPL-3.0-or-later (operator exact-revision grant; no upstream license declaration)",
         destination = "vendor/noble-pure",

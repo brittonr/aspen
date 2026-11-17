@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "1f9d8e745edcb926f3bf31e8371f1ad66c1a168115b1ed7a9c7130ab653cfaab",
-  "inputsHash": "a112bd6f5022e98385f4943f35fec481e949610a1cbcc178f416447b9c7c5771",
+  "cargoLockHash": "f2ee5e155c43447ae2ea88543c82d49be763bc1ffcbb190e943783bb89e72a92",
+  "inputsHash": "963d8a4be7c100321df877744d8ace5f0e4a1dd22fbb160f17ea4779fef530cc",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -790,7 +790,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-integration-20261115/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-chaoscontrol-consumer-20261117/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

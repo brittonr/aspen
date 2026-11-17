@@ -27,6 +27,9 @@ vendor/
 !/vendor/sources.lock.json
 !/vendor/vm-cohort/
 !/vendor/noble-pure/
+# Reviewed producer source module, not a Cargo output directory.
+!/vendor/noble-pure/crates/noble-ngraph/src/belt/target/
+!/vendor/noble-pure/crates/noble-ngraph/src/belt/target/**
 .agent/
 .claude/
 .dogfood-runs/

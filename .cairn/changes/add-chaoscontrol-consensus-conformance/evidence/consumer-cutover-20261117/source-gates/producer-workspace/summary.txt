@@ -1,0 +1,12 @@
+--- octet summary ---
+Status: clean
+Findings: 0
+Warnings: 0
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:1c5ccd77363a0329f1ed9e93042c7511b95d40b50f63c95c81ab71fd804369d0
+Profile hash: b3:9bf99503d3627fb7e9251dec177e2577fcf47343257db554c59165acbbdbdabb
+---

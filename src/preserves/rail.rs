@@ -7,3 +7,6 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p005/bod
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p008/body.rs"));
+
+#[path = "packed/bounds.rs"]
+pub mod packed_bounds;
