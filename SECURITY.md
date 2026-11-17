@@ -12,9 +12,12 @@ Passing a bounded simulation, NixOS VM fixture, dependency audit, source gate,
 or Cairn lifecycle check does not establish a security boundary for arbitrary
 hosts, guests, workloads, transport peers, or operators. The current supported
 scope is one local x86_64 Linux node profile using the reviewed local adapters.
-Cross-host transport, hosted actors, VM migration, WAN/relay paths, Byzantine
-fault tolerance, and the `nixosModules.molten` operator module are not yet
-qualified by this repository. See the open issues for their current status.
+Cross-host transport, hosted actors, VM migration, WAN/relay paths and Byzantine
+fault tolerance are not yet qualified by this repository. The
+[`nixosModules.molten` local fixture](docs/nixos-service-module.md#validation-boundary)
+has recorded startup, restart, bounded-stop and trust/source-denial results;
+those results do not establish independent operator trust or a production
+security boundary. See the open issues for their current status.
 
 ## Operating precautions
 

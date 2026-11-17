@@ -1,0 +1,70 @@
+{
+  "schema": "aspen.native-client-retained-reconciliation.v1",
+  "observed_at": "2026-11-16T23:39:25.710453-05:00",
+  "evidence_class": "offline identity reconciliation of retained native-process execution",
+  "execution": {
+    "invocation": "invocation.json",
+    "result_log": "run.log",
+    "recorded_exit_code": 0,
+    "recorded_tests_passed": 6,
+    "recorded_tests_failed": 0,
+    "recorded_test_seconds": 5.23,
+    "new_execution": false
+  },
+  "immutable_source": {
+    "path": "/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source",
+    "revision": "nix-source:/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source",
+    "encoding": "exact Nix NAR serialization",
+    "recorded_blake3": "ba9a881c83206cc3238d871a176e5a99243912cadc7ec8da8d48e40c6c912906",
+    "remeasured_blake3": "ba9a881c83206cc3238d871a176e5a99243912cadc7ec8da8d48e40c6c912906",
+    "dump_command": [
+      "nix-store",
+      "--dump",
+      "/nix/store/ldl9x7fnapz4kgxrs9wskpkqy8nhli2b-source"
+    ],
+    "dump_exit_code": 0,
+    "hash_command": [
+      "b3sum",
+      "--no-names"
+    ],
+    "hash_exit_code": 0
+  },
+  "immutable_binary": {
+    "path": "/nix/store/241bb55djgk13i4aw0z6d6fs4q99c434-rust_molten-0.1.0-test/tests/molten-26b461e940",
+    "command": "b3sum",
+    "recorded_blake3": "bfdaac104c2571493aa7b1b2c06088f67a4557102b2945b7ff8fd0dc66852737",
+    "remeasured_blake3": "bfdaac104c2571493aa7b1b2c06088f67a4557102b2945b7ff8fd0dc66852737"
+  },
+  "original_repeat_pairs": [
+    {
+      "role": "build bindings",
+      "original": "original/client-build-bindings.preserves",
+      "repeat": "original-repeat/client-build-bindings.preserves",
+      "original_blake3": "e3e33903ce2e2a6cd00cffbdb00ee6295b2531d22ac6ae04e4116b9b067783a5",
+      "repeat_blake3": "e3e33903ce2e2a6cd00cffbdb00ee6295b2531d22ac6ae04e4116b9b067783a5"
+    },
+    {
+      "role": "canonical input",
+      "original": "original/client-input.preserves",
+      "repeat": "original-repeat/client-input.preserves",
+      "original_blake3": "553778aa0d25c764c7917703c28246f9cee2962fa3c47283c8387b96059e4e75",
+      "repeat_blake3": "553778aa0d25c764c7917703c28246f9cee2962fa3c47283c8387b96059e4e75"
+    },
+    {
+      "role": "canonical oracle",
+      "original": "original/client-oracle.preserves",
+      "repeat": "original-repeat/client-oracle.preserves",
+      "original_blake3": "d405e9dc4483278ec5cac5268b1ba22d9f76d08b2631bf7167daf03ff6200cc9",
+      "repeat_blake3": "d405e9dc4483278ec5cac5268b1ba22d9f76d08b2631bf7167daf03ff6200cc9"
+    }
+  ],
+  "establishes": "The retained six-test native run used the recorded immutable source and executable; original and fresh-process repeat retained identical build, input and oracle bytes. This closes the native verification accounting gap only.",
+  "non_claims": [
+    "No new native execution",
+    "No qualification of later or changed source/binary builds",
+    "No independently authenticated producer/operator trust",
+    "No measured guest closure, KVM campaign, saved-snapshot replay or machine-loss claim",
+    "No full runtime-trace equality inferred from matching selected canonical records",
+    "No canonical retained execution artifact was modified"
+  ]
+}

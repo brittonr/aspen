@@ -69,6 +69,13 @@ binary identities. This closes the native source-binding gap only. Guest,
 multi-guest transport/storage and independent saved-snapshot campaign/replay
 qualification remain blocked by the prerequisites below.
 
+The [offline retained-evidence reconciliation](../.cairn/changes/add-bounded-chaoscontrol-client/evidence/native-2026-11-15/reconciliation.json)
+remeasured that original Nix source NAR and test executable and matched their
+recorded BLAKE3 identities. Original/repeat build bindings, input and oracle
+bytes also match. This is not a new execution, full runtime-trace equivalence,
+or qualification of a later build. The native verification task is complete;
+the measured guest/campaign task remains unchecked and the change stays active.
+
 ## Guest handoff through existing mechanisms
 
 The first requested executor profile is single-vCPU per guest, not SMP. Use the existing ChaosControl Rust guest image/process bundle and `chaoscontrol_smr::observation::guest::MultiNodeGuestIntake`, not a new control service or qualification report. At reviewed ChaosControl source ec8aa799bad4735bf1028a092ca39feb08fb4bb7 (issue baseline), GuestSource binds guest_id, executable_ref, source_revision_ref, adapter_ref and launch_contract_ref. The intake requires at least two distinct guest IDs and exact participant-source membership. Its shell must independently remeasure retained artifact bytes, emit actual protocol observations plus complete drains, and run the existing cohort/history validators. Those validators do not attest to execution or grant replay promotion.

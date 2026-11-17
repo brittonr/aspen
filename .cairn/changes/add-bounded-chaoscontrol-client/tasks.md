@@ -8,7 +8,7 @@
 
 ## Evidence and closeout
 
-- [ ] [serial] Execute focused native tests, retain original-build independent repeat and validate source/lifecycle policy. r[molten.chaoscontrol_client.verification]
+- [x] [serial] Execute focused native tests, retain original-build independent repeat and validate source/lifecycle policy. r[molten.chaoscontrol_client.verification]
 - [ ] [depends:chaoscontrol-molten-cohort] Produce the compatible measured guest closure and obtain independent campaign/replay qualification through ChaosControl #19. r[molten.chaoscontrol_client.guest_boundary]
 
 No execution, replay, qualification or closure evidence is claimed by unchecked tasks.
@@ -24,4 +24,23 @@ checks. The source-revision environment inputs were unavailable for this local
 run; these artifacts do not establish immutable-source or guest qualification.
 The missing measured guest, persistent-device/transport cohort and independent
 ChaosControl campaign/replay acceptance remain open and are not archived.
+
+## Immutable native evidence reconciliation
+
+The later [2026-11-15 invocation](evidence/native-2026-11-15/invocation.json)
+and [result log](evidence/native-2026-11-15/run.log) retain six passing native
+tests from the exact Nix-built executable, including the independent
+fresh-process original repeat and valid-prefix reduction. They supersede the
+earlier missing-source-context statement for that native build only.
+
+The [offline reconciliation](evidence/native-2026-11-15/reconciliation.json)
+remeasured the original source NAR and executable and matched their recorded
+BLAKE3 identities. Original/repeat build bindings, canonical input and oracle
+bytes are identical. This records existing execution plus new identity checks,
+not a new test run or qualification of later builds. No retained canonical
+execution bytes were changed.
+
+The guest-closure and independent ChaosControl campaign/replay task remains
+unchecked. Native process-crash evidence cannot satisfy that boundary; the
+change remains active rather than archived.
 
