@@ -416,7 +416,7 @@ pkgs.testers.runNixOSTest {
       node_a.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
 
   node_b.succeed("""
-    molten() { ${startupSourceBinding}/bin/molten "$@"; }
+    molten() { ${pkgs.util-linux}/bin/runuser -u molten -- ${startupSourceBinding}/bin/molten "$@"; }
     molten node control-request \
       --operation status \
       --out /var/lib/molten/vm-evidence/restart-status-request.preserves
@@ -886,7 +886,6 @@ pkgs.testers.runNixOSTest {
         --artifact /var/lib/molten/vm-evidence/vm-faults/storage-attempt.preserves
         --artifact /var/lib/molten/vm-evidence/vm-faults/storage-pre.preserves
         --artifact /var/lib/molten/vm-evidence/vm-faults/storage-post.preserves
-        --log /var/lib/molten/vm-evidence/vm-faults/storage-attempt.log
       )
     fi
     molten test nixos-vm manifest \

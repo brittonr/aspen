@@ -1,0 +1,2 @@
+error: node status health write open denied path=health-receipt.preserves errno=13
+

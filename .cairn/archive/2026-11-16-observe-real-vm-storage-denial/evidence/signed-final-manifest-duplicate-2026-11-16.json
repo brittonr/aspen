@@ -1,0 +1,22 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_base_commit": "afc8308bff9a8c50b2315cb4a17c9454252d7c45",
+  "test_derivation": "/nix/store/yxix1h0ppzwv059s6wvx6p44mix6zz73-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "source_binding_derivation": "/nix/store/bdl7jw50c5b0vnnbrzlpcb3w94079zxl-molten-node-source-binding-v1.drv",
+  "source_binding_output": "/nix/store/hgw28152cfi855jrffljsc1fpqki4bpm-molten-node-source-binding-v1",
+  "resources_per_vm": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "private_writable_store_overlay": true},
+  "outer_wall_seconds": 4439.75,
+  "exit_code": 1,
+  "result": "final-manifest-denied-duplicate-semantic-log",
+  "observed": [
+    "The corrected service-identity client got past restart and reached final evidence assembly.",
+    "The actual protected node-status attempt emitted a typed pre-write health-file EACCES diagnostic, and its attempt/pre/post values were copied by the fixture.",
+    "VM evidence validation emitted decision=pass diagnostics=0 with ref blake3:5abc31189172d9c3fc8010a3c0e40c135fab53ae5c3f0b1bbe21c73755fe783f.",
+    "Manifest construction emitted decision=deny entries=23 diagnostics=1: duplicate-semantic-artifact:log:blake3:3c44967c56db29036f45a7a10be9e20a6eb8bb1ad710d219a68925c32dd8f447.",
+    "The producer listed both storage-attempt.log and its exact storage-denial.log copy; final artifact export was not reached."
+  ],
+  "raw_log_blake3": "9c6a73b77505d967bf5c276a378ac55ff70c69e6497a3e880b2b94af90ccb05b",
+  "correction": "List the diagnostic once, retaining storage-denial.log and all three canonical storage artifacts. Keep the manifest duplicate-rejection rule unchanged.",
+  "non_claim": "This failed overall campaign does not supply a retained complete canonical packet, a passing manifest, independent operator trust or release qualification. The final corrected campaign still requires execution."
+}

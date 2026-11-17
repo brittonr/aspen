@@ -1,0 +1,1 @@
+node run startup=blake3:d85613f195b7cc9abcc3f526de473e74f47f4050663f9c7b3c00e7cc42d1d417 adapters=12 state_root=/var/lib/molten-cross/node-a

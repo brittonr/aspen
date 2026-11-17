@@ -1,0 +1,1499 @@
+{
+  "schema": "molten-source-inventory-reconciliation-v1",
+  "observed_at": "2026-11-16T22:12:29.639816+00:00",
+  "source_base_commit": "ace29e598a74caa14f2ca338f9ffc3ce068d938d",
+  "binding_files_blake3": {
+    "Cargo.toml": "df1604797781133ae827060d9f8304ef00254626961735858a7967c77d90b38e",
+    "Cargo.lock": "6f93991576af2303f9b99b20661da7e87e200faaed57617ee756b6c2e3d587db",
+    "flake.lock": "974c6b0a8102c65d08cccb71ede949a5d066f041f5ffcfc710c09d31748ef158",
+    "crate-hashes.json": "244ef9fd653d5ec847ea6b0fb523402ab8cac75247324cf0ca6d76d4441b62a8",
+    "build-plan.json": "f1e27454a24ab9a55c8f3d5f125e1b813c20db9228b83bf080c49164c042ad0c",
+    "release-policy-build-plan.json": "081da132c0d576b4887f21dd6f15101d5c91b741cad476310c035e7f2cf3dfab",
+    ".cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json": "ea78a0bf94b9e952101aaa43e3594abe1227a1adcb17f922ce4a73596954edb6"
+  },
+  "method": "Join current locked fixed-Nix node aliases and current generated Git-source-hash rows to retained successful anonymous observations by both exact revision and metadata-free NAR identity. Success requires retained expected and observed NARs to agree. No network requests are performed by this reconciliation.",
+  "summary": {
+    "fixed_node_aliases": 208,
+    "fixed_source_byte_cohorts": 76,
+    "fixed_revision_byte_cohorts": 76,
+    "git_source_hash_rows": 25,
+    "git_revision_byte_cohorts": 25,
+    "unmatched_fixed_bindings": 0,
+    "unmatched_git_bindings": 0
+  },
+  "fixed_nix_inventory": [
+    {
+      "narHash": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
+      "revision": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+      "nodes": [
+        "durable-authority-state-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 13,
+          "raw_reference": "raw.default_seeds[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-+3dC9y/XqMJqfdPt8E3ksdg0ioeCmZnZOQwfUPUFL+E=",
+      "revision": "3f7abb641ee604f54629da415bc7686f89662065",
+      "nodes": [
+        "octet-toolchain"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 41,
+          "raw_reference": "raw.fixed_archive_even[0]"
+        },
+        {
+          "observation_index": 57,
+          "raw_reference": "raw.fixed_archive_odd[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-+ujCegoDtsFk7ALTLgPcbRZkursN7Nsmo9VglSMNP9c=",
+      "revision": "cb50ff16b9f1066b8a97dc06da704de2da2fa41c",
+      "nodes": [
+        "aeneasCharon",
+        "aeneasCharon_2",
+        "charon",
+        "charon_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 73,
+          "raw_reference": "raw.remaining_archives_left.rows[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-/1F7W5l2BvnI2ig9ZGjvcZ341QDRvB4xweIvJYrsbdo=",
+      "revision": "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+      "nodes": [
+        "doltlite-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 42,
+          "raw_reference": "raw.fixed_archive_even[1]"
+        },
+        {
+          "observation_index": 58,
+          "raw_reference": "raw.fixed_archive_odd[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-0eBeRdZCK/mxbuzmZqb8+3ssCuykGbGrDWWwD3ItVto=",
+      "revision": "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f",
+      "nodes": [
+        "mathlib-src",
+        "mathlib-src_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 81,
+          "raw_reference": "raw.remaining_archives_right[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-1/SLBjSYBzDdDhvLQ83wrzBakyS/xNGgtxHGNuveOEQ=",
+      "revision": "07a5bfc8ac36c5370199343fa620b69f63186e33",
+      "nodes": [
+        "bun2nix"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 27,
+          "raw_reference": "raw.recursive_nix_tools[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-14SWYERoXP+M6lmfTXdPzB30E0eI+FL/81xnM89PlIE=",
+      "revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+      "nodes": [
+        "spacewasm-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 43,
+          "raw_reference": "raw.fixed_archive_even[2]"
+        },
+        {
+          "observation_index": 59,
+          "raw_reference": "raw.fixed_archive_odd[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
+      "revision": "2a1916465ae6649aebef3758233cfea98e5d33db",
+      "nodes": [
+        "flux-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 74,
+          "raw_reference": "raw.remaining_archives_left.rows[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-24p4oLISFCehrfYAXORuEm6WzvWgRMhoApYnwUjSfPM=",
+      "revision": "7c23ae87427d49f73626f3bd045d7980f00b2685",
+      "nodes": [
+        "fstar",
+        "fstar_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 44,
+          "raw_reference": "raw.fixed_archive_even[3]"
+        },
+        {
+          "observation_index": 60,
+          "raw_reference": "raw.fixed_archive_odd[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-2cM912L2YXVnVX9LquwhAPKyjPP/z/oFQRe7Qq9bHHE=",
+      "revision": "e41340bec587b6d049b5cc518ec7db925dde84be",
+      "nodes": [
+        "artifact",
+        "artifact_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 89,
+          "raw_reference": "raw.fixed_git[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
+      "revision": "d233902339c02a9c334e7e593de68855ad26c4cb",
+      "nodes": [
+        "nixpkgs_14"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 82,
+          "raw_reference": "raw.remaining_archives_right[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-3OkN9IX1ommW6JZlgOOalz8Zx8tQGNgjaM7LVMYFZVg=",
+      "revision": "0e0a71eefe6f01563d11acc6e1d7af1d505934a9",
+      "nodes": [
+        "dylint-src",
+        "dylint-src_10",
+        "dylint-src_11",
+        "dylint-src_12",
+        "dylint-src_13",
+        "dylint-src_2",
+        "dylint-src_3",
+        "dylint-src_4",
+        "dylint-src_5",
+        "dylint-src_6",
+        "dylint-src_7",
+        "dylint-src_8",
+        "dylint-src_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 45,
+          "raw_reference": "raw.fixed_archive_even[4]"
+        },
+        {
+          "observation_index": 61,
+          "raw_reference": "raw.fixed_archive_odd[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-4vhDuZ7OZaZmKKrnDpxLZZpGIJvAeMtK6FKLJYUtAdw=",
+      "revision": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+      "nodes": [
+        "nixpkgs",
+        "nixpkgs_10"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 75,
+          "raw_reference": "raw.remaining_archives_left.rows[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-5xsK26KRHf0WytBtsBnQYC/lTWDhQuT57HJ7SzuqZcM=",
+      "revision": "b556d7bbae5ff86e378451511873dfd07e4504cd",
+      "nodes": [
+        "crane_10",
+        "crane_11",
+        "crane_12",
+        "crane_13",
+        "crane_14",
+        "crane_16",
+        "crane_17",
+        "crane_18",
+        "crane_2",
+        "crane_3",
+        "crane_4",
+        "crane_5",
+        "crane_6"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 46,
+          "raw_reference": "raw.fixed_archive_even[5]"
+        },
+        {
+          "observation_index": 62,
+          "raw_reference": "raw.fixed_archive_odd[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-6MkqajPICgugsuZ92OMoQcgSHnD6sJHwk8AxvMcIgTE=",
+      "revision": "f0927703b7b1c8d97511c4116eb9b4ec6645a0fa",
+      "nodes": [
+        "pre-commit-hooks",
+        "pre-commit-hooks_2",
+        "pre-commit-hooks_3"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 28,
+          "raw_reference": "raw.recursive_nix_tools[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-70AmHxWEbeQK3SFi9ZZ67Prmy3d1zgXHLk/AdPp+EdE=",
+      "revision": "7546a78b4eeef8686c6837e187aa12420f4f03bb",
+      "nodes": [
+        "valence_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 83,
+          "raw_reference": "raw.remaining_archives_right[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-8BjG/P0xnuCyVOXlYRwdI1B8nVtyYLf3oDwPSimqREY=",
+      "revision": "e316f19ee058e6db50075115783be57ac549c389",
+      "nodes": [
+        "crane",
+        "crane_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 63,
+          "raw_reference": "raw.fixed_archive_odd[6]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-8F7g650MFMXm5zyOBadWg0pOHxXccDgwbOVUZYLwwkQ=",
+      "revision": "b18a547801dfebaa5ee3e748e3ebefed1a66cb17",
+      "nodes": [
+        "slotcar_10",
+        "slotcar_2",
+        "slotcar_4",
+        "slotcar_6",
+        "slotcar_8"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 76,
+          "raw_reference": "raw.remaining_archives_left.rows[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-8i/87eeoqiGE4yOTjwSA3Eh/ziJRQEmd/unYU+K27sk=",
+      "revision": "d407951447dcd00442e97087bf374aad70c04cea",
+      "nodes": [
+        "nixpkgs_19"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 47,
+          "raw_reference": "raw.fixed_archive_even[6]"
+        },
+        {
+          "observation_index": 64,
+          "raw_reference": "raw.fixed_archive_odd[7]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-91qqW8lhL7TLwgQWijoGBbiD4t7/q75KTi8NxjVmSmA=",
+      "revision": "3107b77cd68437b9a76194f0f7f9c55f2329ca5b",
+      "nodes": [
+        "flake-parts_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 29,
+          "raw_reference": "raw.recursive_nix_tools[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-9VvC20PJPsleGMewwcWYKGzDIyjckEz8uWmT0vCDYK0=",
+      "revision": "2fbfb1d73d239d2402a8fe03963e37aab15abe8b",
+      "nodes": [
+        "nixpkgs_17",
+        "nixpkgs_7",
+        "nixpkgs_8"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 30,
+          "raw_reference": "raw.recursive_nix_tools[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-9tpvMGFteZnd3gRQZFlRCohVpqooygFuy9yjuyRL2C0=",
+      "revision": "9cf7092bdd603554bd8b63c216e8943cf9b12512",
+      "nodes": [
+        "nixpkgs_12",
+        "nixpkgs_13",
+        "nixpkgs_15",
+        "nixpkgs_16",
+        "nixpkgs_18",
+        "nixpkgs_20",
+        "nixpkgs_21",
+        "nixpkgs_22",
+        "nixpkgs_3",
+        "nixpkgs_4",
+        "nixpkgs_5",
+        "nixpkgs_6"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 84,
+          "raw_reference": "raw.remaining_archives_right[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-ASWqHCXtUIDerN5vG57TbciTs2q2kHx/dyJI6q0veDk=",
+      "revision": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+      "nodes": [
+        "valence"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 48,
+          "raw_reference": "raw.fixed_archive_even[7]"
+        },
+        {
+          "observation_index": 65,
+          "raw_reference": "raw.fixed_archive_odd[8]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-AnWxKYQTgvQwzLPMyiGmUroVNVuLos6ThjP0cGRiCcs=",
+      "revision": "4fe90e130f2871cf69a6febcdc70785adca98aea",
+      "nodes": [
+        "schema-migration-core-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 11,
+          "raw_reference": "raw.default_seeds[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-BO/AlwJBIuW+WXGRQgd2LymvGIYtK0fqd3YYMDtfGBw=",
+      "revision": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+      "nodes": [
+        "choregraph-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 2,
+          "raw_reference": "raw.default_github[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+      "revision": "29dac88ecded94457572db3fdfaaaab95fa91525",
+      "nodes": [
+        "bounded-exec-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 18,
+          "raw_reference": "earlier anonymous-acquisition-20261113.json.bounded_exec"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-CWIDZFX/HsNJeMv6hOqVT6m/5Tkx9xfEzok+Lw2zkHk=",
+      "revision": "2e9c743bc337136b0714f27dae05d575ad81f0ee",
+      "nodes": [
+        "llm-agents"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 31,
+          "raw_reference": "raw.recursive_nix_tools[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-D+OI00Ouwm0v65igIYSCGPXKCl6/SZsOyz1wFM1VAF4=",
+      "revision": "1320a983e6c3d1e2fb53dd2464b084b4903b1426",
+      "nodes": [
+        "nickel-1-17-0",
+        "nickel-1-17-0_2",
+        "nickel-cli"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 22,
+          "raw_reference": "raw.primary_nix_tools[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-D8OOwvq3zDDCtIhMcNueb9tGSZaZUanKpWDleRgQ80U=",
+      "revision": "dc00324a2438762582b49954373112b8eab29cab",
+      "nodes": [
+        "rust-overlay_11",
+        "rust-overlay_12",
+        "rust-overlay_14",
+        "rust-overlay_15",
+        "rust-overlay_19",
+        "rust-overlay_2",
+        "rust-overlay_20",
+        "rust-overlay_21",
+        "rust-overlay_3",
+        "rust-overlay_5",
+        "rust-overlay_6"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 49,
+          "raw_reference": "raw.fixed_archive_even[8]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-DsSIQSRMrLOz40LrGZ03sp2RlJ9sz3wKpd8XPTOzXnw=",
+      "revision": "e013376c32a8fcf07ddb6ec71739552bc118b7bd",
+      "nodes": [
+        "rust-overlay_13",
+        "rust-overlay_4"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 66,
+          "raw_reference": "raw.fixed_archive_odd[9]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
+      "revision": "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
+      "nodes": [
+        "cairn-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 1,
+          "raw_reference": "raw.default_github[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-HG2cCnktfHsKV0s4XW83gU3F57gaTljL9KNSuG6bnQs=",
+      "revision": "637db329424fd7e46cf4185293b9cc8c88c95394",
+      "nodes": [
+        "gitignore",
+        "gitignore_2",
+        "gitignore_3"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 32,
+          "raw_reference": "raw.recursive_nix_tools[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-KlepQu/O5m11lAjcJ4ER5bc6bIzyX2UMPDARzMzQfIw=",
+      "revision": "e598b37857b895b81020a65a802ef55f5bbed72f",
+      "nodes": [
+        "rust-overlay_17",
+        "rust-overlay_8"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 50,
+          "raw_reference": "raw.fixed_archive_even[9]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-KrCOV4I/R7ET3Se9uN9lLv1XmfnGWYBMTMMEgs5Ey64=",
+      "revision": "a22ea2bff65f16abec4f0f7ba2d7ddc14dc35871",
+      "nodes": [
+        "cairn_2",
+        "cairn_6"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 67,
+          "raw_reference": "raw.fixed_archive_odd[10]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-Ly4j75O8ICaSQx3uxPnwk2x7PMF0XQvn5r0c3yBA7FI=",
+      "revision": "f9d8b65950353691ab56561e7c73d2e1063d810b",
+      "nodes": [
+        "nixpkgs_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 21,
+          "raw_reference": "raw.primary_nix_tools[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+      "revision": "ff81ac966bb2cae68946d5ed5fc4994f96d0ffec",
+      "nodes": [
+        "flake-compat",
+        "flake-compat_4"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 77,
+          "raw_reference": "raw.remaining_archives_left.rows[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-O0jnGZ9cr7bsyZqYTmBEUY0TvRnvMalI19b7eGZu42I=",
+      "revision": "fc38f59330b626961d166febfdf1a5aa6575460f",
+      "nodes": [
+        "verified-node-replication-octet"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 51,
+          "raw_reference": "raw.fixed_archive_even[10]"
+        },
+        {
+          "observation_index": 68,
+          "raw_reference": "raw.fixed_archive_odd[11]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-OKzh+0SPDKBS8Jr6icvTxuAmTZ79v6Lm6wmgQ6vaY/o=",
+      "revision": "695124d459574ba7aeba6097310d237f393c243c",
+      "nodes": [
+        "cairn",
+        "cairn_5"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 85,
+          "raw_reference": "raw.remaining_archives_right[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-OtWXmMwjfzB95FFZ2volg6GNJf8UbTsCAO0cs9Yqb7U=",
+      "revision": "aa01409ed38bf7a978570ff567c4475376925df6",
+      "nodes": [
+        "wrpc-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 90,
+          "raw_reference": "raw.fixed_git[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-OvqB00mDIsGDOcuK5jvPJUModVz9WbIBuM/l06TABHc=",
+      "revision": "2f8213a88781d9d38bb81319d06a50805d48ccd3",
+      "nodes": [
+        "slotcar",
+        "slotcar_3",
+        "slotcar_5",
+        "slotcar_7",
+        "slotcar_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 52,
+          "raw_reference": "raw.fixed_archive_even[11]"
+        },
+        {
+          "observation_index": 69,
+          "raw_reference": "raw.fixed_archive_odd[12]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8=",
+      "revision": "9201074343cd9da0ffaf6ec9db690af5b445d663",
+      "nodes": [
+        "valence-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 7,
+          "raw_reference": "raw.default_github[7]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-UkkMh3bX9QW4Luqkm98nUaOqKWrU6i65mUnph3WeSSw=",
+      "revision": "6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a",
+      "nodes": [
+        "rust-overlay_18"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 24,
+          "raw_reference": "raw.primary_nix_tools[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-V5+3pPpDhcrRGA9kmYmod3/pScwfYZEj6MJKsuhbROk=",
+      "revision": "bc2eb6f941369fa3c695e30598b5758b11e4f0de",
+      "nodes": [
+        "aeneas",
+        "aeneas_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 78,
+          "raw_reference": "raw.remaining_archives_left.rows[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-VHMydvati2aB8U2z3JEh7z+RsjFpmjHSYRpXd3/vhCg=",
+      "revision": "4367300e10740ecc99ba4b2171ace561b4787327",
+      "nodes": [
+        "octet-cutover-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 53,
+          "raw_reference": "raw.fixed_archive_even[12]"
+        },
+        {
+          "observation_index": 70,
+          "raw_reference": "raw.fixed_archive_odd[13]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-VmD1jJVs2GnQXorVrLEwF0kNtK34nHSxrcsYNtVvPEU=",
+      "revision": "dc3a664bc01b46c704621cdf647a2293ea1dddff",
+      "nodes": [
+        "wrappers"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 33,
+          "raw_reference": "raw.recursive_nix_tools[6]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+      "revision": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+      "nodes": [
+        "systems",
+        "systems_10",
+        "systems_11",
+        "systems_12",
+        "systems_13",
+        "systems_14",
+        "systems_15",
+        "systems_16",
+        "systems_17",
+        "systems_18",
+        "systems_19",
+        "systems_2",
+        "systems_20",
+        "systems_21",
+        "systems_22",
+        "systems_3",
+        "systems_4",
+        "systems_5",
+        "systems_6",
+        "systems_7",
+        "systems_8",
+        "systems_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 34,
+          "raw_reference": "raw.recursive_nix_tools[7]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+      "revision": "ed949b8084595cb467e983747f1089e214965ac6",
+      "nodes": [
+        "hegel-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 9,
+          "raw_reference": "raw.default_github[9]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-WMNrQL7l+LIabv5k4ekcN5Su5rXnaCYYyzzkNF2+NP0=",
+      "revision": "cf04e894e53eb0947230118a086ef6066ddba38c",
+      "nodes": [
+        "executable-extent-octet"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 86,
+          "raw_reference": "raw.remaining_archives_right[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-WSFCsDSE5ffgD2MqzkM2CYjeFiKhRF/dJUN8uedb6YE=",
+      "revision": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
+      "nodes": [
+        "treefmt-nix",
+        "treefmt-nix_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 35,
+          "raw_reference": "raw.recursive_nix_tools[8]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-X6rJYSESBVr3hBoH0WbKE5KvhPU5bloyZ2L4K60/fPQ=",
+      "revision": "c1dfcf08411b08f6b8615f7d8971a2bfa81d5e8a",
+      "nodes": [
+        "flake-utils",
+        "flake-utils_11"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 54,
+          "raw_reference": "raw.fixed_archive_even[13]"
+        },
+        {
+          "observation_index": 71,
+          "raw_reference": "raw.fixed_archive_odd[14]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-XqrSVHdsfuOz+8WBcdMQqEp71vLSVpUc2FB6kbn8DNw=",
+      "revision": "138c5571a5efc9506f6e2a2c4d33e9f5ebb8067b",
+      "nodes": [
+        "horizon"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 40,
+          "raw_reference": "raw.horizon_lfs"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
+      "revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+      "nodes": [
+        "artifact-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 5,
+          "raw_reference": "raw.default_github[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
+      "revision": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+      "nodes": [
+        "kamacite-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 3,
+          "raw_reference": "raw.default_github[3]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-aBVHGWWRzSpfL++LubA0CwOOQ64WNLegrYHwsVuVN7A=",
+      "revision": "69f538cdce5955fcd47abfed4395dc6d5194c1c5",
+      "nodes": [
+        "crane_15",
+        "crane_7",
+        "crane_8"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 36,
+          "raw_reference": "raw.recursive_nix_tools[9]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-dV4+/jghpJ89F5DHprdjxyru8kllMAurS2DsBGn/ibA=",
+      "revision": "257fafc1c746f1faf156207043a4c826bfb16d49",
+      "nodes": [
+        "nickel-export",
+        "nickel-export_2",
+        "nickel-export_3",
+        "nickel-export_4"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 79,
+          "raw_reference": "raw.remaining_archives_left.rows[6]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4=",
+      "revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "nodes": [
+        "executable-extent-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 91,
+          "raw_reference": "raw.fixed_git[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-gRcqbQ0NnPeS0rGVieUe1ojJ7MYPcG0NZ1pqnPmBUdc=",
+      "revision": "d4883180de0ce3033b7e4e2ab4216f33134863c5",
+      "nodes": [
+        "unit2nix"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 23,
+          "raw_reference": "raw.primary_nix_tools[2]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-gRrLAZUz+NE17zrRLSkxKMlwOwltF4yvCK0W++V63u0=",
+      "revision": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+      "nodes": [
+        "schema-identity-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 16,
+          "raw_reference": "raw.default_seeds[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-gTrEEp5gEspIcCOx9PD8kMaF1iEmfBcTbO0Jag2QhQs=",
+      "revision": "7df7ff7d8e00218376575f0acdcc5d66741351ee",
+      "nodes": [
+        "nixpkgs_11",
+        "nixpkgs_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 55,
+          "raw_reference": "raw.fixed_archive_even[14]"
+        },
+        {
+          "observation_index": 72,
+          "raw_reference": "raw.fixed_archive_odd[15]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-glZLQlzIn1fXH6PazR2iUmTo7kzzyYSshrWhLS9TqCU=",
+      "revision": "31729ca8cbdb4fa927b34e5f4353e6a83f39e993",
+      "nodes": [
+        "flake-parts"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 37,
+          "raw_reference": "raw.recursive_nix_tools[10]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-iqYCLS7IKFhLI/VkCctQBruJ/HKgv6gWpROhQBSy3p4=",
+      "revision": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+      "nodes": [
+        "hardened-wasmtime-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 12,
+          "raw_reference": "raw.default_seeds[1]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-jOmVibE6UP1Az4O1xqyAnwNaRrMny+1JpGUX9NJA4sU=",
+      "revision": "56a93169f4ace2394dc4c474c6d28911c24c35e7",
+      "nodes": [
+        "onixpkgs"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 25,
+          "raw_reference": "raw.primary_nix_tools[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=",
+      "revision": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+      "nodes": [
+        "durable-file-publication-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 20,
+          "raw_reference": "raw.durable_file_publication"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+      "revision": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+      "nodes": [
+        "flake-utils_10",
+        "flake-utils_12",
+        "flake-utils_13",
+        "flake-utils_14",
+        "flake-utils_15",
+        "flake-utils_16",
+        "flake-utils_17",
+        "flake-utils_18",
+        "flake-utils_19",
+        "flake-utils_2",
+        "flake-utils_20",
+        "flake-utils_21",
+        "flake-utils_3",
+        "flake-utils_4",
+        "flake-utils_5",
+        "flake-utils_6",
+        "flake-utils_7",
+        "flake-utils_8",
+        "flake-utils_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 26,
+          "raw_reference": "raw.primary_nix_tools[5]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
+      "revision": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+      "nodes": [
+        "release-channel-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 6,
+          "raw_reference": "raw.default_github[6]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
+      "revision": "89675cd4f585f837323c049e4a25f7b94c903038",
+      "nodes": [
+        "basalt-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 0,
+          "raw_reference": "raw.default_github[0]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-peDt26MipCBaq6sAu90DsjfJywZu8KTF4WEv1nzR7sI=",
+      "revision": "fb1a7403a7897f7fa161e0b3c5d86b4cf19e52f8",
+      "nodes": [
+        "cairn_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 87,
+          "raw_reference": "raw.remaining_archives_right[6]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-qbl874bCIy9+OLImdfBfZ9ITUDDjjTAB04Dk4PlZFV0=",
+      "revision": "348b94ed9ddffccdf1a65582a2dcff0a4a3eeeb4",
+      "nodes": [
+        "rust-overlay_16",
+        "rust-overlay_7",
+        "rust-overlay_9"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 38,
+          "raw_reference": "raw.recursive_nix_tools[11]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
+      "revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+      "nodes": [
+        "mantle-wasm-verifier-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 4,
+          "raw_reference": "raw.default_github[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
+      "revision": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+      "nodes": [
+        "chaoscontrol-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 8,
+          "raw_reference": "raw.default_github[8]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-tnsP7kS55Druw+k+/ZD+4hd5f0JsLgW8komD6LSCWJ4=",
+      "revision": "3c470b9478072fed00234000d5abee07c20eda1c",
+      "nodes": [
+        "cairn_10",
+        "cairn_3",
+        "cairn_4",
+        "cairn_7",
+        "cairn_8"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 56,
+          "raw_reference": "raw.fixed_archive_even[15]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-up4Juc/IyMuggGLMSDgwYEOoMk/K5U8NI0jzeAKqhO0=",
+      "revision": "68218e876d2a38b1985b8590fff244a83c321783",
+      "nodes": [
+        "lean4-src",
+        "lean4-src_2"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 80,
+          "raw_reference": "raw.remaining_archives_left.rows[7]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+      "revision": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+      "nodes": [
+        "flake-compat_2",
+        "flake-compat_3",
+        "flake-compat_5"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 39,
+          "raw_reference": "raw.recursive_nix_tools[12]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-wEX7u3+5hG4unr7doLqksninM8oe3jxyKT4DCzpvGe0=",
+      "revision": "4f018f54fc7dd4cef341d10111427bab59d3b307",
+      "nodes": [
+        "quint-connect-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 10,
+          "raw_reference": "raw.default_github[10]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-xkZ79TBbTHfjj8jM1b4+F3k2MdtkQ9TUGBinmNOpdKY=",
+      "revision": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+      "nodes": [
+        "transactional-reconciliation-src"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 15,
+          "raw_reference": "raw.default_seeds[4]"
+        }
+      ]
+    },
+    {
+      "narHash": "sha256-y2wR4Mk6D/N1ID4FZa2oUMStCUxyIoRzmgOOpLzoWmo=",
+      "revision": "51390d0bfca0a68a8c337d215a4bbeddc2ca616e",
+      "nodes": [
+        "rust-overlay",
+        "rust-overlay_10"
+      ],
+      "retained_observations": [
+        {
+          "observation_index": 88,
+          "raw_reference": "raw.remaining_archives_right[7]"
+        }
+      ]
+    }
+  ],
+  "git_source_hash_inventory": [
+    {
+      "source_key": "https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0",
+      "revision": "89675cd4f585f837323c049e4a25f7b94c903038",
+      "narHash": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
+      "retained_observations": [
+        {
+          "observation_index": 0,
+          "raw_reference": "raw.default_github[0]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0",
+      "revision": "29dac88ecded94457572db3fdfaaaab95fa91525",
+      "narHash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+      "retained_observations": [
+        {
+          "observation_index": 18,
+          "raw_reference": "earlier anonymous-acquisition-20261113.json.bounded_exec"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0",
+      "revision": "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
+      "narHash": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
+      "retained_observations": [
+        {
+          "observation_index": 1,
+          "raw_reference": "raw.default_github[1]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/choregraph.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
+      "revision": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+      "narHash": "sha256-BO/AlwJBIuW+WXGRQgd2LymvGIYtK0fqd3YYMDtfGBw=",
+      "retained_observations": [
+        {
+          "observation_index": 2,
+          "raw_reference": "raw.default_github[2]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
+      "revision": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+      "narHash": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
+      "retained_observations": [
+        {
+          "observation_index": 3,
+          "raw_reference": "raw.default_github[3]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0",
+      "revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+      "narHash": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
+      "retained_observations": [
+        {
+          "observation_index": 4,
+          "raw_reference": "raw.default_github[4]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
+      "revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+      "narHash": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
+      "retained_observations": [
+        {
+          "observation_index": 5,
+          "raw_reference": "raw.default_github[5]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0",
+      "revision": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+      "narHash": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
+      "retained_observations": [
+        {
+          "observation_index": 6,
+          "raw_reference": "raw.default_github[6]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0",
+      "revision": "9201074343cd9da0ffaf6ec9db690af5b445d663",
+      "narHash": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8=",
+      "retained_observations": [
+        {
+          "observation_index": 7,
+          "raw_reference": "raw.default_github[7]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0",
+      "revision": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+      "narHash": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
+      "retained_observations": [
+        {
+          "observation_index": 8,
+          "raw_reference": "raw.default_github[8]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/bytecodealliance/wrpc?rev=aa01409ed38bf7a978570ff567c4475376925df6#wrpc-introspect@0.7.0",
+      "revision": "aa01409ed38bf7a978570ff567c4475376925df6",
+      "narHash": "sha256-OtWXmMwjfzB95FFZ2volg6GNJf8UbTsCAO0cs9Yqb7U=",
+      "retained_observations": [
+        {
+          "observation_index": 90,
+          "raw_reference": "raw.fixed_git[2]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/gattaca-com/flux?rev=2a1916465ae6649aebef3758233cfea98e5d33db#flux-communication@0.1.3",
+      "revision": "2a1916465ae6649aebef3758233cfea98e5d33db",
+      "narHash": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
+      "retained_observations": [
+        {
+          "observation_index": 74,
+          "raw_reference": "raw.remaining_archives_left.rows[1]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12",
+      "revision": "ed949b8084595cb467e983747f1089e214965ac6",
+      "narHash": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+      "retained_observations": [
+        {
+          "observation_index": 9,
+          "raw_reference": "raw.default_github[9]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/nasa/spacewasm?rev=e24cf09355a90497148eb5029fdb8e3400bd63e3#spacewasm@0.0.0",
+      "revision": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+      "narHash": "sha256-14SWYERoXP+M6lmfTXdPzB30E0eI+FL/81xnM89PlIE=",
+      "retained_observations": [
+        {
+          "observation_index": 43,
+          "raw_reference": "raw.fixed_archive_even[2]"
+        },
+        {
+          "observation_index": 59,
+          "raw_reference": "raw.fixed_archive_odd[2]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://github.com/quint-co/quint-connect.git?rev=4f018f54fc7dd4cef341d10111427bab59d3b307#quint-connect@0.1.2",
+      "revision": "4f018f54fc7dd4cef341d10111427bab59d3b307",
+      "narHash": "sha256-wEX7u3+5hG4unr7doLqksninM8oe3jxyKT4DCzpvGe0=",
+      "retained_observations": [
+        {
+          "observation_index": 10,
+          "raw_reference": "raw.default_github[10]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0",
+      "revision": "4fe90e130f2871cf69a6febcdc70785adca98aea",
+      "narHash": "sha256-AnWxKYQTgvQwzLPMyiGmUroVNVuLos6ThjP0cGRiCcs=",
+      "retained_observations": [
+        {
+          "observation_index": 11,
+          "raw_reference": "raw.default_seeds[0]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z37R1bP1kHcELs89RNbQRaqbCVKxB.git?rev=025d9636f0161777710dac37b3c210ca0ad9483f#executable-extent-conformance@0.1.0",
+      "revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "narHash": "sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4=",
+      "retained_observations": [
+        {
+          "observation_index": 91,
+          "raw_reference": "raw.fixed_git[4]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z3hRCegTsS8jpJVgxYfb9psEzxHpG.git?rev=57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e#hardened-wasmtime-runtime@0.1.0",
+      "revision": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+      "narHash": "sha256-iqYCLS7IKFhLI/VkCctQBruJ/HKgv6gWpROhQBSy3p4=",
+      "retained_observations": [
+        {
+          "observation_index": 12,
+          "raw_reference": "raw.default_seeds[1]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#durable-authority-state-redb@0.1.0",
+      "revision": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+      "narHash": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
+      "retained_observations": [
+        {
+          "observation_index": 13,
+          "raw_reference": "raw.default_seeds[2]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0",
+      "revision": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+      "narHash": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=",
+      "retained_observations": [
+        {
+          "observation_index": 20,
+          "raw_reference": "raw.durable_file_publication"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#bounded-http@0.1.0",
+      "revision": "5abc2b93e0f288aba251a0750ce2d716eb9757fc",
+      "narHash": "sha256-FlNyGeN9Bo6/Dv/YqisN+5XSNerpUHM2+6jqHvxYlsA=",
+      "retained_observations": [
+        {
+          "observation_index": 14,
+          "raw_reference": "raw.default_seeds[3]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0",
+      "revision": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+      "narHash": "sha256-xkZ79TBbTHfjj8jM1b4+F3k2MdtkQ9TUGBinmNOpdKY=",
+      "retained_observations": [
+        {
+          "observation_index": 15,
+          "raw_reference": "raw.default_seeds[4]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0",
+      "revision": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+      "narHash": "sha256-gRrLAZUz+NE17zrRLSkxKMlwOwltF4yvCK0W++V63u0=",
+      "retained_observations": [
+        {
+          "observation_index": 16,
+          "raw_reference": "raw.default_seeds[5]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0",
+      "revision": "7f55597b5dc879b7601856e8d7fd0dbacaa2a498",
+      "narHash": "sha256-dwcdRV9LBJEczU9fLN6AYT7cpLcke3auJa7ffPHmoyc=",
+      "retained_observations": [
+        {
+          "observation_index": 17,
+          "raw_reference": "raw.default_seeds[6]"
+        }
+      ]
+    },
+    {
+      "source_key": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-cap@0.1.0",
+      "revision": "250f3b25d0933c2fa106aa82d1cc17a496716f06",
+      "narHash": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY=",
+      "retained_observations": [
+        {
+          "observation_index": 19,
+          "raw_reference": "earlier anonymous-acquisition-20261113.json.bounded_tree"
+        }
+      ]
+    }
+  ],
+  "no_longer_selected_fixed_cohorts": [
+    {
+      "narHash": "sha256-4gM+Vv8h05EaRm9jp4ql5NxnMoa7981MNG3gc00lvIA=",
+      "nodes": [
+        "mantle-executable-extent-src"
+      ]
+    },
+    {
+      "narHash": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
+      "nodes": [
+        "vm-cohort-src"
+      ]
+    }
+  ],
+  "historical_route_boundary": "Earlier unavailable VM Cohort and Mantle source observations remain unchanged. The owner-approved snapshot and fixture dispositions in the change design remove those remote inputs from the current inventory; this record does not claim their anonymous routes recovered.",
+  "non_claims": [
+    "No new anonymous acquisition in this reconciliation",
+    "No successful cold hosted full flake check or README run inferred",
+    "No optional-feature execution, runtime correctness, independent authority or release qualification"
+  ]
+}

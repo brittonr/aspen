@@ -1,0 +1,2 @@
+node control receipt blake3:2688934605df452a08e4a1ea6a8556723f690d193ee685acd7f6ee7d7c2c5b56 written to /var/lib/molten/vm-evidence/status.preserves
+node status running health=blake3:ee9ae2a2205c3e85caba69015f1d4ba93c1932a49f070a939db437e0e655f3b5 control_receipt=blake3:2688934605df452a08e4a1ea6a8556723f690d193ee685acd7f6ee7d7c2c5b56

@@ -73,6 +73,12 @@ rm -rf -- "${ASPEN_DEMO_DIR:?Set by the demo above}"
 
 **Retained execution observation (2026-11-13):** these fixture and status operations completed in **3m34.165s** with a fresh task-owned Cargo target, state and output directory in the pinned development shell (`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`). Existing Cargo/Nix source caches were used. The fixture retained 68 evidence entries; canonical status readback reported generation 3, stopped, one restart and 13 invocations. This is not a cold anonymous bootstrap, an installed-component deployment or a Nix-built-binary result. [Public-source qualification #23](https://github.com/brittonr/aspen/issues/23) and [exact capability qualification #22](https://github.com/brittonr/aspen/issues/22) remain separate.
 
+A clean hosted [Cargo/README job](https://github.com/brittonr/aspen/actions/runs/43965597007)
+at `ace29e598` also passed the locked Cargo build and these unchanged fixture and
+cleanup commands ([retained observation](.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/split-43965597007-observation.json)).
+Its separate full-Nix runner lost communication, so this is observed clean-runner
+README execution, not a passing whole-workflow or release qualification.
+
 For the next step, follow the [checkout-to-first-check walkthrough](docs/handbook/contributing/checkout-to-first-check.md), [system-extension guide](docs/system-extension-runtime.md), or [deterministic harness and replay examples](docs/development.md#deterministic-harness-and-replay).
 
 <a id="architecture-direction"></a>

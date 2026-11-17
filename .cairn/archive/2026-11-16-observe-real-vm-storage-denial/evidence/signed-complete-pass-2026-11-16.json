@@ -1,0 +1,616 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_at": "2026-11-16T23:31:03.923241+00:00",
+  "source_base_commit": "afc8308bff9a8c50b2315cb4a17c9454252d7c45",
+  "source_state": "Tracked dirty worktree with the service-identity restart and duplicate-log-membership corrections. Exact derivation/output/binding identities, not the base commit alone, scope this run.",
+  "test_derivation": "/nix/store/0vfvymn4qcwbbsf9h5ys3za99z4rcr35-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "test_output": "/nix/store/28q8r2sfwma6gfk2fmgl85hvpf7xy9pf-vm-test-run-molten-nixos-vm-multinode-signed",
+  "source_binding_derivation": "/nix/store/cc7cz936x4n3pv1rz1lkvla75zksbk2h-molten-node-source-binding-v1.drv",
+  "source_binding_output": "/nix/store/hj30n6fwxzv4vc1l8rgl4whvbis9gwqa-molten-node-source-binding-v1",
+  "package_derivation": "/nix/store/hhwsh8lvv5fb148l4b8lgk9s335xdhaa-rust_molten-0.1.0.drv",
+  "package_output": "/nix/store/82bfb6rn8lf471ysfam2fyl9j8g1wxqp-rust_molten-0.1.0",
+  "resources": {
+    "vcpus_per_vm": 8,
+    "memory_mib_per_vm": 8192,
+    "store_image": true,
+    "private_writable_store_overlay": true
+  },
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 14400,
+  "outer_wall_seconds": 5077.26,
+  "driver_script_wall_seconds": 2793.73,
+  "exit_code": 0,
+  "result": "complete-signed-multinode-campaign-passed",
+  "raw_log_blake3": "b7d0165714fd5108e36111ec6f31f04e7bbe7cb8ee116a5331874fe15a48c0e1",
+  "original_log_retention": "operator-private original retained separately from the published canonical packet",
+  "canonical_packet": {
+    "directory": "signed-vm-pass-20261116",
+    "file_count": 132,
+    "copied_bytes_match_realized_output": true,
+    "files": [
+      {
+        "path": "control-loop.preserves",
+        "raw_blake3": "556427bb3853c3d8d1e4561cb817024f415c0f27816a47e8a53a344729a4babd"
+      },
+      {
+        "path": "health.preserves",
+        "raw_blake3": "a30c8eb5a339bb82c80e66eec82d0da4b2c928336af1af1aa9730a082cabb94e"
+      },
+      {
+        "path": "heartbeat.preserves",
+        "raw_blake3": "e1918ae37dec722099daf9568f2410d9a64dc48bf602ce220e3bba9afef22c43"
+      },
+      {
+        "path": "identity.preserves",
+        "raw_blake3": "e4ce009be7b54b3c2cd5683c4ee565bc883e1bd97bc4a3c1e4e067f251916b1a"
+      },
+      {
+        "path": "init.txt",
+        "raw_blake3": "80bf975e0c0ddf602866359cf1f93613f694b49af82e5be8c5c1515f6214f0af"
+      },
+      {
+        "path": "live-control/ack-export.preserves",
+        "raw_blake3": "9abaf88a9b929ec02724ce38c0a72a6c03f29db6badda760f1764aaebafbc92f"
+      },
+      {
+        "path": "live-control/ack-export.txt",
+        "raw_blake3": "3bd0a76d8710181814790ff5e79a38bb76329b100acfa2c38b8de376734581b7"
+      },
+      {
+        "path": "live-control/ack-import.preserves",
+        "raw_blake3": "c71e9de33aa1c0b130988b730d9652d3db2f4e16f63e58c3dd60e7cb5f37a19f"
+      },
+      {
+        "path": "live-control/ack-import.txt",
+        "raw_blake3": "f082588b6737041a62dac06bb84ad259d88fe5bd48764f94f8b9b1c3849d39c6"
+      },
+      {
+        "path": "live-control/ack.preserves",
+        "raw_blake3": "fd11924e62412f517f2a18f614e0e31ac9554add627a2868ac4758469d3f3334"
+      },
+      {
+        "path": "live-control/apply.preserves",
+        "raw_blake3": "d157b07adb9c8086601dbfb01d48873904cd3b57a3b5e51806e1a3531dd1717f"
+      },
+      {
+        "path": "live-control/apply.txt",
+        "raw_blake3": "c95ce8ec7ade008817eb4b1b1ade61117631ef1da0cbddf36605d5faa87630ac"
+      },
+      {
+        "path": "live-control/authority-grant.preserves",
+        "raw_blake3": "70add2732f7f35f778b9fa999901774f1b74e1343489815f60b0d0547d982a12"
+      },
+      {
+        "path": "live-control/authority.ref",
+        "raw_blake3": "13c821b551529f1f9f5e022bb8ff7c5f11b6b5736fb2eb730410b553502e3229"
+      },
+      {
+        "path": "live-control/bundle.preserves",
+        "raw_blake3": "2bd7ce17f96c7d0538fc7cf8005d0822221e988ac83e187de19bb0eaf9b972b5"
+      },
+      {
+        "path": "live-control/control.preserves",
+        "raw_blake3": "32633032cedf173e2287d2375bf66615286760060975755515e58481fc4f19b3"
+      },
+      {
+        "path": "live-control/gate.preserves",
+        "raw_blake3": "35acd630205a99459bda5d60ebcaad05c68842dda72559c9fbeaf6fa4085202b"
+      },
+      {
+        "path": "live-control/gate.txt",
+        "raw_blake3": "29654cbf19cc89d4d5517e4d3977dfee9a6f7bbdfff78c5d200616f6bfddd5da"
+      },
+      {
+        "path": "live-control/ingress.preserves",
+        "raw_blake3": "7e2a9d8211c8c6b9f665110c7b68326e9e4774ecf2e85c00cbcfdae98194d6e4"
+      },
+      {
+        "path": "live-control/live-loopback.txt",
+        "raw_blake3": "45763844bb3aa5b01b6310b7a34935f0eaa5b207d7e0bf5fd5331dda574ffa7d"
+      },
+      {
+        "path": "live-control/peer-admission.preserves",
+        "raw_blake3": "b07fd81eb736f6bccf85d7603566d21755ce787bdd1b561a06de77da82fd8df3"
+      },
+      {
+        "path": "live-control/peer.ref",
+        "raw_blake3": "9c5824dcc7b9b1aa06d913b14ba05cb32af8175d0f2e171e35d9bf96943d4409"
+      },
+      {
+        "path": "live-control/protocol-gate.preserves",
+        "raw_blake3": "b5840d5a5efa7273b356824714a444897a70165c8509a52cc6e014c115d9c740"
+      },
+      {
+        "path": "live-control/protocol-gate.txt",
+        "raw_blake3": "0dde22eba08ea2555e84b8a781fd2fa8f61ee2266291a60d5e7916869e57d33b"
+      },
+      {
+        "path": "live-control/queue.preserves",
+        "raw_blake3": "9a13f97e8f3e2e7ff7c3c4d839e7beaa9ac988995dec57231a48088be381f234"
+      },
+      {
+        "path": "live-control/reconcile.preserves",
+        "raw_blake3": "a4e102521622a1cb8956cb316ac71f4ab70eba0b7bb4de8b098a051b7dfcea7b"
+      },
+      {
+        "path": "live-control/reconcile.txt",
+        "raw_blake3": "e1a58fbc1d6a410e0ead7c96ab95eefa5f0ff3c69b42d7400e8559387fcbef68"
+      },
+      {
+        "path": "live-control/request.preserves",
+        "raw_blake3": "7eaa93b803373c14801dbb4e4efadd9d2abb14d1049ee930e6ac74b0ac7e7a25"
+      },
+      {
+        "path": "live-control/sender-identity.preserves",
+        "raw_blake3": "2e16b0f63f415c643b396d1281d574e230a7e1bfab571c3910bb78e260a61dc0"
+      },
+      {
+        "path": "live-control/sender-init.txt",
+        "raw_blake3": "d09956086de21954f42b098e46df45db23a9a9d52b670b0d00c38bdf910134a3"
+      },
+      {
+        "path": "live-control/sender-node-config.preserves",
+        "raw_blake3": "c5ec37d6b8f2836fc4d6c85c2a7b8f36681600d3d799a6b0762573b872768b2e"
+      },
+      {
+        "path": "live-control/sender-run.txt",
+        "raw_blake3": "fe2bc87bb2694ff999d55640738a516f6d01245eaaeacf225363deb4e56fb5e1"
+      },
+      {
+        "path": "live-control/sender-startup.preserves",
+        "raw_blake3": "ac5b763296f4246ccbb8180670f1b46d1b825e7f8952d0dc6c73a1cf8e160560"
+      },
+      {
+        "path": "live-control/ticket.preserves",
+        "raw_blake3": "673534d3ef275fbbb1f0ac4414fb10edc61af62080da940e91b6c307b29686fc"
+      },
+      {
+        "path": "live-control/verify.preserves",
+        "raw_blake3": "165a86ee17b669c8ac3eff35d84095fd7ff5af3a59fc30ea89a43226e1ed1f40"
+      },
+      {
+        "path": "live-control/verify.txt",
+        "raw_blake3": "016196c146d38b30245c9025958602b39d6729bad98b38b6bab4d77d56527236"
+      },
+      {
+        "path": "node-b-control-loop.preserves",
+        "raw_blake3": "d3a7aa7e362bf55d8ebd3a7be83aa7e91240dbd2b71d16bc9b350d5d90a69395"
+      },
+      {
+        "path": "node-b-evidence.preserves",
+        "raw_blake3": "29e0a6dbad0b87bd77109b14208b7e4c33f3daeaf0c973797785ff728dddb520"
+      },
+      {
+        "path": "node-b-heartbeat.preserves",
+        "raw_blake3": "b01022aa111e73810ecf9bbcc8af95a300db4edf753ae59bf6ec14d7699f2fab"
+      },
+      {
+        "path": "node-b-restart-queue.preserves",
+        "raw_blake3": "a91a4528a1c088c6832f05a4a822723f68e79bb0d1d14bb530a6c6e2db6be4e4"
+      },
+      {
+        "path": "node-b-shutdown.preserves",
+        "raw_blake3": "24217d63ece7b1810477f1662a833db59442d6697a88efb2220c87447329333a"
+      },
+      {
+        "path": "node-config.preserves",
+        "raw_blake3": "25021cbfd38d419937e28724be86e09c9aba559be8a644d23579ea99b3edb0fd"
+      },
+      {
+        "path": "node-evidence.preserves",
+        "raw_blake3": "fa10a677fa9aa41fe4f278f86afbc16258ed5799e1df9959448b39b8dbbe55e3"
+      },
+      {
+        "path": "prod-soak-durability.preserves",
+        "raw_blake3": "36bfa10ae261ce513d2dc4d42316af3988f482f6d4d33070d214b730d491c676"
+      },
+      {
+        "path": "prod-soak-faults/conflicting-operation-id.preserves",
+        "raw_blake3": "d29479e4451eb2c5711b09c78ca5bdb2a358e9d12cca2969373c10f5c393a5a7"
+      },
+      {
+        "path": "prod-soak-faults/corrupted-transport-receipt.preserves",
+        "raw_blake3": "5eb275e7b5205cfc417754bba4f789f4671c739d2b0168b010feffec45ee32d1"
+      },
+      {
+        "path": "prod-soak-faults/delay.preserves",
+        "raw_blake3": "7dd70b6fa833eea4ca82c6241268fec24fd60e107548d8b3f1de58c7984104cb"
+      },
+      {
+        "path": "prod-soak-faults/drop.preserves",
+        "raw_blake3": "e02e9fad5dd2a3b4aac5ae74f86ad816bca4d410aac347527217c3b0e9ad3f26"
+      },
+      {
+        "path": "prod-soak-faults/duplicate-operation.preserves",
+        "raw_blake3": "0ee902964fda5c988df162c161bf18b4213c81d3885ca43c54eaac4f4d616ee7"
+      },
+      {
+        "path": "prod-soak-faults/matrix.preserves",
+        "raw_blake3": "0deee951afa7dde4218cf1623b1d0cca4548b6a2e8243c53cfb38d544c14f8dc"
+      },
+      {
+        "path": "prod-soak-faults/partition.preserves",
+        "raw_blake3": "3f3d39535805adee78d2726d8806d611ea0b96672a76c8f5cf22a7cdd883baba"
+      },
+      {
+        "path": "prod-soak-faults/rejoin.preserves",
+        "raw_blake3": "651003c81c9140bf1536ae5f834d4ad92963c16f4d181bec5c8c8246757e767a"
+      },
+      {
+        "path": "prod-soak-faults/stale-ticket-gate.preserves",
+        "raw_blake3": "8d293716af2b44eb743af37be7d3f35d46c3961f877ff06308b8c4898489f106"
+      },
+      {
+        "path": "prod-soak-faults/stale-ticket-gate.txt",
+        "raw_blake3": "9dd81967fe75fe32d8468a351a7dedca4dfec6deb3fbd946222fc91d6283aaa3"
+      },
+      {
+        "path": "prod-soak-faults/stale-ticket.preserves",
+        "raw_blake3": "ee6a6a461f5fc6c2f4988f55a37d5eda08cdff0e77bb62e078038b44d9e9a370"
+      },
+      {
+        "path": "prod-soak-faults/wrong-authority-gate.preserves",
+        "raw_blake3": "4961fff704e960336252a9fd616095194c2d28b834e8a6109fa4a07bc4371e58"
+      },
+      {
+        "path": "prod-soak-faults/wrong-authority-gate.txt",
+        "raw_blake3": "b575d3c225ce6d2c4c90cd0a91b0c462413b5d8d35e34fbe70d17d67260763b0"
+      },
+      {
+        "path": "prod-soak-faults/wrong-authority.preserves",
+        "raw_blake3": "75823d1f6655bb48cd28c7ae56a3933236c3c39f221ca8a4d8117f7270547661"
+      },
+      {
+        "path": "prod-soak-node-a-export.preserves",
+        "raw_blake3": "d47628dda62c985d551bc6098cbc4e2837b586f712c106bc9fb9488870fa02f9"
+      },
+      {
+        "path": "prod-soak-node-b-export.preserves",
+        "raw_blake3": "01279a97e4230af5413da5429bf86ba3b255eabf463f77019a432871e426a1c6"
+      },
+      {
+        "path": "prod-soak-resource-envelope.preserves",
+        "raw_blake3": "93a1edbd563b8c2b3750ab4c467dbee3380ba6f7c32d36ac768a4167040e362f"
+      },
+      {
+        "path": "prod-soak-run.preserves",
+        "raw_blake3": "24a1e38eaec9808660e06aefada30d7b6e460c381b7207206de0ce7122eb2164"
+      },
+      {
+        "path": "run-loop.txt",
+        "raw_blake3": "ac7cdd664402c0e85cb0a1bed585769fb44acd2986cb351426a7bfa9ed900731"
+      },
+      {
+        "path": "run.txt",
+        "raw_blake3": "d27abb08aebdc0fdd540c8a3523921a871dddd332cd9969e58e9fc82265376c5"
+      },
+      {
+        "path": "service-job/coord-apply.txt",
+        "raw_blake3": "149752fe4f9206b11545301e594c4e4a09fe1fcb6690183a7805329287c3823c"
+      },
+      {
+        "path": "service-job/coord-apply/report.preserves",
+        "raw_blake3": "b6b6352b2eb9e37e721dcb93b6eb1d56c943d50072b7e3b8c40edaede5899c9e"
+      },
+      {
+        "path": "service-job/coord-authority.ref",
+        "raw_blake3": "4c01ae7ccf68ea6592ea958066b5ef22cd615c50702484b12a2866637dbb40b5"
+      },
+      {
+        "path": "service-job/coord-payload.preserves",
+        "raw_blake3": "30f795adca4788de22f26cc916585a993a061383e6b6747e0c8313b35f005328"
+      },
+      {
+        "path": "service-job/coord-policy.ref",
+        "raw_blake3": "a71dbffd956fbfeceb325ef1188f9e4a8e1caf6c633bcd9332abf453d487995c"
+      },
+      {
+        "path": "service-job/coord-request.preserves",
+        "raw_blake3": "222e089556a6fd5ce0829366070cbb25e70b7501026142aafb07f15d0f8b7448"
+      },
+      {
+        "path": "service-job/coord-request.txt",
+        "raw_blake3": "34162319a28eb1fc7b14ee03ab5fd75bbb92311c56d73db45b0d5e27deef2347"
+      },
+      {
+        "path": "service-job/coord-resource.ref",
+        "raw_blake3": "920d589025b47b3f7c3c7d6e57f748bcb0494fd171d21e862a0b3f621e5623b2"
+      },
+      {
+        "path": "service-job/executable-manifest.preserves",
+        "raw_blake3": "715bf71769f5328efb27aa06f2885fbc91a477b48300ae1281f6e181fae353c5"
+      },
+      {
+        "path": "service-job/executable-put.preserves",
+        "raw_blake3": "08c95abc09e6f0a101073cbf2fadcba758594dc8bb04af486cd7841b6540b4d5"
+      },
+      {
+        "path": "service-job/executable.bin",
+        "raw_blake3": "54eed4460d7248c40158faa659cd0b6dbdb99cdd87221218783da7c227e5d0f8"
+      },
+      {
+        "path": "service-job/input-manifest.preserves",
+        "raw_blake3": "2b783923158868dbf242eab0f573e280fc1a1636a4fc5c2b5fb70f05e7e824b0"
+      },
+      {
+        "path": "service-job/input-put.preserves",
+        "raw_blake3": "62bc01672d97d260b093d43750609fa90c8d384d52dd400e084c21feeb299acd"
+      },
+      {
+        "path": "service-job/input.bin",
+        "raw_blake3": "ea8f163db38682925e4491c5e58d4bb3506ef8c14eb78a86e908c5624a67200f"
+      },
+      {
+        "path": "service-job/job-ref-execute.txt",
+        "raw_blake3": "7ec48d321c7528b5f0e265c559ccc975ee90563ec0fdc5e4c6b7393be2067407"
+      },
+      {
+        "path": "service-job/job-ref-submit.txt",
+        "raw_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      },
+      {
+        "path": "service-job/job-ref.receipt.preserves",
+        "raw_blake3": "73cd4820b7a7323929188f1d247f6abbd358435287ea41bf0533e34582714c29"
+      },
+      {
+        "path": "service-job/job-submission.preserves",
+        "raw_blake3": "5de44a8edb3863d417e08e95c7e5422b4c93a2ca36a12da8db37d95140741abe"
+      },
+      {
+        "path": "service-job/ref-coordination-authority.preserves",
+        "raw_blake3": "db8a1c8762fd1d7d062d67faa5309378effbe9314550c1360a835deee6114728"
+      },
+      {
+        "path": "service-job/ref-coordination-operation.preserves",
+        "raw_blake3": "c570d15a10304c630aa31367e852eaafc9de4107b8c4f6dd4c803f237f61c78e"
+      },
+      {
+        "path": "service-job/ref-coordination-policy.preserves",
+        "raw_blake3": "ee445a6d50f449f8ecb19dab458762435a2947de107cfb0c460953edfd237883"
+      },
+      {
+        "path": "service-job/ref-coordination-resource.preserves",
+        "raw_blake3": "026aa5d8f618345c36b4487afde2e60b1c1d2b71a0446e1ee4bf5fa591543dfe"
+      },
+      {
+        "path": "service-job/ref-job-authority.preserves",
+        "raw_blake3": "68b8625ff0cbbb3da2428651f801e065ef0e91644aff322a66af0a76ddcf2122"
+      },
+      {
+        "path": "service-job/ref-job-effect.preserves",
+        "raw_blake3": "a9114788f34d1db951f7ebed6739a1938612a87d40ed6e765215af908dcb7719"
+      },
+      {
+        "path": "service-job/ref-job-operation.preserves",
+        "raw_blake3": "78b7714beeba6ad2540adbc6c9187844a15d7915ad0d2372ee24713f31988368"
+      },
+      {
+        "path": "service-job/ref-job-policy.preserves",
+        "raw_blake3": "21f55b3aaefc4ddc26faa82cafd3a0b19eead3bf30b5ac03cdca5140dee54805"
+      },
+      {
+        "path": "service-job/ref-job-provenance.preserves",
+        "raw_blake3": "0cfb444ed34ee70198c131ae8ce813900f2be16178c12ff25b0b452e4eaa0fd4"
+      },
+      {
+        "path": "service-job/ref-remote-capability.preserves",
+        "raw_blake3": "97b05ed758a468e917a4a8099d981585c1ae225789da816c8f1c24addb874e91"
+      },
+      {
+        "path": "service-job/ref-remote-evidence.preserves",
+        "raw_blake3": "3682d99c742521eedfa0cb8b88365b8c11820aa5d9d6ed6335508fc57055dc54"
+      },
+      {
+        "path": "service-job/ref-remote-policy.preserves",
+        "raw_blake3": "53d1a601b5c96ec3234a5ec67a79af8aee68daa982f5badc1b7cfdf159cacbdd"
+      },
+      {
+        "path": "service-job/remote-deliver.preserves",
+        "raw_blake3": "d000bdab02ebf88c9f42830ae1b542cb0915301cabf4179743e3d24556a50954"
+      },
+      {
+        "path": "service-job/remote-deliver.txt",
+        "raw_blake3": "982a10e6b7029b882a83cf9544cd94bc30bfc3b6d850e54cffe46e2ff7200c51"
+      },
+      {
+        "path": "service-job/remote-envelope.preserves",
+        "raw_blake3": "193f11918ee7a58714d230d1081f57b5883a926003f62805a1e05c7512f1d804"
+      },
+      {
+        "path": "service-job/remote-envelope.ref",
+        "raw_blake3": "9f7c3703302231a641af8648e393edcebf8e40821297e8e2711d33ad650765b8"
+      },
+      {
+        "path": "service-job/remote-envelope.txt",
+        "raw_blake3": "0ba490a744a7f12ea43f502f4b418b209fb7bd68424850cd835e8318e7f7e1ff"
+      },
+      {
+        "path": "service-job/remote-payload.preserves",
+        "raw_blake3": "e9e974f53516331daafe8cdde9e16bff1afcc639adc688423ce5ea13de513c62"
+      },
+      {
+        "path": "service-job/source-chunks/chunk-index.redb",
+        "raw_blake3": "2b040fcf00159d41b35040efe3e58d9aff154b564f679046ef8657cadd2cc66c"
+      },
+      {
+        "path": "service-job/source-chunks/chunks/blake3_0f2fb8604bc6e0282091f90d39f5bd942704b38b697ebc6d5308f833ead78a9d.bin",
+        "raw_blake3": "54eed4460d7248c40158faa659cd0b6dbdb99cdd87221218783da7c227e5d0f8"
+      },
+      {
+        "path": "service-job/source-chunks/chunks/blake3_ce19441a57b4701bbb98c2c109fd3ad9a953aa333285d6b4354f0f53fa99fafa.bin",
+        "raw_blake3": "ea8f163db38682925e4491c5e58d4bb3506ef8c14eb78a86e908c5624a67200f"
+      },
+      {
+        "path": "service-job/source-chunks/manifests/blake3_8334c03fa78a50d3997130962b98b019284cd229ad9ed8b0b39499cdac2dc517.bin",
+        "raw_blake3": "8334c03fa78a50d3997130962b98b019284cd229ad9ed8b0b39499cdac2dc517"
+      },
+      {
+        "path": "service-job/source-chunks/manifests/blake3_f8d1cb20c8f39882c9c5be8f6c70af23bed27941b2afba37d250910d55bd7d25.bin",
+        "raw_blake3": "f8d1cb20c8f39882c9c5be8f6c70af23bed27941b2afba37d250910d55bd7d25"
+      },
+      {
+        "path": "service-job/source-chunks/metadata/blake3_3682ac1aded3f56127a15de7ca40161d4ef285d17ebbf07c28f4fd5d41dc2c26.bin",
+        "raw_blake3": "3682ac1aded3f56127a15de7ca40161d4ef285d17ebbf07c28f4fd5d41dc2c26"
+      },
+      {
+        "path": "service-job/source-chunks/metadata/blake3_763589eb030c6837c60c0057b124b60028b60d9315f63b3e8f06f6788efbfd53.bin",
+        "raw_blake3": "763589eb030c6837c60c0057b124b60028b60d9315f63b3e8f06f6788efbfd53"
+      },
+      {
+        "path": "service-job/target-executable-put.preserves",
+        "raw_blake3": "0b704cd98afe83cee5fa08cbe72297241aac0a5ce4f01cbb95c6a24891d30438"
+      },
+      {
+        "path": "service-job/target-input-put.preserves",
+        "raw_blake3": "f1ca464fc9109866c17bce5ce32408d44801a70fe217b3e33eeb8423dd4da41e"
+      },
+      {
+        "path": "shutdown-control.preserves",
+        "raw_blake3": "abfde69d1cf3faca8086614ce9c088bd3d4464b18adc91b0cdd769c7b4fc0d62"
+      },
+      {
+        "path": "shutdown.preserves",
+        "raw_blake3": "5e3a836245745ed637e4c3be9308a6e28295bc0f1438d9abc85d661de23d3246"
+      },
+      {
+        "path": "startup.preserves",
+        "raw_blake3": "5c29f90d6821261c49a38f63da47633ee5ee27a4489fc0c47373323d4dcd4f81"
+      },
+      {
+        "path": "status.preserves",
+        "raw_blake3": "068bea26e5324d4d44c54c9583fa9a22bb1abbccebc0c5b921ce2755121837b7"
+      },
+      {
+        "path": "status.txt",
+        "raw_blake3": "ab9f501cd35882a38841950a605c0a11795cb47330e42ec635da8b663595c337"
+      },
+      {
+        "path": "topology.preserves",
+        "raw_blake3": "e8de28d259fd111da3e5d0bb38038d5f01635b91362fdd942eece8f11ea1144b"
+      },
+      {
+        "path": "vm-evidence-manifest.preserves",
+        "raw_blake3": "4c8b5320315aeb62a48bb33bda8f26fa09912f39665953b85880de331e1a7278"
+      },
+      {
+        "path": "vm-evidence-validation.preserves",
+        "raw_blake3": "2c6c0de122d7ecaf6886bf9fd89fcf2492304988f91d867f709b4444151bb8c1"
+      },
+      {
+        "path": "vm-faults/network-partition.descriptor.preserves",
+        "raw_blake3": "7418ed77a5d376394731a2281df6339f5d3961561d9e4a68c57493c1628ce425"
+      },
+      {
+        "path": "vm-faults/network-partition.receipt.preserves",
+        "raw_blake3": "329d729b97b73d465935c7d1480fca228b9729d58d9a81f9fc268ea5b2681d4b"
+      },
+      {
+        "path": "vm-faults/network-unavailable.log",
+        "raw_blake3": "c79802651020f3774a79bdfab519e5f273209ca9eabf3b322bd56c405428c744"
+      },
+      {
+        "path": "vm-faults/network-unavailable.preserves",
+        "raw_blake3": "4dafb7172b28f9e5a2a85a378fb82198db8c03857e8972ea3bc9993d2bdd0940"
+      },
+      {
+        "path": "vm-faults/restart.descriptor.preserves",
+        "raw_blake3": "456002a562cc957ea9a96c5cff3beaa63f7fbb243432acc172754365d0d91289"
+      },
+      {
+        "path": "vm-faults/restart.receipt.preserves",
+        "raw_blake3": "1fa3a2d35094ab496951dddfc538e9242fca312b4dc56eaf4fb43a6168b7ddb3"
+      },
+      {
+        "path": "vm-faults/storage-attempt.log",
+        "raw_blake3": "3c44967c56db29036f45a7a10be9e20a6eb8bb1ad710d219a68925c32dd8f447"
+      },
+      {
+        "path": "vm-faults/storage-attempt.preserves",
+        "raw_blake3": "ff39f88f15b42c5290d3460eb3ae345df7698651eb43c220b22112af8f3db538"
+      },
+      {
+        "path": "vm-faults/storage-denial.log",
+        "raw_blake3": "3c44967c56db29036f45a7a10be9e20a6eb8bb1ad710d219a68925c32dd8f447"
+      },
+      {
+        "path": "vm-faults/storage-post.preserves",
+        "raw_blake3": "6eb9dcdfe9b64bf2b3584983352dc7d79b38c7b34b91420e78377e0c8874d5a6"
+      },
+      {
+        "path": "vm-faults/storage-pre.preserves",
+        "raw_blake3": "94887dfac00af270d05f56b0dfd03e0c4b39aa831832e4b0b1334576c3b037dd"
+      },
+      {
+        "path": "vm-faults/storage.descriptor.preserves",
+        "raw_blake3": "24d5fbd5e712024999db22ed6f36849c51d6ec6a421d9d480bd7604157f1fd82"
+      },
+      {
+        "path": "vm-faults/storage.receipt.preserves",
+        "raw_blake3": "30bbea7da075fdac28eaca280d18e81768f517bba147825da2cfaa4e1c04deb3"
+      },
+      {
+        "path": "vm-faults/validation.preserves",
+        "raw_blake3": "a2f3e0ebbdd13bd24abddc27920b83d11201b88907db8d08c7944910754981f7"
+      },
+      {
+        "path": "vm-test-run.preserves",
+        "raw_blake3": "b52bbfe4fa7f33ab468c61ab63d279c161b838aef3805882cda8d6710f131756"
+      }
+    ]
+  },
+  "canonical_refs": {
+    "topology": "blake3:094d47b983f60a68c8e50c82237aa6ced31d3e3e7ddf075db5d19f799e2a7c07",
+    "vm_test_run": "blake3:a42c7f82f5ce72b3ce3dc190f5b4f512cb0f00eecc0f0e8fbfd8d4898b212de8",
+    "evidence_validation": "blake3:1ddfe865cf390a6a27b163083428d4a12cf1326aba03b77143bffcf45e6e7955",
+    "fault_validation": "blake3:14f6c8c07f2a6e636bf4ed0421df3f79a7323380af815467873cd4b948d5ce13",
+    "storage_descriptor": "blake3:4def13d0fac96c632ec92ab9cf0479240dd0b009296fca9c3860056b0ebb32d1",
+    "storage_receipt": "blake3:1312851c6d30b0dcfaf3d57eb28bdabcec8ae98922cf27011f6c5eb2e880efd3",
+    "storage_attempt": "blake3:389860d60a2a94aa03f909de26d46ad94f65373debf318a93b93354dd930fa9b",
+    "storage_pre": "blake3:4a4a38e8252a6f81941ac1db3ab52f8c9b0ab2c0e6c773c59d162b3e72111240",
+    "storage_post": "blake3:a9e71c2e6da61e07998c18ab603114db6a460d7e020efcbed471e1285dbf349d"
+  },
+  "observed_storage_failure": {
+    "target_node": "node_b",
+    "operation": "node-status-health-write",
+    "target": "health-receipt.preserves",
+    "operation_decision": "deny",
+    "errno": 13,
+    "phase": "open-before-write",
+    "effective_uid": 998,
+    "effective_gid": 998,
+    "groups": [
+      998
+    ],
+    "effective_capabilities_hex": "0000000000000000",
+    "root_uid": 998,
+    "root_gid": 998,
+    "root_mode_decimal": 320,
+    "root_mode_octal": "0500",
+    "pre_target_absent": true,
+    "post_target_absent": true,
+    "pre_tree_ref": "blake3:77d77bb7ec38277297ad069ac62f2b840cdc3dd46c0a2260a975cee58cf14953",
+    "post_tree_ref": "blake3:77d77bb7ec38277297ad069ac62f2b840cdc3dd46c0a2260a975cee58cf14953",
+    "executable_ref": "blake3:fedba0cb41bbac53a360120ac65c55611b621c20d9f12dd2f880e266e1d863d6"
+  },
+  "canonical_decisions": {
+    "storage_receipt": "deny",
+    "fault_validation": "pass",
+    "evidence_validation": "pass",
+    "manifest": "pass",
+    "validation_diagnostics": 0
+  },
+  "publication_check": {
+    "files_scanned": 132,
+    "grandfathered": 0,
+    "rejected": 0
+  },
+  "prior_rust_verification_record": "../../../../evidence/integrated-cutover-2026-11-16/checks.json",
+  "scope": "The actual protected node-status command failed before opening its health output under the non-root service identity. Separate pre/post observations matched, and the completed VM validated and exported the original linked canonical values.",
+  "non_claims": [
+    "No independent producer/operator trust",
+    "No arbitrary VM or cross-host qualification",
+    "No production startup-latency claim; outer and driver times are not product startup measurements",
+    "No deterministic replay or release authority inferred",
+    "Logs and this observation JSON do not override canonical deny receipts"
+  ]
+}

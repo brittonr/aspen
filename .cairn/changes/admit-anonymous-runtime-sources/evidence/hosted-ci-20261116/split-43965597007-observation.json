@@ -1,0 +1,264 @@
+{
+  "schema": "molten-hosted-ci-observations-v1",
+  "reproducible_dependencies_observation": {
+    "run_id": 43965597007,
+    "url": "https://github.com/brittonr/aspen/actions/runs/43965597007",
+    "source_commit": "ace29e598a74caa14f2ca338f9ffc3ce068d938d",
+    "created_at": "2026-11-16T21:59:34Z",
+    "updated_at": "2026-11-16T23:45:54Z",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "completedAt": "2026-11-16T23:45:45Z",
+        "conclusion": "failure",
+        "databaseId": 133644093799,
+        "name": "nix-acceptance",
+        "startedAt": "2026-11-16T21:59:38Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-16T21:59:42Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-16T21:59:39Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:59:51Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-16T21:59:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:59:59Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-16T21:59:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:25:20Z",
+            "conclusion": "success",
+            "name": "Run nix build --no-link",
+            "number": 4,
+            "startedAt": "2026-11-16T21:59:59Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "name": "Run nix flake check",
+            "number": 5,
+            "startedAt": "2026-11-16T22:25:20Z",
+            "status": "in_progress"
+          },
+          {
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 9,
+            "startedAt": "0001-01-01T00:00:00Z",
+            "status": "pending"
+          },
+          {
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "name": "Post Run actions/checkout@v4",
+            "number": 10,
+            "startedAt": "0001-01-01T00:00:00Z",
+            "status": "pending"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43965597007/job/133644093799"
+      },
+      {
+        "completedAt": "2026-11-16T22:53:23Z",
+        "conclusion": "success",
+        "databaseId": 133644094407,
+        "name": "cargo-workflow",
+        "startedAt": "2026-11-16T21:59:38Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-16T21:59:40Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-16T21:59:39Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:59:45Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-16T21:59:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:59:54Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-16T21:59:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:53:08Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command cargo build --locked",
+            "number": 4,
+            "startedAt": "2026-11-16T21:59:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:53:18Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command python3 scripts/readme-quickstart.py --cargo",
+            "number": 5,
+            "startedAt": "2026-11-16T22:53:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:53:20Z",
+            "conclusion": "success",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 9,
+            "startedAt": "2026-11-16T22:53:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:53:20Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@v4",
+            "number": 10,
+            "startedAt": "2026-11-16T22:53:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T22:53:21Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 11,
+            "startedAt": "2026-11-16T22:53:20Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43965597007/job/133644094407"
+      },
+      {
+        "completedAt": "2026-11-16T23:45:54Z",
+        "conclusion": "failure",
+        "databaseId": 133700704133,
+        "name": "flake-check",
+        "startedAt": "2026-11-16T23:45:49Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-16T23:45:50Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-16T23:45:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T23:45:52Z",
+            "conclusion": "failure",
+            "name": "Require every acceptance job",
+            "number": 2,
+            "startedAt": "2026-11-16T23:45:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T23:45:52Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 3,
+            "startedAt": "2026-11-16T23:45:52Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43965597007/job/133700704133"
+      }
+    ],
+    "nix_job_annotations": [
+      {
+        "path": ".github",
+        "blob_href": "https://github.com/brittonr/aspen/blob/ace29e598a74caa14f2ca338f9ffc3ce068d938d/.github",
+        "start_line": 1,
+        "start_column": null,
+        "end_line": 1,
+        "end_column": null,
+        "annotation_level": "failure",
+        "title": "",
+        "message": "The hosted runner lost communication with the server. Anything in your workflow that terminates the runner process, starves it for CPU/Memory, or blocks its network access can cause this error.",
+        "raw_details": ""
+      },
+      {
+        "path": ".github",
+        "blob_href": "https://github.com/brittonr/aspen/blob/ace29e598a74caa14f2ca338f9ffc3ce068d938d/.github",
+        "start_line": 1,
+        "start_column": null,
+        "end_line": 1,
+        "end_column": null,
+        "annotation_level": "notice",
+        "title": "",
+        "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+        "raw_details": ""
+      }
+    ],
+    "job_log_observations": {
+      "cargo-workflow": {
+        "fetch_exit_code": 0,
+        "diagnostic_output_blake3": "3e8743650e93c769cf1d983db04174cc92699c830086e8b93afa9af9a1a0b203",
+        "diagnostic_output_utf8_bytes": 1294344,
+        "scope": "remote job log",
+        "original_retention": "operator-private original; not republished"
+      },
+      "nix-acceptance": {
+        "fetch_exit_code": 1,
+        "diagnostic_output_blake3": "54bc0bffd73a7e2cf8593f3f00acc0c9f9c216807ff0114ebc920751c9ced1a0",
+        "diagnostic_output_utf8_bytes": 28,
+        "scope": "failed retrieval diagnostic; not a remote job log",
+        "original_retention": "operator-private original; not republished"
+      },
+      "flake-check": {
+        "fetch_exit_code": 0,
+        "diagnostic_output_blake3": "80ffc96c613d8ee0ac027fa4695ebb98ecd36d0c630ce90b21fa472f673280de",
+        "diagnostic_output_utf8_bytes": 3740,
+        "scope": "remote job log",
+        "original_retention": "operator-private original; not republished"
+      }
+    },
+    "readme_observation": {
+      "command": "nix develop --command python3 scripts/readme-quickstart.py --cargo",
+      "job": "cargo-workflow",
+      "step_conclusion": "success",
+      "normalization": "Only the GitHub job/step tab fields and timestamp prefix are removed from these two exact stdout lines. No fixture wording, reference or output value is changed.",
+      "normalized_stdout_excerpt": [
+        "system-extension fixture ok profile=sandboxed-component manifest=blake3:796efc8dc1733e7a1dd339c2be63ec7c6d724ec05d4531bf351d0c963e7567df evidence=68 status=blake3:97caee679618dc6368102301c9ef8914417bd73b43e37eb4464e52e0f3a9ddfb out=target/aspen-demo.lgfAWG",
+        "system-extension status extension=molten.fixture.system.echo service=molten.fixture.system.echo.service generation=3 phase=stopped profile=sandboxed-component health=stopped restarts=1 invocations=13 checkpoint=blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ref=blake3:97caee679618dc6368102301c9ef8914417bd73b43e37eb4464e52e0f3a9ddfb"
+      ],
+      "scope": "The repository sandboxed-component fixture and its unchanged README cleanup, not an external workflow or independent runtime qualification."
+    },
+    "aggregate_observation": {
+      "cargo_workflow": "success",
+      "nix_acceptance": "failure",
+      "flake_check": "failure",
+      "failed_dependency_was_not_masked": true
+    },
+    "establishes": "Clean hosted locked Cargo build and unchanged README Cargo fixture/cleanup succeeded. Default Nix build succeeded, but the Nix runner lost communication during full checks and the required aggregate failed.",
+    "non_claims": [
+      "No passing full flake check",
+      "No successful whole workflow or release gate",
+      "No CPU, memory, disk, network or runner-loss root cause established",
+      "The unavailable Nix job log is not fabricated from the retrieval diagnostic",
+      "Fixture stdout and process success grant no runtime authority or production qualification"
+    ]
+  }
+}

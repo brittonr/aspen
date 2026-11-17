@@ -1,0 +1,2 @@
+coordination apply decision=deny manifest=blake3:dac73aa585115b0a951759a78067a1008630a049c185aed4794697076f9d8373 state=blake3:4a34e4bd1e824df3aad6bb5fb139c88c5136007ae7814e2f2f2affae70e36c5e receipts=1 assertions=0 evidence=5 out=/var/lib/molten/vm-evidence/service-job/coord-apply
+

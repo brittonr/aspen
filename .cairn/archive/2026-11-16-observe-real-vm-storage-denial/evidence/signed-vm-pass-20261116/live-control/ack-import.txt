@@ -1,0 +1,3 @@
+node control live workflow bundle ack import receipt blake3:a6a4a653fcabb10f8735dbf35a3d57089345dba977b3ea6b77d3a8e31967852f written to /var/lib/molten/vm-evidence/live-control/ack-import.preserves
+node live workflow bundle ack import decision=pass ack=blake3:1ad35044823296ebf0be1fe7fd23f995dec6f02039b8eac6cf13b50b1fc5c477 bundle=blake3:bf31ff9245b93a9cd019ca08e6f5fff4a4207046ff06c480f042fc83f822df85 imported=6 receiver_decision=pass diagnostics=0
+next-step=inspect-receiver-control command="molten node show <control-receipt>"

@@ -1,0 +1,124 @@
+{
+  "schema": "molten-hosted-ci-observations-v1",
+  "reproducible_dependencies_observation": {
+    "run_id": 43944117514,
+    "url": "https://github.com/brittonr/aspen/actions/runs/43944117514",
+    "source_commit": "0f75c99b8af3b55b6b0a87e92778d1ec4c0e7bc0",
+    "created_at": "2026-11-16T19:53:57Z",
+    "updated_at": "2026-11-16T21:58:13Z",
+    "conclusion": "failure",
+    "observed_terminal": "The hosted runner lost communication with the server.",
+    "jobs": [
+      {
+        "completedAt": "2026-11-16T21:58:12Z",
+        "conclusion": "failure",
+        "databaseId": 133569074665,
+        "name": "flake-check",
+        "startedAt": "2026-11-16T19:54:01Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-16T19:54:05Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-16T19:54:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T19:54:13Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-16T19:54:05Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T19:54:22Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-16T19:54:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T20:34:04Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command cargo build --locked",
+            "number": 4,
+            "startedAt": "2026-11-16T19:54:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T20:59:46Z",
+            "conclusion": "success",
+            "name": "Run nix build --no-link",
+            "number": 5,
+            "startedAt": "2026-11-16T20:34:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:13:54Z",
+            "conclusion": "cancelled",
+            "name": "Run nix flake check",
+            "number": 6,
+            "startedAt": "2026-11-16T20:59:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:13:54Z",
+            "conclusion": "skipped",
+            "name": "Run nix develop --command python3 scripts/readme-quickstart.py --cargo",
+            "number": 7,
+            "startedAt": "2026-11-16T21:13:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:13:54Z",
+            "conclusion": "skipped",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 13,
+            "startedAt": "2026-11-16T21:13:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-16T21:13:54Z",
+            "conclusion": "skipped",
+            "name": "Post Run actions/checkout@v4",
+            "number": 14,
+            "startedAt": "2026-11-16T21:13:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-11-16T21:13:54Z",
+            "status": "in_progress"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43944117514/job/133569074665"
+      }
+    ],
+    "diagnostic_command": "gh run watch 43944117514 --repo brittonr/aspen --exit-status --interval 60",
+    "diagnostic_watch_output_blake3": "65189ef60b33f7af7b4a33811c3c49c8efdaea8a40c24a0d6134df14a82c4751",
+    "original_log_retention": "operator-private local evidence; not republished",
+    "job_log_retrieval": {
+      "command": "gh run view 43944117514 --repo brittonr/aspen --job 133569074665 --log",
+      "exit_code": 1,
+      "diagnostic": "log not found: 133569074665",
+      "diagnostic_utf8_bytes": 28,
+      "diagnostic_blake3": "487c05e694da140c91f4b95b4247cff3f959537b2189deb1e915d0de2fae564f",
+      "scope": "This digest binds the unsuccessful retrieval diagnostic, not a remote job log."
+    },
+    "establishes": "The locked Cargo build and default Nix build passed for the exact published source. Full flake checks were canceled, README execution was skipped, and the watcher reported lost runner communication.",
+    "non_claims": [
+      "No successful full flake check",
+      "No passing test verdict inferred",
+      "No CPU, memory, disk, network or cancellation root cause established",
+      "No README execution in this run",
+      "No runtime, authority or release qualification"
+    ]
+  }
+}

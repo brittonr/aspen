@@ -1,0 +1,4 @@
+remote delivered envelope blake3:92848a26969b37046ed21374cdfe2c2074c39d40de753f487068dc41a9fb52f0 written to /var/lib/molten/vm-evidence/service-job/remote-delivered.preserves
+remote dataspace deliver receipt blake3:f2c43fd69fbf4ce261d1f3343691174513ce6ef4b94d3233c2ba823259d81043 written to /var/lib/molten/vm-evidence/service-job/remote-deliver.preserves
+remote deliver-local ok envelope=blake3:92848a26969b37046ed21374cdfe2c2074c39d40de753f487068dc41a9fb52f0 topic=molten.vm.service receiver=node_b
+

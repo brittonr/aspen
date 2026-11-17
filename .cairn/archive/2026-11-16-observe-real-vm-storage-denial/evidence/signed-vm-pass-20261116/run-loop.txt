@@ -1,0 +1,2 @@
+node control loop receipt blake3:357ec316edda3e674b498c764efbec84c338547f02e705bfddc13626763de8c0 written to /var/lib/molten/vm-evidence/control-loop.preserves
+node run-loop loop_receipt=blake3:357ec316edda3e674b498c764efbec84c338547f02e705bfddc13626763de8c0 heartbeat=blake3:d46c50e4c520bbce5c04ada579293dd32559e61f03b30a7ad5ed0dd53e49f2a6 processed=0 stopped=no

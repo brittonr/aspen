@@ -24,6 +24,10 @@ jobs:
 
   nix-acceptance:
     runs-on: ubuntu-latest
+    env:
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 2
     steps:
       - uses: actions/checkout@v4
         with:

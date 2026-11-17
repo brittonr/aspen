@@ -35,12 +35,50 @@ The observer opens the selected state and package directory capabilities once an
 
 The opt-in `nix run .#nixos-vm-multinode-signed` rail uses the signed source-binding output's `bin/molten` for the VM service and test-driver operations and binds that exact output in the topology. The fixture's VM-local signing proves the mechanism only. The separate `nix build .#checks.x86_64-linux.nixos-vm-multinode` checks missing-trust denial, not positive signed startup; neither source changes nor a structural receipt establish that a VM run has completed.
 
-The signed campaign declares 8 vCPUs and 8 GiB per VM and a four-hour aggregate driver budget for its multiple source-admission/scenario phases. The complete closure is copied into a local read-only Nix store image instead of using host-store 9p; source verification is unchanged. Individual startup waits and the service's startup deadline remain 3,600 seconds; no admission predicate or operation deadline is relaxed. The earlier [one-hour-driver attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/signed-vm-timeout-2026-11-16.json) exhausted the aggregate budget, and the later [8-vCPU/8-GiB attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/signed-vm-eight-cpu-timeout-2026-11-16.json) exhausted the individual startup wait. Neither reached a storage-denial result. The store-image profile still requires actual execution; a profile edit is not a passing rerun or a production startup-latency claim.
+The signed campaign declares 8 vCPUs and 8 GiB per VM and a four-hour aggregate driver budget for its multiple source-admission/scenario phases. The complete closure is copied into a local read-only Nix store image instead of using host-store 9p; source verification is unchanged. Individual startup waits and the service's startup deadline remain 3,600 seconds; no admission predicate or operation deadline is relaxed. The earlier [one-hour-driver attempt](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-vm-timeout-2026-11-16.json) exhausted the aggregate budget, and the later [8-vCPU/8-GiB attempt](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-vm-eight-cpu-timeout-2026-11-16.json) exhausted the individual startup wait. Neither reached a storage-denial result. The later completed result below binds the actual store-image profile; a profile edit alone is not a passing rerun or a production startup-latency claim.
 
 The read-only store image has an explicit private writable overlay for guest
 Nix registration and signature bookkeeping. This preserves the original
 fixture's writable-store behavior without mounting the host store; admission
 still measures the actual guest store contents.
+
+The [overlay campaign](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-overlay-restart-eacces-2026-11-16.json)
+passed initial signed startup/control assertions but failed node_b's later
+restart with EACCES, before the storage-fault scenario. Restart-request creation
+and submission now use the same `molten` identity as their consuming service;
+no file permissions, service privileges or deadlines are relaxed. This failed
+attempt remains historical; the completed result below is separately scoped.
+
+The [service-identity rerun](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-final-manifest-duplicate-2026-11-16.json)
+got past restart and VM validation passed, but final manifest construction denied
+the duplicate contents of `storage-attempt.log` and its `storage-denial.log`
+copy. The producer now lists that diagnostic only once; all three canonical
+storage artifacts and the strict duplicate rule remain. This failed attempt
+does not replace a complete, retained passing packet.
+
+## Retained successful signed execution
+
+The [completed campaign](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-complete-pass-2026-11-16.json)
+retains all 132 [original exported files](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/signed-vm-pass-20261116/),
+each byte-matched to the realized output by BLAKE3 and scanned by the publication
+guard without exemptions or findings. Earlier failed attempts remain unchanged.
+
+The actual status process ran as UID/GID 998 with no effective capabilities.
+Independent observations both found mode `0500`, an absent health target and the
+same protected-tree identity; the typed error was EACCES at `open-before-write`.
+
+| Canonical result | Decision |
+| --- | --- |
+| Actual protected status operation | `deny` |
+| VM fault validation | `pass`, no diagnostics |
+| VM evidence validation | `pass`, no diagnostics |
+| Export manifest | `pass`, no diagnostics |
+
+The original command remains failed; successful validation qualifies that
+observed denial, not permission to perform the write. The result covers only
+the exact recorded VM-local signer, package, binding and resource profile. It
+does not establish independent producer/operator trust, production startup
+latency, deterministic replay, arbitrary cross-host behavior or release authority.
 
 ## Operator inspection
 

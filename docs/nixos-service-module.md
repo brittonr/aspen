@@ -84,12 +84,12 @@ stays 7,200 seconds. Substituters remain disabled inside the fixture.
 The image is a read-only lower layer. An explicit private writable overlay
 permits Nix boot registration and `.links` bookkeeping; source verification
 still measures the guest's actual store view. The first
-[store-image attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/module-store-image-readonly-failure-2026-11-16.json)
+[store-image attempt](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/module-store-image-readonly-failure-2026-11-16.json)
 failed at that registration/signing step because the overlay defaulted off.
 
-An earlier run booted/restarted/stopped the module but failed an incidental negative assertion. A later [2-vCPU/2-GiB attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/module-vm-startup-timeout-2026-11-16.json), including the shutdown correction, timed out during initial source admission before lifecycle or trust-denial assertions. The new profile captures bounded, best-effort read-only unit/journal/process diagnostics if startup fails; neither the larger resources nor the store image proves the timeout's cause or a passing rerun. A completed exact-package/profile run, successful bounded stop and all trust/source denials remain required before external qualification.
+An earlier run booted/restarted/stopped the module but failed an incidental negative assertion. A later [2-vCPU/2-GiB attempt](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/module-vm-startup-timeout-2026-11-16.json), including the shutdown correction, timed out during initial source admission before lifecycle or trust-denial assertions. The new profile captures bounded, best-effort read-only unit/journal/process diagnostics if startup fails; neither the larger resources nor the store image proves the timeout's cause or a passing rerun. A completed exact-package/profile run, successful bounded stop and all trust/source denials remain required before external qualification.
 
-The [completed store-image/overlay attempt](../.cairn/changes/observe-real-vm-storage-denial/evidence/module-store-image-overlay-pass-2026-11-16.json)
+The [completed store-image/overlay attempt](../.cairn/archive/2026-11-16-observe-real-vm-storage-denial/evidence/module-store-image-overlay-pass-2026-11-16.json)
 passed startup, restart, successful bounded shutdown and all six trust/source
 denial controls with the unchanged deadlines. Its exact test derivation and
 selected binding are recorded; the private original driver log is content-bound

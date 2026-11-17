@@ -1,0 +1,22 @@
+{
+  "schema": "aspen.signed-vm-attempt-observation.v1",
+  "observed_on": "2026-11-16",
+  "source_base_commit": "aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4",
+  "test_derivation": "/nix/store/lnd17pr676c8zif5v4bzax36g5ka11q6-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+  "source_binding_derivation": "/nix/store/35i3jc1jfpnkgc0hgzhpk93bppnbnmkg-molten-node-source-binding-v1.drv",
+  "resources_per_vm": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "private_writable_store_overlay": true},
+  "startup_deadline_seconds": 3600,
+  "aggregate_driver_deadline_seconds": 14400,
+  "outer_wall_seconds": 4281.61,
+  "exit_code": 1,
+  "result": "node-b-restart-failed-with-permission-denied",
+  "observed": [
+    "The script passed its initial signed service startup and control-artifact assertions on both VMs and reached the later restart-control scenario.",
+    "The root test-driver shell created/submitted the restart status request, while molten-node.service runs as the molten service user.",
+    "The node_b restart failed with Permission denied (os error 13); the driver failed its systemctl restart assertion.",
+    "The intended linked node-status storage-denial scenario was not reached."
+  ],
+  "raw_log_blake3": "752ded6fdea3a25f10dcb047ae582a0558ae75a1fe0269490dcfaf91c0ff077d",
+  "correction": "Execute both restart-request creation and submission as the existing molten service identity instead of changing stored-file permissions or service privileges.",
+  "non_claim": "The log does not identify the exact denied file. No full signed pass, intended storage-denial observation, independent operator trust or qualification follows from this failed attempt. The identity correction requires actual execution."
+}

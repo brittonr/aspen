@@ -55,7 +55,7 @@ the selected commit rather than supplying it. The provider's canonical RID
 graphs now select that actual public coordinate; no newer implementation or
 license grant was substituted.
 
-[Complete source-closure observations](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json)
+[The 2026-11-13 source-closure observations](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json)
 retain exact acquisition commands, outputs, revisions and measured NAR hashes
 for all 21 Git source cohorts in the selected default/development unit graph.
 They also enumerate all 78 fixed Nix source byte cohorts: 76 were acquired
@@ -66,6 +66,20 @@ Cairn Artifact input now uses verified public HTTPS at unchanged commit
 `sha256-2cM912L2YXVnVX9LquwhAPKyjPP/z/oFQRe7Qq9bHHE=`, instead of hidden SSH
 credentials. Frozen provider contents and verifier implementation pins are
 unchanged.
+
+The [2026-11-16 reconciliation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/source-inventory-reconciliation-20261116.json)
+joins the dependency bindings at `ace29e598` to retained successful anonymous
+observations by both immutable revision and metadata-free NAR:
+
+| Binding inventory | Exact revision/NAR cohorts | Unmatched |
+| --- | ---: | ---: |
+| Git-source-hash rows | 25 | 0 |
+| Fixed Nix sources (208 node aliases) | 76 | 0 |
+
+This is a deterministic reconciliation of prior acquisitions, not a new network
+acquisition or passing cold full build. The two historically unavailable remote
+inputs are no longer selected after the owner-approved dispositions below;
+their failed route observations remain unchanged, without a route-recovery claim.
 
 ## Vendored exact sources
 
@@ -119,6 +133,8 @@ and does not persist checkout credentials. Its `cargo-workflow` job runs
 `nix develop --command cargo build --locked`, then the unchanged README commands
 through `scripts/readme-quickstart.py --cargo`. On a separate clean runner,
 `nix-acceptance` runs `nix build --no-link` followed by `nix flake check`.
+It declares Nix build scheduling with `max-jobs = 1` and `cores = 2`; this reduces
+concurrent build work, not a hard host-isolation or runner-loss diagnosis.
 The existing required `flake-check` aggregate passes only when both jobs succeed;
 failure, cancellation or a skipped job cannot pass it. No check or timeout is relaxed.
 With a fresh empty home (no SSH keys, agent, Git configuration or Nix
@@ -163,6 +179,21 @@ execution was skipped. The [retained observation](../.cairn/changes/admit-anonym
 preserves those distinct outcomes and the original log identity without inferring
 the cancellation cause. The split jobs remove their serial dependency; successful
 full checks and README execution still require actual hosted results.
+
+An [earlier runner-loss report](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-runner-loss-43944117514.json)
+stays separately scoped. Its job log was unavailable, so the watcher output and
+unsuccessful retrieval diagnostic are retained instead; no resource or network
+root cause is inferred.
+
+At `ace29e598a74caa14f2ca338f9ffc3ce068d938d`, hosted
+[run 43965597007](https://github.com/brittonr/aspen/actions/runs/43965597007)
+passed the locked Cargo build, default Nix build and unchanged README Cargo
+fixture/cleanup. The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/split-43965597007-observation.json)
+keeps exact normalized fixture/status stdout and the original job-log identities.
+The Nix runner lost communication during full checks and its job log was
+unavailable; the required aggregate correctly failed. No resource/network cause
+is diagnosed. The bounded scheduling profile still needs an actual passing full
+check before #23 or whole-workflow acceptance can complete.
 
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`

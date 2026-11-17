@@ -79,6 +79,12 @@ At `afc8308bff9a8c50b2315cb4a17c9454252d7c45`, hosted run `43946811080` passed t
 
 Run Cargo plus the unchanged README commands in `cargo-workflow`, and default Nix build plus full flake checks in `nix-acceptance`. Both use fresh checkouts without persisted credentials and the same environment-scoped anonymous transport rewrite. Keep the existing required status name `flake-check` as an always-evaluated aggregate that fails for either non-success result, including failure, cancellation or skipped execution. No command, test, timeout, source pin or expected verdict is removed or relaxed. This removes the serial dependency between independent paths and preserves Nix build reuse within its job; only actual hosted execution can establish the new outcome. Aspen workflow maintainers own the split and its repeatability evidence.
 
+### Decision: Declare bounded Nix scheduling for hosted acceptance
+
+Run `43965597007` at `ace29e598a74caa14f2ca338f9ffc3ce068d938d` passed the locked Cargo build, unchanged README Cargo fixture/cleanup and default Nix build. The Nix runner lost communication during full checks; its job log was unavailable, and the aggregate correctly failed. Preserve the actual README stdout, provider metadata/annotation and unsuccessful log retrieval separately. This establishes no CPU, memory, disk, network or runner-loss root cause.
+
+The next `nix-acceptance` job declares `NIX_CONFIG` scheduling with `max-jobs = 1` and `cores = 2`, reducing concurrent build work on the same hosted runner class. These are Nix build-scheduling requests, not hard process isolation or a diagnosed fix. Keep every command, source/verifier cohort, compiler profile, expected decision and test/operation deadline unchanged. Actual new clean-runner full-check success is still required; the successful Cargo/README job cannot mask Nix failure.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.

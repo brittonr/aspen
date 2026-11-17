@@ -1,0 +1,1 @@
+node run startup=blake3:e31aa02f06555857d47a657e62a59e609d44faa6ca82343a83632468852428c6 adapters=12 state_root=/var/lib/molten
