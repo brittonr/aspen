@@ -81,3 +81,19 @@ The Molten adapter under `src/componentrpc/` uses two admitted fabric frame sess
 Optional telemetry is a separate, default-disabled producer cohort and authority operation. The selected upstream interface is `WebAssembly/wasi-otel` revision `e5262a84044aff064c9599eebc05013bb3432795`, `wasi:otel/tracing@0.2.0-rc.2`. The Mantle `wrpc-telemetry-reference-bundle` supplies a standalone emitter with safe, secret-attribute and 33-span modes. Molten implements the real three tracing callbacks and separately gates the capability-local, redacted, diagnostic-only exporter with Basalt/UCAN. No hello guest import is widened; no native OTLP or comparison component is mislabeled as trusted host execution.
 
 No build, runtime smoke, test, formatter, lint or lifecycle gate was run in this delegated source implementation, as explicitly instructed. Root optional dependency integration, real bundle realization and the complete focused validation rail remain necessary before any task is closed or execution evidence is claimed. The existing shared `wasm_component::r#ref` identity uses Debug-rendered profile fields; it is consumed unchanged for provider compatibility, not promoted into a stronger new canonical-profile claim. Shared published verifier capability/source-closure prerequisites remain owned by their integration owner.
+
+## Current source integration boundary (2026-11-17)
+
+Root `component-rpc`/`component-rpc-telemetry` feature dependencies, public module
+mounts and CLI dispatch already exist. The shared Mantle structural/source-tree
+verifier is selected at `dd2bebab894688d07e7a29c75c1437f4ecc120df`; neither a new
+verifier implementation nor a replacement source-copy convention is required.
+The ordinary shared runtime is now Wasmtime 49.0.5; the wRPC host remains the
+separate 33.0.0 cohort, with no interchangeable engines, stores or handles.
+
+Mantle's retained `2026-11-03-wrpc-profile-resolution` observation records the
+reference client/server bundle build succeeding under `wrpc-reference`. That
+producer build does not supply independent consumer admission, complete
+real-byte acceptance, remote invocation/replay or optional telemetry execution.
+Those criteria remain open. Local wire/diagnostic controls and CLI inspection
+must retain their own execution records and cannot complete bundle-backed tasks.

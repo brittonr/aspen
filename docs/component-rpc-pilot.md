@@ -8,7 +8,7 @@ service and local component protocols are unchanged. The only RPC is
 
 The selected upstream is [wRPC v0.15.0](https://github.com/bytecodealliance/wrpc/tree/aa01409ed38bf7a978570ff567c4475376925df6):
 `wrpc-runtime-wasmtime` 0.29.0, `wrpc-transport` 0.28.4 and isolated Wasmtime
-33.0.0. This runtime must never receive shared Wasmtime 45 engines, stores,
+33.0.0. This runtime must never receive shared Wasmtime 49.0.5 engines, stores,
 components or handles. Streams, futures, implicit cancellation and transport
 extensions are rejected. See `config/component-rpc/profile.ncl` and the two
 explicit Basalt policy sources in that directory.
@@ -79,7 +79,7 @@ The root command owner mounts `src/componentrpc/mod.rs` as `component_rpc` and
 resolves explicit user-selected directory roots to held capabilities. Domain
 code never discovers ambient roots or reconstructs paths after admission.
 
-Recommended root commands and their exact domain calls:
+Feature-gated root commands and their exact domain calls:
 
 | Command | Domain call |
 | --- | --- |
@@ -87,8 +87,9 @@ Recommended root commands and their exact domain calls:
 | `component-rpc show --output-root O` | `operator::show(&O)` |
 | `component-rpc replay --bundle-root B --staging-root S --output-root O` | `Bundle::load_package(&B, &S)`, then `operator::replay(&O, &bundle)` |
 
-These commands require root dispatch integration; their names here are the
-integration contract, not a claim that an unbuilt binary exposed them.
+The `component-rpc` feature selects the existing root dispatch; optional
+telemetry additionally requires `component-rpc-telemetry`. Source wiring alone
+does not establish that a binary or a bundle-backed call was executed.
 Output roots must be fresh. Readback validates both canonical transcript refs
 and their recorded values. Offline replay decodes persisted Preserves, checks
 exact bundle/component/WIT scope, and consumes recorded effects without
@@ -158,9 +159,24 @@ pilot experimental or retires it. Success proves neither protocol stability,
 semantic equivalence, transport security, production readiness, component
 correctness nor replacement eligibility.
 
-No builds, runtime smoke, tests, formatters, linters or lifecycle mutations were
-run by this delegated consumer implementation, as explicitly instructed.
-Root pins/mounts/dispatch, Mantle realization, the published verifier's current
-capability/source-tree API, focused adapter/authority/replay/export execution,
-Octet and Cairn gates must be integrated and exercised before task completion.
-Source files and executable fixture paths are not execution evidence.
+The original delegated source handoff ran no builds or execution checks.
+Root optional dependencies, module mounts and command dispatch are now present.
+The published Mantle structural/source-closure verifier is already selected at
+`dd2bebab894688d07e7a29c75c1437f4ecc120df`; that API is not a missing prerequisite.
+
+Mantle's retained 2026-11-03 `wrpc-profile-resolution` observation records a
+successful reference-pair build after selecting Octet's `wrpc-reference`
+profile. This supersedes the earlier profile/materialization failure, not the
+remaining real-byte producer acceptance or remote RPC execution obligations.
+The independently admitted immutable package/bundle binding, actual request and
+result, replay, negative authority/materialization cases and focused quality
+gates remain required. The separate telemetry bundle cannot borrow the hello
+pair's build result. Source files, a successful producer build or CLI help do
+not qualify the pilot or authorize a locally rebuilt guest substitute.
+
+The [2026-11-17 local control observation](../.cairn/changes/pilot-wrpc-component-transport/evidence/local-controls-2026-11-17.json)
+retains the clean source commit, selected feature/environment, input and image
+BLAKE3 identities, passing local controls and actual CLI inspection. It
+preserves the earlier pre-test temporary-filesystem failure separately. The
+component-RPC integration maintainers own this repeatable local recipe; it is
+not a producer, transport, telemetry-host or release acceptance record.

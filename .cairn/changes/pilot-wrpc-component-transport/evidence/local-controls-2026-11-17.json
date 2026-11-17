@@ -1,0 +1,81 @@
+{
+  "schema": "aspen.component-rpc.local-controls-observation/v1",
+  "date": "2026-11-17",
+  "change": "pilot-wrpc-component-transport",
+  "maintenance_owner": "Molten component-RPC integration maintainers",
+  "immediate_outcome": "The existing opt-in component-RPC/telemetry feature compiles, its four local controls pass, and the actual CLI exposes the five declared commands.",
+  "durable_capability": "A repeatable source/image-bound local control recipe, separate from producer materialization, current authority and real request/result/replay qualification.",
+  "source": {
+    "commit": "ac46ffe13d9e5ef3094703b48803e05121040225",
+    "checkout_clean": true,
+    "profile": "Cargo test/dev unoptimized, debug information disabled; not a Nix-built deployment or performance profile",
+    "blake3": {
+      "Cargo.toml": "df1604797781133ae827060d9f8304ef00254626961735858a7967c77d90b38e",
+      "Cargo.lock": "6f93991576af2303f9b99b20661da7e87e200faaed57617ee756b6c2e3d587db",
+      "flake.lock": "974c6b0a8102c65d08cccb71ede949a5d066f041f5ffcfc710c09d31748ef158",
+      "tests/componentrpc.rs": "022d5d2547a25daf617017937b048ea63983d1d71a46b3bba701ba083aa3d70c",
+      "config/component-rpc/profile.ncl": "7296c08ebb426f28ac38304f53c1b85f86f8d692c7cbf9d82e5f06c0d5628360",
+      "componentrpc-test-image": "4ce69cf2d03d96e311f3dbe659ada4dfc3542987e78589f6ad01e575978e27e4"
+    }
+  },
+  "environment": {
+    "tooling": "repository-pinned nix develop",
+    "CARGO_BUILD_JOBS": 2,
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "features": [
+      "component-rpc-telemetry"
+    ],
+    "scratch": "Task-owned temporary directory on the repository filesystem; no unrelated temporary files or caches were deleted."
+  },
+  "attempts": [
+    {
+      "command": "nix develop -c cargo test --locked --features component-rpc-telemetry --test componentrpc",
+      "exit_status": 1,
+      "tests_started": false,
+      "outcome": "environment-unavailable",
+      "reason": "Default temporary filesystem quota exceeded before nix-shell could create its temporary file."
+    },
+    {
+      "command": "nix develop -c cargo test --locked --features component-rpc-telemetry --test componentrpc",
+      "exit_status": 0,
+      "tests_started": true,
+      "elapsed_wall_seconds": 377.57,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "tests": [
+        "multibyte_string_lengths_are_minimal_and_bounded",
+        "exact_hello_string_wire_is_not_an_envelope_or_transport_echo",
+        "world_function_and_all_async_paths_are_closed",
+        "diagnostic_projection_excludes_payloads_and_has_a_finite_queue"
+      ]
+    }
+  ],
+  "cli": {
+    "command": "molten component-rpc --help",
+    "exit_status": 0,
+    "image_blake3": "dc5484a0849ee7213f5bfd1553d1361ea1f7dc417ffde0b73dcdad659cea4c34",
+    "image_hash_stable_before_after": true,
+    "commands": [
+      "run-fixture",
+      "show",
+      "replay",
+      "telemetry-fixture",
+      "telemetry-show"
+    ]
+  },
+  "nickel": {
+    "command": "nix develop -c nickel typecheck config/component-rpc/profile.ncl",
+    "exit_status": 0,
+    "scope": "Static profile typechecking, not runtime or producer qualification."
+  },
+  "cache_observation": "Kache disabled its cache after index I/O errors; compilation and the four tests completed. This is not an Octet source-policy result.",
+  "evidence_scope": "Malformed-input, unsupported-world/function/async-shape, bounded-string and diagnostic-queue denials are assertions inside passing tests, not independently executed failed CLI invocations.",
+  "non_claims": [
+    "No Mantle package publication or independent bundle admission is established by these controls.",
+    "No actual client/server request/result, authority negative, materialization negative or transcript replay was executed.",
+    "Compiling component-rpc-telemetry and testing native diagnostics does not execute the WASI OTel callbacks or its emitter bundle.",
+    "No guest build, provider trust grant, live deployment, cross-host result, production readiness or release authority is claimed."
+  ]
+}

@@ -13,3 +13,20 @@
 ## Source handoff note (2026-10-30)
 
 Source implementation: `src/componentrpc/`, `config/component-rpc/`, `tests/componentrpc.rs`, and `docs/component-rpc-pilot.md`. Real wRPC and the separately selected optional WASI OTel host paths are authored against the exact Mantle contracts. Task boxes intentionally remain unchecked: no prohibited build/test/lint/formatter/lifecycle gate or producer realization was run by the delegated consumer worker. Root dependency/mount/command integration and actual bundle-backed positive/negative execution must be reviewed and recorded by the integration owner before claiming completion.
+
+## Parent local controls (2026-11-17)
+
+Root feature dependencies, public module mounts and command dispatch are present.
+The [source/image-bound local observation](evidence/local-controls-2026-11-17.json)
+records four passing wire/diagnostic controls under `component-rpc-telemetry`,
+the actual five-command CLI help surface and Nickel profile typechecking.
+The initial Nix-shell attempt failed before tests started because the default
+temporary filesystem quota was exhausted; the passing attempt used task-owned
+scratch on the repository filesystem without deleting unrelated data.
+
+These controls do not execute a materialized client/server call, authority or
+materialization negatives, transcript replay or the WASI OTel callbacks. The
+shared Mantle verifier/source-tree API is already selected; the remaining
+bundle admission and end-to-end acceptance criteria stay unchecked. No task is
+closed by confusing a compiled optional feature or diagnostic queue with those
+executions. Molten's component-RPC integration maintainers own this local recipe.

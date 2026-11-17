@@ -34,4 +34,6 @@
 
 ## Blocker
 
-Live behavior tasks remain blocked until ChaosControl and OnixOS archive their semantic-history and live-reliability contracts. The production-shaped coordination endpoint and native OnixOS service profile must also be available.
+The provider contracts are no longer missing specifications: ChaosControl's semantic-history contract is archived, and OnixOS retains archived `2026-08-30-add-live-black-box-reliability-rail` and `2026-08-30-onixos-molten-native-service` changes. Historical source, pure/VM controls and checked archive tasks do not establish current-producer admission or a live campaign.
+
+Live behavior still requires the exact current provider integration, independently provisioned signed-output/source trust and credentials, an admitted production-shaped coordination endpoint/native service cohort, actual disposable hosts, complete histories/fault observations, checker results and teardown evidence. The retained v0.1.0 service and an experimental three-node recipe cannot satisfy those requirements. Existing generator, history, importer and public-client source must be reconciled rather than replaced; no unchecked execution criterion is completed by this prerequisite correction.
