@@ -1,0 +1,296 @@
+{
+  "schema": "molten-hosted-ci-observations-v1",
+  "reproducible_dependencies_observation": {
+    "run_id": 43986122156,
+    "url": "https://github.com/brittonr/aspen/actions/runs/43986122156",
+    "source_commit": "1e81020e309c46be6251db36021df25577ad6676",
+    "created_at": "2026-11-17T00:15:15Z",
+    "updated_at": "2026-11-17T02:54:54Z",
+    "conclusion": "success",
+    "metadata_output_blake3": "f985e152dad8bcb148d5e1f3e9cb125f4e8ea22001c88c8aad14a64caa2add5f",
+    "jobs": [
+      {
+        "completedAt": "2026-11-17T00:54:25Z",
+        "conclusion": "success",
+        "databaseId": 133714590712,
+        "name": "cargo-workflow",
+        "startedAt": "2026-11-17T00:15:19Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-17T00:15:23Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-17T00:15:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:15:32Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-17T00:15:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:15:43Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-17T00:15:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:54:13Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command cargo build --locked",
+            "number": 4,
+            "startedAt": "2026-11-17T00:15:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:54:21Z",
+            "conclusion": "success",
+            "name": "Run nix develop --command python3 scripts/readme-quickstart.py --cargo",
+            "number": 5,
+            "startedAt": "2026-11-17T00:54:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:54:22Z",
+            "conclusion": "success",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 9,
+            "startedAt": "2026-11-17T00:54:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:54:22Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@v4",
+            "number": 10,
+            "startedAt": "2026-11-17T00:54:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:54:22Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 11,
+            "startedAt": "2026-11-17T00:54:22Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43986122156/job/133714590712"
+      },
+      {
+        "completedAt": "2026-11-17T02:54:49Z",
+        "conclusion": "success",
+        "databaseId": 133714591250,
+        "name": "nix-acceptance",
+        "startedAt": "2026-11-17T00:15:19Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-17T00:15:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-17T00:15:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:15:31Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@v4",
+            "number": 2,
+            "startedAt": "2026-11-17T00:15:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T00:15:37Z",
+            "conclusion": "success",
+            "name": "Run DeterminateSystems/nix-installer-action@v19",
+            "number": 3,
+            "startedAt": "2026-11-17T00:15:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T01:03:23Z",
+            "conclusion": "success",
+            "name": "Run nix build --no-link",
+            "number": 4,
+            "startedAt": "2026-11-17T00:15:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:46Z",
+            "conclusion": "success",
+            "name": "Run nix flake check",
+            "number": 5,
+            "startedAt": "2026-11-17T01:03:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:47Z",
+            "conclusion": "success",
+            "name": "Post Run DeterminateSystems/nix-installer-action@v19",
+            "number": 9,
+            "startedAt": "2026-11-17T02:54:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:48Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@v4",
+            "number": 10,
+            "startedAt": "2026-11-17T02:54:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:48Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 11,
+            "startedAt": "2026-11-17T02:54:48Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43986122156/job/133714591250"
+      },
+      {
+        "completedAt": "2026-11-17T02:54:54Z",
+        "conclusion": "success",
+        "databaseId": 133782708115,
+        "name": "flake-check",
+        "startedAt": "2026-11-17T02:54:51Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-17T02:54:52Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-17T02:54:52Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:52Z",
+            "conclusion": "success",
+            "name": "Require every acceptance job",
+            "number": 2,
+            "startedAt": "2026-11-17T02:54:52Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-17T02:54:52Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 3,
+            "startedAt": "2026-11-17T02:54:52Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/brittonr/aspen/actions/runs/43986122156/job/133782708115"
+      }
+    ],
+    "required_command_observations": [
+      {
+        "job": "cargo-workflow",
+        "command": "nix develop --command cargo build --locked",
+        "conclusion": "success",
+        "started_at": "2026-11-17T00:15:43Z",
+        "completed_at": "2026-11-17T00:54:13Z",
+        "elapsed_seconds": 2310.0
+      },
+      {
+        "job": "cargo-workflow",
+        "command": "nix develop --command python3 scripts/readme-quickstart.py --cargo",
+        "conclusion": "success",
+        "started_at": "2026-11-17T00:54:13Z",
+        "completed_at": "2026-11-17T00:54:21Z",
+        "elapsed_seconds": 8.0
+      },
+      {
+        "job": "nix-acceptance",
+        "command": "nix build --no-link",
+        "conclusion": "success",
+        "started_at": "2026-11-17T00:15:37Z",
+        "completed_at": "2026-11-17T01:03:23Z",
+        "elapsed_seconds": 2866.0
+      },
+      {
+        "job": "nix-acceptance",
+        "command": "nix flake check",
+        "conclusion": "success",
+        "started_at": "2026-11-17T01:03:23Z",
+        "completed_at": "2026-11-17T02:54:46Z",
+        "elapsed_seconds": 6683.0
+      },
+      {
+        "job": "flake-check",
+        "command": "test \"$CARGO_RESULT\" = success && test \"$NIX_RESULT\" = success",
+        "conclusion": "success",
+        "started_at": "2026-11-17T02:54:52Z",
+        "completed_at": "2026-11-17T02:54:52Z",
+        "elapsed_seconds": 0.0
+      }
+    ],
+    "duration_source": "GitHub step timestamps, with whole-second resolution.",
+    "declared_profile": {
+      "runner": "ubuntu-latest",
+      "checkout_persist_credentials": false,
+      "anonymous_git_rewrite": "ssh://git@github.com/ -> https://github.com/",
+      "nix_max_jobs": 1,
+      "nix_cores": 2,
+      "compiler_profiles_and_test_deadlines_unchanged": true
+    },
+    "job_log_observations": {
+      "cargo-workflow": {
+        "fetch_exit_code": 0,
+        "diagnostic_output_blake3": "b4386713b4bf5289a4504023359d891c91d47777ba2b29d8561eac3063ba76ff",
+        "diagnostic_output_utf8_bytes": 1036531,
+        "original_retention": "operator-private original; not republished"
+      },
+      "nix-acceptance": {
+        "fetch_exit_code": 0,
+        "diagnostic_output_blake3": "a6a69c32a4426786527a669eb59f730107764ea5a717e6706acf1e01c2214efc",
+        "diagnostic_output_utf8_bytes": 2588088,
+        "original_retention": "operator-private original; not republished"
+      },
+      "flake-check": {
+        "fetch_exit_code": 0,
+        "diagnostic_output_blake3": "2c9ae5eb87ba923954bd001cfd7a5571fc92b5567a6b174452313129c516af04",
+        "diagnostic_output_utf8_bytes": 3632,
+        "original_retention": "operator-private original; not republished"
+      }
+    },
+    "readme_observation": {
+      "normalization": "Only the GitHub job/step tab fields and timestamp prefix are removed from these exact stdout lines.",
+      "original_log_step_labels": [
+        "UNKNOWN STEP",
+        "UNKNOWN STEP"
+      ],
+      "step_association": "The log emits UNKNOWN STEP labels; these stdout records follow its explicit README command group. Structured job metadata records the command and successful step conclusion.",
+      "normalized_stdout_excerpt": [
+        "system-extension fixture ok profile=sandboxed-component manifest=blake3:796efc8dc1733e7a1dd339c2be63ec7c6d724ec05d4531bf351d0c963e7567df evidence=68 status=blake3:97caee679618dc6368102301c9ef8914417bd73b43e37eb4464e52e0f3a9ddfb out=target/aspen-demo.hHVGhq",
+        "system-extension status extension=molten.fixture.system.echo service=molten.fixture.system.echo.service generation=3 phase=stopped profile=sandboxed-component health=stopped restarts=1 invocations=13 checkpoint=blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ref=blake3:97caee679618dc6368102301c9ef8914417bd73b43e37eb4464e52e0f3a9ddfb"
+      ],
+      "scope": "Unchanged README Cargo fixture and cleanup in the clean checkout; not a packaged-binary substitute or external workload qualification."
+    },
+    "unsigned_vm_check": {
+      "name": "checks.x86_64-linux.nixos-vm-multinode",
+      "derivation": "/nix/store/hj3my187wr3m080irw9z1xqz78fhl4x8-vm-test-run-molten-nixos-vm-multinode.drv",
+      "observed": "The full-check log records building this derivation and a successful named check. This is the unsigned missing-trust denial check, not positive signed startup."
+    },
+    "establishes": "All required locked Cargo, README Cargo workflow, default Nix build and full flake-check commands succeeded for the exact published candidate, and the required aggregate succeeded.",
+    "non_claims": [
+      "No earlier runner-loss root cause established",
+      "No optional all-features or all-platform qualification",
+      "No independent producer/operator trust or production readiness",
+      "No release admission inferred",
+      "Earlier failed observations remain unchanged and separately scoped"
+    ]
+  }
+}

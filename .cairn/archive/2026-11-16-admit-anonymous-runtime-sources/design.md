@@ -85,6 +85,12 @@ Run `43965597007` at `ace29e598a74caa14f2ca338f9ffc3ce068d938d` passed the locke
 
 The next `nix-acceptance` job declares `NIX_CONFIG` scheduling with `max-jobs = 1` and `cores = 2`, reducing concurrent build work on the same hosted runner class. These are Nix build-scheduling requests, not hard process isolation or a diagnosed fix. Keep every command, source/verifier cohort, compiler profile, expected decision and test/operation deadline unchanged. Actual new clean-runner full-check success is still required; the successful Cargo/README job cannot mask Nix failure.
 
+### Decision: Archive only the observed complete public candidate
+
+Run `43986122156` at `1e81020e309c46be6251db36021df25577ad6676` passed both clean-checkout acceptance jobs and their required aggregate. Locked Cargo, the unchanged README Cargo fixture/cleanup, default Nix build and full flake checks all succeeded. Retain the exact job/step metadata, durations, original diagnostic digests and normalized stdout separately from earlier failures. The result establishes this default candidate on the declared hosted profile, not the cause of earlier runner loss, optional-feature qualification, independent trust or release admission.
+
+Publish the three historical acquisition JSON files as explicitly marked host-material-redacted views. Preserve their exact originals privately and bind each view with `original_record_blake3`; do not rewrite immutable revisions, NAR identities, recorded outcomes, historical snapshot bindings or packed canonical receipts. Remove their old publication-baseline exceptions instead of relocating or expanding exemptions. Workflow maintainers own the existing hosted commands and their repeatability for later candidates.
+
 ## Risks / Trade-offs
 
 - HTTPS availability and full Git-object acquisition are different observations; clean builds remain required.

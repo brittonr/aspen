@@ -4,7 +4,7 @@
 
 ### Requirement: Git dependencies use immutable release pins
 
-r[molten.project.reproducible_dependencies.exact_pins] Every Git dependency in the Aspen release closure MUST be bound to an immutable revision in the repository-owned dependency source of truth, and manifest, lockfile, and Nix source identities MUST agree.
+r[molten.project.reproducible_dependencies.exact_pins] Every Git dependency in the Molten release closure MUST be bound to an immutable revision in the repository-owned dependency source of truth, and manifest, lockfile, and Nix source identities MUST agree.
 
 #### Scenario: Floating Git source fails release validation
 

@@ -12,7 +12,7 @@
       "source.git"
     ],
     "code": 0,
-    "stdout": "Initialized empty Git repository in /dev/shm/aspen-open-issues-20261113/target/source-gate-20261113/anonymous-vm-source.Dqiwxm/source.git/\n",
+    "stdout": "Initialized empty Git repository in <scratch>/aspen-open-issues-20261113/target/source-gate-20261113/anonymous-vm-source.Dqiwxm/source.git/\n",
     "stderr": "hint: Using 'master' as the name for the initial branch. This default branch name\nhint: will change to \"main\" in Git 3.0. To configure the initial branch name\nhint: to use in all of your new repositories, which will suppress this warning,\nhint: call:\nhint:\nhint: \tgit config --global init.defaultBranch <name>\nhint:\nhint: Names commonly chosen instead of 'master' are 'main', 'trunk' and\nhint: 'development'. The just-created branch can be renamed via this command:\nhint:\nhint: \tgit branch -m <name>\nhint:\nhint: Disable this message with \"git config set advice.defaultBranchName false\"\n"
   },
   "fetch": {
@@ -34,5 +34,10 @@
     "No source bytes acquired or NAR verified.",
     "No revision, provider publication, private cache or sibling substitution was used.",
     "Optional Cargo dependency metadata was required before the first test in the hosted storage invocation."
-  ]
+  ],
+  "publication_view": "Host-path, scratch, hostname and private-address redacted view of the exact operator-private original. Recorded outcomes, immutable Git revisions and source NAR identities are unchanged; this view is not the original capture bytes.",
+  "original_record_blake3": "a2eda56a29b31db352fbf7f76c46e391c22c2b4cd12100644e300672baaf1b4e",
+  "publication_redactions": {
+    "scratch": 1
+  }
 }

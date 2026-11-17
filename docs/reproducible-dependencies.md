@@ -41,7 +41,7 @@ observed Git-over-HTTPS acquisitions. These observations do not assert a
 Radicle signed-ref verification or replace source-trust admission.
 
 Earlier commands and failed bootstrap attempts remain in
-[the initial change evidence](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-acquisition-20261113.json).
+[the initial change evidence](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/anonymous-acquisition-20261113.json).
 An earlier hash-generation pass observed HTTP 530 from Durable File Publication's
 `git.onix.computer` route and reused its exact existing NAR identity; that was not
 fresh-source availability evidence. A subsequent anonymous GitHub fetch rejected
@@ -55,9 +55,9 @@ the selected commit rather than supplying it. The provider's canonical RID
 graphs now select that actual public coordinate; no newer implementation or
 license grant was substituted.
 
-[The 2026-11-13 source-closure observations](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json)
-retain exact acquisition commands, outputs, revisions and measured NAR hashes
-for all 21 Git source cohorts in the selected default/development unit graph.
+[The 2026-11-13 source-closure observations](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/anonymous-source-closure-20261113.json)
+retain acquisition revisions, measured NAR hashes and recorded outcomes for all
+21 Git source cohorts in the selected default/development unit graph.
 They also enumerate all 78 fixed Nix source byte cohorts: 76 were acquired
 anonymously and matched their locked NARs. Recursive submodules and required LFS
 payloads are included, not pointer stubs. The executable-extent verifier's nested
@@ -67,7 +67,7 @@ Cairn Artifact input now uses verified public HTTPS at unchanged commit
 credentials. Frozen provider contents and verifier implementation pins are
 unchanged.
 
-The [2026-11-16 reconciliation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/source-inventory-reconciliation-20261116.json)
+The [2026-11-16 reconciliation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/source-inventory-reconciliation-20261116.json)
 joins the dependency bindings at `ace29e598` to retained successful anonymous
 observations by both immutable revision and metadata-free NAR:
 
@@ -80,6 +80,13 @@ This is a deterministic reconciliation of prior acquisitions, not a new network
 acquisition or passing cold full build. The two historically unavailable remote
 inputs are no longer selected after the owner-approved dispositions below;
 their failed route observations remain unchanged, without a route-recovery claim.
+
+The three historical acquisition JSON files publish explicitly marked
+host-material-redacted views. Each `original_record_blake3` binds the exact
+operator-private capture; revisions, NAR identities and recorded outcomes are
+unchanged. Snapshot paths/digests in the reconciliation name those original
+capture bytes, not the redacted publication views. Packed canonical receipts
+are unchanged. Their former publication-baseline exceptions are removed.
 
 ## Vendored exact sources
 
@@ -140,7 +147,7 @@ failure, cancellation or a skipped job cannot pass it. No check or timeout is re
 With a fresh empty home (no SSH keys, agent, Git configuration or Nix
 fetcher cache), evaluating the default development shell failed at exactly that
 fetch without the rewrite and succeeded with it, fetching the same commit over
-HTTPS ([observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-octet-transport-20261115.json)).
+HTTPS ([observation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/anonymous-octet-transport-20261115.json)).
 This is transport only: the Octet revision, its source bytes and its lint behavior
 are unchanged. It is not a cold build; the hosted clean-runner result is the build
 evidence. Remove the rewrite once Octet publishes HTTPS or vendored coordinates for
@@ -151,16 +158,16 @@ review.
 
 Hosted storage [run 43693265859](https://github.com/brittonr/aspen/actions/runs/43693265859) and full-flake [run 43693265823](https://github.com/brittonr/aspen/actions/runs/43693265823) at `2c4631bc88537d6d6323f738e8374683d7706cb4` failed before conformance. The pinned Octet CLI `3f7abb641ee604f54629da415bc7686f89662065` selects a separate Bounded Exec `44eb74eb639194665ee820562d5b2ce2c3ff6a94` through SSH in its Cargo manifest. The fixed Nix-input inventory above does not include this producer's internal Cargo sources. Full-flake evaluation also retained the unresolved VM Cohort and Mantle routes.
 
-The storage workflow selects `nix develop .#object-storage-ci`: the unchanged pinned Rust compiler plus compiler/linker support, Git and Python, without unrelated proof-producer packages. Its dependency guard, tests, optional feature and canonical receipt requirements are unchanged. This is an explicit storage-profile boundary, not a source rewrite, a new Octet cohort or a qualification of the unchanged default development shell. The [retained hosted observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261115.json) keeps failure and artifact evidence separate from any subsequent pass. Aspen's workflow maintainers own this shell and repeatability through the existing hosted workflow; issue #23 remains open for the full public graph.
+The storage workflow selects `nix develop .#object-storage-ci`: the unchanged pinned Rust compiler plus compiler/linker support, Git and Python, without unrelated proof-producer packages. Its dependency guard, tests, optional feature and canonical receipt requirements are unchanged. This is an explicit storage-profile boundary, not a source rewrite, a new Octet cohort or a qualification of the unchanged default development shell. The [retained hosted observation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261115.json) keeps failure and artifact evidence separate from any subsequent pass. Aspen's workflow maintainers own this shell and repeatability through the existing hosted workflow; at that candidate, issue #23 remained open for the full public graph.
 
-The repaired hosted [storage run 43695373650](https://github.com/brittonr/aspen/actions/runs/43695373650) at `4055bab940178c300c66b635cd00f2cda0188cf3` initialized that shell and passed its dependency guard. Before the first Rust test, Cargo attempted the optional `vm-cohort-core` source and failed because `git-remote-rad` was absent. Optional feature selection did not prevent this cold metadata fetch. A [fresh credential-free direct attempt](../.cairn/changes/admit-anonymous-runtime-sources/evidence/anonymous-vm-source-20261115.json) to acquire the unchanged VM Cohort commit through its recorded seed returned HTTP 500; the workspace catalog advertises no GitHub source. The all-required-default-acquisition task is reopened. No test or canonical conformance receipt was produced, and neither source-acquisition counts nor the tool-shell fix satisfy the clean-public-build criterion.
+The repaired hosted [storage run 43695373650](https://github.com/brittonr/aspen/actions/runs/43695373650) at `4055bab940178c300c66b635cd00f2cda0188cf3` initialized that shell and passed its dependency guard. Before the first Rust test, Cargo attempted the optional `vm-cohort-core` source and failed because `git-remote-rad` was absent. Optional feature selection did not prevent this cold metadata fetch. A [fresh credential-free direct attempt](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/anonymous-vm-source-20261115.json) to acquire the unchanged VM Cohort commit through its recorded seed returned HTTP 500; the workspace catalog advertises no GitHub source. The all-required-default-acquisition task was reopened. No test or canonical conformance receipt was produced, and neither source-acquisition counts nor the tool-shell fix satisfied the clean-public-build criterion.
 
 The later full-flake [run 43816346417](https://github.com/brittonr/aspen/actions/runs/43816346417)
 at `d2c4359d79b287514f054a799a7edd576b90f351` acquired the public source graph and
 reached `molten` production/test crate builds before reporting “The operation was canceled.”
-The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/observations.json)
+The [retained observation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/observations.json)
 binds that result and the original diagnostic log digest. It establishes neither the cancellation
-cause nor a successful cold build, passing tests, or a passing full flake check; #23 remains open.
+cause nor a successful cold build, passing tests, or a passing full flake check; that candidate left #23 open.
 
 At `aac7b5ba974cc9660749dab6d8ef4b7db04e3cb4`, hosted
 [run 43925658138](https://github.com/brittonr/aspen/actions/runs/43925658138)
@@ -175,12 +182,12 @@ but successful full checks and the verbatim workflow still require a new run.
 At `afc8308bff9a8c50b2315cb4a17c9454252d7c45`, hosted
 [run 43946811080](https://github.com/brittonr/aspen/actions/runs/43946811080)
 again passed both build commands, but full flake checks were canceled and README
-execution was skipped. The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-cancelled-43946811080.json)
+execution was skipped. The [retained observation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-cancelled-43946811080.json)
 preserves those distinct outcomes and the original log identity without inferring
 the cancellation cause. The split jobs remove their serial dependency; successful
 full checks and README execution still require actual hosted results.
 
-An [earlier runner-loss report](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-runner-loss-43944117514.json)
+An [earlier runner-loss report](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/default-runner-loss-43944117514.json)
 stays separately scoped. Its job log was unavailable, so the watcher output and
 unsuccessful retrieval diagnostic are retained instead; no resource or network
 root cause is inferred.
@@ -188,12 +195,28 @@ root cause is inferred.
 At `ace29e598a74caa14f2ca338f9ffc3ce068d938d`, hosted
 [run 43965597007](https://github.com/brittonr/aspen/actions/runs/43965597007)
 passed the locked Cargo build, default Nix build and unchanged README Cargo
-fixture/cleanup. The [retained observation](../.cairn/changes/admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/split-43965597007-observation.json)
+fixture/cleanup. The [retained observation](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/split-43965597007-observation.json)
 keeps exact normalized fixture/status stdout and the original job-log identities.
 The Nix runner lost communication during full checks and its job log was
 unavailable; the required aggregate correctly failed. No resource/network cause
-is diagnosed. The bounded scheduling profile still needs an actual passing full
-check before #23 or whole-workflow acceptance can complete.
+is diagnosed. That unsuccessful candidate did not satisfy #23's required
+full-check/aggregate acceptance.
+
+At `1e81020e309c46be6251db36021df25577ad6676`, clean hosted
+[run 43986122156](https://github.com/brittonr/aspen/actions/runs/43986122156)
+passed both acceptance jobs and their required aggregate. The locked Cargo
+build, unchanged README Cargo fixture/cleanup, default Nix build and full flake
+checks all succeeded. The [retained result](../.cairn/archive/2026-11-16-admit-anonymous-runtime-sources/evidence/hosted-ci-20261116/full-43986122156-observation.json)
+records exact source/profile, command results, durations, original diagnostic
+digests and normalized stdout. The Nix job requested single-build/two-core
+scheduling without changing commands, compiler profiles, source pins, expected
+decisions or test/operation deadlines. Workflow maintainers own these existing
+commands and their repeatability for later candidates.
+
+This completes #23's default public-build and #25's clean README execution
+acceptance for the recorded candidate. Earlier blocker statements above remain
+historical; no earlier failure cause, optional-feature qualification, independent
+trust, external runtime qualification or release admission is inferred.
 
 
 Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`

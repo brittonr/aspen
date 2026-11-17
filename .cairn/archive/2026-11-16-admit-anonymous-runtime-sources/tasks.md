@@ -12,8 +12,8 @@
 - [x] [serial] Ship the owner-approved exact VM Cohort snapshot and bind the Mantle producer fixtures by upstream blob identity; remove both `git+rad` inputs, the VM `rad://` Cargo source, its crate hash and its Git-transport profile row through their owning generators; add the `vendored-sources` check with positive and negative tests. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Fetch the pinned Octet producer's public SSH-named dependency anonymously through an environment-scoped HTTPS rewrite in the documented setup and hosted workflow, retaining fresh-home negative and positive observations. r[molten.project.reproducible_dependencies.exact_pins]
 - [x] [serial] Retain passing hosted `Object storage live` runs for the published source with original canonical receipts, artifact identities, fixture-command refs and scoped local-endpoint observations. r[molten.project.reproducible_dependencies.exact_pins]
-- [ ] [serial] Execute the unchanged README Cargo quickstart after the locked Cargo build on its clean hosted runner, and the explicit default `nix build` followed by full flake checks on a separate clean hosted runner; require both jobs to succeed through the existing `flake-check` aggregate and retain exact results without substituting the packaged-binary smoke. r[molten.project.reproducible_dependencies.exact_pins]
-- [ ] [serial] Retain a passing cold hosted `Reproducible dependencies` run for the published source before archiving. r[molten.project.reproducible_dependencies.exact_pins]
+- [x] [serial] Execute the unchanged README Cargo quickstart after the locked Cargo build on its clean hosted runner, and the explicit default `nix build` followed by full flake checks on a separate clean hosted runner; require both jobs to succeed through the existing `flake-check` aggregate and retain exact results without substituting the packaged-binary smoke. r[molten.project.reproducible_dependencies.exact_pins]
+- [x] [serial] Retain a passing cold hosted `Reproducible dependencies` run for the published source before archiving. r[molten.project.reproducible_dependencies.exact_pins]
 
 ## Parent observation (2026-11-13)
 
@@ -67,4 +67,28 @@ above remain open for actual full-check/aggregate success. The next Nix job
 declares single-build, two-core scheduling without changing commands, compiler
 profiles, source pins, expected outcomes or test/operation deadlines. This is
 not a root-cause diagnosis or an inferred passing run.
+
+## Complete hosted acceptance
+
+[Run 43986122156](evidence/hosted-ci-20261116/full-43986122156-observation.json)
+at `1e81020e309c46be6251db36021df25577ad6676` succeeded in both clean-checkout
+acceptance jobs and the required `flake-check` aggregate. The locked Cargo build,
+unchanged README Cargo fixture/cleanup, default Nix build and full flake check
+all passed. The retained record includes exact provider job/step results, command
+durations, original diagnostic digests and the normalized fixture/status stdout.
+The Nix job used single-build/two-core scheduling without changing compiler
+profiles, source pins, expected decisions or test/operation deadlines.
+
+The named `nixos-vm-multinode` check also passed; it is the unsigned missing-trust
+denial case, not positive signed startup. Earlier unsuccessful runs remain
+separate. This completes the default public-build/README acceptance, not optional
+feature, external runtime, independent trust or release qualification.
+
+The three historical acquisition JSON files now publish explicitly marked
+host-material-redacted views. Their exact originals were preserved privately and
+verified against their original BLAKE3 bindings before normalization. Every Git
+revision and NAR token is unchanged. Original snapshot paths/digests remain
+historical capture identities, not hashes of the publication views; packed
+canonical receipts are unchanged. The three corresponding publication-baseline
+exceptions are removed rather than carried into the archive.
 
