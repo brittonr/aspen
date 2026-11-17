@@ -19,7 +19,7 @@ pub fn resources() -> Resources {
 pub fn task(component: Id) -> TaskSpec {
     TaskSpec {
         id: "task".into(),
-        component,
+        workload: Workload::Component { artifact: component },
         inputs: vec![],
         dependencies: vec![],
         resources: resources(),
@@ -58,12 +58,13 @@ pub fn request(component: Id) -> ExecutionRequest {
             epoch: 1,
         },
         policy_ref: id(2),
-        component,
+        workload: Workload::Component { artifact: component },
         inputs: vec![],
         resources: resources(),
         fuel: 1_000_000,
         timeout_ms: 2000,
         max_output_bytes: 1024,
+        max_attempts: 2,
     }
 }
 pub struct Setup {

@@ -177,7 +177,10 @@ fn default_and_max_tile_plans_fit_existing_executor_without_profile_widening() {
     assert_eq!(fixture.image_bytes(), 691_200);
     let prepared = prepare(fixture.clone()).unwrap();
     assert_eq!(prepared.job.tasks.len(), 33);
-    assert!(prepared.job.tasks.iter().all(|t| t.component == fixture.renderer));
+    assert!(prepared.job.tasks.iter().all(|t| t.workload
+        == molten_batch_core::Workload::Component {
+            artifact: fixture.renderer
+        }));
     let total_inputs: usize = prepared.objects.iter().map(|(_, b)| b.len()).sum();
     let aggregate =
         fixture.image_bytes() + fixture.tile_count() as usize * TILE_HEADER + prepared.objects.last().unwrap().1.len();

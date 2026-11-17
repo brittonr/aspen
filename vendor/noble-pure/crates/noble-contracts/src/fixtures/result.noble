@@ -1,0 +1,23 @@
+module result@1 [
+    variant Result<A,E> Ok A public Err E public
+    export Result
+    export Result.Ok
+    export Result.Err
+    export Result.match
+
+    signature map_ok forall<S:stack,A:value,E:value,B:value,eps:effect> [ S Result<A,E> Program<S+A,S+B,eps> -- S Result<B,E> ! eps ]
+    export map_ok
+    def map_ok [ swap [ swap run Result.Ok ] [ swap drop Result.Err ] Result.match ]
+
+    signature map_error forall<S:stack,A:value,E:value,F:value,eps:effect> [ S Result<A,E> Program<S+E,S+F,eps> -- S Result<A,F> ! eps ]
+    export map_error
+    def map_error [ swap [ swap drop Result.Ok ] [ swap run Result.Err ] Result.match ]
+
+    signature and_then forall<S:stack,A:value,E:value,B:value,eps:effect> [ S Result<A,E> Program<S+A,S+Result<B,E>,eps> -- S Result<B,E> ! eps ]
+    export and_then
+    def and_then [ swap [ swap run ] [ swap drop Result.Err ] Result.match ]
+
+    signature or_else forall<S:stack,A:value,E:value,F:value,eps:effect> [ S Result<A,E> Program<S+E,S+Result<A,F>,eps> -- S Result<A,F> ! eps ]
+    export or_else
+    def or_else [ swap [ swap drop Result.Ok ] [ swap run ] Result.match ]
+]

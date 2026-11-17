@@ -25,18 +25,28 @@ No global coordination mechanism is mandatory. OpenRaft is not selected, adapted
 The [standalone batch pilot](standalone-batch-orchestration.md) under
 `pilots/orchestration` is a separate workspace with its own explicit
 operator policy and Redb databases. Its controller/worker application ports compose
-Iroh and import-free Wasmtime adapters, but are not installed in the admitted
-Aspen runtime. Adoption does not change dispatcher, fabric-port or ALPN
+Iroh, import-free Wasmtime and explicitly installed `pure-net-eval/v1` adapters,
+but are not installed in the admitted Aspen runtime. Adoption changes no dispatcher, fabric-port or ALPN
 registries, system-tier manifests, root workspace membership, or Basalt/Cairn
 authority. Native integration requires the separate per-port gates in the pilot's
 integration plan; successful same-host DAG execution grants no system authority.
 
-The standalone pilot's RPC v2 selects a requested run on the controller before
-framing status, rather than transferring every unrelated run and attempt to the
-CLI. Raw inspection and planning still request complete validated state. This
-carrier cutover changes neither operator enrollment nor durable-state, workload,
-progress-event or cursor identities; every pilot peer upgrades together, with no
-v1 carrier fallback. It is separate from the admitted Aspen fabric's ALPN registry.
+The pure-net workload reuses the same accepted-attempt, capacity, cancellation,
+stopped-retry and output-copy owners. Its manifest separately binds the real
+executable/compiled closure, exact Noble producer and consumer overlay, canonical
+program/input/IR/net, rules/arithmetic, limits and native grants. One retained
+sequential arena resumes across bounded local handoffs; current authority is
+rechecked before successful publication. Trusted native calculation is not a
+sandbox, and same-host process-restart evidence neither overturns the producer's
+performance NO-GO nor admits parallel reduction, portable checkpoints or a root
+system extension.
+
+The standalone pilot's RPC v3 preserves controller-side selected-run status
+filtering and adds the typed component/pure-net carrier. Every peer upgrades
+together without v1/v2 fallback. Content, policy, job, execution and durable-state
+schemas advance to v2; old v1 snapshots fail closed rather than opening a second
+ledger. Run/assignment and progress/cursor identities remain unchanged. These
+standalone profiles do not alter the admitted Aspen fabric's ALPN registry.
 
 ## Executable system-extension tier
 

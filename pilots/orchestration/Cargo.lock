@@ -2135,6 +2135,7 @@ dependencies = [
  "molten-batch-application",
  "molten-batch-core",
  "molten-orchestrator-codec",
+ "molten-pure-net",
  "redb",
  "serde",
  "serde_json",
@@ -2160,6 +2161,7 @@ dependencies = [
  "molten-batch-core",
  "molten-orchestrator-adapters",
  "molten-orchestrator-codec",
+ "molten-pure-net",
  "molten-render-pilot",
  "serde_json",
  "tempfile",
@@ -2180,6 +2182,19 @@ dependencies = [
 [[package]]
 name = "molten-orchestrator-core"
 version = "0.1.0"
+
+[[package]]
+name = "molten-pure-net"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "molten-batch-core",
+ "molten-orchestrator-codec",
+ "noble-contracts",
+ "noble-kernel",
+ "noble-ngraph",
+ "serde",
+]
 
 [[package]]
 name = "molten-render-pilot"
@@ -2448,6 +2463,25 @@ dependencies = [
  "windows",
  "windows-result 0.4.1",
  "wmi",
+]
+
+[[package]]
+name = "noble-contracts"
+version = "0.0.0"
+dependencies = [
+ "noble-kernel",
+]
+
+[[package]]
+name = "noble-kernel"
+version = "0.0.0"
+
+[[package]]
+name = "noble-ngraph"
+version = "0.0.0"
+dependencies = [
+ "noble-contracts",
+ "noble-kernel",
 ]
 
 [[package]]

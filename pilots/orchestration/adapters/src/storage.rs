@@ -58,9 +58,21 @@ impl Disk {
         tx.set_durability(Durability::Immediate).map_err(crate::invalid)?;
         {
             let mut table = tx.open_table(SNAPSHOTS).map_err(crate::invalid)?;
+            // A carrier cutover must not silently initialize an empty ledger
+            // beside records whose identities and authority use the old schema.
+            for legacy in [
+                "controller-state.v1",
+                "worker-state.v1",
+                "controller-state.v1.projection",
+                "worker-state.v1.projection",
+            ] {
+                if table.get(legacy).map_err(crate::invalid)?.is_some() {
+                    return Err(Error::Unsupported);
+                }
+            }
             let opposite = match schema {
-                "controller-state.v1" => "worker-state.v1",
-                "worker-state.v1" => "controller-state.v1",
+                "controller-state.v2" => "worker-state.v2",
+                "worker-state.v2" => "controller-state.v2",
                 _ => return Err(Error::Unsupported),
             };
             if table.get(opposite).map_err(crate::invalid)?.is_some() {
@@ -102,7 +114,7 @@ impl Disk {
         next: &T,
         controller: Option<(&State, &State)>,
     ) -> Result<Commit, Error> {
-        if (schema == "controller-state.v1") != controller.is_some() {
+        if (schema == "controller-state.v2") != controller.is_some() {
             return Err(Error::Invalid("controller progress transaction owner mismatch".into()));
         }
         let old = codec::encode(schema, expected).map_err(crate::invalid)?;
@@ -146,7 +158,7 @@ pub struct RedbControllerStore {
 impl RedbControllerStore {
     pub fn open(disk: Arc<Disk>, initial: State) -> Result<Arc<Self>, Error> {
         verify_state(&initial)?;
-        disk.initialize("controller-state.v1", &initial)?;
+        disk.initialize("controller-state.v2", &initial)?;
         disk.initialize_progress()?;
         let this = Arc::new(Self { disk });
         let old = this.load()?;
@@ -162,7 +174,7 @@ impl RedbControllerStore {
 }
 impl StateStore for RedbControllerStore {
     fn load(&self) -> Result<State, Error> {
-        let state: State = self.disk.load("controller-state.v1")?;
+        let state: State = self.disk.load("controller-state.v2")?;
         verify_state(&state)?;
         Ok(state)
     }
@@ -176,7 +188,7 @@ impl StateStore for RedbControllerStore {
         {
             return Err(Error::Invalid("invalid controller commit cohort/revision".into()));
         }
-        self.disk.cas("controller-state.v1", old, next, Some((old, next)))
+        self.disk.cas("controller-state.v2", old, next, Some((old, next)))
     }
     fn progress_snapshot(&self, run: Id) -> Result<ProgressSnapshot, Error> {
         let (state, journal, state_ref) = self.disk.progress_view()?;
@@ -193,7 +205,7 @@ pub struct RedbWorkerJournal {
 impl RedbWorkerJournal {
     pub fn open(disk: Arc<Disk>, initial: WorkerState) -> Result<Arc<Self>, Error> {
         verify_worker(&initial)?;
-        disk.initialize("worker-state.v1", &initial)?;
+        disk.initialize("worker-state.v2", &initial)?;
         let this = Arc::new(Self { disk });
         let old = this.load()?;
         if old.cluster != initial.cluster
@@ -209,7 +221,7 @@ impl RedbWorkerJournal {
 }
 impl WorkerJournal for RedbWorkerJournal {
     fn load(&self) -> Result<WorkerState, Error> {
-        let state: WorkerState = self.disk.load("worker-state.v1")?;
+        let state: WorkerState = self.disk.load("worker-state.v2")?;
         verify_worker(&state)?;
         Ok(state)
     }
@@ -225,7 +237,7 @@ impl WorkerJournal for RedbWorkerJournal {
         {
             return Err(Error::Invalid("invalid worker commit cohort/revision".into()));
         }
-        self.disk.cas("worker-state.v1", old, next, None)
+        self.disk.cas("worker-state.v2", old, next, None)
     }
 }
 
@@ -256,7 +268,7 @@ impl ContentPort for RedbContent {
             .get(projection_key.as_str())
             .map_err(crate::invalid)?
             .ok_or(Error::Invalid("missing content projection".into()))?;
-        let manifest = codec::decode("content-manifest.v1", a.value(), b.value()).map_err(crate::invalid)?;
+        let manifest = codec::decode("content-manifest.v2", a.value(), b.value()).map_err(crate::invalid)?;
         let content = Content {
             manifest,
             bytes: raw.value().to_vec(),
@@ -271,7 +283,7 @@ impl ContentPort for RedbContent {
         let key = id.hex();
         let akey = format!("{key}.manifest");
         let bkey = format!("{key}.projection");
-        let encoded = codec::encode("content-manifest.v1", &c.manifest).map_err(crate::invalid)?;
+        let encoded = codec::encode("content-manifest.v2", &c.manifest).map_err(crate::invalid)?;
         let mut tx = self.disk.db.begin_write().map_err(crate::invalid)?;
         tx.set_durability(Durability::Immediate).map_err(crate::invalid)?;
         {
@@ -306,5 +318,36 @@ impl ContentPort for RedbContent {
     }
     fn make_data(&self, bytes: Vec<u8>) -> Result<Content, Error> {
         content(ContentKind::Data, bytes)
+    }
+}
+
+#[cfg(test)]
+mod carrier_cutover_tests {
+    use super::*;
+
+    #[test]
+    fn old_snapshot_cannot_be_silently_replaced_by_a_new_empty_ledger() {
+        for key in [
+            "controller-state.v1",
+            "worker-state.v1",
+            "controller-state.v1.projection",
+            "worker-state.v1.projection",
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = CapabilityRoot::open(temp.path()).unwrap();
+            let disk = Disk::open(&root).unwrap();
+            let tx = disk.db.begin_write().unwrap();
+            {
+                let mut table = tx.open_table(SNAPSHOTS).unwrap();
+                table.insert(key, b"retained old owner".as_slice()).unwrap();
+            }
+            tx.commit().unwrap();
+            let state = State::empty(Id([1; 32]), Id([2; 32]), 1, 3).unwrap();
+            assert!(matches!(RedbControllerStore::open(disk.clone(), state), Err(Error::Unsupported)));
+            let tx = disk.db.begin_read().unwrap();
+            let table = tx.open_table(SNAPSHOTS).unwrap();
+            assert!(table.get("controller-state.v2").unwrap().is_none());
+            assert_eq!(table.get(key).unwrap().unwrap().value(), b"retained old owner");
+        }
     }
 }

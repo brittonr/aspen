@@ -55,11 +55,16 @@ impl ExecutionPort for PureComponentRuntime {
     async fn run(
         &self,
         r: ExecutionRequest,
-        component: Content,
+        workload: MaterializedWorkload,
         inputs: Vec<Vec<u8>>,
     ) -> Result<ExecutionOutput, Error> {
         validate_request(&r)?;
-        if crate::content_id(&component)? != r.component || component.manifest.kind != ContentKind::Component {
+        let (Workload::Component { artifact }, MaterializedWorkload::Component { artifact: component }) =
+            (r.workload, workload)
+        else {
+            return Err(Error::Denied);
+        };
+        if crate::content_id(&component)? != artifact || component.manifest.kind != ContentKind::Component {
             return Err(Error::Denied);
         }
         let total = inputs.iter().try_fold(0_usize, |sum, v| sum.checked_add(v.len())).ok_or(Error::Bound)?;
@@ -78,7 +83,11 @@ impl ExecutionPort for PureComponentRuntime {
         })
         .await
         .map_err(|_| Error::Unknown)?;
-        Ok(ExecutionOutput { stopped: true, output })
+        Ok(ExecutionOutput {
+            stopped: true,
+            output,
+            report: None,
+        })
     }
     fn cancel(&self, id: Id) -> Result<(), Error> {
         let mut slots = self.slots.lock().map_err(|_| Error::Unavailable)?;

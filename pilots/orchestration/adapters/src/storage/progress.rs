@@ -97,11 +97,11 @@ impl Disk {
         {
             let mut table = tx.open_table(SNAPSHOTS).map_err(crate::invalid)?;
             let (state, state_ref): (State, Id) = {
-                let a = table.get("controller-state.v1").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
+                let a = table.get("controller-state.v2").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
                 let b =
-                    table.get("controller-state.v1.projection").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
+                    table.get("controller-state.v2.projection").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
                 (
-                    codec::decode("controller-state.v1", a.value(), b.value()).map_err(crate::invalid)?,
+                    codec::decode("controller-state.v2", a.value(), b.value()).map_err(crate::invalid)?,
                     codec::digest(a.value()),
                 )
             };
@@ -160,9 +160,9 @@ impl Disk {
     pub(super) fn progress_view(&self) -> Result<(State, Journal, Id), Error> {
         let tx = self.db.begin_read().map_err(crate::invalid)?;
         let table = tx.open_table(SNAPSHOTS).map_err(crate::invalid)?;
-        let a = table.get("controller-state.v1").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
-        let b = table.get("controller-state.v1.projection").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
-        let state = codec::decode("controller-state.v1", a.value(), b.value()).map_err(crate::invalid)?;
+        let a = table.get("controller-state.v2").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
+        let b = table.get("controller-state.v2.projection").map_err(crate::invalid)?.ok_or(Error::Unavailable)?;
+        let state = codec::decode("controller-state.v2", a.value(), b.value()).map_err(crate::invalid)?;
         verify_state(&state)?;
         let state_ref = codec::digest(a.value());
         let a = table.get(OWNER_SCHEMA).map_err(crate::invalid)?;
@@ -224,9 +224,9 @@ mod tests {
         assert_eq!(store.compare_commit(&old, &next).unwrap(), Commit::Applied);
         assert_eq!(journal_pair(&disk), before);
         let owner: JournalOwner = disk.load(OWNER_SCHEMA).unwrap();
-        let next_ref = codec::identity("controller-state.v1", &next).unwrap();
+        let next_ref = codec::identity("controller-state.v2", &next).unwrap();
         assert_eq!(owner.state_ref, next_ref);
-        assert_eq!(owner.projected_state_ref, codec::identity("controller-state.v1", &old).unwrap());
+        assert_eq!(owner.projected_state_ref, codec::identity("controller-state.v2", &old).unwrap());
         owner.validate(next_ref, &before.0, &before.1).unwrap();
         let (observed, _, observed_ref) = disk.progress_view().unwrap();
         assert_eq!(observed, next);
@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(journal_pair(&disk), before);
         let (state, _, state_ref) = disk.progress_view().unwrap();
         assert_eq!(state, initial());
-        assert_eq!(state_ref, codec::identity("controller-state.v1", &initial()).unwrap());
+        assert_eq!(state_ref, codec::identity("controller-state.v2", &initial()).unwrap());
         remove_owner(&disk, false);
         assert!(matches!(disk.initialize_progress(), Err(Error::Invalid(_))));
         let next = apply(&state, &Command::Tick).unwrap();

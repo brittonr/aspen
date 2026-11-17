@@ -24,6 +24,10 @@ let Source = {
   purpose | NonEmpty,
   disclosure | NonEmpty,
   selected_paths | Array RelativePath,
+  file_filter | optional | {
+    extensions | Array NonEmpty,
+    exact_paths | Array RelativePath,
+  },
   renamed_originals | Array { upstream | RelativePath, destination | RelativePath },
   aspen_owned | Array { path | RelativePath, derived_from | RelativePath, change | NonEmpty },
 }
@@ -37,7 +41,7 @@ let FixtureBinding = {
 }
 in
 {
-  schema = "molten.vendored-sources.v1",
+  schema = "molten.vendored-sources.v2",
   notices | RelativePath = "THIRD_PARTY_LICENSES.md",
   sources
     | Array Source
@@ -73,6 +77,46 @@ in
             derived_from = "crates/vm-cohort-core/Cargo.toml.orig",
             change = "Workspace-inherited package fields, lints and dependency requirements resolved from the selected root Cargo.toml, as `cargo vendor` does, so Cargo can build the crate outside its upstream workspace. No Rust source changes.",
           },
+        ],
+      },
+      {
+        name = "noble-pure",
+        repository = "https://github.com/OnixResearch/noble",
+        revision = "f7af9e972aa2968d22978794a667d267cf2745e8",
+        license = "AGPL-3.0-or-later (operator exact-revision grant; no upstream license declaration)",
+        destination = "vendor/noble-pure",
+        purpose = "Opt-in sequential pure I64 net evaluation and independently bounded producer reference evaluator.",
+        disclosure = "2026-11-17 operator asserted necessary rights and authorized AGPL-3.0-or-later source-only reuse/redistribution of Onix-owned Rust and Cargo metadata in exactly noble-ngraph, noble-kernel and noble-contracts, then separately granted the indispensable crates/noble-contracts/src/fixtures/result.noble asset (BLAKE3 694a6766ca91c9434329df739070f7b26dda43576dfc3788cb7b7c2c271cb4fe). All other non-Rust fixture programs, third-party code, proofs, integration test suites, other crates and Git history are excluded. Original selected blobs are preserved; no upstream license declaration is invented.",
+        selected_paths = [
+          "Cargo.toml", "Cargo.lock",
+          "crates/noble-ngraph/Cargo.toml", "crates/noble-ngraph/src",
+          "crates/noble-kernel/Cargo.toml", "crates/noble-kernel/src",
+          "crates/noble-contracts/Cargo.toml", "crates/noble-contracts/src",
+        ],
+        file_filter = {
+          extensions = [".rs"],
+          exact_paths = [
+            "Cargo.toml", "Cargo.lock",
+            "crates/noble-ngraph/Cargo.toml",
+            "crates/noble-kernel/Cargo.toml",
+            "crates/noble-contracts/Cargo.toml",
+            "crates/noble-contracts/src/fixtures/result.noble",
+          ],
+        },
+        renamed_originals = [
+          { upstream = "Cargo.toml", destination = "Cargo.toml.orig" },
+          { upstream = "crates/noble-ngraph/Cargo.toml", destination = "crates/noble-ngraph/Cargo.toml.orig" },
+          { upstream = "crates/noble-kernel/Cargo.toml", destination = "crates/noble-kernel/Cargo.toml.orig" },
+          { upstream = "crates/noble-contracts/Cargo.toml", destination = "crates/noble-contracts/Cargo.toml.orig" },
+          { upstream = "crates/noble-ngraph/src/net.rs", destination = "crates/noble-ngraph/src/net.rs.orig" },
+          { upstream = "crates/noble-ngraph/src/eval.rs", destination = "crates/noble-ngraph/src/eval.rs.orig" },
+        ],
+        aspen_owned = [
+          { path = "crates/noble-ngraph/Cargo.toml", derived_from = "crates/noble-ngraph/Cargo.toml.orig", change = "scripts/normalize-noble-manifests.py resolves package inheritance and unsafe-code lint; no third-party dependencies." },
+          { path = "crates/noble-kernel/Cargo.toml", derived_from = "crates/noble-kernel/Cargo.toml.orig", change = "scripts/normalize-noble-manifests.py resolves package inheritance and unsafe-code lint." },
+          { path = "crates/noble-contracts/Cargo.toml", derived_from = "crates/noble-contracts/Cargo.toml.orig", change = "scripts/normalize-noble-manifests.py resolves inheritance; omits integration-test-only dev dependency." },
+          { path = "crates/noble-ngraph/src/net.rs", derived_from = "crates/noble-ngraph/src/net.rs.orig", change = "Aspen bounded phase/control observation overlay; retains original in-place sequential arena, checked rewrite plans, arithmetic and complete ordered readback." },
+          { path = "crates/noble-ngraph/src/eval.rs", derived_from = "crates/noble-ngraph/src/eval.rs.orig", change = "Aspen per-node observation overlay for independently bounded normative source-IR reference evaluator; unchanged arithmetic." },
         ],
       },
     ],

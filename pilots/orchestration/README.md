@@ -2,8 +2,9 @@
 
 The reviewed source candidate is now maintained in-tree. Run the pinned repository
 shell and `scripts/verify.sh` before use. This workspace implements a standalone,
-single-controller, multi-worker **import-free WebAssembly Component batch profile**.
-It is not a production release, an HA controller, or a registered Molten native
+single-controller, multi-worker import-free WebAssembly Component batch profile
+and a separately installed **`pure-net-eval/v1`** sequential native pure workload.
+Neither is a production release, an HA controller, or a registered Molten native
 system extension. The existing node daemon is unchanged.
 
 The original allocation functional core and application shell are retained. The
@@ -60,6 +61,82 @@ request/result binding and durably copies successful output before releasing the
 reservation or enabling dependencies. Literal inputs precede dependency outputs;
 dependency outputs follow sorted dependency-id order.
 
+
+## Explicit pure-net workload
+
+`pure-net-eval/v1` uses this same controller/worker attempt ledger, reservation,
+retry and accepted-output publication path. It is opt-in: component grants do
+not authorize native calculation, and successful compilation is not a grant.
+The producer is Noble `f7af9e972aa2968d22978794a667d267cf2745e8` with a separately
+identified Aspen observation overlay. Its performance NO-GO remains in force;
+this service does not claim a speedup or default adoption.
+
+The operator path is:
+
+1. Export reviewed limits from `profiles/pure-net.ncl` with
+   `nickel export --format json`. The Rust defaults are mechanism ceilings, not
+   a qualified deployment profile.
+2. Run `molten-orchestrator pure-net manifest --backend sequential-net
+   --limits limits.json --out manifest.frame` using the actual deployment
+   executable. The manifest binds that executable's bytes, compiled dependency
+   closure, producer/overlay, arithmetic, rules and all finite limits. Use
+   `--backend independent-reference` only for the explicitly selected reference.
+3. Run `molten-orchestrator pure-net compile --source source.noble
+   --input-arity 2 --inputs ordered-inputs.json --program-out program.frame
+   --inputs-out inputs.frame`. The inputs JSON is an ordered I64 array; `-`
+   with `[19,7]` evaluates to `[12]`.
+4. Create policy with exact `new-policy --pure-net-manifest MANIFEST_ID
+   --pure-net-program PROGRAM_ID` grants. Initialize and enroll controller,
+   worker and operator roots using the normal commands below. Server roots
+   require an explicit nonzero `--bind` address.
+5. Install the same manifest create-only in both server roots with
+   `pure-net install --root ROOT --manifest manifest.frame`. Replacement,
+   another executable/closure, or missing native grants fails closed.
+6. Start the worker under Linux `prlimit` or equivalent OS limits no larger
+   than the selected manifest's address-space and soft/hard CPU limits.
+   Startup checks the observed limits; there is no unbounded fallback.
+7. Publish `pure-net-manifest`, `pure-net-program` and `data` content with
+   ordinary `put`. Submit a task whose workload is
+   `{"PureNet":{"manifest":MANIFEST_ID,"artifact":PROGRAM_ID}}` and whose
+   `inputs` contains the ordered-input object. The existing `submit`, `run`,
+   `progress` and `get` paths remain authoritative. Decode a fetched report with
+   `pure-net receipt --file receipt.frame`; readback never grants authority.
+
+Native work is trusted in-process calculation, **not a sandbox**. One retained
+arena/queue resumes across cooperative local quanta; total work does not reset
+on a handoff. Each turn reserves at most `quantum_work + max_atomic_work` logical
+units, including size-dependent rewrite validation, independently of semantic
+interaction fuel. Decoder, frontend, validation, setup, graph/queue/memory,
+readback, observations, concurrency and aggregate retry work have separate caps.
+Whole-worker OS limits are not per-evaluation instruction metering.
+
+Canonical receipts bind the exact program, reconstructed checked IR/net, ordered
+input, manifest, executable/closure, limits and grants. Stable phase/work/outcome
+observations replay; timing, process IDs, allocator addresses and profiling
+diagnostics do not enter semantic identity. Current grants/revocations,
+generation and cancellation fence successful publication after calculation.
+Stopped failure reconciliation remains possible after execution revocation.
+
+Repeat the real CLI and process-restart qualification from the repository root:
+
+```sh
+nix develop -c cargo test --manifest-path pilots/orchestration/Cargo.toml -p molten-pure-net --lib --locked
+nix develop -c cargo test --manifest-path pilots/orchestration/Cargo.toml -p molten-orchestrator-adapters --test pure_net_runtime --locked
+nix develop -c cargo test --manifest-path pilots/orchestration/Cargo.toml -p molten-orchestrator-cli --test pure_net_e2e --locked
+```
+
+The process campaign kills and waits for its own worker before reopening at
+acceptance, begin, calculation, content, terminal commit and reply boundaries.
+It checks durable attempts and one authoritative completion, not merely logs.
+`MOLTEN_PURE_NET_EVIDENCE_DIR` retains private inspection/receipt copies;
+`MOLTEN_PURE_NET_HEAPTRACK_PREFIX` with `MOLTEN_PURE_NET_ALLOCATIONS_DIR` enables
+a separate worker-lifetime allocation observation. Raw deployment/profiler
+material stays private. See the [adoption guide](../../docs/standalone-batch-orchestration.md)
+for evidence classes and limitations. Molten contributors own the bridge,
+snapshot importer, standalone adapter and repeatable qualification commands.
+Parallel reduction, portable checkpoints, root-host adoption and cross-host
+qualification remain separate gates.
+
 ## Architecture
 
 | Layer | Owns | Dependencies |
@@ -69,9 +146,10 @@ dependency outputs follow sorted dependency-id order.
 | `batch-core` | Bounded DAG, controller and worker transitions, resource accounting, placement policy, explicit operator-policy rules | Original `core`, Serde; `no_std` + `alloc` |
 | `batch-application` | Effect ordering, CAS/reconciliation, controller and worker use cases; application-owned ports | `batch-core`, `async-trait`; no runtime or backend |
 | `codec` | Versioned Preserves projection, canonical identity and verified reconstruction | `batch-core`, Preserves, BLAKE3, Serde |
-| `adapters` | Capability-rooted Redb, file-policy observations, Iroh, Wasmtime, bounded RPC ingress and composition | Application ports and selected infrastructure |
+| `adapters` | Capability-rooted Redb, file-policy observations, Iroh, Wasmtime, installed pure-net execution, bounded RPC ingress and composition | Application ports and selected infrastructure |
 | `cli` | Explicit root acquisition, enrollment, operator commands and launch | Application and adapters |
 | `render` | Original pure CPU scene renderer, versioned manifest, checked tiles/assembly and fixture shell | `batch-core`, `codec`, Serde |
+| `pure-net` | Exact Noble source admission, sequential retained-arena reduction, independent source reference, finite work and canonical semantic receipts | `batch-core`, `codec`, reviewed source-only Noble snapshot |
 
 Output ports are `StateStore`, `WorkerJournal`, `ContentPort`, `IdentityPort`,
 `PlacementPort`, `AdmissionPort`, `WorkerClient`, `ExecutionPort` and
@@ -101,7 +179,7 @@ trailing data. This is an explicitly new RPC profile, not wire compatibility wit
 Molten's native-extension protocol. See `docs/PROTOCOL.md`.
 
 Iroh uses the `Minimal` preset, explicit direct IP addresses, exact peer keys and
-ALPN `molten-orchestrator/batch-rpc/v2`. No relay, DNS discovery or transport retry
+ALPN `molten-orchestrator/batch-rpc/v3`. No relay, DNS discovery or transport retry
 is silently selected. A controller accepts only configured operator keys. A
 worker accepts only its configured controller key. Connectivity is not enrollment.
 

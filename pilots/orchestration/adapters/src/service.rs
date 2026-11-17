@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use molten_batch_application::*;
 use molten_batch_core::*;
-use tokio::sync::Mutex;
 use tokio::sync::watch;
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::*;
@@ -120,7 +120,13 @@ impl ServiceHandler {
                     Err(Error::Unavailable) => Ok(Reply::ArtifactGap { id }),
                     Err(error) => Err(error),
                 },
-                Request::Observe { request } => Ok(Reply::Observation(worker.observe(&request)?.into())),
+                Request::Observe { request } => {
+                    let observation = worker.observe(&request)?;
+                    if matches!(observation, WorkerObservation::Terminal { .. }) {
+                        self.fault.hit("before-worker-reply");
+                    }
+                    Ok(Reply::Observation(observation.into()))
+                }
                 Request::CancelAttempt { request } => Ok(Reply::Observation(worker.cancel(&request)?.into())),
                 Request::Start { request } => {
                     let (observation, ticket) = worker.start(request)?;
@@ -164,6 +170,9 @@ impl RequestHandler for ServiceHandler {
     fn reply_closed(&self, reply: &Reply) {
         if matches!(reply, Reply::ProgressPage(ProgressPage::Events { events, .. }) if !events.is_empty()) {
             self.fault.hit("after-progress-ack");
+        }
+        if self.worker.is_some() && matches!(reply, Reply::Observation(WireObservation::Terminal { .. })) {
+            self.fault.hit("after-worker-ack");
         }
     }
     async fn handle(&self, peer: Id, request: Request) -> Reply {
@@ -224,8 +233,38 @@ pub async fn open_service_with_fault(
     if policy.cluster != config.cluster || policy.generation != config.generation {
         return Err(Error::Denied);
     }
+    validate_policy(&policy)?;
+    let installed = if policy.profile == PURE_NET_PROFILE {
+        Some(crate::pure_net::load_pure_net(&root, &policy)?)
+    } else {
+        None
+    };
+    if let Some(native) = &installed {
+        if config.role == Role::Worker {
+            if config.capacity.slots > native.manifest.limits.max_concurrent_evaluations {
+                return Err(Error::Bound);
+            }
+            let limits = &native.manifest.limits;
+            let observed = observe_process_limits(
+                limits.process_address_space_bytes,
+                limits.process_cpu_soft_seconds,
+                limits.process_cpu_hard_seconds,
+            )?;
+            eprintln!(
+                "pure-net-worker-process-observation {}",
+                serde_json::json!({
+                    "manifest": native.manifest_ref,
+                    "limits": observed,
+                    "trusted_native_not_sandboxed": true
+                })
+            );
+        }
+    }
     let disk = Disk::open_with_fault(&root, fault.clone())?;
     let content = RedbContent::new(disk.clone());
+    if let Some(native) = &installed {
+        content.put(&native.content)?;
+    }
     let identity = Arc::new(CanonicalIdentity);
     let admission = Arc::new(FileAdmission::new(root.clone(), policy_ref)?);
     let counters = Arc::new(Counters {
@@ -273,12 +312,16 @@ pub async fn open_service_with_fault(
                 disk.clone(),
                 WorkerState::empty(config.cluster, node, config.generation, policy_ref, config.capacity)?,
             )?;
+            let execution: Arc<dyn ExecutionPort> = match &installed {
+                Some(native) => Arc::new(PureNetRuntime::for_worker(disk, native, counters.clone())),
+                None => Arc::new(PureComponentRuntime::for_worker(disk)),
+            };
             let worker = Arc::new(WorkerService::new(WorkerPorts {
                 journal,
                 content,
                 identity,
                 admission,
-                execution: Arc::new(PureComponentRuntime::for_worker(disk)),
+                execution,
                 observations: counters.clone(),
             }));
             worker.recover_after_exclusive_open()?;

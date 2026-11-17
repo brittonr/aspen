@@ -16,7 +16,9 @@ let
         || (pkgs.lib.hasPrefix "pilots/orchestration/" rel
           && !(pkgs.lib.hasInfix "/target/" (rel + "/"))
           && !(pkgs.lib.hasInfix "/.git/" (rel + "/")))
-        || builtins.elem rel [ "LICENSE" "crates" "crates/molten-core" "crates/molten-core/src" ]
+        || builtins.elem rel [ "LICENSE" "rust-toolchain.toml" "vendor" "vendor/sources.ncl" "vendor/sources.lock.json"
+          "crates" "crates/molten-core" "crates/molten-core/src" ]
+        || pkgs.lib.hasPrefix "vendor/noble-pure/" (rel + "/")
         || pkgs.lib.hasPrefix "crates/molten-core/src/committed_stream" rel;
   };
 in platform.buildRustPackage {
@@ -25,12 +27,13 @@ in platform.buildRustPackage {
   inherit src;
   sourceRoot = "source/pilots/orchestration";
   cargoLock.lockFile = ./Cargo.lock;
-  nativeBuildInputs = [ pkgs.pkg-config pkgs.clang pkgs.mold ];
+  nativeBuildInputs = [ pkgs.pkg-config pkgs.clang pkgs.mold pkgs.util-linux ];
   cargoBuildFlags = [ "--workspace" ];
   cargoTestFlags = [ "--workspace" ];
   postInstall = ''
     install -Dm644 ../../LICENSE "$out/share/licenses/aspen-batch-pilot/LICENSE"
+    cp -r ../../vendor/noble-pure "$out/share/noble-pure-source"
   '';
-  meta.description = "Aspen standalone bounded batch orchestration and original CPU renderer";
+  meta.description = "Aspen standalone bounded batch orchestration, pure workloads and CPU renderer";
   meta.license = pkgs.lib.licenses.agpl3Plus;
 }

@@ -39,7 +39,7 @@ python3 - "$ART" "$WORK/job.json" <<'PY'
 import json,sys
 artifact,path=sys.argv[1:]
 def task(name,deps):
- return dict(id=name,component=artifact,inputs=[],dependencies=deps,resources=dict(cpu_millis=1000,memory_bytes=16777216,slots=1),required_labels={},fuel=1000000,timeout_ms=5000,max_output_bytes=1024,max_attempts=2,retry_delay_ticks=1)
+ return dict(id=name,workload=dict(Component=dict(artifact=artifact)),inputs=[],dependencies=deps,resources=dict(cpu_millis=1000,memory_bytes=16777216,slots=1),required_labels={},fuel=1000000,timeout_ms=5000,max_output_bytes=1024,max_attempts=2,retry_delay_ticks=1)
 with open(path,'x') as f: json.dump(dict(name='demo',tasks=[task('a',[]),task('b',['a'])]),f,indent=2)
 PY
 RUN=$("$BIN" submit --root "$WORK/client" --target "$TARGET" --key demo --file "$WORK/job.json" | json_field run)

@@ -13,6 +13,16 @@
   license = "AGPL-3.0-or-later",
   maintenance_owner = "Molten contributors; pilots/orchestration",
   deployment_profile = "standalone-single-controller-import-free-component-batch-v1",
+  optional_workload_profiles = ["pure-net-eval/v1"],
+  pure_net_source = {
+    repository = "https://github.com/OnixResearch/noble",
+    revision = "f7af9e972aa2968d22978794a667d267cf2745e8",
+    selection_policy = "../../vendor/sources.ncl",
+    generated_lock = "../../vendor/sources.lock.json",
+    permission_record = "exact-revision operator AGPL-3.0-or-later grant; selected Rust/Cargo metadata and only the separately granted result.noble asset",
+    consumer_overlay = "separately declared bounded sequential/control and independent reference hooks; originals preserved",
+    adoption_decision = "opt-in only; frozen producer performance NO-GO is not overturned",
+  },
   repairs = [
     "adapters/src/storage.rs: import redb::ReadableDatabase for both read-transaction open_table calls",
     "adapters/src/root.rs: reopen the held directory with read flags before fsync; do not fsync an O_PATH handle",
@@ -27,11 +37,13 @@
     "scripts/demo.sh: honor CARGO_TARGET_DIR for the release executable",
     "adapters/tests/root.rs: retain directory-sync, held-root rename and create-only publication regression coverage",
     "review docs/MOLTEN-INTEGRATION.md with explicit per-port follow-on gates and preserve mainline assignment-token fencing",
+    "pure-net-eval/v1: exact installed manifest and independent native grants; same authoritative attempt ledger; RPC v3 and artifact/state schema v2 clean cutover; legacy snapshots fail closed",
   ],
   non_claims = [
     "not installed as a Molten system extension and not part of the root Cargo workspace",
     "operator policy and standalone database are not Basalt/Cairn production admission",
     "same-host execution does not qualify cross-host, HA, production isolation or valuable workloads",
     "passing fixtures do not prove Wasmtime, component, worker, transport or whole-system correctness",
+    "pure-net native calculation is trusted in-process work, not a sandbox, speedup, parallel/checkpoint admission or default backend",
   ],
 }

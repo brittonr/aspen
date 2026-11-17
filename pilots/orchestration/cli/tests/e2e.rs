@@ -179,7 +179,7 @@ fn real_two_worker_dag_restart_idempotency_and_unenrolled_peer_denial() {
         &component,
     ]);
     let artifact = put["id"].as_str().unwrap();
-    let task = |name: &str, lane: &str, deps: Vec<&str>| json!({"id":name,"component":artifact,"inputs":[],"dependencies":deps,"resources":{"cpu_millis":1000,"memory_bytes":16777216,"slots":1},"required_labels":{"lane":lane},"fuel":1000000,"timeout_ms":5000,"max_output_bytes":1024,"max_attempts":2,"retry_delay_ticks":1});
+    let task = |name: &str, lane: &str, deps: Vec<&str>| json!({"id":name,"workload":{"Component":{"artifact":artifact}},"inputs":[],"dependencies":deps,"resources":{"cpu_millis":1000,"memory_bytes":16777216,"slots":1},"required_labels":{"lane":lane},"fuel":1000000,"timeout_ms":5000,"max_output_bytes":1024,"max_attempts":2,"retry_delay_ticks":1});
     let spec = json!({"name":"live-dag","tasks":[task("a","one",vec![]),task("b","two",vec![]),task("c","one",vec!["a","b"])]});
     let specpath = text(&base.join("job.json"));
     fs::write(&specpath, serde_json::to_vec_pretty(&spec).unwrap()).unwrap();

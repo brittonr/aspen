@@ -8,9 +8,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
@@ -18,8 +18,10 @@ use clap::ValueEnum;
 use molten_batch_core::*;
 use molten_orchestrator_adapters::*;
 
+mod pure_net;
+
 #[derive(Parser)]
-#[command(version, about = "Single-controller, fenced pure-component batch orchestration")]
+#[command(version, about = "Single-controller, fenced pure-workload batch orchestration")]
 struct Cli {
     #[command(subcommand)]
     command: Cmd,
@@ -34,6 +36,8 @@ enum RoleArg {
 enum KindArg {
     Component,
     Data,
+    PureNetManifest,
+    PureNetProgram,
 }
 #[derive(Args)]
 struct Client {
@@ -44,11 +48,19 @@ struct Client {
 }
 #[derive(Subcommand)]
 enum Cmd {
+    PureNet {
+        #[command(subcommand)]
+        command: pure_net::Command,
+    },
     NewPolicy {
         #[arg(long)]
         out: PathBuf,
         #[arg(long)]
         allow_pure_components: bool,
+        #[arg(long)]
+        pure_net_manifest: Vec<String>,
+        #[arg(long)]
+        pure_net_program: Vec<String>,
     },
     Init {
         #[arg(long)]
@@ -96,7 +108,7 @@ enum Cmd {
         #[arg(long)]
         root: PathBuf,
         #[arg(long)]
-        component: String,
+        artifact: String,
         #[arg(long)]
         undo: bool,
     },
@@ -107,6 +119,12 @@ enum Cmd {
         resume: bool,
         #[arg(long, help = "Conformance only: abrupt exit 86 at one named boundary")]
         crash_at: Option<String>,
+        #[arg(
+            long,
+            conflicts_with = "crash_at",
+            help = "Conformance only: pause for an external kill at one boundary"
+        )]
+        pause_at: Option<String>,
     },
     Put {
         #[command(flatten)]
@@ -224,8 +242,8 @@ async fn call(c: &Client, request: Request) -> Result<Reply> {
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::SignalKind;
         use tokio::signal::unix::signal;
+        use tokio::signal::unix::SignalKind;
         match signal(SignalKind::terminate()) {
             Ok(mut term) => {
                 tokio::select! {_=tokio::signal::ctrl_c()=>{},_=term.recv()=>{}}
@@ -240,26 +258,51 @@ async fn shutdown_signal() {
         let _ = tokio::signal::ctrl_c().await;
     }
 }
+#[cfg(unix)]
+fn conformance_resume_signal(fault: ProcessFault) -> Result<()> {
+    use tokio::signal::unix::SignalKind;
+    let mut signal = tokio::signal::unix::signal(SignalKind::user_defined1())?;
+    tokio::spawn(async move {
+        if signal.recv().await.is_some() {
+            fault.resume();
+        }
+    });
+    Ok(())
+}
+#[cfg(not(unix))]
+fn conformance_resume_signal(_fault: ProcessFault) -> Result<()> {
+    bail!("conformance pause requires Unix signals")
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Cmd::PureNet { command } => pure_net::run(command)?,
         Cmd::NewPolicy {
             out,
             allow_pure_components,
+            pure_net_manifest,
+            pure_net_program,
         } => {
             // Public identity supplies a fresh namespace, not a signing capability.
             let key = iroh_key_for_namespace();
+            let native = !pure_net_manifest.is_empty() || !pure_net_program.is_empty();
+            if native && allow_pure_components {
+                bail!("native pure-net and component grants require separate deployment profiles");
+            }
             let policy = Policy {
-                profile: PROFILE.into(),
+                profile: if native { PURE_NET_PROFILE } else { PROFILE }.into(),
                 cluster: key,
                 generation: 1,
                 allow_any_pure_component: allow_pure_components,
                 allowed_components: BTreeSet::new(),
+                allowed_pure_net_manifests: pure_net_manifest.iter().map(|id| parse_id(id)).collect::<Result<_>>()?,
+                allowed_pure_net_programs: pure_net_program.iter().map(|id| parse_id(id)).collect::<Result<_>>()?,
                 max_memory_bytes: 268435456,
                 max_fuel: 1_000_000_000,
                 max_timeout_ms: 60_000,
                 max_output_bytes: MAX_CONTENT_BYTES as u64,
             };
+            validate_policy(&policy).map_err(molten_batch_application::Error::from)?;
             write_new(&out, &serde_json::to_vec_pretty(&policy)?)?;
             emit(serde_json::json!({"cluster":policy.cluster,"policy_ref":policy_id(&policy)?}))?;
         }
@@ -356,26 +399,36 @@ async fn main() -> Result<()> {
         }
         Cmd::Revoke {
             root: dir,
-            component,
+            artifact,
             undo,
         } => {
             let r = root(&dir)?;
             let mut revoked: BTreeSet<Id> = r.read_json("revoked.json")?;
-            let id = parse_id(&component)?;
+            let id = parse_id(&artifact)?;
             if undo {
                 revoked.remove(&id);
             } else {
                 revoked.insert(id);
             }
             r.replace("revoked.json", &serde_json::to_vec_pretty(&revoked)?)?;
-            emit(serde_json::json!({"revoked":!undo,"component":id,"active_work_requires_explicit_cancel":true}))?;
+            emit(serde_json::json!({"revoked":!undo,"artifact":id,"active_work_requires_explicit_cancel":true}))?;
         }
         Cmd::Serve {
             root: dir,
             resume,
             crash_at,
+            pause_at,
         } => {
-            let running = open_service_with_fault(root(&dir)?, resume, ProcessFault::at(crash_at)?).await?;
+            let pause_selected = pause_at.is_some();
+            let fault = if pause_at.is_some() {
+                ProcessFault::pause_at(pause_at)?
+            } else {
+                ProcessFault::at(crash_at)?
+            };
+            if pause_selected {
+                conformance_resume_signal(fault.clone())?;
+            }
+            let running = open_service_with_fault(root(&dir)?, resume, fault).await?;
             eprintln!("orchestrator ready id={}", endpoint_id(&running.endpoint));
             let (tx, rx) = tokio::sync::watch::channel(false);
             tokio::spawn(async move {
@@ -388,6 +441,8 @@ async fn main() -> Result<()> {
             let kind = match kind {
                 KindArg::Component => ContentKind::Component,
                 KindArg::Data => ContentKind::Data,
+                KindArg::PureNetManifest => ContentKind::PureNetManifest,
+                KindArg::PureNetProgram => ContentKind::PureNetProgram,
             };
             let c = content(kind, read_file(&file, MAX_CONTENT_BYTES)?)?;
             let id = content_id(&c)?;

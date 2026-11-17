@@ -53,12 +53,18 @@ pub struct Content {
     pub manifest: ContentManifest,
     pub bytes: Vec<u8>,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MaterializedWorkload {
+    Component { artifact: Content },
+    PureNet { manifest: Content, artifact: Content },
+}
 pub trait ContentPort: Send + Sync {
     fn get(&self, id: Id) -> Result<Content, Error>;
     fn put(&self, content: &Content) -> Result<Id, Error>;
     fn make_data(&self, bytes: Vec<u8>) -> Result<Content, Error>;
 }
 pub trait IdentityPort: Send + Sync {
+    fn content(&self, content: &Content) -> Result<Id, Error>;
     fn spec(&self, spec: &JobSpec) -> Result<Id, Error>;
     fn run(&self, cluster: Id, key: &str) -> Result<Id, Error>;
     fn assignment(&self, cluster: Id, generation: u64, p: &Placement, spec: Id) -> Result<Id, Error>;
@@ -66,12 +72,13 @@ pub trait IdentityPort: Send + Sync {
     fn result(&self, r: &ExecutionResult) -> Result<Id, Error>;
 }
 pub trait PlacementPort: Send + Sync {
-    fn next(&self, s: &State) -> Result<Option<Placement>, Error>;
+    fn next(&self, s: &State, after: Option<PlacementCursor>) -> Result<Option<Placement>, Error>;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdmissionAction {
     Reserve,
     Execute,
+    Publish,
     Complete,
     Cancel,
 }
@@ -111,13 +118,14 @@ pub trait WorkerClient: Send + Sync {
 pub struct ExecutionOutput {
     pub stopped: bool,
     pub output: Result<Vec<u8>, FailureCode>,
+    pub report: Option<Vec<u8>>,
 }
 #[async_trait]
 pub trait ExecutionPort: Send + Sync {
     async fn run(
         &self,
         r: ExecutionRequest,
-        component: Content,
+        workload: MaterializedWorkload,
         inputs: Vec<Vec<u8>>,
     ) -> Result<ExecutionOutput, Error>;
     fn cancel(&self, id: Id) -> Result<(), Error>;

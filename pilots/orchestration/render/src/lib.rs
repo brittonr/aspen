@@ -11,6 +11,7 @@ use molten_batch_core::ContentManifest;
 use molten_batch_core::Id;
 use molten_batch_core::JobSpec;
 use molten_batch_core::TaskSpec;
+use molten_batch_core::Workload;
 use molten_batch_core::MAX_CONTENT_BYTES;
 use molten_orchestrator_codec as codec;
 use serde::Deserialize;
@@ -45,7 +46,7 @@ pub(crate) fn require(ok: bool, message: &str) -> Result<()> {
 }
 pub fn content_id(kind: ContentKind, bytes: &[u8]) -> Result<Id> {
     require(!bytes.is_empty() && bytes.len() <= MAX_CONTENT_BYTES, "content bound")?;
-    Ok(codec::identity("content-manifest.v1", &ContentManifest {
+    Ok(codec::identity("content-manifest.v2", &ContentManifest {
         kind,
         raw_digest: codec::digest(bytes),
         length: bytes.len() as u64,
@@ -126,7 +127,9 @@ pub fn prepare(manifest: Manifest) -> Result<Prepared> {
         objects.push((input, bytes));
         tasks.push(TaskSpec {
             id,
-            component: manifest.renderer,
+            workload: Workload::Component {
+                artifact: manifest.renderer,
+            },
             inputs: vec![input],
             dependencies,
             resources: manifest.runtime.resources,

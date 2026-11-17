@@ -3,10 +3,11 @@
 <!-- r[impl molten.batch_orchestration.vendor] -->
 <!-- r[impl molten.batch_orchestration.boundary] -->
 
-`pilots/orchestration` is an Aspen-owned, eight-crate workspace for a
+`pilots/orchestration` is an Aspen-owned, nine-crate workspace for a
 single-controller, multi-worker DAG service. It is independent of the root Cargo
-workspace and does not register a system extension in the main runtime. Its named deployment
-profile is `standalone-single-controller-import-free-component-batch-v1`.
+workspace and does not register a system extension in the main runtime. Its
+import-free component deployment remains separately selected from the opt-in
+`pure-net-eval/v1` native pure workload.
 
 The immediate consumer is an operator running bounded, import-free component DAGs
 with a separate controller/worker database and explicit peer enrollment. The
@@ -142,3 +143,57 @@ cohort. Retain exact source, environment, public projections, accepted bytes and
 command outcomes for each selected campaign. Temporary tmpfs operation proves
 neither NVMe nor machine-loss durability. Actual two-host direct-LAN execution
 remains required for cross-host qualification; no such evidence is supplied here.
+
+## Opt-in sequential pure-net service
+
+<!-- r[impl molten.pure_net.profile] -->
+<!-- r[impl molten.pure_net.evidence] -->
+
+The immediate consumer is an operator submitting bounded pure I64 source through
+the existing standalone DAG service. `pure-net` adds a reusable exact-source
+producer bridge, retained-arena sequential reduction and independent source
+reference; it does not add a scheduler, attempt database or node-daemon service.
+Molten contributors maintain the snapshot importer, bridge, adapter and
+[operator procedure](../pilots/orchestration/README.md#explicit-pure-net-workload).
+
+The installed manifest binds the exact executable/compiled closure, pinned Noble
+source and Aspen overlay, rules/arithmetic/readback, finite limits and canonical
+schema. Separate manifest/program grants and fresh publication admission are
+required. The existing accepted/begin/finish, stopped retry, cancellation and
+output-copy transactions remain authoritative. An async waiter retains neither
+permission to restart nor proof that blocking work stopped; the computation
+holds the exclusive database lifetime through completion.
+
+Evidence classes remain distinct:
+
+| Class | Supported observation | Not established |
+|---|---|---|
+| Authored source/fixtures | Declared contracts, cases and executable commands | A passing execution |
+| Deterministic local execution | Complete independently expected arithmetic, malformed/boundary refusal, cumulative work and canonical receipt replay | Host isolation or arbitrary Noble semantics |
+| Actual same-host process restart | Killed/reaped worker, exclusive reopen, durable attempt reconciliation and at most one accepted completion | Machine-loss/NVMe durability or cross-host behavior |
+| Diagnostic baseline | Frozen net/source-reference cases, phase/end-to-end/retry costs, logical arena events and separately scoped worker memory/allocations | Speedup, default adoption or canonical timing identity |
+| Cross-host/parallel/checkpoint | No qualification supplied by this sequential delivery | Any such profile's readiness |
+
+The producer's frozen performance NO-GO is preserved. Trusted in-process native
+calculation is not a sandbox. Worker OS limits and logical reservations have
+different scopes; a stopped exhausted job must release its permit so unrelated
+work can progress. The linked operator commands reproduce the bounded local
+qualification. Public evidence must exclude raw keys, roots, private addresses
+and profiler traces; canonical semantic receipts exclude diagnostic timing and
+allocator/process identity.
+
+The standalone Octet metadata selects the new `molten-pure-net` bridge for direct
+source-shape checking. It is not an Octet qualification of the pre-existing
+standalone adapters or upstream Noble crates. Workspace Cargo tests/Clippy and
+the exact-source snapshot check remain separate rails; `warning-only` is a
+source-policy denial even when the producer exits zero.
+
+The [bounded qualification observation](../.cairn/archive/2026-11-17-add-pure-net-eval-service/evidence/qualification-2026-11-17.json)
+records 153 passing workspace tests, three unselected renderer-specific cases,
+the clean producer-bridge source check, the realized Nix package, nine actual
+worker-loss boundaries and eight retained canonical success/denial objects.
+The [matched measurements](../.cairn/archive/2026-11-17-add-pure-net-eval-service/evidence/matched-baseline-2026-11-17.json)
+retain twelve uninstrumented and twelve separately instrumented cases, including
+unfavorable results. The [requirement/case map](../.cairn/archive/2026-11-17-add-pure-net-eval-service/evidence/requirement-map.ncl)
+distinguishes expected-denial assertions inside passing tests from an actual
+nonzero command exit. Neither the measurements nor archival grants authority.

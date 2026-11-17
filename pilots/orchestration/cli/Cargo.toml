@@ -11,6 +11,7 @@ molten-batch-core = { path = "../batch-core" }
 molten-batch-application = { path = "../batch-application" }
 molten-orchestrator-codec = { path = "../codec" }
 molten-orchestrator-adapters = { path = "../adapters" }
+molten-pure-net = { path = "../pure-net" }
 serde_json.workspace = true
 anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }

@@ -55,6 +55,7 @@ fn finish(env: &Setup, request: &ExecutionRequest, output: Id) -> Command<'stati
         request_ref: CanonicalIdentity.request(request).unwrap(),
         outcome: ExecutionOutcome::Succeeded { output },
         stopped: true,
+        report: None,
     };
     let _ = env;
     Command::Terminal {
@@ -94,7 +95,7 @@ fn output_state_progress_and_watermark_reopen_together() {
     let projected = env.store.progress_snapshot(request.fence.run).unwrap();
     let current = commit(&env, &Command::Tick);
     let snapshot = env.store.progress_snapshot(request.fence.run).unwrap();
-    assert_eq!(snapshot.state_ref, molten_orchestrator_codec::identity("controller-state.v1", &current).unwrap());
+    assert_eq!(snapshot.state_ref, molten_orchestrator_codec::identity("controller-state.v2", &current).unwrap());
     assert_eq!(snapshot.watermark, projected.watermark);
     assert_eq!(snapshot.tasks, projected.tasks);
     assert_eq!(snapshot.phase, RunPhase::Succeeded);
@@ -165,6 +166,7 @@ fn late_success_from_a_failed_attempt_cannot_replace_the_accepted_retry() {
             code: FailureCode::Interrupted,
         },
         stopped: true,
+        report: None,
     };
     commit(&env, &Command::Terminal {
         attempt: first.fence.assignment,

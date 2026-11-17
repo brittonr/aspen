@@ -21,7 +21,8 @@ impl WorkerService {
         self.ports.journal.load()
     }
     /// Composition must invoke once after EXCLUSIVE database open, before RPCs.
-    /// Only the no-import, in-process component profile supports this recovery.
+    /// Trusted calculation must remain entirely process-owned, with the database
+    /// retained through blocking work. Missing replies do not establish exit.
     pub fn recover_after_exclusive_open(&self) -> Result<(), Error> {
         self.commit(&WorkerCommand::RecoverAfterProcessExit).map(|_| ())
     }
@@ -71,10 +72,12 @@ impl WorkerService {
                 request: request.clone(),
                 request_ref,
             })?;
+            self.ports.observations.record(Diagnostic::Boundary("before-worker-accept"));
             match self.ports.journal.compare_commit(&old, &next)? {
                 Commit::Conflict => continue,
                 Commit::Unknown => return Err(Error::Unknown),
                 Commit::Applied => {
+                    self.ports.observations.record(Diagnostic::Boundary("after-worker-accept"));
                     let record = &next.records[&request.fence.assignment];
                     let ticket = if record.phase == WorkerPhase::Accepted {
                         Some(LaunchTicket {
@@ -122,13 +125,14 @@ impl WorkerService {
         // Materialization is outside the core. A pre-start error may terminate
         // the accepted attempt, but may not permit reuse of the same identity.
         let prepared = self.prepare(request);
-        let (component, inputs) = match prepared {
+        let (workload, inputs) = match prepared {
             Ok(value) => value,
             Err(_) => {
                 return self.finish(id, ExecutionResult {
                     request_ref: ticket.request_ref,
                     outcome: ExecutionOutcome::RejectedBeforeStart,
                     stopped: true,
+                    report: None,
                 })
             }
         };
@@ -147,8 +151,10 @@ impl WorkerService {
                 request_ref: ticket.request_ref,
                 boot: ticket.boot,
             })?;
+            self.ports.observations.record(Diagnostic::Boundary("before-worker-begin"));
             match self.ports.journal.compare_commit(&state, &next)? {
                 Commit::Applied => {
+                    self.ports.observations.record(Diagnostic::Boundary("after-worker-begin"));
                     claimed = true;
                     break;
                 }
@@ -159,6 +165,7 @@ impl WorkerService {
         if !claimed {
             return Err(Error::Conflict);
         }
+        self.ports.observations.record(Diagnostic::Boundary("before-worker-calculation"));
         let current = self.state()?;
         let cancelled = current.records[&id].cancel_requested;
         if cancelled || self.ports.admission.assignment(request, AdmissionAction::Execute).is_err() {
@@ -166,17 +173,77 @@ impl WorkerService {
                 request_ref: ticket.request_ref,
                 outcome: ExecutionOutcome::RejectedBeforeStart,
                 stopped: true,
+                report: None,
             });
         }
-        let output = self.ports.execution.run(ticket.request.clone(), component, inputs).await?;
+        let output = self.ports.execution.run(ticket.request.clone(), workload, inputs).await?;
         if !output.stopped {
             return Err(Error::Unknown);
         }
+        self.ports.observations.record(Diagnostic::Boundary("after-worker-calculation"));
+        // A stopped semantic failure may carry a canonical receipt. Retaining
+        // that report is reconciliation, not authorization to publish success.
+        let report = if let Some(bytes) = output.report {
+            if bytes.len() as u64 > request.max_output_bytes {
+                return self.finish(id, ExecutionResult {
+                    request_ref: ticket.request_ref,
+                    outcome: ExecutionOutcome::Failed {
+                        code: FailureCode::OutputLimit,
+                    },
+                    stopped: true,
+                    report: None,
+                });
+            }
+            self.ports.observations.record(Diagnostic::Boundary("before-worker-output-persist"));
+            let published = self.ports.content.make_data(bytes).and_then(|content| self.ports.content.put(&content));
+            let report = match published {
+                Ok(id) => id,
+                Err(Error::Unknown) => return Err(Error::Unknown),
+                Err(_) => {
+                    return self.finish(id, ExecutionResult {
+                        request_ref: ticket.request_ref,
+                        outcome: ExecutionOutcome::Failed {
+                            code: FailureCode::Internal,
+                        },
+                        stopped: true,
+                        report: None,
+                    })
+                }
+            };
+            self.ports.observations.record(Diagnostic::Boundary("after-worker-output-persist"));
+            Some(report)
+        } else {
+            None
+        };
         let outcome = match output.output {
             Ok(bytes) if bytes.len() as u64 <= request.max_output_bytes => {
+                self.ports.observations.record(Diagnostic::Boundary("before-worker-output-persist"));
+                let current = self.state()?;
+                if current.records[&id].cancel_requested {
+                    return self.finish(id, ExecutionResult {
+                        request_ref: ticket.request_ref,
+                        outcome: ExecutionOutcome::Cancelled,
+                        stopped: true,
+                        report,
+                    });
+                }
+                if self.ports.admission.assignment(request, AdmissionAction::Publish).is_err() {
+                    return self.finish(id, ExecutionResult {
+                        request_ref: ticket.request_ref,
+                        outcome: ExecutionOutcome::Failed {
+                            code: FailureCode::PublicationDenied,
+                        },
+                        stopped: true,
+                        report,
+                    });
+                }
                 let published = self.ports.content.make_data(bytes).and_then(|c| self.ports.content.put(&c));
                 match published {
-                    Ok(id) => ExecutionOutcome::Succeeded { output: id },
+                    Ok(id) => {
+                        self.ports.observations.record(Diagnostic::Boundary("after-worker-output-persist"));
+                        ExecutionOutcome::Succeeded { output: id }
+                    }
+                    Err(Error::Unknown) => return Err(Error::Unknown),
                     Err(_) => ExecutionOutcome::Failed {
                         code: FailureCode::Internal,
                     },
@@ -191,34 +258,77 @@ impl WorkerService {
             request_ref: ticket.request_ref,
             outcome,
             stopped: true,
+            report,
         })
     }
-    fn prepare(&self, r: &ExecutionRequest) -> Result<(Content, Vec<Vec<u8>>), Error> {
+    fn prepare(&self, r: &ExecutionRequest) -> Result<(MaterializedWorkload, Vec<Vec<u8>>), Error> {
         self.ports.admission.assignment(r, AdmissionAction::Execute)?;
-        let component = self.ports.content.get(r.component)?;
-        if component.manifest.kind != ContentKind::Component {
-            return Err(Error::Invalid("component kind".into()));
-        }
+        let artifact_id = r.workload.artifact();
+        let artifact = self.verified_content(artifact_id, match r.workload {
+            Workload::Component { .. } => ContentKind::Component,
+            Workload::PureNet { .. } => ContentKind::PureNetProgram,
+        })?;
+        let workload = match r.workload {
+            Workload::Component { .. } => MaterializedWorkload::Component { artifact },
+            Workload::PureNet { manifest, .. } => MaterializedWorkload::PureNet {
+                manifest: self.verified_content(manifest, ContentKind::PureNetManifest)?,
+                artifact,
+            },
+        };
         let mut total = 0_usize;
         let mut inputs = Vec::with_capacity(r.inputs.len());
         for id in &r.inputs {
-            let c = self.ports.content.get(*id)?;
+            let c = self.verified_content(*id, ContentKind::Data)?;
             total = total.checked_add(c.bytes.len()).ok_or(Error::Bound)?;
             if c.manifest.kind != ContentKind::Data || total > MAX_CONTENT_BYTES {
                 return Err(Error::Bound);
             }
             inputs.push(c.bytes);
         }
-        Ok((component, inputs))
+        Ok((workload, inputs))
+    }
+    fn verified_content(&self, id: Id, kind: ContentKind) -> Result<Content, Error> {
+        let content = self.ports.content.get(id)?;
+        if content.manifest.kind != kind || self.ports.identity.content(&content)? != id {
+            return Err(Error::Invalid("content kind/identity".into()));
+        }
+        Ok(content)
     }
     fn finish(&self, id: Id, result: ExecutionResult) -> Result<(), Error> {
-        // A racing cancel may have durably produced its own stopped result.
-        // Do not replace that authoritative terminal record.
-        let state = self.state()?;
-        if state.records.get(&id).is_some_and(|r| matches!(r.phase, WorkerPhase::Terminal(_))) {
-            return Ok(());
+        for _ in 0..8 {
+            let state = self.state()?;
+            let record = state.records.get(&id).ok_or(Error::Invalid("missing acceptance".into()))?;
+            // A racing cancel may already have durably produced its own stopped
+            // record. Never replace it or treat an unknown commit as an ack.
+            if matches!(record.phase, WorkerPhase::Terminal(_)) {
+                return Ok(());
+            }
+            self.ports.observations.record(Diagnostic::Boundary("before-worker-terminal-commit"));
+            let mut current_result = result;
+            if matches!(current_result.outcome, ExecutionOutcome::Succeeded { .. })
+                && self.ports.admission.assignment(&record.request, AdmissionAction::Publish).is_err()
+            {
+                current_result.outcome = ExecutionOutcome::Failed {
+                    code: FailureCode::PublicationDenied,
+                };
+            }
+            let next = worker_apply(&state, &WorkerCommand::Finish {
+                attempt: id,
+                result: current_result,
+            })?;
+            match self.ports.journal.compare_commit(&state, &next)? {
+                Commit::Applied => {
+                    self.ports.observations.record(Diagnostic::Boundary("after-worker-terminal-commit"));
+                    return Ok(());
+                }
+                Commit::Conflict => continue,
+                Commit::Unknown => {
+                    self.ports.observations.record(Diagnostic::CommitUnknown);
+                    return Err(Error::Unknown);
+                }
+            }
         }
-        self.commit(&WorkerCommand::Finish { attempt: id, result }).map(|_| ())
+        Err(Error::Conflict)
     }
     fn commit(&self, command: &WorkerCommand) -> Result<WorkerState, Error> {
         for _ in 0..8 {

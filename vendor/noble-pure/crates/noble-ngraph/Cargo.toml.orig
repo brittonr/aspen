@@ -1,0 +1,13 @@
+[package]
+name = "noble-ngraph"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Numeric-Graph-v1: the pure ngraph-ir/0 library (IR, checker, evaluators, extraction, training, snapshots, file codecs). No host effects and no third-party dependency."
+
+[dependencies]
+noble-kernel = { path = "../noble-kernel" }
+noble-contracts = { path = "../noble-contracts" }
+
+[lints]
+workspace = true

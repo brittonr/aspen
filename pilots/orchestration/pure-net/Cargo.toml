@@ -1,0 +1,15 @@
+[package]
+name = "molten-pure-net"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[dependencies]
+molten-batch-core = { path = "../batch-core" }
+molten-orchestrator-codec = { path = "../codec" }
+serde = { version = "1", features = ["derive"] }
+blake3 = "1"
+noble-ngraph = { path = "../../../vendor/noble-pure/crates/noble-ngraph" }
+noble-kernel = { path = "../../../vendor/noble-pure/crates/noble-kernel" }
+noble-contracts = { path = "../../../vendor/noble-pure/crates/noble-contracts" }

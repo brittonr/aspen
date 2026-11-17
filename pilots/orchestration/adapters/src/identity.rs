@@ -5,9 +5,12 @@ use molten_orchestrator_codec as codec;
 #[derive(Default)]
 pub struct CanonicalIdentity;
 impl IdentityPort for CanonicalIdentity {
+    fn content(&self, content: &Content) -> Result<Id, Error> {
+        content_id(content)
+    }
     fn spec(&self, spec: &JobSpec) -> Result<Id, Error> {
         validate_job(spec)?;
-        codec::identity("job-spec.v1", spec).map_err(super::invalid)
+        codec::identity("job-spec.v2", spec).map_err(super::invalid)
     }
     fn run(&self, cluster: Id, key: &str) -> Result<Id, Error> {
         if !valid_name(key) {
@@ -21,16 +24,16 @@ impl IdentityPort for CanonicalIdentity {
     }
     fn request(&self, r: &ExecutionRequest) -> Result<Id, Error> {
         validate_request(r)?;
-        codec::identity("execution-request.v1", r).map_err(super::invalid)
+        codec::identity("execution-request.v2", r).map_err(super::invalid)
     }
     fn result(&self, r: &ExecutionResult) -> Result<Id, Error> {
-        codec::identity("execution-result.v1", r).map_err(super::invalid)
+        codec::identity("execution-result.v2", r).map_err(super::invalid)
     }
 }
 pub struct FirstFitPlacement;
 impl PlacementPort for FirstFitPlacement {
-    fn next(&self, s: &State) -> Result<Option<Placement>, Error> {
-        next_placement(s).map_err(Into::into)
+    fn next(&self, s: &State, after: Option<PlacementCursor>) -> Result<Option<Placement>, Error> {
+        next_placement(s, after).map_err(Into::into)
     }
 }
 pub fn verify_state(s: &State) -> Result<(), Error> {
@@ -98,5 +101,5 @@ pub fn content_id(c: &Content) -> Result<Id, Error> {
     {
         return Err(Error::Invalid("content identity/length".into()));
     }
-    codec::identity("content-manifest.v1", &c.manifest).map_err(super::invalid)
+    codec::identity("content-manifest.v2", &c.manifest).map_err(super::invalid)
 }

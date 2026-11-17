@@ -1,4 +1,4 @@
-# Batch profile v1: canonical state and RPC v2 contracts
+# Batch artifact/state profile v2 and RPC v3 contracts
 
 ## Identity domains
 
@@ -6,15 +6,17 @@ An `Id` is a fixed 32-byte value. Its JSON spelling is exactly 64 lowercase hex
 characters. Node ids are Iroh public keys. Semantic object ids are BLAKE3 digests
 of canonical Preserves values in the following domains:
 
-- `operator-policy.v1`: the immutable explicit operator policy.
-- `job-spec.v1`: the complete validated task graph, including resources and retry policy.
+- `operator-policy.v2`: explicit component and separate native manifest/program grants.
+- `job-spec.v2`: the complete validated task graph, typed workload, resources and retry policy.
 - `run-id.v1`: tuple `[cluster, submission_key]`; the key is distinct from spec identity.
 - `assignment-id.v1`: tuple `[cluster, generation, run, task, node, attempt_epoch, spec_ref]`.
-- `execution-request.v1`: complete fenced request, policy, component, ordered inputs and limits.
-- `execution-result.v1`: exact request reference, stopped disposition and outcome.
-- `content-manifest.v1`: kind, raw-byte BLAKE3 digest and exact length.
-- `controller-state.v1`, `worker-state.v1`: complete versioned snapshots.
-- `batch-rpc.request.v2`, `batch-rpc.reply.v2`: request/response adapter envelopes.
+- `execution-request.v2`: complete fenced request, policy, typed workload, ordered inputs and limits.
+- `execution-result.v2`: exact request reference, stopped disposition, outcome and optional failure report.
+- `content-manifest.v2`: component/data/pure-net kind, raw-byte BLAKE3 digest and exact length.
+- `controller-state.v2`, `worker-state.v2`: complete versioned snapshots.
+- `batch-rpc.request.v3`, `batch-rpc.reply.v3`: request/response adapter envelopes.
+- `pure-net-eval/{manifest,program,ordered-i64-inputs,receipt}/v1`: explicit native
+  manifest, source plus reconstructed checked IR, ordered inputs and semantic report.
 
 A content reference confers no installation, execution or result-acceptance authority.
 The standalone content manifest is not claimed to be byte-compatible with an
@@ -73,12 +75,24 @@ remote key against explicit role enrollment before reading the body. No retry,
 relay, name lookup, protocol fallback or authority promotion is performed by the
 transport adapter. Errors return bounded codes, never backend paths or secrets.
 
-RPC v2 selects an optional run in the status request, before reply framing. A
-selected-run reply carries only that run; complete-state status remains explicit
-for raw inspection and planning. The CLI's selected-run JSON is unchanged. All
-clients, controllers and workers use the v2 ALPN together; there is no v1 fallback
-or mixed-carrier compatibility. Workload, durable-state and progress identities
-remain in their existing v1 domains, so this carrier cutover rewrites no database.
+RPC v3 preserves controller-side selected-run status filtering and adds the
+artifact-neutral workload carrier. Selected status returns only that run;
+complete-state status remains explicit for inspection and planning. All clients,
+controllers and workers must use ALPN `molten-orchestrator/batch-rpc/v3` together.
+There is no v1/v2 carrier fallback, native selection through a component grant,
+or mixed-version compatibility. Content, policy, job, request/result and durable
+snapshot identities advance to v2; old v1 snapshots fail closed instead of
+opening a second empty ledger. This release provides no in-place database
+migration. Progress event/cursor and run/assignment identity domains are unchanged.
+
+`Workload::PureNet` binds both an explicitly installed manifest and a checked
+program object. One ordered-input frame supplies the pure I64 arguments. The
+manifest independently binds the exact executable/compiled dependency closure,
+producer and consumer overlay, rules/arithmetic/readback, backend and finite
+limits. A completed semantic receipt is not a controller-accepted output:
+current authority, generation/cancellation and durable copy/terminal publication
+remain separate prerequisites. A stopped failed attempt may retain a bounded
+report without turning that report into successful output.
 
 ## Request and attempt idempotency
 

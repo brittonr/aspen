@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let plan = serde_json::json!({
                 "component": component_id, "manifest": prepared.manifest.id()?,
-                "job": codec::identity("job-spec.v1", &prepared.job)?,
+                "job": codec::identity("job-spec.v2", &prepared.job)?,
                 "tiles": prepared.manifest.tile_count(), "final_task": "assemble", "objects": objects,
                 "evidence": "authored inputs; execution has not been observed by preparation"
             });

@@ -2,16 +2,16 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
 use molten_batch_application::*;
 use molten_batch_core::*;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const ALPN: &[u8] = b"molten-orchestrator/batch-rpc/v2";
-pub const REQUEST_SCHEMA: &str = "batch-rpc.request.v2";
-pub const REPLY_SCHEMA: &str = "batch-rpc.reply.v2";
+pub const ALPN: &[u8] = b"molten-orchestrator/batch-rpc/v3";
+pub const REQUEST_SCHEMA: &str = "batch-rpc.request.v3";
+pub const REPLY_SCHEMA: &str = "batch-rpc.reply.v3";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Controller,

@@ -16,6 +16,24 @@ pub struct Placement {
     pub number: u32,
     pub inputs: Vec<Id>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlacementCursor {
+    pub run: Id,
+    pub task_index: usize,
+    pub node: Id,
+}
+impl PlacementCursor {
+    pub fn at(s: &State, placement: &Placement) -> Result<Self, Violation> {
+        let run = s.runs.get(&placement.run).ok_or(Violation::Missing("run"))?;
+        let task_index =
+            run.spec.tasks.iter().position(|t| t.id == placement.task).ok_or(Violation::Missing("task"))?;
+        Ok(Self {
+            run: placement.run,
+            task_index,
+            node: placement.node,
+        })
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct PendingReason {
     pub run: Id,
@@ -192,7 +210,8 @@ pub fn validate_state(s: &State) -> Result<(), Violation> {
         let t = &r.tasks[&f.task];
         if f.spec_ref != r.spec_ref
             || f.epoch > t.number
-            || a.request.component != spec.component
+            || a.request.workload != spec.workload
+            || a.request.max_attempts != spec.max_attempts
             || a.request.resources != spec.resources
             || a.request.fuel != spec.fuel
             || a.request.timeout_ms != spec.timeout_ms
@@ -262,14 +281,18 @@ pub fn validate_placement(s: &State, p: &Placement) -> Result<(), Violation> {
     Ok(())
 }
 /// One placement per snapshot. The application asks again after each commit,
-/// preventing overcommit through a stale multi-placement plan.
-pub fn next_placement(s: &State) -> Result<Option<Placement>, Violation> {
+/// preventing overcommit through a stale multi-placement plan. Start after the
+/// last proposed placement, wrapping to the first eligible one. The cursor is
+/// advisory: every returned placement is revalidated against this snapshot.
+pub fn next_placement(s: &State, after: Option<PlacementCursor>) -> Result<Option<Placement>, Violation> {
     validate_state(s)?;
+    let after = after.map(|p| (p.run, p.task_index, p.node));
+    let mut first = None;
     for (id, r) in &s.runs {
         if r.cancel_requested {
             continue;
         }
-        for spec in &r.spec.tasks {
+        for (task_index, spec) in r.spec.tasks.iter().enumerate() {
             let t = &r.tasks[&spec.id];
             if !matches!(t.phase,TaskPhase::Pending{ready_at} if ready_at<=s.tick) {
                 continue;
@@ -297,12 +320,17 @@ pub fn next_placement(s: &State) -> Result<Option<Placement>, Violation> {
                     inputs: inputs.clone(),
                 };
                 if validate_placement(s, &p).is_ok() {
-                    return Ok(Some(p));
+                    if after.is_none_or(|position| (*id, task_index, *node) > position) {
+                        return Ok(Some(p));
+                    }
+                    if first.is_none() {
+                        first = Some(p);
+                    }
                 }
             }
         }
     }
-    Ok(None)
+    Ok(first)
 }
 pub fn explain(s: &State) -> Vec<PendingReason> {
     let mut out = Vec::new();
@@ -423,7 +451,8 @@ pub fn apply(s: &State, c: &Command<'_>) -> Result<State, Violation> {
                 || f.epoch != p.number
                 || f.spec_ref != s.runs[&p.run].spec_ref
                 || r.policy_ref != s.policy_ref
-                || r.component != spec.component
+                || r.workload != spec.workload
+                || r.max_attempts != spec.max_attempts
                 || r.inputs != p.inputs
                 || r.resources != spec.resources
                 || r.fuel != spec.fuel

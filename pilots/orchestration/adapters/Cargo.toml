@@ -10,6 +10,7 @@ rust-version.workspace = true
 molten-batch-core = { path = "../batch-core" }
 molten-batch-application = { path = "../batch-application" }
 molten-orchestrator-codec = { path = "../codec" }
+molten-pure-net = { path = "../pure-net" }
 serde = { workspace = true, features = ["std"] }
 serde_json.workspace = true
 async-trait.workspace = true

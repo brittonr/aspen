@@ -1,0 +1,21 @@
+{
+  "schema": "molten.pure-net.source-permission-record.v1",
+  "recorded_date": "2026-11-17",
+  "authority_kind": "explicit interactive operator assertion of necessary rights",
+  "verification_boundary": "Records the submitted grant; not independent upstream ownership verification, legal advice, execution authority or release approval.",
+  "repository": "https://github.com/OnixResearch/noble",
+  "revision": "f7af9e972aa2968d22978794a667d267cf2745e8",
+  "terms": "AGPL-3.0-or-later",
+  "initial_scope": ["Onix-owned Rust in noble-ngraph", "Onix-owned Rust in noble-kernel", "Onix-owned Rust in noble-contracts", "reviewed Cargo metadata and normalized manifests"],
+  "additional_interactive_answer": "grant_exact_result_asset",
+  "additional_asset": {
+    "path": "crates/noble-contracts/src/fixtures/result.noble",
+    "bytes": 1123,
+    "git_blob_interoperability_coordinate": "8e5bcb947f54eb999ced7534791fc09fe6fbf28d",
+    "blake3": "694a6766ca91c9434329df739070f7b26dda43576dfc3788cb7b7c2c271cb4fe",
+    "reason": "Compile-time include_bytes dependency of noble-contracts source.rs"
+  },
+  "excluded": ["other non-Rust fixture programs", "third-party material", "vendored inets proofs and test suites", "unselected crates", "Git history"],
+  "upstream_license_or_repository_settings_changed": false,
+  "permission_does_not_override_performance_no_go": true
+}

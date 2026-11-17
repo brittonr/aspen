@@ -13,7 +13,10 @@ EXPECTED = {
     "batch-application": {"molten-batch-core", "async-trait"},
     "codec": {"molten-batch-core", "serde", "serde_json", "preserves", "blake3"},
     "render": {"molten-batch-core", "molten-orchestrator-codec", "serde", "serde_json"},
+    "pure-net": {"molten-batch-core", "molten-orchestrator-codec", "serde", "blake3", "noble-ngraph", "noble-kernel", "noble-contracts"},
 }
+NOBLE_PATHS = {name: (ROOT.parent.parent / "vendor/noble-pure/crates" / name).resolve()
+               for name in ("noble-ngraph", "noble-kernel", "noble-contracts")}
 BLOCKED = re.compile(r"\b(?:std|core)\s*::\s*(?:fs|net|process|env|thread|time)\b|\b(?:tokio|redb|iroh|wasmtime|cap_std)\s*::")
 
 def stripped(source: str) -> str:
@@ -26,7 +29,7 @@ def check() -> list[str]:
     errors = []
     manifest = tomllib.loads((ROOT / "Cargo.toml").read_text())
     members = manifest["workspace"]["members"]
-    if set(members) != {"core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render"}:
+    if set(members) != {"core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render", "pure-net"}:
         errors.append("Unexpected workspace member set")
     names = {}
     for member in members:
@@ -37,7 +40,10 @@ def check() -> list[str]:
         for name, dep in data.get("dependencies", {}).items():
             if isinstance(dep, dict) and "path" in dep:
                 target = (ROOT / member / dep["path"]).resolve()
-                if not target.is_relative_to(ROOT) or not (target / "Cargo.toml").is_file():
+                if member == "pure-net" and name in NOBLE_PATHS:
+                    if target != NOBLE_PATHS[name] or not (target / "Cargo.toml").is_file():
+                        errors.append(f"{member}: wrong exact vendored producer dependency {name}")
+                elif not target.is_relative_to(ROOT) or not (target / "Cargo.toml").is_file():
                     errors.append(f"{member}: missing or escaping dependency {name}")
     bridge = ROOT / "adapters/src/lib.rs"
     shared = ROOT.parent.parent / "crates/molten-core/src/committed_stream/mod.rs"
@@ -46,7 +52,7 @@ def check() -> list[str]:
     for member in ("core", "batch-core"):
         if "#![no_std]" not in (ROOT / member / "src/lib.rs").read_text():
             errors.append(f"{member}: no_std missing")
-    for member in ("core", "application", "batch-core", "batch-application"):
+    for member in ("core", "application", "batch-core", "batch-application", "pure-net"):
         for path in (ROOT / member / "src").rglob("*.rs"):
             code = stripped(path.read_text())
             if BLOCKED.search(code):
@@ -62,5 +68,5 @@ if __name__ == "__main__":
     if problems:
         print("\n".join(problems))
         raise SystemExit(1)
-    print("PASS: eight-crate dependency graph; pure cores/application have no matched ambient imports; no implementation stubs.")
+    print("PASS: nine-crate dependency graph; pure cores/application/producer bridge have no matched ambient imports; no implementation stubs.")
     print("Scope: lexical and manifest checks only. Rust parsing, type checking and runtime behavior are not established.")

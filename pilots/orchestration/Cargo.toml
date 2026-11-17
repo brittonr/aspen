@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [workspace]
-members = ["core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render"]
+members = ["core", "application", "batch-core", "batch-application", "codec", "adapters", "cli", "render", "pure-net"]
 resolver = "2"
+
+[workspace.metadata.octet]
+default_scope = ["-p", "molten-pure-net"]
+cargo_check_args = ["--all-targets"]
 
 [workspace.package]
 edition = "2021"

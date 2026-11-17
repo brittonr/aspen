@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 POLICY = "vendor/sources.ncl"
 LOCK = "vendor/sources.lock.json"
 LOCK_SCHEMA = "molten.vendored-sources-lock.v1"
-POLICY_SCHEMA = "molten.vendored-sources.v1"
+POLICY_SCHEMA = "molten.vendored-sources.v2"
 REGULAR_MODES = {"100644": False, "100755": True}
 
 
@@ -58,6 +58,17 @@ def is_selected(path: str, selected: list[str]) -> bool:
     return any(path == entry or path.startswith(entry + "/") for entry in selected)
 
 
+# r[impl molten.pure_net.source_intake]
+def is_selected_file(source: dict, path: str) -> bool:
+    if not is_selected(path, source["selected_paths"]):
+        return False
+    file_filter = source.get("file_filter")
+    return file_filter is None or (
+        PurePosixPath(path).suffix in file_filter["extensions"]
+        or path in file_filter["exact_paths"]
+    )
+
+
 def is_clean_relative(path: str) -> bool:
     parts = PurePosixPath(path).parts
     return bool(path) and not path.startswith("/") and all(part not in ("", ".", "..") for part in parts)
@@ -71,6 +82,8 @@ def check_source(root: Path, source: dict, locked: dict | None, b3sum: str) -> l
     for field in ("repository", "revision", "destination"):
         if locked.get(field) != source[field]:
             errors.append(f"{name}: lock {field} {locked.get(field)!r} differs from policy {source[field]!r}")
+    if "policy" in locked and locked["policy"] != source:
+        errors.append(f"{name}: locked source policy differs from reviewed policy")
     renamed = {(entry["upstream"], entry["destination"]) for entry in source["renamed_originals"]}
     renamed_upstream = {upstream for upstream, _ in renamed}
     owned = {entry["path"] for entry in source["aspen_owned"]}
@@ -82,13 +95,13 @@ def check_source(root: Path, source: dict, locked: dict | None, b3sum: str) -> l
             continue
         locked_paths[path] = record
         if role == "upstream":
-            if record.get("upstream_path") != path or not is_selected(path, source["selected_paths"]):
+            if record.get("upstream_path") != path or not is_selected_file(source, path):
                 errors.append(f"{name}: {path} is not an unchanged selected upstream path")
             if path in renamed_upstream:
                 errors.append(f"{name}: {path} must be renamed, not shipped under its upstream name")
         elif role == "renamed-upstream":
             pair = (record.get("upstream_path"), path)
-            if pair not in renamed:
+            if pair not in renamed or not is_selected_file(source, pair[0] or ""):
                 errors.append(f"{name}: {path} is not a declared rename of an upstream path")
             seen_renamed.add(pair)
         elif role == "aspen-owned":
@@ -171,11 +184,15 @@ def check_tree(root: Path, policy: dict, lock: dict, b3sum: str) -> list[str]:
     locked_sources = {source.get("name"): source for source in lock.get("sources", [])}
     policy_names = {source["name"] for source in policy["sources"]}
     errors += [f"{name}: locked source is not in policy" for name in sorted(set(locked_sources) - policy_names)]
+    if len(locked_sources) != len(lock.get("sources", [])):
+        errors.append("duplicate locked source name")
     for source in policy["sources"]:
         errors += check_source(root, source, locked_sources.get(source["name"]), b3sum)
     locked_bindings = {binding.get("local_path"): binding for binding in lock.get("fixture_bindings", [])}
     policy_paths = {binding["local_path"] for binding in policy["fixture_bindings"]}
     errors += [f"fixture {path}: locked binding is not in policy" for path in sorted(set(locked_bindings) - policy_paths)]
+    if len(locked_bindings) != len(lock.get("fixture_bindings", [])):
+        errors.append("duplicate locked fixture path")
     for binding in policy["fixture_bindings"]:
         errors += check_binding(root, binding, locked_bindings.get(binding["local_path"]), b3sum)
     return errors
@@ -201,6 +218,8 @@ def upstream_entries(checkout: Path, source: dict) -> dict[str, tuple[str, str]]
         mode, kind, obj = meta.split()
         if kind != "blob" or mode not in REGULAR_MODES:
             raise VendorError(f"{source['name']}: {path} is {kind} mode {mode}, not a regular file")
+        if not is_selected_file(source, path):
+            continue
         entries[path] = (mode, obj)
     for selected in source["selected_paths"]:
         if not any(is_selected(path, [selected]) for path in entries):
@@ -216,6 +235,8 @@ def extract(checkout: Path, source: dict, stage: Path) -> None:
                 continue
             if not member.isfile() or not is_clean_relative(member.name):
                 raise VendorError(f"{source['name']}: refusing archive member {member.name!r}")
+            if not is_selected_file(source, member.name):
+                continue
             target = stage / member.name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(tar.extractfile(member).read())
@@ -265,7 +286,7 @@ def import_source(root: Path, source: dict, checkout: Path, b3sum: str) -> dict:
         if stage.exists():
             shutil.rmtree(stage)
     keys = ("name", "repository", "revision", "destination")
-    return {**{key: source[key] for key in keys}, "files": sorted(files, key=lambda record: record["path"])}
+    return {**{key: source[key] for key in keys}, "policy": source, "files": sorted(files, key=lambda record: record["path"])}
 
 
 def import_binding(root: Path, binding: dict, checkout: Path, b3sum: str) -> dict:
@@ -303,17 +324,51 @@ def main() -> int:
         if args.mode == "import":
             checkouts = parse_pairs(args.source, "--source")
             repositories = parse_pairs(args.fixture_repository, "--fixture-repository")
-            missing = [source["name"] for source in policy["sources"] if source["name"] not in checkouts]
-            missing += [b["repository"] for b in policy["fixture_bindings"] if b["repository"] not in repositories]
-            if missing:
-                raise VendorError("import needs every policy checkout; missing: " + ", ".join(sorted(set(missing))))
+            old = json.loads((root / LOCK).read_text()) if (root / LOCK).exists() else {
+                "schema": LOCK_SCHEMA, "sources": [], "fixture_bindings": []
+            }
+            known = {s["name"] for s in policy["sources"]}
+            known_repositories = {b["repository"] for b in policy["fixture_bindings"]}
+            if set(checkouts) - known or set(repositories) - known_repositories:
+                raise VendorError("import names an unknown policy source or fixture repository")
+            # Validate every preserved row before modifying any destination. A partial
+            # import is not permission to regenerate/rebind unavailable old sources.
+            preserved_policy = {**policy,
+                "sources": [s for s in policy["sources"] if s["name"] not in checkouts],
+                "fixture_bindings": [b for b in policy["fixture_bindings"] if b["repository"] not in repositories]}
+            preserved_lock = {**old,
+                "sources": [s for s in old["sources"] if s["name"] not in checkouts],
+                "fixture_bindings": [b for b in old["fixture_bindings"] if b["repository"] not in repositories]}
+            # Legacy v1 locks omitted full reviewed policy rows. Anchor those
+            # preserved rows to this repository's committed policy AND lock;
+            # tree hashes alone cannot detect silently broadened selection or
+            # changed license/disclosure. No upstream checkout is needed.
+            if preserved_policy["sources"] or preserved_policy["fixture_bindings"]:
+                baseline_text = git(root, "show", f"HEAD:{POLICY}")
+                baseline_policy = json.loads(subprocess.run(
+                    [args.nickel, "export", "--format", "json"], input=baseline_text,
+                    check=True, stdout=subprocess.PIPE, text=True).stdout)
+                baseline_lock = json.loads(git(root, "show", f"HEAD:{LOCK}"))
+                for group, key in (("sources", "name"), ("fixture_bindings", "local_path")):
+                    baseline_rows = {row[key]: row for row in baseline_policy[group]}
+                    baseline_locked = {row[key]: row for row in baseline_lock[group]}
+                    preserved_rows = {row[key]: row for row in preserved_lock[group]}
+                    for row in preserved_policy[group]:
+                        if baseline_rows.get(row[key]) != row or baseline_locked.get(row[key]) != preserved_rows.get(row[key]):
+                            raise VendorError(f"preserved {group} row {row[key]} differs from committed policy/lock; provide its exact checkout for deliberate import")
+            errors = check_tree(root, preserved_policy, preserved_lock, args.b3sum)
+            if errors:
+                raise VendorError("preserved source validation failed: " + "; ".join(errors))
+            previous_sources = {s["name"]: s for s in old["sources"]}
+            previous_bindings = {b["local_path"]: b for b in old["fixture_bindings"]}
             lock = {
                 "schema": LOCK_SCHEMA,
-                "sources": [import_source(root, s, checkouts[s["name"]], args.b3sum) for s in policy["sources"]],
-                "fixture_bindings": [
-                    import_binding(root, b, repositories[b["repository"]], args.b3sum)
-                    for b in policy["fixture_bindings"]
-                ],
+                "sources": [import_source(root, s, checkouts[s["name"]], args.b3sum)
+                            if s["name"] in checkouts else previous_sources[s["name"]]
+                            for s in policy["sources"]],
+                "fixture_bindings": [import_binding(root, b, repositories[b["repository"]], args.b3sum)
+                                     if b["repository"] in repositories else previous_bindings[b["local_path"]]
+                                     for b in policy["fixture_bindings"]],
             }
             (root / LOCK).write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
         lock = json.loads((root / LOCK).read_text())

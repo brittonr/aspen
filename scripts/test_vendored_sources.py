@@ -4,6 +4,7 @@ import importlib.util
 import os
 import shutil
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,6 +124,66 @@ class CheckTreeTests(unittest.TestCase):
     def test_unknown_lock_schema_is_rejected(self):
         self.lock["schema"] = "other"
         self.assert_rejected("has schema")
+
+
+    def restrict_source_files(self):
+        self.policy["sources"][0]["file_filter"] = {
+            "extensions": [".rs"],
+            "exact_paths": ["LICENSE", "crates/core/Cargo.toml", "crates/core/src/result.noble"],
+        }
+
+    def test_only_explicitly_granted_asset_can_join_rust_and_metadata(self):
+        self.restrict_source_files()
+        relative = "crates/core/src/result.noble"
+        (self.root / "vendor/upstream" / relative).write_text("module Result {}\n")
+        self.lock["sources"][0]["files"].append(self.record(relative, relative, "upstream"))
+        self.assertEqual(self.errors(), [])
+        ungranted = "crates/core/src/calculator.noble"
+        (self.root / "vendor/upstream" / ungranted).write_text("not authorized\n")
+        self.lock["sources"][0]["files"].append(self.record(ungranted, ungranted, "upstream"))
+        self.assert_rejected("calculator.noble is not an unchanged selected upstream path")
+
+    def test_renaming_an_ungranted_asset_does_not_admit_it(self):
+        self.restrict_source_files()
+        upstream = "crates/core/src/calculator.noble"
+        renamed = upstream + ".orig"
+        (self.root / "vendor/upstream" / renamed).write_text("not authorized\n")
+        self.policy["sources"][0]["renamed_originals"].append({"upstream": upstream, "destination": renamed})
+        self.lock["sources"][0]["files"].append(self.record(renamed, upstream, "renamed-upstream"))
+        self.assert_rejected("calculator.noble.orig is not a declared rename")
+
+    # r[verify molten.pure_net.source_intake]
+    def test_real_git_import_excludes_ungranted_asset_from_bytes_and_lock(self):
+        self.restrict_source_files()
+        checkout = self.root / "checkout"
+        checkout.mkdir()
+        for path, value in {
+            "LICENSE": "fixture license\n",
+            "crates/core/Cargo.toml": "[package]\nversion.workspace = true\n",
+            "crates/core/src/lib.rs": "pub fn imported() {}\n",
+            "crates/core/src/result.noble": "module Result {}\n",
+            "crates/core/src/calculator.noble": "not authorized\n",
+        }.items():
+            target = checkout / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(value)
+        environment = {**os.environ, "GIT_CONFIG_COUNT": "0", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
+        def git(*args):
+            return subprocess.run([
+                "git", "-C", str(checkout), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+                "-c", "user.name=SourceFixture", "-c", "user.email=fixture@invalid", *args,
+            ], env=environment, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
+        git("init", "-q")
+        git("add", ".")
+        git("commit", "-q", "-m", "source fixture")
+        source = self.policy["sources"][0]
+        source["revision"] = git("rev-parse", "HEAD")
+        locked = vendored.import_source(self.root, source, checkout, B3SUM)
+        self.assertEqual(vendored.check_source(self.root, source, locked, B3SUM), [])
+        paths = {entry["path"] for entry in locked["files"]}
+        self.assertEqual(paths, {"LICENSE", "crates/core/Cargo.toml", "crates/core/Cargo.toml.orig",
+                                 "crates/core/src/lib.rs", "crates/core/src/result.noble"})
+        self.assertFalse((self.root / "vendor/upstream/crates/core/src/calculator.noble").exists())
 
 
 if __name__ == "__main__":

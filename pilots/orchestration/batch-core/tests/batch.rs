@@ -15,7 +15,7 @@ fn resources() -> Resources {
 fn task(name: &str, deps: &[&str]) -> TaskSpec {
     TaskSpec {
         id: name.into(),
-        component: id(3),
+        workload: Workload::Component { artifact: id(3) },
         inputs: vec![],
         dependencies: deps.iter().map(|v| (*v).into()).collect(),
         resources: resources(),
@@ -70,16 +70,17 @@ fn request(s: &State, p: &Placement, assignment: Id) -> ExecutionRequest {
             epoch: p.number,
         },
         policy_ref: s.policy_ref,
-        component: t.component,
+        workload: t.workload,
         inputs: p.inputs.clone(),
         resources: t.resources,
         fuel: t.fuel,
         timeout_ms: t.timeout_ms,
         max_output_bytes: t.max_output_bytes,
+        max_attempts: t.max_attempts,
     }
 }
 fn schedule(s: &State, assignment: Id) -> State {
-    let p = next_placement(s).unwrap().unwrap();
+    let p = next_placement(s, None).unwrap().unwrap();
     let r = request(s, &p, assignment);
     apply(s, &Command::Schedule {
         placement: p,
@@ -96,6 +97,7 @@ fn terminal(s: &State, assignment: Id, outcome: ExecutionOutcome) -> State {
             request_ref: assignment,
             outcome,
             stopped: true,
+            report: None,
         },
     })
     .unwrap()
@@ -104,10 +106,10 @@ fn terminal(s: &State, assignment: Id, outcome: ExecutionOutcome) -> State {
 fn dag_executes_only_after_dependencies_and_reserves_capacity() {
     let s = submit(&initial(), "dag", id(5), vec![task("a", &[]), task("b", &["a"])]);
     let s = schedule(&s, id(10));
-    assert!(next_placement(&s).unwrap().is_none());
+    assert!(next_placement(&s, None).unwrap().is_none());
     assert_eq!(s.usage(id(4)).unwrap(), resources());
     let s = terminal(&s, id(10), ExecutionOutcome::Succeeded { output: id(9) });
-    let p = next_placement(&s).unwrap().unwrap();
+    let p = next_placement(&s, None).unwrap().unwrap();
     assert_eq!(p.task, "b");
     assert_eq!(p.inputs, vec![id(9)]);
     assert_eq!(s.usage(id(4)).unwrap(), Resources::default());
@@ -115,6 +117,16 @@ fn dag_executes_only_after_dependencies_and_reserves_capacity() {
     let s = terminal(&s, id(11), ExecutionOutcome::Succeeded { output: id(9) });
     assert_eq!(s.runs[&id(5)].phase(), RunPhase::Succeeded);
 }
+#[test]
+fn placement_cursor_advances_and_wraps_within_one_run() {
+    let s = submit(&initial(), "siblings", id(5), vec![task("a", &[]), task("z", &[])]);
+    let first = next_placement(&s, None).unwrap().unwrap();
+    assert_eq!(first.task, "a");
+    let second = next_placement(&s, Some(PlacementCursor::at(&s, &first).unwrap())).unwrap().unwrap();
+    assert_eq!(second.task, "z");
+    assert_eq!(next_placement(&s, Some(PlacementCursor::at(&s, &second).unwrap())).unwrap(), Some(first));
+}
+
 #[test]
 fn uncertain_attempt_holds_capacity_and_cannot_be_replaced() {
     let s = submit(&initial(), "uncertain", id(5), vec![task("a", &[])]);
@@ -125,7 +137,7 @@ fn uncertain_attempt_holds_capacity_and_cannot_be_replaced() {
     })
     .unwrap();
     assert_eq!(s.usage(id(4)).unwrap(), resources());
-    assert!(next_placement(&s).unwrap().is_none());
+    assert!(next_placement(&s, None).unwrap().is_none());
 }
 #[test]
 fn retry_requires_stopped_terminal_and_advanced_epoch() {
@@ -140,15 +152,16 @@ fn retry_requires_stopped_terminal_and_advanced_epoch() {
                 code: FailureCode::Trap,
             },
             stopped: false,
+            report: None,
         },
     };
     assert!(apply(&s, &no_stop).is_err());
     let s = terminal(&s, id(10), ExecutionOutcome::Failed {
         code: FailureCode::Trap,
     });
-    assert!(next_placement(&s).unwrap().is_none());
+    assert!(next_placement(&s, None).unwrap().is_none());
     let s = apply(&s, &Command::Tick).unwrap();
-    let p = next_placement(&s).unwrap().unwrap();
+    let p = next_placement(&s, None).unwrap().unwrap();
     assert_eq!(p.number, 2);
     let s = schedule(&s, id(11));
     assert!(apply(&s, &Command::Terminal {
@@ -157,7 +170,8 @@ fn retry_requires_stopped_terminal_and_advanced_epoch() {
         result: ExecutionResult {
             request_ref: id(10),
             outcome: ExecutionOutcome::Succeeded { output: id(9) },
-            stopped: true
+            stopped: true,
+            report: None,
         }
     })
     .is_err());
@@ -214,6 +228,11 @@ fn cycle_missing_dependency_and_duplicate_task_are_denied() {
         tasks: vec![task("a", &[]), task("a", &[])]
     })
     .is_err());
+    assert!(validate_job(&JobSpec {
+        name: "unsorted".into(),
+        tasks: vec![task("z", &[]), task("a", &[])],
+    })
+    .is_err());
 }
 #[test]
 fn stale_and_drained_nodes_are_not_eligible() {
@@ -223,12 +242,12 @@ fn stale_and_drained_nodes_are_not_eligible() {
         draining: true,
     })
     .unwrap();
-    assert!(next_placement(&drained).unwrap().is_none());
+    assert!(next_placement(&drained, None).unwrap().is_none());
     let mut stale = s;
     for _ in 0..4 {
         stale = apply(&stale, &Command::Tick).unwrap();
     }
-    assert!(next_placement(&stale).unwrap().is_none());
+    assert!(next_placement(&stale, None).unwrap().is_none());
 }
 #[test]
 fn restore_rejects_missing_history_and_false_resource_release() {
@@ -244,7 +263,7 @@ fn worker_and_request() -> (WorkerState, ExecutionRequest) {
     let state = WorkerState::empty(id(1), id(4), 1, id(2), resources()).unwrap();
     let state = worker_apply(&state, &WorkerCommand::RecoverAfterProcessExit).unwrap();
     let s = submit(&initial(), "worker", id(5), vec![task("a", &[])]);
-    let p = next_placement(&s).unwrap().unwrap();
+    let p = next_placement(&s, None).unwrap().unwrap();
     (state, request(&s, &p, id(10)))
 }
 #[test]
@@ -327,7 +346,8 @@ fn late_success_cannot_override_committed_cancel() {
         result: ExecutionResult {
             request_ref: id(10),
             outcome: ExecutionOutcome::Succeeded { output: id(9) },
-            stopped: true
+            stopped: true,
+            report: None,
         }
     })
     .is_err());
@@ -342,8 +362,171 @@ fn independent_pending_tasks_prevent_premature_terminal_run_status() {
         code: FailureCode::Trap,
     });
     assert_eq!(s.runs[&id(5)].phase(), RunPhase::Pending);
-    assert_eq!(next_placement(&s).unwrap().unwrap().task, "b");
+    assert_eq!(next_placement(&s, None).unwrap().unwrap().task, "b");
     let s = schedule(&s, id(11));
     let s = terminal(&s, id(11), ExecutionOutcome::Succeeded { output: id(9) });
     assert_eq!(s.runs[&id(5)].phase(), RunPhase::Failed);
+}
+
+fn policy(profile: &str) -> Policy {
+    Policy {
+        profile: profile.into(),
+        cluster: id(1),
+        generation: 1,
+        allow_any_pure_component: false,
+        allowed_components: Default::default(),
+        allowed_pure_net_manifests: Default::default(),
+        allowed_pure_net_programs: Default::default(),
+        max_memory_bytes: 65536,
+        max_fuel: 10000,
+        max_timeout_ms: 1000,
+        max_output_bytes: 1024,
+    }
+}
+
+#[test]
+fn native_authority_requires_profile_and_both_exact_unrevoked_grants() {
+    let mut native = task("native", &[]);
+    native.workload = Workload::PureNet {
+        manifest: id(7),
+        artifact: id(8),
+    };
+    let mut component = policy(PROFILE);
+    component.allow_any_pure_component = true;
+    assert!(policy_allows_task(&component, &Default::default(), &task("wasm", &[])).unwrap());
+    assert!(!policy_allows_task(&component, &Default::default(), &native).unwrap());
+    component.allowed_pure_net_manifests.insert(id(7));
+    assert!(validate_policy(&component).is_err());
+
+    let mut p = policy(PURE_NET_PROFILE);
+    assert!(!policy_allows_task(&p, &Default::default(), &native).unwrap());
+    p.allowed_pure_net_manifests.insert(id(7));
+    assert!(!policy_allows_task(&p, &Default::default(), &native).unwrap());
+    p.allowed_pure_net_programs.insert(id(9));
+    assert!(!policy_allows_task(&p, &Default::default(), &native).unwrap());
+    p.allowed_pure_net_programs.insert(id(8));
+    assert!(policy_allows_task(&p, &Default::default(), &native).unwrap());
+    assert!(!policy_allows_task(&p, &Default::default(), &task("wasm", &[])).unwrap());
+    for revoked in [id(7), id(8)] {
+        assert!(!policy_allows_task(&p, &[revoked].into(), &native).unwrap());
+    }
+    p.allow_any_pure_component = true;
+    assert!(validate_policy(&p).is_err());
+}
+
+#[test]
+fn native_revocation_denies_execution_but_not_stopped_reconciliation() {
+    let (_, mut r) = worker_and_request();
+    r.workload = Workload::PureNet {
+        manifest: id(7),
+        artifact: id(8),
+    };
+    let mut p = policy(PURE_NET_PROFILE);
+    p.allowed_pure_net_manifests.insert(id(7));
+    p.allowed_pure_net_programs.insert(id(8));
+    assert!(policy_allows_request(&p, &Default::default(), &r, true).unwrap());
+    for revoked in [id(7), id(8)] {
+        let revoked = [revoked].into();
+        assert!(!policy_allows_request(&p, &revoked, &r, true).unwrap());
+        assert!(policy_allows_request(&p, &revoked, &r, false).unwrap());
+    }
+    r.fence.generation += 1;
+    assert!(!policy_allows_request(&p, &Default::default(), &r, true).unwrap());
+    assert!(!policy_allows_request(&p, &Default::default(), &r, false).unwrap());
+}
+
+#[test]
+fn request_attempt_bound_is_finite_and_bound_to_originating_task() {
+    let s = submit(&initial(), "bounded", id(5), vec![task("a", &[])]);
+    let p = next_placement(&s, None).unwrap().unwrap();
+    let r = request(&s, &p, id(10));
+    for max_attempts in [0, MAX_ATTEMPTS + 1] {
+        let bad = ExecutionRequest {
+            max_attempts,
+            ..r.clone()
+        };
+        assert!(validate_request(&bad).is_err());
+    }
+    let mut bad = r.clone();
+    bad.fence.epoch = bad.max_attempts + 1;
+    assert!(validate_request(&bad).is_err());
+    let bad = ExecutionRequest {
+        max_attempts: r.max_attempts + 1,
+        ..r.clone()
+    };
+    assert!(apply(&s, &Command::Schedule {
+        placement: p,
+        request: &bad,
+        request_ref: id(10)
+    })
+    .is_err());
+    let scheduled = schedule(&s, id(10));
+    let mut restored = scheduled;
+    restored.attempts.get_mut(&id(10)).unwrap().request.max_attempts += 1;
+    assert!(validate_state(&restored).is_err());
+}
+
+#[test]
+fn native_running_cancel_wins_late_success_and_duplicates_reconcile() {
+    let (s, mut r) = worker_and_request();
+    r.workload = Workload::PureNet {
+        manifest: id(7),
+        artifact: id(8),
+    };
+    let accept = WorkerCommand::Accept {
+        request: r.clone(),
+        request_ref: id(10),
+    };
+    let s = worker_apply(&s, &accept).unwrap();
+    assert_eq!(worker_apply(&s, &accept).unwrap(), s);
+    let s = worker_apply(&s, &WorkerCommand::Begin {
+        attempt: id(10),
+        request_ref: id(10),
+        boot: s.boot,
+    })
+    .unwrap();
+    let s = worker_apply(&s, &WorkerCommand::Cancel {
+        request: r,
+        request_ref: id(10),
+    })
+    .unwrap();
+    assert_eq!(s.usage().unwrap(), resources());
+    let s = worker_apply(&s, &WorkerCommand::Finish {
+        attempt: id(10),
+        result: ExecutionResult {
+            request_ref: id(10),
+            outcome: ExecutionOutcome::Succeeded { output: id(9) },
+            stopped: true,
+            report: None,
+        },
+    })
+    .unwrap();
+    assert!(matches!(
+        s.records[&id(10)].phase,
+        WorkerPhase::Terminal(ExecutionResult {
+            outcome: ExecutionOutcome::Cancelled,
+            ..
+        })
+    ));
+    assert_eq!(s.usage().unwrap(), Resources::default());
+    assert_eq!(worker_apply(&s, &accept).unwrap(), s);
+}
+
+#[test]
+fn native_request_accepts_exact_carrier_limits_and_rejects_one_extra_input() {
+    let (_, mut request) = worker_and_request();
+    request.workload = Workload::PureNet {
+        manifest: id(7),
+        artifact: id(8),
+    };
+    request.max_attempts = MAX_ATTEMPTS;
+    request.fence.epoch = MAX_ATTEMPTS;
+    request.max_output_bytes = MAX_CONTENT_BYTES as u64;
+    request.inputs = vec![id(9); MAX_INPUTS];
+    validate_request(&request).unwrap();
+    request.inputs.push(id(9));
+    assert!(validate_request(&request).is_err());
+    request.inputs.pop();
+    request.max_output_bytes += 1;
+    assert!(validate_request(&request).is_err());
 }

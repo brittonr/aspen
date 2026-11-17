@@ -16,15 +16,22 @@ pub struct Policy {
     pub generation: u64,
     pub allow_any_pure_component: bool,
     pub allowed_components: BTreeSet<Id>,
+    pub allowed_pure_net_manifests: BTreeSet<Id>,
+    pub allowed_pure_net_programs: BTreeSet<Id>,
     pub max_memory_bytes: u64,
     pub max_fuel: u64,
     pub max_timeout_ms: u64,
     pub max_output_bytes: u64,
 }
 pub fn validate_policy(p: &Policy) -> Result<(), Violation> {
-    if p.profile != PROFILE
+    if !matches!(p.profile.as_str(), PROFILE | PURE_NET_PROFILE)
+        || (p.profile == PROFILE
+            && (!p.allowed_pure_net_manifests.is_empty() || !p.allowed_pure_net_programs.is_empty()))
+        || (p.profile == PURE_NET_PROFILE && (p.allow_any_pure_component || !p.allowed_components.is_empty()))
         || p.generation == 0
         || p.allowed_components.len() > 4096
+        || p.allowed_pure_net_manifests.len() > 4096
+        || p.allowed_pure_net_programs.len() > 4096
         || p.max_memory_bytes < 65_536
         || p.max_memory_bytes > 1024 * 1024 * 1024
         || p.max_fuel == 0
@@ -39,8 +46,7 @@ pub fn validate_policy(p: &Policy) -> Result<(), Violation> {
 }
 pub fn policy_allows_task(p: &Policy, revoked: &BTreeSet<Id>, t: &TaskSpec) -> Result<bool, Violation> {
     validate_policy(p)?;
-    Ok(!revoked.contains(&t.component)
-        && (p.allow_any_pure_component || p.allowed_components.contains(&t.component))
+    Ok(policy_allows_workload(p, revoked, t.workload)
         && t.resources.memory_bytes <= p.max_memory_bytes
         && t.fuel <= p.max_fuel
         && t.timeout_ms <= p.max_timeout_ms
@@ -61,10 +67,26 @@ pub fn policy_allows_request(
     if !execution {
         return Ok(true);
     }
-    Ok(!revoked.contains(&r.component)
-        && (p.allow_any_pure_component || p.allowed_components.contains(&r.component))
+    Ok(policy_allows_workload(p, revoked, r.workload)
         && r.resources.memory_bytes <= p.max_memory_bytes
         && r.fuel <= p.max_fuel
         && r.timeout_ms <= p.max_timeout_ms
         && r.max_output_bytes <= p.max_output_bytes)
+}
+
+fn policy_allows_workload(p: &Policy, revoked: &BTreeSet<Id>, workload: Workload) -> bool {
+    match workload {
+        Workload::Component { artifact } => {
+            p.profile == PROFILE
+                && !revoked.contains(&artifact)
+                && (p.allow_any_pure_component || p.allowed_components.contains(&artifact))
+        }
+        Workload::PureNet { manifest, artifact } => {
+            p.profile == PURE_NET_PROFILE
+                && !revoked.contains(&manifest)
+                && !revoked.contains(&artifact)
+                && p.allowed_pure_net_manifests.contains(&manifest)
+                && p.allowed_pure_net_programs.contains(&artifact)
+        }
+    }
 }

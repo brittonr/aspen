@@ -81,8 +81,9 @@ pub enum WorkerCommand {
         attempt: Id,
         result: ExecutionResult,
     },
-    /// Legal only after exclusive reopening of a process-owned pure-Wasm journal.
-    /// No detached native execution or hostcalls are allowed by this profile.
+    /// Legal only after exclusive reopening of a process-owned journal.
+    /// Calculation must be trusted in-process work with no detached execution
+    /// or external effects; this is not a native-code sandbox guarantee.
     RecoverAfterProcessExit,
     Drain,
     Resume,
@@ -147,6 +148,7 @@ pub fn worker_apply(s: &WorkerState, c: &WorkerCommand) -> Result<WorkerState, V
                     request_ref: *request_ref,
                     outcome: ExecutionOutcome::RejectedBeforeStart,
                     stopped: true,
+                    report: None,
                 })
             } else {
                 WorkerPhase::Accepted
@@ -188,6 +190,7 @@ pub fn worker_apply(s: &WorkerState, c: &WorkerCommand) -> Result<WorkerState, V
                             request_ref: *request_ref,
                             outcome: ExecutionOutcome::Cancelled,
                             stopped: true,
+                            report: None,
                         })
                     }
                     WorkerPhase::Running => {}
@@ -206,6 +209,7 @@ pub fn worker_apply(s: &WorkerState, c: &WorkerCommand) -> Result<WorkerState, V
                         request_ref: *request_ref,
                         outcome: ExecutionOutcome::RejectedBeforeStart,
                         stopped: true,
+                        report: None,
                     }),
                     cancel_requested: true,
                 });
@@ -235,8 +239,8 @@ pub fn worker_apply(s: &WorkerState, c: &WorkerCommand) -> Result<WorkerState, V
         }
         WorkerCommand::RecoverAfterProcessExit => {
             n.boot = n.boot.checked_add(1).ok_or(Violation::Overflow)?;
-            // Pure in-process component Stores cannot survive the old process.
-            // This is not a rule for native processes, remote effects or WASI.
+            // The old exclusive owner and all its in-process calculations must
+            // have exited. Missing replies never establish that precondition.
             for r in n.records.values_mut() {
                 if !matches!(r.phase, WorkerPhase::Terminal(_)) {
                     r.phase = WorkerPhase::Terminal(ExecutionResult {
@@ -245,6 +249,7 @@ pub fn worker_apply(s: &WorkerState, c: &WorkerCommand) -> Result<WorkerState, V
                             code: FailureCode::Interrupted,
                         },
                         stopped: true,
+                        report: None,
                     });
                 }
             }

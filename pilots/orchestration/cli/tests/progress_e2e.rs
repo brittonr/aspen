@@ -13,8 +13,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use serde_json::Value;
 use serde_json::json;
+use serde_json::Value;
 const BIN: &str = env!("CARGO_BIN_EXE_molten-orchestrator");
 fn invoke(args: &[&str]) -> Output {
     Command::new(BIN).args(args).output().unwrap()
@@ -163,7 +163,7 @@ impl Fixture {
             fs::write(self.base.path().join(format!("progress-{n:04}.json")), encoded.projection).unwrap();
         }
         if command == "status" && extra.contains(&"--raw") {
-            let encoded = molten_orchestrator_codec::encode("controller-state.v1", &value).unwrap();
+            let encoded = molten_orchestrator_codec::encode("controller-state.v2", &value).unwrap();
             fs::write(self.base.path().join("controller-state.preserves"), encoded.canonical).unwrap();
             fs::write(self.base.path().join("controller-state.json"), encoded.projection).unwrap();
         }
@@ -282,7 +282,7 @@ impl Fixture {
         retain("wait-controller-state.stderr", &raw.stderr);
         if raw.status.success() && raw.stdout.len() <= molten_batch_core::MAX_CONTENT_BYTES {
             let state: Value = serde_json::from_slice(&raw.stdout).unwrap();
-            let encoded = molten_orchestrator_codec::encode("controller-state.v1", &state).unwrap();
+            let encoded = molten_orchestrator_codec::encode("controller-state.v2", &state).unwrap();
             retain("controller-state.preserves", &encoded.canonical);
             retain("controller-state.json", &encoded.projection);
         }
@@ -336,7 +336,7 @@ impl Drop for Fixture {
     }
 }
 fn task(id: &str, component: &str) -> Value {
-    json!({"id":id,"component":component,"inputs":[],"dependencies":[],
+    json!({"id":id,"workload":{"Component":{"artifact":component}},"inputs":[],"dependencies":[],
         "resources":{"cpu_millis":1000,"memory_bytes":16777216,"slots":1},"required_labels":{},
         "fuel":1000000,"timeout_ms":5000,"max_output_bytes":1024,"max_attempts":2,"retry_delay_ticks":1})
 }
@@ -523,14 +523,12 @@ fn exhaustion_and_running_cancellation_have_authoritative_terminal_observations(
     f.call("cancel", &["--run", &id]);
     f.wait(&id, "Cancelled");
     let raw = f.call("status", &["--raw"]);
-    assert!(
-        raw["attempts"]
-            .as_object()
-            .unwrap()
-            .values()
-            .filter(|a| a["request"]["fence"]["run"] == id)
-            .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true)
-    );
+    assert!(raw["attempts"]
+        .as_object()
+        .unwrap()
+        .values()
+        .filter(|a| a["request"]["fence"]["run"] == id)
+        .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true));
 }
 // r[verify molten.observations.cursors]
 #[test]
@@ -710,9 +708,7 @@ fn real_renderer_pending_and_active_cancellation_do_not_confuse_disconnect_with_
         .filter(|a| a["request"]["fence"]["run"] == active)
         .collect::<Vec<_>>();
     assert!(!attempts.is_empty());
-    assert!(
-        attempts
-            .iter()
-            .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true)
-    );
+    assert!(attempts
+        .iter()
+        .all(|a| a["reservation_held"] == false && a["phase"]["Terminal"]["result"]["stopped"] == true));
 }

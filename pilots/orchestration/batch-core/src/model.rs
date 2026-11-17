@@ -23,6 +23,7 @@ pub const MAX_CONTENT_OBJECTS: u64 = 4096;
 pub const MAX_CONTENT_TOTAL_BYTES: u64 = 1024 * 1024 * 1024;
 pub const MAX_WORKER_RECORDS: usize = 4096;
 pub const PROFILE: &str = "molten-orchestrator/pure-component-batch/v1";
+pub const PURE_NET_PROFILE: &str = "molten-orchestrator/pure-net-batch/v1";
 pub const ABI: &str = "run(list<list<u8>>)->list<u8>";
 
 /// Public identity bytes. Parsing an identity never confers authority; its
@@ -100,6 +101,8 @@ impl Resources {
 pub enum ContentKind {
     Component,
     Data,
+    PureNetManifest,
+    PureNetProgram,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -108,11 +111,24 @@ pub struct ContentManifest {
     pub raw_digest: Id,
     pub length: u64,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum Workload {
+    Component { artifact: Id },
+    PureNet { manifest: Id, artifact: Id },
+}
+impl Workload {
+    pub fn artifact(self) -> Id {
+        match self {
+            Self::Component { artifact } | Self::PureNet { artifact, .. } => artifact,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskSpec {
     pub id: String,
-    pub component: Id,
+    pub workload: Workload,
     pub inputs: Vec<Id>,
     pub dependencies: Vec<String>,
     pub resources: Resources,
@@ -219,12 +235,13 @@ pub struct Fence {
 pub struct ExecutionRequest {
     pub fence: Fence,
     pub policy_ref: Id,
-    pub component: Id,
+    pub workload: Workload,
     pub inputs: Vec<Id>,
     pub resources: Resources,
     pub fuel: u64,
     pub timeout_ms: u64,
     pub max_output_bytes: u64,
+    pub max_attempts: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FailureCode {
@@ -236,6 +253,23 @@ pub enum FailureCode {
     OutputLimit,
     Interrupted,
     Internal,
+    Malformed,
+    Unsupported,
+    Stuck,
+    Incomplete,
+    DecodeLimit,
+    SetupLimit,
+    ValidationLimit,
+    ConcurrencyLimit,
+    ReductionLimit,
+    NodeLimit,
+    QueueLimit,
+    MemoryLimit,
+    ReadbackLimit,
+    ObservationLimit,
+    AttemptLimit,
+    PublicationDenied,
+    PublicationUnknown,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecutionOutcome {
@@ -250,6 +284,7 @@ pub struct ExecutionResult {
     pub request_ref: Id,
     pub outcome: ExecutionOutcome,
     pub stopped: bool,
+    pub report: Option<Id>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AttemptPhase {
@@ -347,7 +382,13 @@ pub fn validate_resources(r: Resources) -> Result<(), Violation> {
 }
 pub fn validate_request(r: &ExecutionRequest) -> Result<(), Violation> {
     validate_resources(r.resources)?;
-    if r.fence.generation == 0 || r.fence.epoch == 0 || r.fence.epoch > MAX_ATTEMPTS || !valid_name(&r.fence.task) {
+    if r.fence.generation == 0
+        || r.fence.epoch == 0
+        || r.max_attempts == 0
+        || r.max_attempts > MAX_ATTEMPTS
+        || r.fence.epoch > r.max_attempts
+        || !valid_name(&r.fence.task)
+    {
         return Err(Violation::FenceMismatch);
     }
     if r.inputs.len() > MAX_INPUTS

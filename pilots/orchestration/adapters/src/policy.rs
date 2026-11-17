@@ -32,7 +32,7 @@ impl FileAdmission {
 }
 pub fn policy_id(p: &Policy) -> Result<Id, Error> {
     validate_policy(p)?;
-    codec::identity("operator-policy.v1", p).map_err(crate::invalid)
+    codec::identity("operator-policy.v2", p).map_err(crate::invalid)
 }
 impl AdmissionPort for FileAdmission {
     fn submit(&self, spec: &JobSpec, policy: Id) -> Result<(), Error> {
@@ -57,7 +57,7 @@ impl AdmissionPort for FileAdmission {
             &p,
             &revoked,
             r,
-            matches!(action, AdmissionAction::Reserve | AdmissionAction::Execute),
+            matches!(action, AdmissionAction::Reserve | AdmissionAction::Execute | AdmissionAction::Publish),
         )? {
             return Err(Error::Denied);
         }

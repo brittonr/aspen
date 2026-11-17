@@ -1,0 +1,321 @@
+{
+  "schema": "aspen.pure-net.qualification-observation/v1",
+  "date": "2026-11-17",
+  "change": "add-pure-net-eval-service",
+  "workload": "pure-net-eval/v1",
+  "immediate_outcome": "An explicitly installed standalone controller/worker workload runs checked immutable pure programs, retains canonical bounded results, and reconciles confirmed worker-process loss through the existing authoritative attempt ledger.",
+  "durable_capability": "Exact-source producer intake, manifest/closure-bound admission, retained-arena cooperative sequential execution, fresh publication fences, and repeatable local qualification over the existing composition.",
+  "maintenance_owner": "Molten contributors; pilots/orchestration",
+  "producer": {
+    "repository": "https://github.com/OnixResearch/noble",
+    "revision": "f7af9e972aa2968d22978794a667d267cf2745e8",
+    "requested_inets_reference": "01bd554a43504b58dc64c607f46dfe4acc7735cd",
+    "actual_producer_inets_reference": "98bbb01070664e4462a35efa5d62de6f27143572",
+    "consumer_overlay": "aspen-noble-sequential-observation/1",
+    "comparison": "Pinned Noble independent source-IR reference versus its corrected sequential I64 net backend; generic inets reference binding is recorded without transferring its theorems to the host integration.",
+    "source_permission": "source-permission-2026-11-17.json"
+  },
+  "source_boundary": {
+    "command": "nix develop -c python3 scripts/vendored-sources.py check --root .",
+    "selected_files": 310,
+    "fixture_bindings": 2,
+    "decision": "matched",
+    "negative_fixture_command": "nix develop -c python3 scripts/test_vendored_sources.py",
+    "negative_and_positive_fixture_tests": 15,
+    "exit_status": 0,
+    "scope": "Exact selected bytes/roles/filter/provenance, not independent ownership or upstream correctness verification."
+  },
+  "verification": [
+    {
+      "command": "CLIPPY_STRICT=1 nix develop -c bash pilots/orchestration/scripts/verify.sh",
+      "exit_status": 0,
+      "workspace_crates": 9,
+      "toolchain": {
+        "rustc": "1.98.0-nightly (31a9463c6 2026-05-25)",
+        "cargo": "1.98.0-nightly (4d1f98451 2026-05-15)"
+      },
+      "tests": {
+        "passed": 153,
+        "failed": 0,
+        "ignored": 3
+      },
+      "clippy": "workspace/all-targets warnings denied",
+      "release_build": "molten-orchestrator-cli completed",
+      "ignored_scope": "Three pre-existing real-renderer component-dependent fault cases were not selected by this rail; this observation does not qualify them."
+    },
+    {
+      "command": "nix develop -c cargo octet check -p molten-pure-net --artifact-dir PRIVATE_OUTPUT -- --lib",
+      "working_directory": "pilots/orchestration",
+      "status": "clean",
+      "findings": 0,
+      "warnings": 0,
+      "errors": 0,
+      "producer": "cargo-octet 0.1.0",
+      "producer_toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+      "config_hash": "b3:10c9aea50e250bceb38883c372495649d43b0348e8e0bc017bfb0224fee1b8b4",
+      "profile_hash": "b3:6af02f5f975d65f594c26e6023dcf7d3beccef1678f9955e841a995ebc835fae",
+      "scope": "Direct source shape of molten-pure-net; not qualification of legacy standalone adapters or transitive Noble source."
+    },
+    {
+      "command": "nix-build pilots/orchestration/default.nix --no-out-link",
+      "exit_status": 0,
+      "output": "/nix/store/nkwvnk8bnbyqh33akgnq0glxbb0h0snz-molten-standalone-batch-pilot-0.2.0",
+      "check_profile": "release/offline/workspace",
+      "native_cli_service_tests": 7,
+      "native_producer_tests": 23,
+      "scope": "Declared source closure realizes and its release-profile test suite executes; not machine-loss, cross-host deployment or production readiness."
+    },
+    {
+      "command": "nix run path:$CAIRN_ROOT#cairn -- validate --root . --policy $CAIRN_ROOT/cairn-policy/generated/cairn-policy.json --strict",
+      "exit_status": 0,
+      "receipt_hash": "ce4a5b9b8e3c60095ea676a030de56cf50c22ebc6896d3e45fb6f94dd19e7d00",
+      "findings": [],
+      "scope": "Pre-sync lifecycle structure under the explicitly selected sibling policy; not behavioral completion authority."
+    },
+    {
+      "command": "nix develop -c python3 scripts/check-doc-links.py --root . pilots/orchestration/README.md pilots/orchestration/docs/PROTOCOL.md docs/standalone-batch-orchestration.md docs/architecture.md pilots/orchestration/render/README.md",
+      "exit_status": 0,
+      "files": 5,
+      "findings": 0
+    },
+    {
+      "command": "nix develop -c cargo fmt --check",
+      "scope": "Root workspace formatting",
+      "exit_status": 0
+    },
+    {
+      "command": "/nix/store/nkwvnk8bnbyqh33akgnq0glxbb0h0snz-molten-standalone-batch-pilot-0.2.0/bin/molten-orchestrator pure-net receipt --file CANONICAL_FRAME",
+      "executions": 8,
+      "exit_status": 0,
+      "scope": "Actual installed package decoded all eight retained canonical success/denial frames and their typed outcomes matched; readback is not execution or publication authority."
+    }
+  ],
+  "native_runtime": {
+    "host_arch": "x86_64",
+    "host_os": "linux",
+    "host_bindings": {
+      "dependency_closure": "3fcb1b4729d59550c7545ed56b1c15af481291979d50949d9b04b6bd2dc2cc6e",
+      "executable": "3b2a108e2c9b41d020a477856977e1076ee969afb99a34f748be93000210a35f"
+    },
+    "semantic_fields": "Manifest/program/input and their separate canonical semantic identities; reconstructed checked IR/net; producer/rule/arithmetic/lowerer/reducer/readback/closure bindings; limits/request grants; stable logical counters and phase/work/interaction observations; typed semantic outcome.",
+    "diagnostics_excluded_from_identity": [
+      "wall/phase time",
+      "process ids",
+      "allocator addresses",
+      "worker roots",
+      "whole-process heaptrack and VmHWM observations"
+    ],
+    "publication": "Current authority/generation/cancellation and durable controller output-copy/terminal transitions remain independent prerequisites."
+  },
+  "retained_canonical_receipts": [
+    {
+      "content_id": "8ff02835d34ef214db8044403891326ad2fdca375ae8413e732738cc88f8cab8",
+      "semantic_ref": "ec0cc58560a7ecdd521a1623ae577853d4578f2f1e89f9306b407b7292240243",
+      "path": "canonical/8ff02835d34ef214db8044403891326ad2fdca375ae8413e732738cc88f8cab8.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 24
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "7ac6447ad15811eecdc642db3ff83a775e32dfcfd2c47c0def2c94cd10fa9632",
+      "semantic_ref": "9ae299eb49aa5776e1655061848033169695efd38232dfdd1323cd34f55141d6",
+      "path": "canonical/7ac6447ad15811eecdc642db3ff83a775e32dfcfd2c47c0def2c94cd10fa9632.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 24
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "f01cfa26fc002ca0c4838981bbff3b898bf8d3941c669a243be937756ace28a9",
+      "semantic_ref": "7dee6295f2ac63b0b1aecef4427c8cbefeebd34187b5906bb411d0dc7896840a",
+      "path": "canonical/f01cfa26fc002ca0c4838981bbff3b898bf8d3941c669a243be937756ace28a9.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 9
+          },
+          {
+            "I64": 3
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "19c6759ab47e166f9972b1796a5495bf3530c74aeffb77ae0e5508b45d3e6a68",
+      "semantic_ref": "936cefd50184c1845bdbdb9d2fe6d84ddd38791cf842392952e9cac56353f755",
+      "path": "canonical/19c6759ab47e166f9972b1796a5495bf3530c74aeffb77ae0e5508b45d3e6a68.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 9
+          },
+          {
+            "I64": 3
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "ec2267c8861d884190a86e01d328a4770e0541a186d2cfaddeb2c7494dc22db1",
+      "semantic_ref": "3d38c1aa771069cb9a5e4025c38c448cc7877c91e36fa88441ae2e3a7adfa6ab",
+      "path": "canonical/ec2267c8861d884190a86e01d328a4770e0541a186d2cfaddeb2c7494dc22db1.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 12
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "ecf644afab8b64820fe85cb7c1c202b1374de67583081685ea5a158fc55b00a1",
+      "semantic_ref": "ddcfec77fecd06f8ddafb9eb56bb9e7280d3940455fffd90a4ae45d4dc3dae98",
+      "path": "canonical/ecf644afab8b64820fe85cb7c1c202b1374de67583081685ea5a158fc55b00a1.frame",
+      "outcome": {
+        "Completed": [
+          {
+            "I64": 12
+          }
+        ]
+      }
+    },
+    {
+      "content_id": "39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c",
+      "semantic_ref": "c3a469ec05725b40d4d3c62f80c77f8afc24b8b1d1adc44ebc28bd4b33c3bf07",
+      "path": "canonical/39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c.frame",
+      "outcome": {
+        "Rejected": {
+          "Exhausted": "Reduction"
+        }
+      }
+    },
+    {
+      "content_id": "a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830",
+      "semantic_ref": "9b555c5062894332a662cf2b2eef644a9ffc56e1126a997f51c2988fab49a562",
+      "path": "canonical/a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830.frame",
+      "outcome": {
+        "Rejected": "Bindings"
+      }
+    }
+  ],
+  "typed_denial_attempts": [
+    {
+      "epoch": 2,
+      "report": "39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c",
+      "worker_outcome": {
+        "Failed": {
+          "code": "ReductionLimit"
+        }
+      },
+      "semantic_outcome": {
+        "Rejected": {
+          "Exhausted": "Reduction"
+        }
+      },
+      "canonical_receipt": "canonical/39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c.frame"
+    },
+    {
+      "epoch": 1,
+      "report": "39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c",
+      "worker_outcome": {
+        "Failed": {
+          "code": "ReductionLimit"
+        }
+      },
+      "semantic_outcome": {
+        "Rejected": {
+          "Exhausted": "Reduction"
+        }
+      },
+      "canonical_receipt": "canonical/39c220dd2275cccceb856afd92df544793602bc43fa81893f57ef4b9e5cd216c.frame"
+    },
+    {
+      "epoch": 2,
+      "report": "a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830",
+      "worker_outcome": {
+        "Failed": {
+          "code": "Rejected"
+        }
+      },
+      "semantic_outcome": {
+        "Rejected": "Bindings"
+      },
+      "canonical_receipt": "canonical/a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830.frame"
+    },
+    {
+      "epoch": 1,
+      "report": "a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830",
+      "worker_outcome": {
+        "Failed": {
+          "code": "Rejected"
+        }
+      },
+      "semantic_outcome": {
+        "Rejected": "Bindings"
+      },
+      "canonical_receipt": "canonical/a1e1fd6d3639f5c3532beefc4511539fc36ced6c7d348daa2ac60ce600bef830.frame"
+    }
+  ],
+  "process_recovery": {
+    "test": "pure_net_kill_wait_reopen_all_worker_boundaries_preserve_one_authoritative_completion",
+    "boundaries": [
+      "after-worker-accept",
+      "after-worker-ack",
+      "after-worker-begin",
+      "after-worker-calculation",
+      "after-worker-output-persist",
+      "after-worker-terminal-commit",
+      "before-worker-calculation",
+      "before-worker-reply",
+      "before-worker-terminal-commit"
+    ],
+    "count": 9,
+    "observation": "worker-recovery-2026-11-17.json",
+    "assertions": [
+      "SIGKILL of exact owned child, followed by wait",
+      "Exclusive reopen inspects durable old attempt before recovery",
+      "Nonterminal records become stopped interruption, not success",
+      "Retained terminal records survive without another execution",
+      "One authoritative accepted completion, no duplicate durable-success acknowledgement"
+    ]
+  },
+  "baselines": {
+    "observation": "matched-baseline-2026-11-17.json",
+    "frozen_workloads": 3,
+    "backends": [
+      "SequentialNet",
+      "IndependentReference"
+    ],
+    "uninstrumented_cases": 12,
+    "heaptrack_instrumented_cases": 12,
+    "complete_final_process_allocation_reports": 12,
+    "samples_per_case": 1,
+    "performance_no_go_preserved": true,
+    "scope": "Same explicit inputs, semantics, grants and Redb durability within each cohort; per-phase, end-to-end and retry costs, logical arena events, worker VmHWM and separately instrumented final-worker heap observations. No speedup or statistical-generalization claim."
+  },
+  "reviewed_repairs": [
+    "Fresh post-join deadline check prevents success when select chooses a completed calculation after timeout.",
+    "Count final live agents in the already charged readback traversal instead of an uncharged second scan.",
+    "A fixed-size task-index placement cursor skips only definite Reserve denials; revoked retries cannot starve authorized runs or independent sibling tasks. Unknown effects still stop dispatch and retain reconciliation ownership."
+  ],
+  "requirement_mapping": "requirement-map.ncl",
+  "privacy": {
+    "public": "Canonical semantic frames copied unchanged; selected diagnostic numeric records and exact source/tool identity facts retained.",
+    "private": "Raw process roots/configuration, raw heaptrack addresses, unsanitized build/test logs and failed-attempt originals remain outside the repository.",
+    "redaction": "Removed heaptrack_raw_private paths before creating published measurement bytes. Published files must pass the repository guard."
+  },
+  "non_claims": [
+    "Not a default backend, parallel reducer, portable checkpoint or node-daemon/system-tier activation.",
+    "Not a sandbox, arbitrary Noble-language qualification or universal termination/refinement proof.",
+    "Not cross-host, NVMe/machine-loss durability, controller HA, production readiness or exactly-once external effects.",
+    "Source permission records the explicit operator assertion and exact grant; no upstream-wide license is invented.",
+    "Logs, counters, lifecycle state and this observation do not override canonical deny receipts or grant execution/publication/release authority."
+  ]
+}

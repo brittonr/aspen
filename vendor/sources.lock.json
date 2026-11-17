@@ -244,6 +244,2673 @@
       "name": "vm-cohort",
       "repository": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3",
       "revision": "31f1696ba9391bfda8577a58af84f72361d5573e"
+    },
+    {
+      "destination": "vendor/noble-pure",
+      "files": [
+        {
+          "blake3": "ce4e8115999c6989966464366cd024a013abadcce5c2835e346d782669211fa3",
+          "bytes": 24624,
+          "executable": false,
+          "git_blob": "8cc42fc2268b1837b268a190e575c055689a91e6",
+          "path": "Cargo.lock",
+          "role": "upstream",
+          "upstream_path": "Cargo.lock"
+        },
+        {
+          "blake3": "9febbacd8fd96ab2cb37f0c0a28847cff83d63c1832cb2eb326d558bbeb0efc9",
+          "bytes": 762,
+          "executable": false,
+          "git_blob": "a9347cd93cea612d5272374b60a37b00b6fbff2d",
+          "path": "Cargo.toml.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "Cargo.toml"
+        },
+        {
+          "blake3": "c7a42815b011166860c90ffaa34209336573866660c8f8de4bc9c600c6496d5f",
+          "bytes": 297,
+          "executable": false,
+          "git_blob": "1dc7e96754b590e50c6c650b227a5d45009e89ec",
+          "path": "crates/noble-contracts/Cargo.toml",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "48d02ef07c74a722ad60a1a53e1774d53da3679ed47f2641f6ef6c592d171042",
+          "bytes": 240,
+          "executable": false,
+          "git_blob": "81e82b71436900a0c9fc006fbf5822fd60545b3d",
+          "path": "crates/noble-contracts/Cargo.toml.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/noble-contracts/Cargo.toml"
+        },
+        {
+          "blake3": "daf013b6f5f80b6327c0eeb18aa4f6e15654d16f6a7f71756a36567b60b92419",
+          "bytes": 11687,
+          "executable": false,
+          "git_blob": "70b6fe25c164f1358aee69a86ff4c0ebe0251e13",
+          "path": "crates/noble-contracts/src/companion/admit/accept.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/accept.rs"
+        },
+        {
+          "blake3": "36652780b003c6e2043f5f25644683e164c538f8a0033d9d56b1584d1888386e",
+          "bytes": 7697,
+          "executable": false,
+          "git_blob": "e58bdf5513c64582c250e1645fd64f7009cd88d0",
+          "path": "crates/noble-contracts/src/companion/admit/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/mod.rs"
+        },
+        {
+          "blake3": "e7e5cba8a5c80d40ca8e1bc3b7ceaef49bbd5d4d1bb1e38cdce6f69080bda359",
+          "bytes": 5927,
+          "executable": false,
+          "git_blob": "f0dcb0393dacf2fce09e0c946b9511f574e5d529",
+          "path": "crates/noble-contracts/src/companion/admit/observation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/observation.rs"
+        },
+        {
+          "blake3": "87182a680af9e4ba90c787c7efe76447e6ce7df8c20a548ff45600d19026b870",
+          "bytes": 5146,
+          "executable": false,
+          "git_blob": "398aedaead8ca5dfabc051196d5eead4fd703c57",
+          "path": "crates/noble-contracts/src/companion/admit/program.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/program.rs"
+        },
+        {
+          "blake3": "6b642e8caf7f71b3a7625bde903c0132f1f3c7c76ca0f2513f429643f82f4390",
+          "bytes": 10047,
+          "executable": false,
+          "git_blob": "dee2259bfaa4f7db890f30f0f94565e9b9a64ec5",
+          "path": "crates/noble-contracts/src/companion/admit/recognize.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/recognize.rs"
+        },
+        {
+          "blake3": "ecd3a2d79932883766d09ca61df636a39c7a2570662acb780a6159b5bcd2b249",
+          "bytes": 6968,
+          "executable": false,
+          "git_blob": "b119d6d7f60ab67eb2e421f55a79ac7df6234dcf",
+          "path": "crates/noble-contracts/src/companion/admit/statement.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/statement.rs"
+        },
+        {
+          "blake3": "7a6c89ee9c8271968f0bcf4c14cc10c072bb8661bc2293a32975d5d0f7a14c71",
+          "bytes": 4982,
+          "executable": false,
+          "git_blob": "710004af39171ce812f33f3c554dec876d5df4f0",
+          "path": "crates/noble-contracts/src/companion/admit/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/admit/types.rs"
+        },
+        {
+          "blake3": "66e270241ebf99735086396d3396b80921512737c74403d4eade19ba57ca1354",
+          "bytes": 10219,
+          "executable": false,
+          "git_blob": "6ca62a3f2f7e5b1f3c7fe671956164fcec7f89cf",
+          "path": "crates/noble-contracts/src/companion/core.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/core.rs"
+        },
+        {
+          "blake3": "41fe25f3d9eb39fc90502dd9388875307fc94793916a21d264be1b9e13f4aa0b",
+          "bytes": 2141,
+          "executable": false,
+          "git_blob": "6a004ed161f96ed50a12e8c2164c0ebf85956b8a",
+          "path": "crates/noble-contracts/src/companion/core/context.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/core/context.rs"
+        },
+        {
+          "blake3": "376785d941603f734c6cff8763bb1c83561ec521c0a59bc47606a1ed8df7c71e",
+          "bytes": 3842,
+          "executable": false,
+          "git_blob": "20eea4b7c4e626464992a93ceb03808442761f1c",
+          "path": "crates/noble-contracts/src/companion/core/refusal.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/core/refusal.rs"
+        },
+        {
+          "blake3": "9ea74a60737a7431e754c14a9a6ebbdfdfeea25585abcd2a919a0eaccc4c2045",
+          "bytes": 4052,
+          "executable": false,
+          "git_blob": "1fbf44e579b7adc715d1a4110182f28be8584ee8",
+          "path": "crates/noble-contracts/src/companion/digest.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/digest.rs"
+        },
+        {
+          "blake3": "48ce64b6260dd0e4b6f66e91882dbe157b8de03572e7b0b969b8eb93d531518f",
+          "bytes": 9830,
+          "executable": false,
+          "git_blob": "b3f087155f2eb782a05b5a9f1d812e08faeff5ca",
+          "path": "crates/noble-contracts/src/companion/guard.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/guard.rs"
+        },
+        {
+          "blake3": "be3f31d508d7472d2b98d5f12daf6ccb0a2c01d539b980239c6f8ce15094b028",
+          "bytes": 9390,
+          "executable": false,
+          "git_blob": "96b56f0b71f1ee540e467a5d88c3440bfc030a86",
+          "path": "crates/noble-contracts/src/companion/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/mod.rs"
+        },
+        {
+          "blake3": "010bedfc2e964a34e516aaf738b6fda31f7fa34c5369fbffd34418c9d5eafc0c",
+          "bytes": 4460,
+          "executable": false,
+          "git_blob": "cfc7bee9bbea4e02fa5c9a13026aa9a31679a955",
+          "path": "crates/noble-contracts/src/companion/registry/application.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/registry/application.rs"
+        },
+        {
+          "blake3": "3efdfe30ea600e549a891ba4617568bc5960301cb77cdf1bf6bd577821ce72b4",
+          "bytes": 7791,
+          "executable": false,
+          "git_blob": "4924911b3f0c0d6ffc0f0da37f285fbbd20552e8",
+          "path": "crates/noble-contracts/src/companion/registry/entries.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/registry/entries.rs"
+        },
+        {
+          "blake3": "f474d8ab8d52503d62630de5c08a4fb5889f0a0ec71001e532ecfeb2973ac368",
+          "bytes": 4022,
+          "executable": false,
+          "git_blob": "734a9ce67dbfecb16a899857a8f8e5656259d8aa",
+          "path": "crates/noble-contracts/src/companion/registry/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/registry/mod.rs"
+        },
+        {
+          "blake3": "80253a6e342369c0e0b84d23854b00ff10a29a2456f7bf197cf56cafecfd6cd1",
+          "bytes": 8467,
+          "executable": false,
+          "git_blob": "6b33e97a4979ce56b13d50a717958400e615ebcf",
+          "path": "crates/noble-contracts/src/companion/release.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/release.rs"
+        },
+        {
+          "blake3": "2b20fc177c34f97830a381e1292a59a278a76ef5105b41bea2ff03da346458e4",
+          "bytes": 10840,
+          "executable": false,
+          "git_blob": "b39f2c1530d9634db264caee0038df18ce0a8148",
+          "path": "crates/noble-contracts/src/companion/rules/derive.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/rules/derive.rs"
+        },
+        {
+          "blake3": "8e6288537e0f7f618d6078b5394459495753d6af2abbd9375a439bf339f720e8",
+          "bytes": 6731,
+          "executable": false,
+          "git_blob": "ed8da89d395cb4298f35941d461f3d797a633872",
+          "path": "crates/noble-contracts/src/companion/rules/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/rules/mod.rs"
+        },
+        {
+          "blake3": "4ca7ebe48249f28bcc1accebd33f3acb8e3e6b87c8e587457b7986b129f1fe5a",
+          "bytes": 5934,
+          "executable": false,
+          "git_blob": "96dc5f6d6fa43e4392ead27d9e40991b8c98d264",
+          "path": "crates/noble-contracts/src/companion/rules/premises.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/rules/premises.rs"
+        },
+        {
+          "blake3": "d4a833efc98a26e076e528864bfc3558e337b86e79281d702cd31accc956bd06",
+          "bytes": 3298,
+          "executable": false,
+          "git_blob": "f64b40f08e40d476f2bf72ad504e454f9a164710",
+          "path": "crates/noble-contracts/src/companion/rules/premises/step.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/rules/premises/step.rs"
+        },
+        {
+          "blake3": "db5184460f133293427502f982c4c4266428b439e5725b45b3b9076bcd71ae2c",
+          "bytes": 4841,
+          "executable": false,
+          "git_blob": "126b230dea30a89f24c752004b97a6e1c7ddc8a3",
+          "path": "crates/noble-contracts/src/companion/subject.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/companion/subject.rs"
+        },
+        {
+          "blake3": "62095c56b7ed850de47122c707d6a62704bf2b10f673934e08e95550582042cc",
+          "bytes": 11913,
+          "executable": false,
+          "git_blob": "621da058f076d120092beed770546b462d6f1240",
+          "path": "crates/noble-contracts/src/component/bindings.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/bindings.rs"
+        },
+        {
+          "blake3": "75f704e0292f22d19d1810e71f10dc78ce923bad5e3522da8f9c0f916e78fa5b",
+          "bytes": 3482,
+          "executable": false,
+          "git_blob": "1d5538c4ffeca748fe54cc0e71487bc696534f9a",
+          "path": "crates/noble-contracts/src/component/context.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/context.rs"
+        },
+        {
+          "blake3": "124acc40eec78dd062315b38416e3b4dce838228fda2d8d07a746ebe16584576",
+          "bytes": 21125,
+          "executable": false,
+          "git_blob": "f9cb8f563afea1e6afae4a3a058c3871be4edb9d",
+          "path": "crates/noble-contracts/src/component/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/mod.rs"
+        },
+        {
+          "blake3": "92b88382ee0383008a655bcc74410284adfa08b302a23cdf4ac440117bd0a1f8",
+          "bytes": 6567,
+          "executable": false,
+          "git_blob": "f4c4406e6b8aff299910491ab099d778c0783dd0",
+          "path": "crates/noble-contracts/src/component/parser.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser.rs"
+        },
+        {
+          "blake3": "936687b296ea892d005f7cac2b3cf0fc15d3e74f399023aaab690a3be89dc88a",
+          "bytes": 6895,
+          "executable": false,
+          "git_blob": "eedb5d8283d88e0d41bed6cd1895e1cc090123bc",
+          "path": "crates/noble-contracts/src/component/parser/cursor.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/cursor.rs"
+        },
+        {
+          "blake3": "4334717afc9b6b6f076f949d1e3f0e973266ae7821bd55a52d55d5e6e21ccab1",
+          "bytes": 6180,
+          "executable": false,
+          "git_blob": "bc92d908005d0977e076bce298b354177407db37",
+          "path": "crates/noble-contracts/src/component/parser/function.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/function.rs"
+        },
+        {
+          "blake3": "de3fccf7ded61b75e7aa5779feff5d03787e86a84569807d12737316cd490997",
+          "bytes": 5482,
+          "executable": false,
+          "git_blob": "bd87157974645e2f734ec390d2af1368327823ed",
+          "path": "crates/noble-contracts/src/component/parser/lexer.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/lexer.rs"
+        },
+        {
+          "blake3": "18dd17f271a1fc7c2efb15a66e5d1b71782a81d1c0cc140ae96977dcf9d71851",
+          "bytes": 11438,
+          "executable": false,
+          "git_blob": "0e814bc48fe5a68942192201fa0a0463a1b7384f",
+          "path": "crates/noble-contracts/src/component/parser/resolve.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/resolve.rs"
+        },
+        {
+          "blake3": "cf5c48aad67705a50b027722fbf18bbd8cf2f55af74b7a97d468acd3d6e44afb",
+          "bytes": 8295,
+          "executable": false,
+          "git_blob": "b94677a51ba31ffd984386ff59395550ef3f5b01",
+          "path": "crates/noble-contracts/src/component/parser/resolve/declarations.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/resolve/declarations.rs"
+        },
+        {
+          "blake3": "7859112113041e6fe11e8782a1a916eccf47f263701e4e018354101f13c03c12",
+          "bytes": 3655,
+          "executable": false,
+          "git_blob": "a1718740481ca0627a26a0266731679838c5c807",
+          "path": "crates/noble-contracts/src/component/parser/resolve/signature.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/resolve/signature.rs"
+        },
+        {
+          "blake3": "d58fc7b39cb727786cd0a21535baafe7a80600d7f30b6a3f83c7b088320058d3",
+          "bytes": 2835,
+          "executable": false,
+          "git_blob": "3a99d53d1c5d276ca06c4ccc341c0ebd76b2b475",
+          "path": "crates/noble-contracts/src/component/parser/resolve/traversal.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/resolve/traversal.rs"
+        },
+        {
+          "blake3": "810bd4386f780595775958fb7807e613d3d79a406678278eaccb36a2fab734ef",
+          "bytes": 4524,
+          "executable": false,
+          "git_blob": "3253c9cb61e531427370f9bd63a5425e0c783b90",
+          "path": "crates/noble-contracts/src/component/parser/resolve/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/resolve/types.rs"
+        },
+        {
+          "blake3": "0011ab1f23cd2cfebe29c64e45c25c80a0a04bb6ba34cec8d766ea1b3824c774",
+          "bytes": 3449,
+          "executable": false,
+          "git_blob": "03c1240b93adc8ebad9e18963f74cd99d1ce838f",
+          "path": "crates/noble-contracts/src/component/parser/world.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/parser/world.rs"
+        },
+        {
+          "blake3": "c8cc7f051834fb0450f6b90f9cfab9d00c7bcbfafc02af837ecce26eaf73b825",
+          "bytes": 4748,
+          "executable": false,
+          "git_blob": "7ff619d48dce88121f6af210c30fbf3fd5ab1ad7",
+          "path": "crates/noble-contracts/src/component/preparation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/component/preparation.rs"
+        },
+        {
+          "blake3": "694a6766ca91c9434329df739070f7b26dda43576dfc3788cb7b7c2c271cb4fe",
+          "bytes": 1123,
+          "executable": false,
+          "git_blob": "8e5bcb947f54eb999ced7534791fc09fe6fbf28d",
+          "path": "crates/noble-contracts/src/fixtures/result.noble",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/fixtures/result.noble"
+        },
+        {
+          "blake3": "c80bdf4f0f1d047b8a92f2656571c71afaf5c4d66934c68656cee2d9a2d2bf90",
+          "bytes": 8615,
+          "executable": false,
+          "git_blob": "b3b2fb4b24c4d169b8c4652ffce85443ed90ea1c",
+          "path": "crates/noble-contracts/src/frontend.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/frontend.rs"
+        },
+        {
+          "blake3": "55ec499f9d840bcb1c1136626d99bea52f6008c97ebb2a6884c7f6fc9b2fc574",
+          "bytes": 4666,
+          "executable": false,
+          "git_blob": "80c678ec3b6a69590682b9f1e9d10b5666a36a59",
+          "path": "crates/noble-contracts/src/frontend/bindings.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/frontend/bindings.rs"
+        },
+        {
+          "blake3": "71fd1bd39def41a2f695fd78ee98c3b2cbafce0a1c7b90b461ca247b1841eb7f",
+          "bytes": 5948,
+          "executable": false,
+          "git_blob": "19920c4ed32596d1c6e953ac4f71ba4e7719ad04",
+          "path": "crates/noble-contracts/src/frontend/fields.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/frontend/fields.rs"
+        },
+        {
+          "blake3": "86509793be5d690233efa1dd5b3d2fb2775f6f13567037be194f76db1840b7a6",
+          "bytes": 8355,
+          "executable": false,
+          "git_blob": "8be2385ca37562dcacb992a8f5832756de54d017",
+          "path": "crates/noble-contracts/src/frontend/logic.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/frontend/logic.rs"
+        },
+        {
+          "blake3": "bbfa0a968f04a21ad5bd1b78c1f16c005ea800562894d6b5c684a28fc2f2c7a0",
+          "bytes": 8800,
+          "executable": false,
+          "git_blob": "4cd3533dc12e2b36657e995085e54d262ddb3c08",
+          "path": "crates/noble-contracts/src/inference/build/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/build/mod.rs"
+        },
+        {
+          "blake3": "5dc8e9573df62ab13413682a57316422da6cdcf2ab3cdb8a30a570f8fc6c3cd2",
+          "bytes": 5057,
+          "executable": false,
+          "git_blob": "7fbaa3e2fd25923468570fb18e41b81ff26bbf0a",
+          "path": "crates/noble-contracts/src/inference/build/stack.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/build/stack.rs"
+        },
+        {
+          "blake3": "c99264f4e878eaafcd44bd5dd44c4c26b0aa7c32391975b15e67cd7934d835e9",
+          "bytes": 10109,
+          "executable": false,
+          "git_blob": "9304b25f44de7a9b80f5bc2bf4228e1146c29968",
+          "path": "crates/noble-contracts/src/inference/construct.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/construct.rs"
+        },
+        {
+          "blake3": "0abb2a200685eb116ea1edc2097d6e91c6a0ad9acac013cf176ba2036a53a494",
+          "bytes": 15873,
+          "executable": false,
+          "git_blob": "5c55213cd47c80dc60b0d3366bc03b21a51959e3",
+          "path": "crates/noble-contracts/src/inference/effects.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/effects.rs"
+        },
+        {
+          "blake3": "1ffd1a3cd829808bc8c079d82e00cf43c5f3b1ab74462c153df6e504764f931b",
+          "bytes": 58105,
+          "executable": false,
+          "git_blob": "edc6abb14faf02f4b26e56e447b3c0408e507770",
+          "path": "crates/noble-contracts/src/inference/effects/oracle.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/effects/oracle.rs"
+        },
+        {
+          "blake3": "2f52d7ebfcdd031bfbb964fe5366a768c32423b0721d5f01f8991bfc2be0e02a",
+          "bytes": 21463,
+          "executable": false,
+          "git_blob": "ee0bbd6c8c25ee49c1b7d8278da1ebd5342b9584",
+          "path": "crates/noble-contracts/src/inference/effects/solve.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/effects/solve.rs"
+        },
+        {
+          "blake3": "852308ee32175093772a20d2a2217b3dbeedee378077c4c39e67d633a901ee59",
+          "bytes": 21599,
+          "executable": false,
+          "git_blob": "9ae350a158c578d65a6249673bad351707cb53ff",
+          "path": "crates/noble-contracts/src/inference/finish.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/finish.rs"
+        },
+        {
+          "blake3": "8b0e80eae6cfb5d4c2edd9e08ec7dd28b2a286bd11aabe61cf003cbb89b1f711",
+          "bytes": 16217,
+          "executable": false,
+          "git_blob": "645966f4255753968edd0e087294b32a6d2dc6f6",
+          "path": "crates/noble-contracts/src/inference/materialize.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/materialize.rs"
+        },
+        {
+          "blake3": "ccd6270d8812734b9021d84961ae0d7883bb0b9a1f91171f371c5c4d9ae46e73",
+          "bytes": 5435,
+          "executable": false,
+          "git_blob": "3dc4a88058469dcb243260d65b6c6829030b71a5",
+          "path": "crates/noble-contracts/src/inference/materialize/rendering.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/materialize/rendering.rs"
+        },
+        {
+          "blake3": "79be1bd57a40a37d43c09316d57d5604bb8bd735ab125402b3f49945a7dd1718",
+          "bytes": 8049,
+          "executable": false,
+          "git_blob": "8144833437c4d56bd641528a964b382dcd5a24b7",
+          "path": "crates/noble-contracts/src/inference/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/mod.rs"
+        },
+        {
+          "blake3": "6914b01d23b11afca1c435794ac57e58e61ff77b7011856df7e04c604a9b6fb2",
+          "bytes": 9489,
+          "executable": false,
+          "git_blob": "40719826007449219674d200d4a49123a8ac5caf",
+          "path": "crates/noble-contracts/src/inference/unify.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/inference/unify.rs"
+        },
+        {
+          "blake3": "336a2b104e00bcb57411020e763be6faf68d611f9e079840c2726ddd669ba2e9",
+          "bytes": 122316,
+          "executable": false,
+          "git_blob": "45c2f19142714fa2195ec8c702e97275ce7aee90",
+          "path": "crates/noble-contracts/src/intrinsic.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/intrinsic.rs"
+        },
+        {
+          "blake3": "83801e01c211e2e5bb566029cbf08fb7c6ebaecc909a93dd15380d036167402d",
+          "bytes": 38437,
+          "executable": false,
+          "git_blob": "c3e06a8efdcb226aace1c0d85b324a28070559fb",
+          "path": "crates/noble-contracts/src/intrinsic/named_v2.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/intrinsic/named_v2.rs"
+        },
+        {
+          "blake3": "fbd5aaf1f930b04b9a5ff2c4f37f7828240c1a9c8f73e8fb3995211ce0358c2c",
+          "bytes": 10178,
+          "executable": false,
+          "git_blob": "d6aaa747eee5d18ffa9a64e4185ba12cbfee8b99",
+          "path": "crates/noble-contracts/src/lib.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/lib.rs"
+        },
+        {
+          "blake3": "e8348cb4b8d9842bc5b041a7dc624d6d13359f147e11578e860e679ff71352f0",
+          "bytes": 3571,
+          "executable": false,
+          "git_blob": "10b958ecac01f7eada030d864025c9a7d9a3d1a9",
+          "path": "crates/noble-contracts/src/metering.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/metering.rs"
+        },
+        {
+          "blake3": "36118ee06075110ae72c23d0d5f32c3e0d40bb8c2ed412d2901be4fa97c0a6c2",
+          "bytes": 5913,
+          "executable": false,
+          "git_blob": "cabb5fbf4854ceda841bee68ae0a8a329fa92295",
+          "path": "crates/noble-contracts/src/predicate.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate.rs"
+        },
+        {
+          "blake3": "6b7bbc30c667865faba346feb4548f4bc243569b27e510ab199d8b009be964b8",
+          "bytes": 1622,
+          "executable": false,
+          "git_blob": "4cdeeb413f3586dcda2abb62b7ff71f0abdfb247",
+          "path": "crates/noble-contracts/src/predicate/application.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/application.rs"
+        },
+        {
+          "blake3": "a02b795b905bcde7ced893484669fb2f4c1d3d870fccbc006ae5e1fc3747e82a",
+          "bytes": 7682,
+          "executable": false,
+          "git_blob": "bdc3694c3f66d8fa406be3af525ec91a482a0aa3",
+          "path": "crates/noble-contracts/src/predicate/binary.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/binary.rs"
+        },
+        {
+          "blake3": "b013bca119f13642c7b1fe17c82d84c61ab55944dc7737310cafa2d9c30035a5",
+          "bytes": 2893,
+          "executable": false,
+          "git_blob": "48868cff1e525db165baa16571f07d2cb7573cfa",
+          "path": "crates/noble-contracts/src/predicate/mapping.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/mapping.rs"
+        },
+        {
+          "blake3": "2496afb69cf6c3d65c3f906a35b478eb8a85a69493d83cbf52779ad9b833022c",
+          "bytes": 4822,
+          "executable": false,
+          "git_blob": "659ba94cb582360ad332117d34f58465681d812c",
+          "path": "crates/noble-contracts/src/predicate/references.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/references.rs"
+        },
+        {
+          "blake3": "0946712f0fb8edae2db5e70281df705c95e205c1fd15773261eed893827253e5",
+          "bytes": 9173,
+          "executable": false,
+          "git_blob": "2e13527f5297950292a4faa0f2b74c3b85d1c07d",
+          "path": "crates/noble-contracts/src/predicate/resolving.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/resolving.rs"
+        },
+        {
+          "blake3": "224661daf10a5f157c2ec3dbfda52fde9e27f4d05183fcb14e6f7388203eb757",
+          "bytes": 2248,
+          "executable": false,
+          "git_blob": "098f39b712c52a3c75f0088dae88ec75cbd607ce",
+          "path": "crates/noble-contracts/src/predicate/structural.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/structural.rs"
+        },
+        {
+          "blake3": "45eabc6ca36dad98c46f5e9246aa4e96f14908706474076c131843fedc3a32e2",
+          "bytes": 9156,
+          "executable": false,
+          "git_blob": "915110dd7c35ae38c065cf05efff22c03d416078",
+          "path": "crates/noble-contracts/src/predicate/unary.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/predicate/unary.rs"
+        },
+        {
+          "blake3": "087c22742c95754b84ca08834fa523af8c8dce26b715783c8912e696c2a701fa",
+          "bytes": 14961,
+          "executable": false,
+          "git_blob": "1f7eaa715c6b9975c8fed1522120b013f594af9b",
+          "path": "crates/noble-contracts/src/program.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program.rs"
+        },
+        {
+          "blake3": "9506c0ed8d0b7126d1b3b7d7b3b1a257304de57d8c4f77518291b5ac7081ebbe",
+          "bytes": 5304,
+          "executable": false,
+          "git_blob": "8e2f6fab856ef38f67dddd980b0e17b9f422f474",
+          "path": "crates/noble-contracts/src/program/bindings.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program/bindings.rs"
+        },
+        {
+          "blake3": "29d73fe2a5f3f000c6cf4ffa13d2f17adbae45432244709e98802e3c2f34db9f",
+          "bytes": 4678,
+          "executable": false,
+          "git_blob": "af856091fff4b12e3e967018ad97bb72589f9820",
+          "path": "crates/noble-contracts/src/program/forms.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program/forms.rs"
+        },
+        {
+          "blake3": "f87f68fba59a83411f8c04db683ba319e35405b91dceb92de9bdb88f782f5392",
+          "bytes": 5347,
+          "executable": false,
+          "git_blob": "ae2558109828c660985f39c7f366daac552ef2bd",
+          "path": "crates/noble-contracts/src/program/traversal.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program/traversal.rs"
+        },
+        {
+          "blake3": "e1351a71663f8ff6c34f161735878925560205d5bd979cd1cec986fc9fcb6f0a",
+          "bytes": 4123,
+          "executable": false,
+          "git_blob": "bd2a04f572a8c3f2a4cccb9f638f48fff8ded9bd",
+          "path": "crates/noble-contracts/src/program/witness.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program/witness.rs"
+        },
+        {
+          "blake3": "43ece4a9e4a8029f43c7bec28f24b233449269e7faa7edbad8c1b135404e710d",
+          "bytes": 5215,
+          "executable": false,
+          "git_blob": "7d60036d3f4cac440cca233b295903c126ea894b",
+          "path": "crates/noble-contracts/src/program/words.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/program/words.rs"
+        },
+        {
+          "blake3": "9d1909e6e3fd5197273c2fc1a44506e61c85ad59cefc3e99fff8cdbb24f814fa",
+          "bytes": 5358,
+          "executable": false,
+          "git_blob": "2f7446f988d4ae305e324a7ccfb6a083fd348f2c",
+          "path": "crates/noble-contracts/src/rendering/expression.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/rendering/expression.rs"
+        },
+        {
+          "blake3": "5aabc213a2fa136b40ce7b35f06bde7a94a4f935e9d97e6e563f9d4cfdef020f",
+          "bytes": 4221,
+          "executable": false,
+          "git_blob": "37ff95312a45cd73563d37cd1f1280b3819fb25f",
+          "path": "crates/noble-contracts/src/rendering/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/rendering/mod.rs"
+        },
+        {
+          "blake3": "29063ec7f73647de1add699233b4a2c5b1bc065719cded89ab40abcf409862ba",
+          "bytes": 3023,
+          "executable": false,
+          "git_blob": "97d020e1a470438e41f3c516c633c8969094378d",
+          "path": "crates/noble-contracts/src/rendering/subject.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/rendering/subject.rs"
+        },
+        {
+          "blake3": "68c2c1e852a98cfb30a216876462560fa9f05cd216e02ad60a3d7abb9f5ac67c",
+          "bytes": 5491,
+          "executable": false,
+          "git_blob": "e976c3c440aac61de7a19b73ca127a4cc626c900",
+          "path": "crates/noble-contracts/src/rendering/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/rendering/types.rs"
+        },
+        {
+          "blake3": "8b88da9b19983af952a3273a355ff22bdac9896cdbc9f751174002f338aebaf6",
+          "bytes": 88094,
+          "executable": false,
+          "git_blob": "f416e37b39787e8b32cc1bd8d611fb414bf39839",
+          "path": "crates/noble-contracts/src/source.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source.rs"
+        },
+        {
+          "blake3": "95f35d8a683ef338a95c647eb287e39b3f83df2d5b7b6574e147caa4e6fefcdc",
+          "bytes": 232770,
+          "executable": false,
+          "git_blob": "7222d03247a85a5a55fe3d54052233391fe54a96",
+          "path": "crates/noble-contracts/src/source/chunks.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/chunks.rs"
+        },
+        {
+          "blake3": "397e4d1029f7bb8af636ed1152a32c340a6d08739572c5c04b142ea6afa058bd",
+          "bytes": 25626,
+          "executable": false,
+          "git_blob": "a60fd99dcb1fa55e117d20d7db553f74253c43c7",
+          "path": "crates/noble-contracts/src/source/declared.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared.rs"
+        },
+        {
+          "blake3": "3ddd62de8f1d30f474f47399ed358bc071f1dc972fd8a1ac2ad33dc06e1caf5f",
+          "bytes": 1943,
+          "executable": false,
+          "git_blob": "0477ed436bc531f6a46a0fb46482b22939f71b83",
+          "path": "crates/noble-contracts/src/source/declared/links.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/links.rs"
+        },
+        {
+          "blake3": "f8f954e72a7dc68a53776234fd22f477e088acf02888d40062ab4d0452cc2443",
+          "bytes": 17513,
+          "executable": false,
+          "git_blob": "cde730d9c34af10844f8b1950d44567744ce6ca4",
+          "path": "crates/noble-contracts/src/source/declared/parsing.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/parsing.rs"
+        },
+        {
+          "blake3": "6888fa4908a0958bd8af211a2b5ce326f2da9bc54a4a4db59a49697a61a82133",
+          "bytes": 4232,
+          "executable": false,
+          "git_blob": "055bed3876558638d48bab3dfad07c2bd1cbc566",
+          "path": "crates/noble-contracts/src/source/declared/parsing/body.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/parsing/body.rs"
+        },
+        {
+          "blake3": "e887096d22d8db9ceebf8215bcedb79b353467c2ca977728ba77ab6e3ade72a3",
+          "bytes": 599,
+          "executable": false,
+          "git_blob": "e7c5c26a4af840ce6c73472d0ad437716ba2c4b3",
+          "path": "crates/noble-contracts/src/source/declared/parsing/imports.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/parsing/imports.rs"
+        },
+        {
+          "blake3": "f97a103c01fa089ac2ed085bfaef9da07e82b2ce2ea4a1d16905c4cf8306284d",
+          "bytes": 6037,
+          "executable": false,
+          "git_blob": "86af215afd8dd5fa7f918c6193b85cc3600a3b89",
+          "path": "crates/noble-contracts/src/source/declared/parsing/logic.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/parsing/logic.rs"
+        },
+        {
+          "blake3": "9f1dd2b2329a679efaf2613795452628d74058e312e9bd42be027564ed560045",
+          "bytes": 21571,
+          "executable": false,
+          "git_blob": "6d72fadaeca831871f2917ca5043b1735ccd6c77",
+          "path": "crates/noble-contracts/src/source/declared/parsing/members.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/parsing/members.rs"
+        },
+        {
+          "blake3": "54f31bbcd956bc1b9d406782fec553139bdf30910875d831eaf791871792b45a",
+          "bytes": 25013,
+          "executable": false,
+          "git_blob": "bc6e2b5c12ffda8ff1753cf96a6a003b622a652f",
+          "path": "crates/noble-contracts/src/source/declared/signatures.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/signatures.rs"
+        },
+        {
+          "blake3": "a2f8ae15952a417aae4fb53ede369b35493457dd56f3bb61fbf34836b3999cd4",
+          "bytes": 91615,
+          "executable": false,
+          "git_blob": "3ef1ab4d30658d2a40bd75533908c0d202be24e9",
+          "path": "crates/noble-contracts/src/source/declared/state.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state.rs"
+        },
+        {
+          "blake3": "7c89442ce73cb98a288cc228acc40c255506c8645e1b970e89498175a55a9a9c",
+          "bytes": 12582,
+          "executable": false,
+          "git_blob": "9d480d93d6b41a915063a5bdea6dc6bcfeecf71c",
+          "path": "crates/noble-contracts/src/source/declared/state/namespace.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/namespace.rs"
+        },
+        {
+          "blake3": "8bb1999aba05a38da7d2f74d14ffe3e8a3c9494f229abf8ddb5a201de407a807",
+          "bytes": 11396,
+          "executable": false,
+          "git_blob": "bf4d2fda1eff42e0a7b414f2752a13f52e826d3c",
+          "path": "crates/noble-contracts/src/source/declared/state/namespace/words.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/namespace/words.rs"
+        },
+        {
+          "blake3": "057138c353c1adb0373e0b39829c02658013f141ed9e46ec02db97c5dabd63e9",
+          "bytes": 35933,
+          "executable": false,
+          "git_blob": "25e695d53283d090292128b65a32243af5b79b15",
+          "path": "crates/noble-contracts/src/source/declared/state/prepare.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/prepare.rs"
+        },
+        {
+          "blake3": "977cfd20a98d6a057205bbe8ccb7f33d785533072dab82c7618b9d1d4be59f3d",
+          "bytes": 9946,
+          "executable": false,
+          "git_blob": "989fd071c29a4bc5dcc5f9021504a93a86d1cea5",
+          "path": "crates/noble-contracts/src/source/declared/state/proof.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/proof.rs"
+        },
+        {
+          "blake3": "81f1477677161288e14c89188611090b63b00ec485bd0702b9e974d2cc79e096",
+          "bytes": 13198,
+          "executable": false,
+          "git_blob": "2199341b2fa5eb36c789926e4067c3f8e8325a0a",
+          "path": "crates/noble-contracts/src/source/declared/state/rebind.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/rebind.rs"
+        },
+        {
+          "blake3": "f88552b9324027b2e292d010fff8507886870a09ec1ede11680c59c670f970a2",
+          "bytes": 8338,
+          "executable": false,
+          "git_blob": "90e3d1761835da59a4ffc6c6a7f23a67007f97e1",
+          "path": "crates/noble-contracts/src/source/declared/state/register.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register.rs"
+        },
+        {
+          "blake3": "e753ba06c6922be306b3c0747e938767153081eb4650a1a2b79be96780aed0e9",
+          "bytes": 10079,
+          "executable": false,
+          "git_blob": "7832bab00ab9867ec8d441e316297c7017b67090",
+          "path": "crates/noble-contracts/src/source/declared/state/register/adapter.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/adapter.rs"
+        },
+        {
+          "blake3": "e100d7c6a763625ff8c52f3b251a13f750fb9298c8cb98fbd7592a08bf706237",
+          "bytes": 16263,
+          "executable": false,
+          "git_blob": "71e39cdbc0b0bc97e959f06eecb224011dda51ec",
+          "path": "crates/noble-contracts/src/source/declared/state/register/collection.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/collection.rs"
+        },
+        {
+          "blake3": "26a8c3cc085e9d4b891f4ad4082f5b44d6c2dbdaf7aab7756e1f5d6f5a03428c",
+          "bytes": 11980,
+          "executable": false,
+          "git_blob": "a3076e30089a46e9509ada345201692edb287347",
+          "path": "crates/noble-contracts/src/source/declared/state/register/definitions.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/definitions.rs"
+        },
+        {
+          "blake3": "675c5adc8a6e0b1aab7c7a0c15fc497f935152e91dd1fad3723228c87a5c1aa6",
+          "bytes": 9022,
+          "executable": false,
+          "git_blob": "ca8576f461688705e7c567ab525285e0021f867e",
+          "path": "crates/noble-contracts/src/source/declared/state/register/definitions/graph.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/definitions/graph.rs"
+        },
+        {
+          "blake3": "ee92809ff9dd44909e2f855518af52f977f229427d9900bed2e8db239c401fc9",
+          "bytes": 4016,
+          "executable": false,
+          "git_blob": "7b7fb05fbb2b28fbf2e1680d30df7f6025857a25",
+          "path": "crates/noble-contracts/src/source/declared/state/register/definitions/scheduling.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/definitions/scheduling.rs"
+        },
+        {
+          "blake3": "628771739c560887f5a61502bfa083e9fc1c4b0d021223541c4b8c1017eddf4a",
+          "bytes": 4617,
+          "executable": false,
+          "git_blob": "b3c64a552aa4dba02d97dd59e49205958edf25fc",
+          "path": "crates/noble-contracts/src/source/declared/state/register/exports.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/exports.rs"
+        },
+        {
+          "blake3": "72a823c5a7e7693a4b71d3037aa5bc06c34de2b996988bec40981fc5ae566b21",
+          "bytes": 30291,
+          "executable": false,
+          "git_blob": "206990595b261e9921f2e714e872769225d42793",
+          "path": "crates/noble-contracts/src/source/declared/state/register/logical.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/logical.rs"
+        },
+        {
+          "blake3": "02f1e081476b06b4ddf0bf8df45717f922ced2ca5787c39fb51a5029c84dc4cf",
+          "bytes": 12679,
+          "executable": false,
+          "git_blob": "85b255ee3394df794f6030005de36ba8a42d26f6",
+          "path": "crates/noble-contracts/src/source/declared/state/register/logical/origin.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/logical/origin.rs"
+        },
+        {
+          "blake3": "f1d9237889bc1f2448482371882ad0d6f5a2ad4c3a5ecfd6c210a938175e4ef9",
+          "bytes": 10764,
+          "executable": false,
+          "git_blob": "e7aefb6a41a13c48a93d968f261f71da907d1f95",
+          "path": "crates/noble-contracts/src/source/declared/state/register/publication.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/publication.rs"
+        },
+        {
+          "blake3": "dcf7623589c6337566d114e07312829f42ecb3c4b01d790dfdc041a4b0c86be7",
+          "bytes": 10952,
+          "executable": false,
+          "git_blob": "a49d5b32f7df86c10e41d0b3eb285d89a36d73e8",
+          "path": "crates/noble-contracts/src/source/declared/state/register/schema.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/schema.rs"
+        },
+        {
+          "blake3": "7ea93ededa5a1777a9c1478f844c3ae4aba62d5ad45a64fa4f8385cc50fd8ed4",
+          "bytes": 9169,
+          "executable": false,
+          "git_blob": "be0792fd5d8bb7af9043961bfa2800f24c2dc82e",
+          "path": "crates/noble-contracts/src/source/declared/state/register/schema/names.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/schema/names.rs"
+        },
+        {
+          "blake3": "61207f1a82481797d28601e4f0d4ddc14364627448e568554a4200f783cc739c",
+          "bytes": 4946,
+          "executable": false,
+          "git_blob": "7126381e7aa70051c624784f1b6f37f1cd43852d",
+          "path": "crates/noble-contracts/src/source/declared/state/register/schema/nominals.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/schema/nominals.rs"
+        },
+        {
+          "blake3": "d4128cd3c87db407aaf1a237f17557f71283536dfc7819f872722fbdd537d869",
+          "bytes": 5484,
+          "executable": false,
+          "git_blob": "90d0b140c2a7bc420af121dfc6a20b78799c0e18",
+          "path": "crates/noble-contracts/src/source/declared/state/register/schema/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/state/register/schema/types.rs"
+        },
+        {
+          "blake3": "8c5c0ef171c8160fb9ee104b18442feb465eabbe533ec2507b57bc27f4f5d515",
+          "bytes": 17759,
+          "executable": false,
+          "git_blob": "074ef59f35bfd637e793e8c0bfbb1b6aef277d1a",
+          "path": "crates/noble-contracts/src/source/declared/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/declared/types.rs"
+        },
+        {
+          "blake3": "95456416a30b495c6fcc4a30ba4e80803e88fbd50a8b309911edc3643152c30b",
+          "bytes": 25638,
+          "executable": false,
+          "git_blob": "cba99fc700d7cbc38556c134bb226b70a76781f2",
+          "path": "crates/noble-contracts/src/source/editor.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/editor.rs"
+        },
+        {
+          "blake3": "12647ebb6922680604e836474bcbfa26603f605d664b6e90f5f03334dcc5b01d",
+          "bytes": 2098,
+          "executable": false,
+          "git_blob": "c0b3fd3a8997a712539438376be4d968259b271c",
+          "path": "crates/noble-contracts/src/source/emission/contracts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/contracts.rs"
+        },
+        {
+          "blake3": "1bfc0b94c03c3a8a29b2868a013038a61fde754ffe8a4693e721df1ca0e47d67",
+          "bytes": 11048,
+          "executable": false,
+          "git_blob": "a66d0b4cb6274399c28be8ffcfd920e6e8e0b11c",
+          "path": "crates/noble-contracts/src/source/emission/contracts/patterns.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/contracts/patterns.rs"
+        },
+        {
+          "blake3": "0b5c95394d3cf0881b48c902cf970f34f58bef39e7dda3d86e37e81a74af0ae9",
+          "bytes": 3298,
+          "executable": false,
+          "git_blob": "f76fb0cd03d9557b4b6e6ca8d6aae47bad302a2a",
+          "path": "crates/noble-contracts/src/source/emission/identity.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/identity.rs"
+        },
+        {
+          "blake3": "4819b712c8b8f1bc73b177b3bebc35f7f268b503a306590444a8ba7f572b4a0e",
+          "bytes": 3959,
+          "executable": false,
+          "git_blob": "611277e9eeeb76f2d72d789f357862a5816023a3",
+          "path": "crates/noble-contracts/src/source/emission/interfaces.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/interfaces.rs"
+        },
+        {
+          "blake3": "8849c71fc0f8ac648e46f22e05fc8fc4e5cee98ad8f1249fb1d8ef69b0933ebe",
+          "bytes": 6673,
+          "executable": false,
+          "git_blob": "8e1cfbaa1ef238aa19947b37b8b41e70cc4049df",
+          "path": "crates/noble-contracts/src/source/emission/materialization.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/materialization.rs"
+        },
+        {
+          "blake3": "0ee577a10a54f8af10b0f86cb0aaf4160d3fe1e209f4d74e75c2c91efc119549",
+          "bytes": 15534,
+          "executable": false,
+          "git_blob": "9041fe3490d0e7f6ad906c9bc752bd6c0370840f",
+          "path": "crates/noble-contracts/src/source/emission/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/emission/mod.rs"
+        },
+        {
+          "blake3": "47dd7ba564860c69edbe745676500790179a98944c2d5278b7b387ad495e4490",
+          "bytes": 5480,
+          "executable": false,
+          "git_blob": "2dace6c7342273766191e1cd9bba6f63b527c429",
+          "path": "crates/noble-contracts/src/source/inference/completion.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/inference/completion.rs"
+        },
+        {
+          "blake3": "49a1d25d1bfccae642db8c32f581791cf35593c22d8b5ca213b92b74919954b7",
+          "bytes": 13517,
+          "executable": false,
+          "git_blob": "4f5875eb45d8a403d66b6a51f27737bee305889d",
+          "path": "crates/noble-contracts/src/source/inference/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/inference/mod.rs"
+        },
+        {
+          "blake3": "3def4428b22f7b0d5a1c9e0c2001d1ffebd9403dc8528faab0a6025ec1135d2a",
+          "bytes": 17567,
+          "executable": false,
+          "git_blob": "281f1552c8100e3aef3be2e497ad753495524270",
+          "path": "crates/noble-contracts/src/source/inference/operations.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/inference/operations.rs"
+        },
+        {
+          "blake3": "cc360326c95ba6b152beddbaf45b7b4a19bae9689557936a0f27b2692a834368",
+          "bytes": 8563,
+          "executable": false,
+          "git_blob": "5d551e0d287f85583a1c059843c51f30f4d62aa9",
+          "path": "crates/noble-contracts/src/source/inference/traversal.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/inference/traversal.rs"
+        },
+        {
+          "blake3": "fae84cc8638d486aade30e6632025da66565762377429be3a56aaa59f604cb77",
+          "bytes": 9389,
+          "executable": false,
+          "git_blob": "84fb2a9e200bd648a7ec979d1b0e584caa4dd9c6",
+          "path": "crates/noble-contracts/src/source/inference/validation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/inference/validation.rs"
+        },
+        {
+          "blake3": "724b928cc520c6dbe2deefd9f796661531dd74652d6ef01a1e3252b99166a8be",
+          "bytes": 12188,
+          "executable": false,
+          "git_blob": "90d703954f1817f91755a0db7195b5024d75681b",
+          "path": "crates/noble-contracts/src/source/lexer.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/lexer.rs"
+        },
+        {
+          "blake3": "a364f4606305ce2cb7395533c787cd623962dd0fe279415c3b71d4787e5cee49",
+          "bytes": 6463,
+          "executable": false,
+          "git_blob": "b9888a2cf25af78ad0e2a07bab4c509274b0555f",
+          "path": "crates/noble-contracts/src/source/lexer/text.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/lexer/text.rs"
+        },
+        {
+          "blake3": "de1dd715ad674baf41431567b8ee2deac2b01076a92295c6f89b0d213a00f2ba",
+          "bytes": 3214,
+          "executable": false,
+          "git_blob": "c8fee4c08815f538194bf3f4330725db912cdcf0",
+          "path": "crates/noble-contracts/src/source/lexer/tokens.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/lexer/tokens.rs"
+        },
+        {
+          "blake3": "edb6474102650dc60fc9ddf1be2a277530f679fa1171dac93b7b2dd083454b6a",
+          "bytes": 27095,
+          "executable": false,
+          "git_blob": "beb817d28344a260d46159db62c6b06de2937c8b",
+          "path": "crates/noble-contracts/src/source/locals.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/locals.rs"
+        },
+        {
+          "blake3": "cbd61b1793a118076840df4e8161d950ec0ff1a13456edfe6d98e2fd6f798e1e",
+          "bytes": 9721,
+          "executable": false,
+          "git_blob": "29b2b7d45cf542c5ffbff2be0cbe9882759117a8",
+          "path": "crates/noble-contracts/src/source/parsing.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/parsing.rs"
+        },
+        {
+          "blake3": "e6cb6fc18844245f093e0ace5d1542d4fd330058dc69da5acb99fb9218b5cf4c",
+          "bytes": 13884,
+          "executable": false,
+          "git_blob": "6a99cddb549abe7688a99ddee7736cfb901eea30",
+          "path": "crates/noble-contracts/src/source/preflight.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/preflight.rs"
+        },
+        {
+          "blake3": "74c470dc1ffa839fea61c3046b890c7f0e611e8e48b0893736580e73caf3b25d",
+          "bytes": 2623,
+          "executable": false,
+          "git_blob": "c4ef3ad7ff40db03a3be83d6d5ee3d9a4ddd750f",
+          "path": "crates/noble-contracts/src/source/preflight/paths.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/preflight/paths.rs"
+        },
+        {
+          "blake3": "f0ccd575bcff65054b33c8c0eaccf4b08836e1e4ab0b52f5c3b3d99b0cc0396e",
+          "bytes": 23023,
+          "executable": false,
+          "git_blob": "91d2362e453773639a44c909ed2ad235a2430008",
+          "path": "crates/noble-contracts/src/source/preparation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/preparation.rs"
+        },
+        {
+          "blake3": "f3fb801374e83f2e3e98c399a90f611e853d16d4b9acddacf4dc3113b83e096f",
+          "bytes": 27446,
+          "executable": false,
+          "git_blob": "5e3ea70607aaa8f57bf06153d19bb0ad0c0d73d9",
+          "path": "crates/noble-contracts/src/source/preparation/symbolic.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/preparation/symbolic.rs"
+        },
+        {
+          "blake3": "cb7c0d11f72f5b6ddc13afa0090eb73701e2f11f9435b3ab56bedef2b8be65be",
+          "bytes": 65595,
+          "executable": false,
+          "git_blob": "fc10093e9b558e045e92e35e9db9f46346b64aa9",
+          "path": "crates/noble-contracts/src/source/procedures.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/procedures.rs"
+        },
+        {
+          "blake3": "c0c5de6f0dbba5fdbe9249e9c7156736a665b6f90977bb7c7aa8b14fc610b4b0",
+          "bytes": 13100,
+          "executable": false,
+          "git_blob": "47986c17b4e8792e826a1903178500eaf668fb45",
+          "path": "crates/noble-contracts/src/source/procedures/composition.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/procedures/composition.rs"
+        },
+        {
+          "blake3": "66d27cb0a4702882fae1bc65c8283b26a1e80ccffd62e9fd785216a633686372",
+          "bytes": 81297,
+          "executable": false,
+          "git_blob": "ce9dbc642f4e44c2ce0b280b643d91dd41d2a8fe",
+          "path": "crates/noble-contracts/src/source/procedures/persistence.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/procedures/persistence.rs"
+        },
+        {
+          "blake3": "101984eda3b77960ee856bed2f52e37f24431784f66600220d0b68238a859ca2",
+          "bytes": 13237,
+          "executable": false,
+          "git_blob": "ef4dae1254ba52043387fafb293e268a74a15165",
+          "path": "crates/noble-contracts/src/source/procedures/retrieval.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/procedures/retrieval.rs"
+        },
+        {
+          "blake3": "6b2c2fdbebd5ae6843c5ab95f07974b6547426dbe2e14f17e5792bbe1a62eaa5",
+          "bytes": 29198,
+          "executable": false,
+          "git_blob": "04e7e0fb5488a231fd7510e2421b5c3e2aff9b45",
+          "path": "crates/noble-contracts/src/source/proof.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/proof.rs"
+        },
+        {
+          "blake3": "3003ba86c8f7caf18aa686abe523395b2a7b8f33748f72cfa0f4c1356a278fef",
+          "bytes": 9103,
+          "executable": false,
+          "git_blob": "ca31655f4e967f351e2eac79a0a86ee7cf79963f",
+          "path": "crates/noble-contracts/src/source/replacement.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/replacement.rs"
+        },
+        {
+          "blake3": "9638838efed87c3f84af85c731c1b103013dbcbd6bc23af40a7e1a096dac87ab",
+          "bytes": 13577,
+          "executable": false,
+          "git_blob": "e6e441bf90156778e80586df6060493878c466bd",
+          "path": "crates/noble-contracts/src/source/resolution.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/resolution.rs"
+        },
+        {
+          "blake3": "d3b0f67cffc00f88a29434eaefc4d4365fe7bb37658e6cfd9318f5bcaa0e5c5e",
+          "bytes": 10459,
+          "executable": false,
+          "git_blob": "befa75c75e9b299d1fee001b58aa3cc177e267eb",
+          "path": "crates/noble-contracts/src/source/resolution/comparison.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/resolution/comparison.rs"
+        },
+        {
+          "blake3": "dad7dd46220e09ace535f5a9ef4a2fdb3baea9b2dd3fbae623d2092028ce60ff",
+          "bytes": 73956,
+          "executable": false,
+          "git_blob": "33f2e73483d66ef7ecc46e20907442390768d62e",
+          "path": "crates/noble-contracts/src/source/sizechange.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/source/sizechange.rs"
+        },
+        {
+          "blake3": "171b548dbce34073762d0186b7f8fa41f05e16b4ce30f834c321f999736dcf08",
+          "bytes": 4261,
+          "executable": false,
+          "git_blob": "0f5b74a090e504260970666f3ad77a38845ee20f",
+          "path": "crates/noble-contracts/src/syntax/constructors.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/constructors.rs"
+        },
+        {
+          "blake3": "31ca0554fedbf36610cd7dd36c7766babe4e365c54faa059d9e49edab42343ce",
+          "bytes": 764,
+          "executable": false,
+          "git_blob": "ac73344f2e23d6826f54ef658d2cbdf3e8007a1f",
+          "path": "crates/noble-contracts/src/syntax/identifiers.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/identifiers.rs"
+        },
+        {
+          "blake3": "e32dca22dc06458a378ac44a1d1e463c9b5b6071ecbe8c80fdbc19347200b2ff",
+          "bytes": 1571,
+          "executable": false,
+          "git_blob": "876e97238b9dd224115e00adb8d6a7636eb10ef9",
+          "path": "crates/noble-contracts/src/syntax/integer.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/integer.rs"
+        },
+        {
+          "blake3": "09aa8e57198765c9d71578a924a0eb87a4c4a621c564c967ec45e0a921d93332",
+          "bytes": 8838,
+          "executable": false,
+          "git_blob": "d035e5ed85fc4c22602a5c34c78804a9fb710943",
+          "path": "crates/noble-contracts/src/syntax/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/mod.rs"
+        },
+        {
+          "blake3": "f920315a90c893a6d008a4b705fd303dcaa8f68b85f8045ef3532f7253ad359a",
+          "bytes": 7419,
+          "executable": false,
+          "git_blob": "aa2f7de17c9770ebafd6ce750d9d0db5b7865b06",
+          "path": "crates/noble-contracts/src/syntax/parsing.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/parsing.rs"
+        },
+        {
+          "blake3": "7a2827d0023b54d203573359f048f39bf884bdd799a60d2385e83ff0ce4c6805",
+          "bytes": 7556,
+          "executable": false,
+          "git_blob": "de907bbc6404c7c34b3e30d1c695e59e793a77c2",
+          "path": "crates/noble-contracts/src/syntax/typing.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/syntax/typing.rs"
+        },
+        {
+          "blake3": "a25148bdf974fe95b01fbf8bb852e2b731a0a61e0dd36db7e761d13a7e2db7db",
+          "bytes": 3656,
+          "executable": false,
+          "git_blob": "f5438df0ac0af7d5b4bba73f02b8661ebc6b89e8",
+          "path": "crates/noble-contracts/src/wire.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-contracts/src/wire.rs"
+        },
+        {
+          "blake3": "e883c3fa50e7305881a2bfb9d205ff3baab331c80c00b2bccf6789c4dbde4576",
+          "bytes": 250,
+          "executable": false,
+          "git_blob": "3345267ab72214b59ec4009a89877997cb942543",
+          "path": "crates/noble-kernel/Cargo.toml",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "09d09d27122d990defa54ed15dc0cc1f82bf0075f19ddc9a7d1d568a55b17961",
+          "bytes": 133,
+          "executable": false,
+          "git_blob": "627e713b5a6d72a38b0a575d18a3af348c7b4a6e",
+          "path": "crates/noble-kernel/Cargo.toml.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/noble-kernel/Cargo.toml"
+        },
+        {
+          "blake3": "8c9db0c2442c66779423324857dc5a72e95f5238b0d883998d24f41e872c28d9",
+          "bytes": 5700,
+          "executable": false,
+          "git_blob": "33190d948b94441a6f8230f73259565b017801af",
+          "path": "crates/noble-kernel/src/acceptance/frames.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/frames.rs"
+        },
+        {
+          "blake3": "429e2337cf1cf17c27e0d806a4ffc0aa338ace29f459652448644cae0d71e107",
+          "bytes": 12775,
+          "executable": false,
+          "git_blob": "ca1f846ba555de8e787bc1973a5420f5fb0ec3d8",
+          "path": "crates/noble-kernel/src/acceptance/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/mod.rs"
+        },
+        {
+          "blake3": "48c0e44016d72dc7a8cb8d31038e66b3f16b828583bc0b61bf0c46037934f4b1",
+          "bytes": 16921,
+          "executable": false,
+          "git_blob": "df20240e205a40eb1ce11f182e6c1a277b2923bd",
+          "path": "crates/noble-kernel/src/acceptance/nodes.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/nodes.rs"
+        },
+        {
+          "blake3": "e11fad1cc0609c096d879366fbb9d8d75e1c05124eebf0e1c1d8698d02bcc1ad",
+          "bytes": 12542,
+          "executable": false,
+          "git_blob": "5c8bfe20922168725807e5349b634d34c42f9f19",
+          "path": "crates/noble-kernel/src/acceptance/nodes/visibility.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/nodes/visibility.rs"
+        },
+        {
+          "blake3": "0fcf0ac0e005ed481f348594129f1c964379ce43e5b63800266f072be333e117",
+          "bytes": 11879,
+          "executable": false,
+          "git_blob": "6669b660e6c1a9c4a9229013b87388a7d6f697e9",
+          "path": "crates/noble-kernel/src/acceptance/parts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/parts.rs"
+        },
+        {
+          "blake3": "b3486298f56f55ae7cf5de3c97fb8a05085dba0a370dac092bd7029d904d636e",
+          "bytes": 1477,
+          "executable": false,
+          "git_blob": "0dcf035e621c39a16a0c6a569de62e7e50da6cc2",
+          "path": "crates/noble-kernel/src/acceptance/parts/effects.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/parts/effects.rs"
+        },
+        {
+          "blake3": "cab310070c6b370629e70512cf257c0e05e2cd1f442b4cae00155fd20712abfc",
+          "bytes": 15536,
+          "executable": false,
+          "git_blob": "fe65b020e29bff7ba13713a16fc4eb5edc575898",
+          "path": "crates/noble-kernel/src/acceptance/parts/instantiate.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/parts/instantiate.rs"
+        },
+        {
+          "blake3": "4f9569e834aebf0b9e6aaa7a7d12a43cf27342055b9001955b6d9da7343defe8",
+          "bytes": 1050,
+          "executable": false,
+          "git_blob": "214530c326a328e4beec191475479d9750887b79",
+          "path": "crates/noble-kernel/src/acceptance/parts/multiset.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/parts/multiset.rs"
+        },
+        {
+          "blake3": "ff6d04e241205d3a1c27c88695e10c3d4493423662886305a6be9e9292f38c58",
+          "bytes": 24803,
+          "executable": false,
+          "git_blob": "277ceadd2993ae3c26b9064f8686a1c0d67b6570",
+          "path": "crates/noble-kernel/src/acceptance/preflight.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/preflight.rs"
+        },
+        {
+          "blake3": "7a5cf78cfd7c069f608c6de3cddd76d4a26ada3b9cd8d90e3bbf53890614bd38",
+          "bytes": 1934,
+          "executable": false,
+          "git_blob": "2db58ea92e8ffa9fad3aa4f1eb33f3bcf2e5687d",
+          "path": "crates/noble-kernel/src/acceptance/schemes.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/schemes.rs"
+        },
+        {
+          "blake3": "184f8e5968e46e2a0f685731bee014c6fdec11cc86a8cd9658abd1f9d790b11f",
+          "bytes": 8972,
+          "executable": false,
+          "git_blob": "bdaa88d98fd8d0edf9d325856df8c78e6f3c8372",
+          "path": "crates/noble-kernel/src/acceptance/validate.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/acceptance/validate.rs"
+        },
+        {
+          "blake3": "5dd43a6d54822b074e4d53f075fab87fb78f69b0274efa2fbfdd93e3de9207f0",
+          "bytes": 1022,
+          "executable": false,
+          "git_blob": "f4a31eb3b051516cd33a2ec3c563e809ad67d1e6",
+          "path": "crates/noble-kernel/src/async_tasks/accounting.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/accounting.rs"
+        },
+        {
+          "blake3": "1c464f8170798b42620449e6aae33c5b85b9be8658fa15cdb13ebbb282a78d35",
+          "bytes": 7361,
+          "executable": false,
+          "git_blob": "465582c1ec41a48026a8d0b792e0903d2965d39b",
+          "path": "crates/noble-kernel/src/async_tasks/bounds.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/bounds.rs"
+        },
+        {
+          "blake3": "3f9bacc6a0e6d10791902a9d68d7bea42cb6f16acd5aa32b3393e928760235ad",
+          "bytes": 5591,
+          "executable": false,
+          "git_blob": "3569238f91b7fcd5e3758e591a0ae347e85d21d2",
+          "path": "crates/noble-kernel/src/async_tasks/domain.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/domain.rs"
+        },
+        {
+          "blake3": "b032992039e5e82ff933f8cb7038f4e5a3c3c57430a8f8a22e37d3045d91f1af",
+          "bytes": 2670,
+          "executable": false,
+          "git_blob": "0e1341d22f0eead4ec256228348ec4264b85d767",
+          "path": "crates/noble-kernel/src/async_tasks/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/mod.rs"
+        },
+        {
+          "blake3": "7a50d46e963f26dd914ee2392b439c0c1afcd9e483035c9a403a39b5f42600dd",
+          "bytes": 8253,
+          "executable": false,
+          "git_blob": "b1779b045c0b2f0061d6b209b6dad0ec4bc4d119",
+          "path": "crates/noble-kernel/src/async_tasks/schema.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/schema.rs"
+        },
+        {
+          "blake3": "d9caea6c908ea3d31c543a962f85bb60a6748c58e39cc61e01bd1b3b467e0499",
+          "bytes": 6990,
+          "executable": false,
+          "git_blob": "1a55ab7f20d450a5c2814d997c9d4358ac153d92",
+          "path": "crates/noble-kernel/src/async_tasks/schema/coverage.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/schema/coverage.rs"
+        },
+        {
+          "blake3": "ae01b60eb573b9e598783fddd811e219f915da09a69a096a3c0c42f21d277e0e",
+          "bytes": 2517,
+          "executable": false,
+          "git_blob": "90aa9b7236693a9495ab78d3f918046393147c4e",
+          "path": "crates/noble-kernel/src/async_tasks/table.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/table.rs"
+        },
+        {
+          "blake3": "f416c39bb2053636af5a81e1ec19880ddf937f38a16352b3abfffc5a5b5b337d",
+          "bytes": 4878,
+          "executable": false,
+          "git_blob": "ad955bf6c522608c209f50f877be9a4d44f442e7",
+          "path": "crates/noble-kernel/src/async_tasks/table/admission.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/table/admission.rs"
+        },
+        {
+          "blake3": "6629e477db34afc444c028ab4457db8eca9aae62a3fb65f14d817f87ffae69e8",
+          "bytes": 4124,
+          "executable": false,
+          "git_blob": "6bd80d85d7ac95a1129e7622f03cd42b1fc84c74",
+          "path": "crates/noble-kernel/src/async_tasks/table/callbacks.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/table/callbacks.rs"
+        },
+        {
+          "blake3": "24555213f4d0672b17b22046d49c128974b59a0ffba9524af0646bfadcc6017d",
+          "bytes": 2812,
+          "executable": false,
+          "git_blob": "bcd71fc456daa207156a43d34afda6229e5c9b95",
+          "path": "crates/noble-kernel/src/async_tasks/table/inspection.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/table/inspection.rs"
+        },
+        {
+          "blake3": "9159381a678b119c9165bd947869b50a123cbe5b76042ca15a5eca9ee59aa2bf",
+          "bytes": 5901,
+          "executable": false,
+          "git_blob": "c3ffd2a26b8a29fbca70c697223ceebb897d1be8",
+          "path": "crates/noble-kernel/src/async_tasks/table/ownership.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/table/ownership.rs"
+        },
+        {
+          "blake3": "4cd65b6d12a1075f3b371c5e6364791aa1e957c1994579db9469f236f9d96991",
+          "bytes": 2515,
+          "executable": false,
+          "git_blob": "e3758fb52216134283e930cb94492768ca41e7ac",
+          "path": "crates/noble-kernel/src/async_tasks/transition.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/transition.rs"
+        },
+        {
+          "blake3": "3da10ebb68e81c80eca1cb73780a7706204ede103cb969ad4bcd540e1299eb9d",
+          "bytes": 4424,
+          "executable": false,
+          "git_blob": "aebf383cc39b9dab73656cd3d1f3ce3022084089",
+          "path": "crates/noble-kernel/src/async_tasks/transition/cleanup.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/transition/cleanup.rs"
+        },
+        {
+          "blake3": "c06083feca181d97d6601b2d252fe7957f6fdee74e3104a2fd638d3ea0ff8915",
+          "bytes": 3608,
+          "executable": false,
+          "git_blob": "1318cf3de1a2bbf2c1244886d00d60195312424d",
+          "path": "crates/noble-kernel/src/async_tasks/transition/completion.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/transition/completion.rs"
+        },
+        {
+          "blake3": "1e81108640c18e5c59234253daf48656a293d7fff6ff4249b120d0880cac7c78",
+          "bytes": 4735,
+          "executable": false,
+          "git_blob": "1830093480b8d28f64f22fe827b815f65e695a24",
+          "path": "crates/noble-kernel/src/async_tasks/transition/lifecycle.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/transition/lifecycle.rs"
+        },
+        {
+          "blake3": "5ba1b000c7105c1f8c49b8375c4dfd365fa6e521712c379ec0954dc147722283",
+          "bytes": 8154,
+          "executable": false,
+          "git_blob": "812ab47067ba685d67c90666c0b28f5ce8506cf5",
+          "path": "crates/noble-kernel/src/async_tasks/transition/validation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/async_tasks/transition/validation.rs"
+        },
+        {
+          "blake3": "537602c514226a4dbbc8e36b79189d1d3b9b0d6ef865047f9b56b6c0c6249a65",
+          "bytes": 11050,
+          "executable": false,
+          "git_blob": "3ffd75a5b069370a651717d78d28769fed9f7ae6",
+          "path": "crates/noble-kernel/src/authority/admission.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/admission.rs"
+        },
+        {
+          "blake3": "59001f62cfb474860234ad05204d20c176cf385e654fe320952c0ca06288a177",
+          "bytes": 10746,
+          "executable": false,
+          "git_blob": "a804b091c7213ce2f5bb221159f7be303d48461d",
+          "path": "crates/noble-kernel/src/authority/facts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/facts.rs"
+        },
+        {
+          "blake3": "54bb822f34b747d5ba35e580b756b7fe3412d259d06674290b7bd3ccf8e7ebb2",
+          "bytes": 7395,
+          "executable": false,
+          "git_blob": "099e9c17808a8925081e9d7c688d30b80b24ab03",
+          "path": "crates/noble-kernel/src/authority/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/mod.rs"
+        },
+        {
+          "blake3": "0eb9f9f5ea69c6aaf6fd21b6ba9e7676acdb19f02ba1b1019e1a64db6aae347b",
+          "bytes": 9753,
+          "executable": false,
+          "git_blob": "73d9cf3981a339a39a104120ecc54c831969ebe5",
+          "path": "crates/noble-kernel/src/authority/observation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/observation.rs"
+        },
+        {
+          "blake3": "a126585afb7897fcc96bf3ecb875b64b8a913c3c8f89e3cf392b9f803b205649",
+          "bytes": 4237,
+          "executable": false,
+          "git_blob": "377e97584d61cfb9433565416c0f7f170249d214",
+          "path": "crates/noble-kernel/src/authority/permit.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/permit.rs"
+        },
+        {
+          "blake3": "09255a68340337882ec15b8250ae64e3d3f0d8ca20f18225d3bfd013dac68106",
+          "bytes": 6770,
+          "executable": false,
+          "git_blob": "8992edad656f89d785dec1e16975fad228bab5e8",
+          "path": "crates/noble-kernel/src/authority/receipts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/receipts.rs"
+        },
+        {
+          "blake3": "d6262617fce9a89f91e7b20f2c60f4ec616e33706162e0f74014b0e589b35bf5",
+          "bytes": 4091,
+          "executable": false,
+          "git_blob": "7ab139d9a7535b6d0e4bc304e953ce1816cf42ac",
+          "path": "crates/noble-kernel/src/authority/report.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/authority/report.rs"
+        },
+        {
+          "blake3": "060aee951407f073128938d133d65244765dbdb537bb1ad4c50a2930c3317da4",
+          "bytes": 754,
+          "executable": false,
+          "git_blob": "75d81fd749226821a2b6f0cf4525d899c60046aa",
+          "path": "crates/noble-kernel/src/capacity/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/capacity/mod.rs"
+        },
+        {
+          "blake3": "84a5df1545c5120ffbcb00364e3327bd4c279ff01d623a7b36a196472d7c7d1e",
+          "bytes": 37788,
+          "executable": false,
+          "git_blob": "f5a34913a5f403544d2e16b3c1ac4b47a691d6b4",
+          "path": "crates/noble-kernel/src/contracts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts.rs"
+        },
+        {
+          "blake3": "0ad9c3861373ede422a66ec3533b4afb6a991f1ea072b78258de540adf602922",
+          "bytes": 6972,
+          "executable": false,
+          "git_blob": "6d75894cd40cfc5fa44d108a0be6e0b8048af9c0",
+          "path": "crates/noble-kernel/src/contracts/bootstrap.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/bootstrap.rs"
+        },
+        {
+          "blake3": "331c3bd7b09ae21da858330bf473cf14722737e1183549fec12ae33d34d9ad9b",
+          "bytes": 8938,
+          "executable": false,
+          "git_blob": "215f87726bb8c6986010d4fd6a0d686a4f1f9716",
+          "path": "crates/noble-kernel/src/contracts/bootstrap/data.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/bootstrap/data.rs"
+        },
+        {
+          "blake3": "0e4f5eacc281d6d2303b9bd3ef5a339c01bac648e09ea7f9e963b388b92ddaeb",
+          "bytes": 12947,
+          "executable": false,
+          "git_blob": "9e362aa104e08bb87552cdd948aa2f96c9b44a11",
+          "path": "crates/noble-kernel/src/contracts/clone_budget.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/clone_budget.rs"
+        },
+        {
+          "blake3": "0aa5418412229543eefa44a997d406795e472b29c8a747dfdd9c1541827db026",
+          "bytes": 7731,
+          "executable": false,
+          "git_blob": "7f99f6b1213f8425c8d650edb71c8cda0f4812ef",
+          "path": "crates/noble-kernel/src/contracts/live.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/live.rs"
+        },
+        {
+          "blake3": "eed7bd2a98ac2d79ad48cd5b5624db68c3153154f2041d333a00ca71f93f3ac1",
+          "bytes": 14959,
+          "executable": false,
+          "git_blob": "17cf55e69e11ca50c18d61b91d04ca7355a43bea",
+          "path": "crates/noble-kernel/src/contracts/nominal.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal.rs"
+        },
+        {
+          "blake3": "b6b180d9f127b1eb8dd9fa3fc0a9c7f16021afb7f2dc754f8ea79a7e8e53be9c",
+          "bytes": 6575,
+          "executable": false,
+          "git_blob": "9c6c9a24e6a4a8962e439569c785654402484734",
+          "path": "crates/noble-kernel/src/contracts/nominal/inspection.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/inspection.rs"
+        },
+        {
+          "blake3": "90bbe951c40101046b28c27fc5c5853e2e02a734c5e3acab97cfd60c2bda873f",
+          "bytes": 9273,
+          "executable": false,
+          "git_blob": "e66a9c8e20ebe3dc4c4e52cfcc9be3be79a33b2c",
+          "path": "crates/noble-kernel/src/contracts/nominal/payload.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/payload.rs"
+        },
+        {
+          "blake3": "90a5c5f64a04e8e96b2e242dd1112f2f7a37a1fdc982bce7eca108aa9c8c7c08",
+          "bytes": 14664,
+          "executable": false,
+          "git_blob": "583b32d9643fd4d3d7aeea0ecb4156b0d744ef52",
+          "path": "crates/noble-kernel/src/contracts/nominal/schemes.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/schemes.rs"
+        },
+        {
+          "blake3": "3d602b33e34d1abde7d0be1535db4bf93af181ab5a7ac75fd6248f8b335c7a79",
+          "bytes": 12663,
+          "executable": false,
+          "git_blob": "dcd2108e00400ea8ce47b2e3fb549fe10e34b00c",
+          "path": "crates/noble-kernel/src/contracts/nominal/type/walk.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/type/walk.rs"
+        },
+        {
+          "blake3": "1b533f7fca7b42f0b5f532676cd7b038a9af61722c5d3f9de5039c7d854dc3ec",
+          "bytes": 2106,
+          "executable": false,
+          "git_blob": "ddb1d535da3373c87aaa899b080eefb80447d45c",
+          "path": "crates/noble-kernel/src/contracts/nominal/type/walk/work.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/type/walk/work.rs"
+        },
+        {
+          "blake3": "8a304fa73dffe2cf16831d5982a8e682ebdf488de55a0f566ed848dd17de1f5e",
+          "bytes": 24063,
+          "executable": false,
+          "git_blob": "cad02e10f22b0999f3ce78aff44f422e25dce198",
+          "path": "crates/noble-kernel/src/contracts/nominal/validation.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/contracts/nominal/validation.rs"
+        },
+        {
+          "blake3": "569cfcc8e5a94917abe93c9cef38a9a852df4e0458ffde017cd34d3e6a8bd284",
+          "bytes": 3593,
+          "executable": false,
+          "git_blob": "5f7926019b8c08a264e1bcd4a9c010098040126a",
+          "path": "crates/noble-kernel/src/dataspace/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/dataspace/mod.rs"
+        },
+        {
+          "blake3": "de8758450403b58eb48edfc0b2b6285a9d7749e00cbcb6bdff42d26951161ca0",
+          "bytes": 6712,
+          "executable": false,
+          "git_blob": "c7ca5c52ff23e810c3ba4cbbe3149803fa8c7a33",
+          "path": "crates/noble-kernel/src/dataspace/table.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/dataspace/table.rs"
+        },
+        {
+          "blake3": "3ed76498a277ca451c8829a9e2a8738acd6149147f71e52ff4f3a4b1f8390aae",
+          "bytes": 10921,
+          "executable": false,
+          "git_blob": "de13e510a084d05218ca41a93b8785c2cbcdd94b",
+          "path": "crates/noble-kernel/src/dataspace/table/actions.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/dataspace/table/actions.rs"
+        },
+        {
+          "blake3": "1a5de86b7412fd0663a5d55a0e0946aaf65d49095b3a1aa3e0debaa00d917f3a",
+          "bytes": 4811,
+          "executable": false,
+          "git_blob": "119f84d920e6e6187573cb6e9ca62667156471c8",
+          "path": "crates/noble-kernel/src/dataspace/wire.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/dataspace/wire.rs"
+        },
+        {
+          "blake3": "c880434c70f94b706f0e730b194fbab049f31052d08d1333e2565e082b4482c1",
+          "bytes": 1980,
+          "executable": false,
+          "git_blob": "97d5fc875999b64305334cafd2a2b50b8a982fae",
+          "path": "crates/noble-kernel/src/execution/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/execution/mod.rs"
+        },
+        {
+          "blake3": "6b7f5e9cbf4ecfd80d1b2ba633e705e13942f5f892e0315f727215332f1254ed",
+          "bytes": 1462,
+          "executable": false,
+          "git_blob": "76ac8e0b403816b1681d8dd475a7185663a7b555",
+          "path": "crates/noble-kernel/src/integer.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/integer.rs"
+        },
+        {
+          "blake3": "2eddf8b7acea908f9caac7b0a1bc98edd477fc39b542b099e307f7f89b9b1f21",
+          "bytes": 2227,
+          "executable": false,
+          "git_blob": "d0e8f8144819fe4951aa9e48e38c9ae1577da40e",
+          "path": "crates/noble-kernel/src/lib.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/lib.rs"
+        },
+        {
+          "blake3": "89b33da3931b982099bc09b4b1fd690b69870d7b1df9a52b28715ca8f71e8d57",
+          "bytes": 7677,
+          "executable": false,
+          "git_blob": "398ff8ecb2cb7b0081571a7819c6d85acd716437",
+          "path": "crates/noble-kernel/src/resources/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/mod.rs"
+        },
+        {
+          "blake3": "38fbc18578bc4ca71fb84360dd76620fc6b52e8c68403a35c2f9a02122520452",
+          "bytes": 7157,
+          "executable": false,
+          "git_blob": "24dc2cb151def786511d46ea780598177dd61c02",
+          "path": "crates/noble-kernel/src/resources/table.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/table.rs"
+        },
+        {
+          "blake3": "061cc8ba2099e1bed7c0a8e2dabb2d891fa34958d4e96f327b7d584d526c4a71",
+          "bytes": 6527,
+          "executable": false,
+          "git_blob": "39e25dd81be6cf19250eec54fd1cf26540319bb1",
+          "path": "crates/noble-kernel/src/resources/table/access.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/table/access.rs"
+        },
+        {
+          "blake3": "3c053d8bbb315349b763dfef6a43bb609a1d3c2b51ac16adc90579947ea6927d",
+          "bytes": 2572,
+          "executable": false,
+          "git_blob": "4c4f9f88e244e6a14cab7370a6d96a3054719f45",
+          "path": "crates/noble-kernel/src/resources/table/inspection.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/table/inspection.rs"
+        },
+        {
+          "blake3": "1e2910684b3cc5d0f3a9f20408c06a8605a11eb1a8a674d86b641efc2741fa7f",
+          "bytes": 5875,
+          "executable": false,
+          "git_blob": "732a95803b54f55b4ebd48a1b0acb6d336254bca",
+          "path": "crates/noble-kernel/src/resources/table/transfer.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/table/transfer.rs"
+        },
+        {
+          "blake3": "a4dedb472702e31813f9a443ebec7d399e45805f7dcde2eaa70d302c463e6c0f",
+          "bytes": 8895,
+          "executable": false,
+          "git_blob": "23a22960d0a7bef129a0771995147c4f13f05daa",
+          "path": "crates/noble-kernel/src/resources/transition.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/resources/transition.rs"
+        },
+        {
+          "blake3": "5f81b00f1980f07d6f5de269b4f10a6450c0b8820c84ed338217cdf1549d600c",
+          "bytes": 11528,
+          "executable": false,
+          "git_blob": "3413a14c475363a5b6a331cd579dc836e634dbe1",
+          "path": "crates/noble-kernel/src/shapes.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/shapes.rs"
+        },
+        {
+          "blake3": "cdd871bc2af85d0e2073ef9d913d001acb99ea934207a82046f19b292e568046",
+          "bytes": 11744,
+          "executable": false,
+          "git_blob": "1618ab7f6ec92cd8abf4f84645ce6f9e24255044",
+          "path": "crates/noble-kernel/src/shapes/impls.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/shapes/impls.rs"
+        },
+        {
+          "blake3": "b432688430caf910b1d0ea2bc2d1ce9e5e2250525774e8c3aafd2893555ce2a9",
+          "bytes": 5517,
+          "executable": false,
+          "git_blob": "0a2c4592acfdafc3b975763994835c8fc4f7787d",
+          "path": "crates/noble-kernel/src/shapes/impls/equality.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/shapes/impls/equality.rs"
+        },
+        {
+          "blake3": "b9cbafc8d723d2a0a281f614694f6d7dd8099bfad67be87a182b2d36abf50002",
+          "bytes": 11848,
+          "executable": false,
+          "git_blob": "889dd5e6ebd37855c4a01ad7735f502b8498d11f",
+          "path": "crates/noble-kernel/src/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/types.rs"
+        },
+        {
+          "blake3": "4c19b9bf8feadd6fe10609649a9bbb6ddd1301dbca7ab09723cda2059d6b8032",
+          "bytes": 5063,
+          "executable": false,
+          "git_blob": "0e7097acbf46a87cbd3929d45012ff9051515ab1",
+          "path": "crates/noble-kernel/src/types/data.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/types/data.rs"
+        },
+        {
+          "blake3": "4cfec7e44b53d562f9be64585aa2ec18eafd4ca57b02d08e61e4c2e593fedc54",
+          "bytes": 17995,
+          "executable": false,
+          "git_blob": "7d036e7f3485be7cf2a0334642e699a48dfdc126",
+          "path": "crates/noble-kernel/src/types/impls.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/types/impls.rs"
+        },
+        {
+          "blake3": "4c3859fd6d03db6318c99be61804ac7f66975670659fcb4aad3edf761384fbba",
+          "bytes": 3223,
+          "executable": false,
+          "git_blob": "6121d2382e63e9a27252c0e7d4ecce5e328db65d",
+          "path": "crates/noble-kernel/src/types/physical.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/types/physical.rs"
+        },
+        {
+          "blake3": "b85e60f0912f59fe95ec777b05b0f9a4f677039e5797b3510894442a914c5989",
+          "bytes": 7394,
+          "executable": false,
+          "git_blob": "9b5612cd49817523a8345a628d5cd1c2503e636e",
+          "path": "crates/noble-kernel/src/types/size.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/types/size.rs"
+        },
+        {
+          "blake3": "f4986944254377c443ce6e22fcb36df65273e5e927bd8a8cec85118bbefb282f",
+          "bytes": 11965,
+          "executable": false,
+          "git_blob": "1cb9c35a84bdc13bf87459e81e7a828cd8e39252",
+          "path": "crates/noble-kernel/src/untrusted.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/untrusted.rs"
+        },
+        {
+          "blake3": "703b3d9d5f5f298430e9576f726049e932d2e5990e63d31b0cc297f9dedb84a2",
+          "bytes": 9881,
+          "executable": false,
+          "git_blob": "4fedd27ee50f40cb8aa4ad32c0559c6c99df6de6",
+          "path": "crates/noble-kernel/src/words.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words.rs"
+        },
+        {
+          "blake3": "5afbe1e65a72b9030aa24c95d0db4dc6af7563f1273a2ba32f4790bfebacd40f",
+          "bytes": 5613,
+          "executable": false,
+          "git_blob": "08fdd5292f49e720cb0e47cfb52cdedfcc2bb1b5",
+          "path": "crates/noble-kernel/src/words/bounds.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/bounds.rs"
+        },
+        {
+          "blake3": "28cad3391e60a2761eabb541e6aad27f06c5c8f933f8c6e3fa17bdd23292b219",
+          "bytes": 7963,
+          "executable": false,
+          "git_blob": "eef218389a77727b071a64fa76bd8547537cffcd",
+          "path": "crates/noble-kernel/src/words/resolve.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/resolve.rs"
+        },
+        {
+          "blake3": "5cba6587df14ef898a308952e2c6242652870b42096dd913d29e6f795ece2829",
+          "bytes": 1523,
+          "executable": false,
+          "git_blob": "cc1355981e209b8a5b33a3d18801a667878dcb18",
+          "path": "crates/noble-kernel/src/words/segments.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/segments.rs"
+        },
+        {
+          "blake3": "9a5278e88de494f8fff98a283f5ac3043642c18b955f2c73305b13fb4e0bc74c",
+          "bytes": 12613,
+          "executable": false,
+          "git_blob": "22de2760686a180b7e958f55293657b7ea9aed6c",
+          "path": "crates/noble-kernel/src/words/subst.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/subst.rs"
+        },
+        {
+          "blake3": "bd96a3cfa48e18162f00a9ffb93761f39b7e3b24f2ae816f35a6f1bf6068671a",
+          "bytes": 4980,
+          "executable": false,
+          "git_blob": "6d1b1b43e704a2a7c1489ce95a69d52921da2c6f",
+          "path": "crates/noble-kernel/src/words/subst/finish.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/subst/finish.rs"
+        },
+        {
+          "blake3": "5a9ae48101db01a022d75d22b88888bae1d51a821382f92d7954403c82b11648",
+          "bytes": 909,
+          "executable": false,
+          "git_blob": "f7532c80a7616704ec5b96093fecdf97a0c7c185",
+          "path": "crates/noble-kernel/src/words/subst/schedule.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-kernel/src/words/subst/schedule.rs"
+        },
+        {
+          "blake3": "9c5bd4f01d043d45449f5fd33efb0ce4647fadab980b003aed2b305608040198",
+          "bytes": 527,
+          "executable": false,
+          "git_blob": "32d83927d15f00c73c81173f20f5d99c5155d976",
+          "path": "crates/noble-ngraph/Cargo.toml",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "012c92d46c96ede29756df8f1ccf9dfde81a0389296397940871e7ea8be89294",
+          "bytes": 426,
+          "executable": false,
+          "git_blob": "79791162027e4d3bfb0ad02b73b2c0ab11c2d009",
+          "path": "crates/noble-ngraph/Cargo.toml.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/noble-ngraph/Cargo.toml"
+        },
+        {
+          "blake3": "b4f990c7dfb032a8cd4a0995e101c5d9da895ef9774423ab24fd0cff973288eb",
+          "bytes": 14607,
+          "executable": false,
+          "git_blob": "4c22cdcbc635b3e1a21e9cb890fd71ac75f2445f",
+          "path": "crates/noble-ngraph/src/batch.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/batch.rs"
+        },
+        {
+          "blake3": "3b7556a26fb7c18e6cc070bcb3c5c475938873055cc997cdbf0695fe3385083c",
+          "bytes": 5149,
+          "executable": false,
+          "git_blob": "c10fa79580202f1bf93e7d78c00f87d53be8e38a",
+          "path": "crates/noble-ngraph/src/belt.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt.rs"
+        },
+        {
+          "blake3": "facda79c1f1146e49b20e20a0eeac27e4becb38a5cea69e62c3a78adc91b2219",
+          "bytes": 7657,
+          "executable": false,
+          "git_blob": "2482c2390d0b470f6ae6b54a9b2b280eabc621be",
+          "path": "crates/noble-ngraph/src/belt/codec.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/codec.rs"
+        },
+        {
+          "blake3": "77217a4726101c3f1748bcbb0e078ccfd5886df43bf30c197f4b1cdad0f43539",
+          "bytes": 2023,
+          "executable": false,
+          "git_blob": "49ff2cd1a6bb596484c87dd6bfefe7980c6927e2",
+          "path": "crates/noble-ngraph/src/belt/codec/hashing.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/codec/hashing.rs"
+        },
+        {
+          "blake3": "8f0407dc51a6e1af61330e4373b3ef08168f8491d166a6c44ae7d9196d7b5878",
+          "bytes": 2670,
+          "executable": false,
+          "git_blob": "807e05664f195a808c6f61289eaa960e941b6686",
+          "path": "crates/noble-ngraph/src/belt/codec/instructions.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/codec/instructions.rs"
+        },
+        {
+          "blake3": "10e99fa9be0e8ca790383cd2ef3e985f797a0bac329847018ab2e1e0bfdce170",
+          "bytes": 6010,
+          "executable": false,
+          "git_blob": "7570e7e3490306936a2e4458027b8bb3758a0b4f",
+          "path": "crates/noble-ngraph/src/belt/execution.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/execution.rs"
+        },
+        {
+          "blake3": "43c0bec9384b766d87375b7b97294ff4f48cd7cd105f55a9714e1cc34685803f",
+          "bytes": 11286,
+          "executable": false,
+          "git_blob": "79d4f1d95e8f1a686a1d3ad35396732089c68273",
+          "path": "crates/noble-ngraph/src/belt/lower.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/lower.rs"
+        },
+        {
+          "blake3": "d9fb85885bb8ae251f14d94e9e34d9ae99b8c27a28fa815dda0ad3f4a8f319dd",
+          "bytes": 4016,
+          "executable": false,
+          "git_blob": "aedf7758a07776ce2eb6d5a380dc1f6193d9f6f7",
+          "path": "crates/noble-ngraph/src/belt/support.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/support.rs"
+        },
+        {
+          "blake3": "68828d57bfc04c05099da12c2f668d0f0dd996562ffd00e6d5b20935bdd8df62",
+          "bytes": 2801,
+          "executable": false,
+          "git_blob": "db1e324fd76d1a21ae2ab9e1a44f506cffda4948",
+          "path": "crates/noble-ngraph/src/belt/target.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target.rs"
+        },
+        {
+          "blake3": "b0c41ffffd43a8935c1253591feca0bcfc4fb15ed29b63700ee0fbbe87049a5f",
+          "bytes": 13247,
+          "executable": false,
+          "git_blob": "6ac37229adf957fd8fdb03560561a3ccf6f2b0d2",
+          "path": "crates/noble-ngraph/src/belt/target/codec.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/codec.rs"
+        },
+        {
+          "blake3": "0a79a6973f2bfc172a07fe1d3b6d98c5a1fd8feb97aefbab42f45f03db4156b4",
+          "bytes": 10065,
+          "executable": false,
+          "git_blob": "2530ad5b51484a888fc2d9e97ea2e0ece92109f7",
+          "path": "crates/noble-ngraph/src/belt/target/execution.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/execution.rs"
+        },
+        {
+          "blake3": "51c70f82c8c8fd286ce17f0b3243dfe3ea2d35ab2a715f14869752002b21a04c",
+          "bytes": 14290,
+          "executable": false,
+          "git_blob": "1cee295fcee08a3c710a0247f97023626caa1bf1",
+          "path": "crates/noble-ngraph/src/belt/target/lower.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/lower.rs"
+        },
+        {
+          "blake3": "c57112b805882540df60d2b66413c1f8adccf7ab27dce0c9edf603a69a4b67ad",
+          "bytes": 63,
+          "executable": false,
+          "git_blob": "1661adb88700486d49ac9564df0d1966969073a0",
+          "path": "crates/noble-ngraph/src/belt/target/machine.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/machine.rs"
+        },
+        {
+          "blake3": "9775b0061f12d2e963881064b7c6809c0090485d721f12e286736e45a99998ac",
+          "bytes": 10754,
+          "executable": false,
+          "git_blob": "1e8d089f2ee1f88cc73f82132823951373a8db30",
+          "path": "crates/noble-ngraph/src/belt/target/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/types.rs"
+        },
+        {
+          "blake3": "23c0340e462ec15977170665ddf15d6fc63cbfd2987001febc480557df7db94c",
+          "bytes": 16242,
+          "executable": false,
+          "git_blob": "b3913cbcc00d0a42bcd19b861c9b381e21613308",
+          "path": "crates/noble-ngraph/src/belt/target/validate.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/target/validate.rs"
+        },
+        {
+          "blake3": "3446f24430f829d620a77165fe00a29472dad88bc99881d652a28ce7fc057fe4",
+          "bytes": 4937,
+          "executable": false,
+          "git_blob": "0b92b43d852714082d89c22693fe9cd8fdd36271",
+          "path": "crates/noble-ngraph/src/belt/types.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/types.rs"
+        },
+        {
+          "blake3": "aced301ec22680797800892574e2ed35d2b90e531887b954cdc87bc46746b814",
+          "bytes": 820,
+          "executable": false,
+          "git_blob": "fd435fd30370a83802fb28fb02d57ee176261d5f",
+          "path": "crates/noble-ngraph/src/belt/validate.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/validate.rs"
+        },
+        {
+          "blake3": "fa7345a5843536f0975340dc125bf94a05c1242e84fcf3929d0b6464bdb66ed3",
+          "bytes": 7916,
+          "executable": false,
+          "git_blob": "1ffc5d05bb4398e223d5d81f92bab83d9ac3b2e1",
+          "path": "crates/noble-ngraph/src/belt/validate/machine.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/belt/validate/machine.rs"
+        },
+        {
+          "blake3": "89b901ecebe1e01b6e369493992212881f954f7cb5e288df642d052e4b177053",
+          "bytes": 73999,
+          "executable": false,
+          "git_blob": "489f022f4d82e2903ec1a4535462a33238b7cd83",
+          "path": "crates/noble-ngraph/src/cert.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/cert.rs"
+        },
+        {
+          "blake3": "df97f9586aa48f81de7db6df23bb43b9b2858b8a579e0f580d799f556a68848d",
+          "bytes": 27229,
+          "executable": false,
+          "git_blob": "83d142cbf00bcafaabbd70acfb5ffde9b23f8dbc",
+          "path": "crates/noble-ngraph/src/cert/scoped.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/cert/scoped.rs"
+        },
+        {
+          "blake3": "edc3be4769dd78f8105e773d4ff1faae346de8a0af2cadc20305dbee30eed94b",
+          "bytes": 48959,
+          "executable": false,
+          "git_blob": "433103a73f9a1dca2648aad8fddcf718c5fecd3a",
+          "path": "crates/noble-ngraph/src/check.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/check.rs"
+        },
+        {
+          "blake3": "076f1ad4795e4cab83fdc7c4cd274eaecd3b0e54f48b4f4c63997fd9759bb379",
+          "bytes": 26605,
+          "executable": false,
+          "git_blob": "7d0262f86687becfeb43171b53250f30faa37c4f",
+          "path": "crates/noble-ngraph/src/compiled.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/compiled.rs"
+        },
+        {
+          "blake3": "38fc8a911c03b435d1a727ca87054af184a807b42b5e1e8d679dafd23dc8b412",
+          "bytes": 14707,
+          "executable": false,
+          "git_blob": "ecfe0508b9218d8c3cfb5c6155e372d592e92d74",
+          "path": "crates/noble-ngraph/src/diag.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/diag.rs"
+        },
+        {
+          "blake3": "22e83fa7aed1b2a8248d3ebd8b6a6fd07bcd6b2d9dfb1cfb260691454b687ee8",
+          "bytes": 19600,
+          "executable": false,
+          "git_blob": "2fda0cdb3971d3e163bf8306663548e130258562",
+          "path": "crates/noble-ngraph/src/eval.rs",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "fa770867561bedc30c2fcf608d0f982ddfdaa23c043e50b359ecd0a9514cec03",
+          "bytes": 18851,
+          "executable": false,
+          "git_blob": "4d97b9dbe13b2bf4e1d6f7f3c053758cc1fe40c7",
+          "path": "crates/noble-ngraph/src/eval.rs.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/noble-ngraph/src/eval.rs"
+        },
+        {
+          "blake3": "60b34f4ab48fd2fa536e5d8dabda4c63c86124c7a0ea17da7ad765267054746e",
+          "bytes": 27227,
+          "executable": false,
+          "git_blob": "75ac9cc6ce6485fba6c692b9ede87783c0ea254c",
+          "path": "crates/noble-ngraph/src/extract/admission.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/extract/admission.rs"
+        },
+        {
+          "blake3": "3e0398b9415e3c157803e55de5d4b0c8fa31e7e7a8c72b1a1eb51d36164bb502",
+          "bytes": 3187,
+          "executable": false,
+          "git_blob": "9fec1138fe5ca06339aaba8cc93d4dbf3ccfad1f",
+          "path": "crates/noble-ngraph/src/extract/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/extract/mod.rs"
+        },
+        {
+          "blake3": "320ee6c27ca8db3d08140d4c0e66a5933738e7bfd3fff6260324fd68b3cdfdb4",
+          "bytes": 3000,
+          "executable": false,
+          "git_blob": "772a47df4bb5cf34ca9c9f5816fef6943e506363",
+          "path": "crates/noble-ngraph/src/extract/source.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/extract/source.rs"
+        },
+        {
+          "blake3": "b636ee749b282ed9a6ac76bf6758c135ab39613b92b0f8795192221b612e2637",
+          "bytes": 47677,
+          "executable": false,
+          "git_blob": "0bd3558bce6c9b98857fe1c2e0887e87826ce297",
+          "path": "crates/noble-ngraph/src/extract/symbolic.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/extract/symbolic.rs"
+        },
+        {
+          "blake3": "eee0933dc987e9d8a16f4baa05fc631d09afbb09fd9f852b32403c0185df209a",
+          "bytes": 19967,
+          "executable": false,
+          "git_blob": "d1428a5a2d6af7d601b9c10894d6796ffc8d3b4e",
+          "path": "crates/noble-ngraph/src/facts.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/facts.rs"
+        },
+        {
+          "blake3": "5ae08730b430270099eebbb5cfc057065576e039d114b211b8e7e9eef09d4a1b",
+          "bytes": 7711,
+          "executable": false,
+          "git_blob": "c66ecb27ec4d560d9fb3b8cd4642bf0dec384e79",
+          "path": "crates/noble-ngraph/src/format/data.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/data.rs"
+        },
+        {
+          "blake3": "e67393056fd53659121469147ed9b47548d87142a364bf479ac9e95e839e06d3",
+          "bytes": 34497,
+          "executable": false,
+          "git_blob": "57154e82d64f759b25e8871caaada5d29a9839cf",
+          "path": "crates/noble-ngraph/src/format/graph.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/graph.rs"
+        },
+        {
+          "blake3": "61e4e18df1e787a53a8face7ef54543c9057032f0e76e8b0b135b4eec862799c",
+          "bytes": 5957,
+          "executable": false,
+          "git_blob": "856aaf7b94edee0ed7e2568afc13c951aa132098",
+          "path": "crates/noble-ngraph/src/format/mod.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/mod.rs"
+        },
+        {
+          "blake3": "7f6d42d03f5bdafbf94abd20383f7831cbce470aa791c40c3f73972441cdadb8",
+          "bytes": 23231,
+          "executable": false,
+          "git_blob": "81a3a3106582d76f4325d90db26f21bdb7c9fc77",
+          "path": "crates/noble-ngraph/src/format/snapshot.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/snapshot.rs"
+        },
+        {
+          "blake3": "2ba2fa1467df065b472c0dfd5ef47bd757ed1211dfad3126ffc9f45e58b785c0",
+          "bytes": 8907,
+          "executable": false,
+          "git_blob": "b9108480a57cb18ba20c03d3186b3f4842937ab2",
+          "path": "crates/noble-ngraph/src/format/value.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/value.rs"
+        },
+        {
+          "blake3": "23d040f99e58ef991408e985cc0562c004083b7508584e27ad988e4752afcaf5",
+          "bytes": 4028,
+          "executable": false,
+          "git_blob": "da517342022cc087c8badc4c22d7a2954e31b1f2",
+          "path": "crates/noble-ngraph/src/format/vectors.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/format/vectors.rs"
+        },
+        {
+          "blake3": "a3b5eda2dcc199ecbdb87236dc8e17f0fc4df329230ef93b5cb014fc76dbcdbb",
+          "bytes": 31761,
+          "executable": false,
+          "git_blob": "0940e31cca1e4b40d6e533a15aa89b928257c432",
+          "path": "crates/noble-ngraph/src/grad.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/grad.rs"
+        },
+        {
+          "blake3": "20b54a8175639fb02d5953d5f83caf9e8b95f56e1edb3256770042f24d47c509",
+          "bytes": 974,
+          "executable": false,
+          "git_blob": "2e81e87ae403ca45fae97208d4b85888fb96598b",
+          "path": "crates/noble-ngraph/src/identity.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/identity.rs"
+        },
+        {
+          "blake3": "46a9eef7cd4807d396cab44c397805f585e03c6875b796914e35a6d79e4c4371",
+          "bytes": 33262,
+          "executable": false,
+          "git_blob": "147332c4f71c7676898e9a7cb830fc8ea884f43b",
+          "path": "crates/noble-ngraph/src/ir.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/ir.rs"
+        },
+        {
+          "blake3": "72b0a4acff63656851d85b4b2c6b1829a277357ed21ba92847b9e9196b69c8e0",
+          "bytes": 28035,
+          "executable": false,
+          "git_blob": "bb845f688db886ea27f499df717ca398f683cf6f",
+          "path": "crates/noble-ngraph/src/layout.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/layout.rs"
+        },
+        {
+          "blake3": "eca4afa5a78b4ade02cafb02ab847af5750793f0d1c5356c5183f1a1f6ef57e5",
+          "bytes": 4611,
+          "executable": false,
+          "git_blob": "07cd54a86cd6d69385ad4670aa0612de3d8d4af3",
+          "path": "crates/noble-ngraph/src/lib.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/lib.rs"
+        },
+        {
+          "blake3": "17208017c2cdcb637477491d66f1caaaada0f56995d09caa2b2194f853c8745e",
+          "bytes": 27203,
+          "executable": false,
+          "git_blob": "b2cab22f9cab2dca2180d233a069d3d6e36a846c",
+          "path": "crates/noble-ngraph/src/llvm.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/llvm.rs"
+        },
+        {
+          "blake3": "610daaf78d943ef25d499615c47b614ec2a801b0db83e64f75c8c3a6eb89eb7c",
+          "bytes": 138025,
+          "executable": false,
+          "git_blob": "ba7da29fa0b74b4be2eb25f85b318512bacf817c",
+          "path": "crates/noble-ngraph/src/net.rs",
+          "role": "aspen-owned",
+          "upstream_path": null
+        },
+        {
+          "blake3": "700411a4cddd80ca045c3292e367b8009635e310a4bdbb210d8f1b375078cbf0",
+          "bytes": 130863,
+          "executable": false,
+          "git_blob": "5294ca00e70bc2a63174de8f5901ea58a0b3e6f3",
+          "path": "crates/noble-ngraph/src/net.rs.orig",
+          "role": "renamed-upstream",
+          "upstream_path": "crates/noble-ngraph/src/net.rs"
+        },
+        {
+          "blake3": "31bdd74f7078d0b9e7818cc0df53b384bc5bb8da9d1d6a4ba36e21a04fe01fd4",
+          "bytes": 64337,
+          "executable": false,
+          "git_blob": "1f721e06434d9bdeef3ca45c3c511879e63c01a0",
+          "path": "crates/noble-ngraph/src/net/rewrite.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/net/rewrite.rs"
+        },
+        {
+          "blake3": "ada4cee20f2847a9d54a515da4c8d019c4eb9645a1436a99b7399fbb9376dec3",
+          "bytes": 1555,
+          "executable": false,
+          "git_blob": "d775f6f73f5a98a092fe2abf7f7d1493648044b5",
+          "path": "crates/noble-ngraph/src/prng.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/prng.rs"
+        },
+        {
+          "blake3": "0853c9b69dc20ffc639cd3844ca54f54be450dfa7cae98824d3762bca5fd2cf7",
+          "bytes": 33925,
+          "executable": false,
+          "git_blob": "223c97fbea2d1757bdfbfc74df81c0cf2a8b938b",
+          "path": "crates/noble-ngraph/src/resource.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/resource.rs"
+        },
+        {
+          "blake3": "f6ede7eb4125128c480d0d6e78b56874f1e49c61637f06a3df3cc33171f07579",
+          "bytes": 10294,
+          "executable": false,
+          "git_blob": "1658d1c89171c1312451649e336c27a3e286b07c",
+          "path": "crates/noble-ngraph/src/schedule.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/schedule.rs"
+        },
+        {
+          "blake3": "56812996e7e478c8a6fd8d4ba0a2c528fe5762e274e1eef8a44a8ec942859491",
+          "bytes": 32992,
+          "executable": false,
+          "git_blob": "67de5d26bf156a5c0c13d73757170e6a21f2a94f",
+          "path": "crates/noble-ngraph/src/sem.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/sem.rs"
+        },
+        {
+          "blake3": "3c9b38154c77b56d8ab91bdc65d2b90c112082bec85ecbb93da426bcaa556f3b",
+          "bytes": 7156,
+          "executable": false,
+          "git_blob": "1a432fe3eff36a3b43f320de816964a978532f2c",
+          "path": "crates/noble-ngraph/src/snapshot.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/snapshot.rs"
+        },
+        {
+          "blake3": "fdff53e92bdaa1ff58c345d25a391b1ae889ed9872ae6f648503a92dbcb0ce6a",
+          "bytes": 70458,
+          "executable": false,
+          "git_blob": "95767be4474969801a33c760fe1ede16eeb800e4",
+          "path": "crates/noble-ngraph/src/specialize.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize.rs"
+        },
+        {
+          "blake3": "2e58ac04245527e24790c4e40fbd04eaf79d7a41aef603adae64d70095416519",
+          "bytes": 40758,
+          "executable": false,
+          "git_blob": "fea97b191e1e9359a82df0981989966a524f8a66",
+          "path": "crates/noble-ngraph/src/specialize/cache.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache.rs"
+        },
+        {
+          "blake3": "79b1752ba9acdd261ddd335b330b7614e4d1b7532df59b490a5af4cad05a825b",
+          "bytes": 3850,
+          "executable": false,
+          "git_blob": "d1ca3249de865f5abb78c67e5c60d0d5320bd4f5",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests.rs"
+        },
+        {
+          "blake3": "044b6fb3906a3078e312af417d899a2480790be2a0215519da3687f9018d386e",
+          "bytes": 5126,
+          "executable": false,
+          "git_blob": "50f4fe4f2f36376b480e940319b36687068229cd",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests/adversarial.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests/adversarial.rs"
+        },
+        {
+          "blake3": "a6352adf2de1254957ebe8493dc9ce197b30266302eb7a27828a3af0ff3736a2",
+          "bytes": 3394,
+          "executable": false,
+          "git_blob": "a49ce8df4cb5161235459138f0ad20b52baa6f03",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests/identity.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests/identity.rs"
+        },
+        {
+          "blake3": "c7fdc679495857f5362de40dc7d932695b5a52771702a0a4b4b6fe3c62c1c452",
+          "bytes": 9456,
+          "executable": false,
+          "git_blob": "7064dad764e54b5a3f03b7a645562ce5bdddb590",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests/matrix.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests/matrix.rs"
+        },
+        {
+          "blake3": "ea9e70e8b7bdec10305124a8ac08dbfcaca02853229ec1bc5cf53b19fa7f11bd",
+          "bytes": 7887,
+          "executable": false,
+          "git_blob": "d07a09429a7807454513a81ccb7b207df623dd12",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests/resources.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests/resources.rs"
+        },
+        {
+          "blake3": "21317329c3128dbd9653428a74f9187dea50070fc70607bf6aa4d6774bd1f320",
+          "bytes": 1755,
+          "executable": false,
+          "git_blob": "827220b5717fa81831baa47fc66a1a8e4060ede7",
+          "path": "crates/noble-ngraph/src/specialize/cache/tests/reuse.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/cache/tests/reuse.rs"
+        },
+        {
+          "blake3": "a11d1415bd0d8ccfd30efd1b4b871c8fa4abb8ea6c5e1c9febde44116fc30a4a",
+          "bytes": 14811,
+          "executable": false,
+          "git_blob": "6e79e9a2411e18b59bb93e44a73adb3c57702a4a",
+          "path": "crates/noble-ngraph/src/specialize/program.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/specialize/program.rs"
+        },
+        {
+          "blake3": "4ab33c6ed1380cc50ab2e8d757f0d726951365b7a8b41a325f6e4192c3eb0420",
+          "bytes": 26907,
+          "executable": false,
+          "git_blob": "fc84ef0369c6481f81fbc9175b8bc17225bdcd5e",
+          "path": "crates/noble-ngraph/src/train.rs",
+          "role": "upstream",
+          "upstream_path": "crates/noble-ngraph/src/train.rs"
+        }
+      ],
+      "name": "noble-pure",
+      "policy": {
+        "aspen_owned": [
+          {
+            "change": "scripts/normalize-noble-manifests.py resolves package inheritance and unsafe-code lint; no third-party dependencies.",
+            "derived_from": "crates/noble-ngraph/Cargo.toml.orig",
+            "path": "crates/noble-ngraph/Cargo.toml"
+          },
+          {
+            "change": "scripts/normalize-noble-manifests.py resolves package inheritance and unsafe-code lint.",
+            "derived_from": "crates/noble-kernel/Cargo.toml.orig",
+            "path": "crates/noble-kernel/Cargo.toml"
+          },
+          {
+            "change": "scripts/normalize-noble-manifests.py resolves inheritance; omits integration-test-only dev dependency.",
+            "derived_from": "crates/noble-contracts/Cargo.toml.orig",
+            "path": "crates/noble-contracts/Cargo.toml"
+          },
+          {
+            "change": "Aspen bounded phase/control observation overlay; retains original in-place sequential arena, checked rewrite plans, arithmetic and complete ordered readback.",
+            "derived_from": "crates/noble-ngraph/src/net.rs.orig",
+            "path": "crates/noble-ngraph/src/net.rs"
+          },
+          {
+            "change": "Aspen per-node observation overlay for independently bounded normative source-IR reference evaluator; unchanged arithmetic.",
+            "derived_from": "crates/noble-ngraph/src/eval.rs.orig",
+            "path": "crates/noble-ngraph/src/eval.rs"
+          }
+        ],
+        "destination": "vendor/noble-pure",
+        "disclosure": "2026-11-17 operator asserted necessary rights and authorized AGPL-3.0-or-later source-only reuse/redistribution of Onix-owned Rust and Cargo metadata in exactly noble-ngraph, noble-kernel and noble-contracts, then separately granted the indispensable crates/noble-contracts/src/fixtures/result.noble asset (BLAKE3 694a6766ca91c9434329df739070f7b26dda43576dfc3788cb7b7c2c271cb4fe). All other non-Rust fixture programs, third-party code, proofs, integration test suites, other crates and Git history are excluded. Original selected blobs are preserved; no upstream license declaration is invented.",
+        "file_filter": {
+          "exact_paths": [
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/noble-ngraph/Cargo.toml",
+            "crates/noble-kernel/Cargo.toml",
+            "crates/noble-contracts/Cargo.toml",
+            "crates/noble-contracts/src/fixtures/result.noble"
+          ],
+          "extensions": [
+            ".rs"
+          ]
+        },
+        "license": "AGPL-3.0-or-later (operator exact-revision grant; no upstream license declaration)",
+        "name": "noble-pure",
+        "purpose": "Opt-in sequential pure I64 net evaluation and independently bounded producer reference evaluator.",
+        "renamed_originals": [
+          {
+            "destination": "Cargo.toml.orig",
+            "upstream": "Cargo.toml"
+          },
+          {
+            "destination": "crates/noble-ngraph/Cargo.toml.orig",
+            "upstream": "crates/noble-ngraph/Cargo.toml"
+          },
+          {
+            "destination": "crates/noble-kernel/Cargo.toml.orig",
+            "upstream": "crates/noble-kernel/Cargo.toml"
+          },
+          {
+            "destination": "crates/noble-contracts/Cargo.toml.orig",
+            "upstream": "crates/noble-contracts/Cargo.toml"
+          },
+          {
+            "destination": "crates/noble-ngraph/src/net.rs.orig",
+            "upstream": "crates/noble-ngraph/src/net.rs"
+          },
+          {
+            "destination": "crates/noble-ngraph/src/eval.rs.orig",
+            "upstream": "crates/noble-ngraph/src/eval.rs"
+          }
+        ],
+        "repository": "https://github.com/OnixResearch/noble",
+        "revision": "f7af9e972aa2968d22978794a667d267cf2745e8",
+        "selected_paths": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "crates/noble-ngraph/Cargo.toml",
+          "crates/noble-ngraph/src",
+          "crates/noble-kernel/Cargo.toml",
+          "crates/noble-kernel/src",
+          "crates/noble-contracts/Cargo.toml",
+          "crates/noble-contracts/src"
+        ]
+      },
+      "repository": "https://github.com/OnixResearch/noble",
+      "revision": "f7af9e972aa2968d22978794a667d267cf2745e8"
     }
   ]
 }

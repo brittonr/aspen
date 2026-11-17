@@ -26,6 +26,7 @@ vendor/
 !/vendor/sources.ncl
 !/vendor/sources.lock.json
 !/vendor/vm-cohort/
+!/vendor/noble-pure/
 .agent/
 .claude/
 .dogfood-runs/
@@ -33,5 +34,6 @@ vendor/
 mutants.out/
 *.orig
 !/vendor/vm-cohort/**/Cargo.toml.orig
+!/vendor/noble-pure/**/*.orig
 crates/**/tests/ui/**/Cargo.lock
 docs/simulations/*.json

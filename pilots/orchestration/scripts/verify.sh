@@ -11,8 +11,10 @@ cargo --version
 printf '\n== Architecture/source checks ==\n'
 python3 check_boundaries.py
 printf '\n== Format authored source ==\n'
-# This intentionally formats the previously uncompiled source before testing.
-cargo fmt --all
+# Explicit packages exclude immutable out-of-workspace producer snapshots.
+cargo fmt -p molten-orchestrator-core -p molten-orchestrator-application \
+  -p molten-batch-core -p molten-batch-application -p molten-orchestrator-codec \
+  -p molten-orchestrator-adapters -p molten-orchestrator-cli -p molten-render-pilot -p molten-pure-net
 printf '\n== Actual Rust unit, adapter, and separate-process tests ==\n'
 cargo test --workspace --all-targets --locked
 printf '\n== Clippy ==\n'

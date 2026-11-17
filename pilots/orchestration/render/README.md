@@ -72,7 +72,7 @@ The helper binary and component guest call these pure workload APIs; CLI's test-
 - `frozen_manifest(component_id) -> Result<Manifest>` with actual uploaded component content-manifest identity, not a raw digest.
 - `prepare(manifest) -> Result<Prepared>` exposing `.manifest`, `.objects: Vec<(Id, Vec<u8>)>` (Data content IDs/exact literals), `.job: JobSpec`. Publish component/objects first, submit through existing admission.
 - `Manifest::{validate,id,encode,decode,tile,tile_count,image_bytes,scene}` and `Assignment::{id,encode}` for inspection.
-- `content_id(kind, bytes)` uses exact existing `content-manifest.v1` semantics.
+- `content_id(kind, bytes)` uses current `content-manifest.v2` semantics. Historical v1 cohort identities above remain evidence for their original bindings, not v2 identities.
 - `execute(inputs)` is the guest ABI body; `render_tile`, `assemble` and `verify_final` are the real pure workload APIs.
 - For fetched results first compare `content_id(Data, bytes)` to the authoritative accepted output ID, then call `verify_final(manifest, bytes)`. Identity is not authorization.
 

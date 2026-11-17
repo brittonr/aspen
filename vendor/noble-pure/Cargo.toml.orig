@@ -1,0 +1,26 @@
+[workspace]
+members = ["crates/noble-kernel", "crates/noble-contracts", "crates/noble-wasm", "crates/noble-cli", "crates/noble-syndicate", "crates/noble-ngraph", "crates/noble-ngraph-experiment"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+architecture_policy = "policy/architecture.ncl"
+
+# A uniform mode keeps normal and test dependencies in one compiler configuration.
+# The initial abort/unwind probe was rejected by Octet's unit selector.
+[profile.dev]
+panic = "unwind"
+overflow-checks = true
+
+[profile.release]
+panic = "unwind"
+overflow-checks = true

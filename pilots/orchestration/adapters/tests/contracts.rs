@@ -137,7 +137,12 @@ struct NeverRun {
 }
 #[async_trait]
 impl ExecutionPort for NeverRun {
-    async fn run(&self, _: ExecutionRequest, _: Content, _: Vec<Vec<u8>>) -> Result<ExecutionOutput, Error> {
+    async fn run(
+        &self,
+        _: ExecutionRequest,
+        _: MaterializedWorkload,
+        _: Vec<Vec<u8>>,
+    ) -> Result<ExecutionOutput, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Err(Error::Unknown)
     }
@@ -165,7 +170,11 @@ fn unknown_worker_acceptance_does_not_mint_a_launch_ticket() {
         observations: Arc::new(Counters::default()),
     });
     worker.recover_after_exclusive_open().unwrap();
-    let r = request(content_id(&fixture()).unwrap());
+    let mut r = request(content_id(&fixture()).unwrap());
+    r.workload = Workload::PureNet {
+        manifest: id(7),
+        artifact: r.workload.artifact(),
+    };
     assert!(matches!(worker.start(r.clone()), Err(Error::Unknown)));
     assert_eq!(runtime.calls.load(Ordering::SeqCst), 0);
     let (_, ticket) = worker.start(r).unwrap();
