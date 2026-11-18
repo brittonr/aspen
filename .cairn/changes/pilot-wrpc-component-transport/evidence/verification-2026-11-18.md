@@ -41,3 +41,21 @@ is its only constructor.
   credential admission or release evidence.
 - The Iroh overlap decision required for promotion is not made; the pilot stays
   experimental.
+
+## Review follow-up
+
+An independent review of `43482e4b1..c2ec6cf83` found no behaviour change in
+`ed52b83c0` and no new denial that would pass without its gate, plus three
+claim gaps. Molten `328153ff7` closes them: the second-attempt case now
+requires the consumed-session denial, which runs before the journal and
+transport; the tasks note no longer says all 262 manifest members were
+remeasured; and the tasks and pilot doc say 55 findings were repaired and one
+allowed.
+
+At `328153ff7` the [follow-up run](real-bundle-followup-run-2026-11-18.json)
+rejected the same 38 cases in the same order with identical replay output, and
+Octet with `component-rpc-telemetry` was `clean`. Both Octet artifact sets are
+kept under `octet-component-rpc-2026-11-18/`: `after-328153ff7`, and
+`before-43482e4b1`, a rerun of the pre-repair check (`warning-only`, 110
+findings, 56 distinct) because the first run's artifacts were in removed
+scratch.

@@ -1,0 +1,180 @@
+{
+  "schema": "aspen.component-rpc.real-bundle-run-observation/v1",
+  "date": "2026-11-18",
+  "change": "pilot-wrpc-component-transport",
+  "maintenance_owner": "Molten component-RPC integration maintainers",
+  "immediate_outcome": "After the Tiger Style repairs and the review follow-up, the hello pair and telemetry emitter re-ran on the same published Mantle bytes: the same 38 negative cases were rejected in the same order, offline replay verified and the telemetry fixture exported one span.",
+  "durable_capability": "A digest-bound real-bundle run for the source state that closes the pilot tasks, comparable field by field with the admission run.",
+  "baseline": "real-bundle-admission-run-2026-11-18.json",
+  "source": {
+    "commit": "328153ff76f88ed3a4d061e418fd9faa4e2cc088",
+    "checkout_clean": true,
+    "profile": "Cargo dev unoptimized, debug information disabled; not a Nix-built deployment or performance profile",
+    "features": [
+      "component-rpc-telemetry"
+    ],
+    "molten_image_blake3": "fa748cdff7a936629c0d07c5f5371a9896153afd0a0efac2c65c7cb3f034c462"
+  },
+  "producer_binding": "Same immutable store paths and producer facts as the baseline; this run admitted the same materialization reference, blake3:1375f1fa640106b44b1a44dd580fbafddde7e78b4d3835f245dfe70cc85ee902.",
+  "runs": [
+    {
+      "command": "molten component-rpc run-fixture --bundle-root REFERENCE_BUNDLE --staging-root FRESH --output-root FRESH",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.75,
+      "stdout_blake3": "cb27a63f2a0228c8af28a131983b536c6a665ce869720222e247840a6aa8385c",
+      "outcome": "admitted"
+    },
+    {
+      "command": "molten component-rpc show --output-root OUTPUT",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.02,
+      "stdout_blake3": "cb27a63f2a0228c8af28a131983b536c6a665ce869720222e247840a6aa8385c",
+      "outcome": "read-back"
+    },
+    {
+      "command": "molten component-rpc replay --bundle-root REFERENCE_BUNDLE --staging-root FRESH --output-root OUTPUT",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.1,
+      "stdout_blake3": "5a60c57855ac08fb0e4a4a6b4039916444caad342c6780ac09e89a457cb26a43",
+      "outcome": "replay-verified"
+    },
+    {
+      "command": "molten component-rpc telemetry-fixture --bundle-root TELEMETRY_BUNDLE --staging-root FRESH --rpc-output-root OUTPUT --sink-root FRESH --sink-ref SINK_REF",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 1.09,
+      "stdout_blake3": "6eed0c2daa77f0238062cda2a7df98cc1dc71b34cba8acf4a5541a3d7f93960e",
+      "outcome": "diagnostic-exported"
+    },
+    {
+      "command": "molten component-rpc telemetry-show --sink-root SINK",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.02,
+      "stdout_blake3": "e0e553475ce7164cf900e9cb183767d293194da0981257bd041a59d581569e19",
+      "outcome": "read-back"
+    }
+  ],
+  "staging_leftovers": 0,
+  "outputs": {
+    "out/client-intent.preserves": {
+      "blake3": "33fbd1351bcc1b9bd477afe1ea64d7745e4ce13c8a2ebbc6a5b5c53eaffce056",
+      "bytes": 1118
+    },
+    "out/client-live.preserves": {
+      "blake3": "196c5db4c480d55c8b14022a75cbc6ead07c80669d1342ddb85509c0d597b7aa",
+      "bytes": 3691
+    },
+    "out/client-terminal.preserves": {
+      "blake3": "1a685da1681fb46988c1379ac093a2b35e56caeb8921612321c6025286af8685",
+      "bytes": 223
+    },
+    "out/client.preserves": {
+      "blake3": "196c5db4c480d55c8b14022a75cbc6ead07c80669d1342ddb85509c0d597b7aa",
+      "bytes": 3691
+    },
+    "out/report.preserves": {
+      "blake3": "a47928fff9a442c9f2b1c344681c79e29db1a29d90b58b54f8360550e05256f6",
+      "bytes": 1449
+    },
+    "out/server-intent.preserves": {
+      "blake3": "4fad6fbb538ebbce9b42469a598705037438b3b824ce176d81d04d208fcb537b",
+      "bytes": 1118
+    },
+    "out/server-live.preserves": {
+      "blake3": "2a08d14a19a01375cb265a63ecd3ceae9a5dcbf9c44edf185c8d93d16f428ff8",
+      "bytes": 3691
+    },
+    "out/server-terminal.preserves": {
+      "blake3": "3a3812be6bf2318a12f14dc2577c6b458133b3b947a909c13f9bb95315982202",
+      "bytes": 223
+    },
+    "out/server.preserves": {
+      "blake3": "2a08d14a19a01375cb265a63ecd3ceae9a5dcbf9c44edf185c8d93d16f428ff8",
+      "bytes": 3691
+    },
+    "sink/otel-diagnostic.preserves": {
+      "blake3": "75ae0d297d9476ce48e4085402bca0e39cbc2831a23d5d73544c913e0befc703",
+      "bytes": 963
+    },
+    "sink/otel-fixture.preserves": {
+      "blake3": "f69810e1f9d8628a0fb2b271a2c38fe2a434f385b96596b9fa1b6f44b3e82ea9",
+      "bytes": 356
+    }
+  },
+  "rpc": {
+    "contract": "molten.component-rpc.hello.v1",
+    "report_refs": [
+      "blake3:1375f1fa640106b44b1a44dd580fbafddde7e78b4d3835f245dfe70cc85ee902",
+      "blake3:196c5db4c480d55c8b14022a75cbc6ead07c80669d1342ddb85509c0d597b7aa",
+      "blake3:2a08d14a19a01375cb265a63ecd3ceae9a5dcbf9c44edf185c8d93d16f428ff8"
+    ],
+    "client_result": "42",
+    "remote_result": "hello from Rust",
+    "negative_cases": [
+      "reordered-transcript",
+      "duplicate-transcript",
+      "cross-call-replay",
+      "wire-result-drift",
+      "uncertain-delivery",
+      "malformed-mapping",
+      "stream-future-path",
+      "wrong-world",
+      "unauthorized-function",
+      "resource-contract-drift",
+      "stale-current-context",
+      "unauthorized-peer-replay",
+      "production-overclaim",
+      "telemetry-secret-field",
+      "telemetry-queue-overflow",
+      "live-timing-replay",
+      "ucan-wrong-grant",
+      "unauthorized-peer-before-effect",
+      "ungranted-component-before-effect",
+      "ucan-invalid-holder-signature",
+      "ucan-duplicate-nonce",
+      "current-basalt-policy-deny",
+      "missing-valid-token",
+      "expired-current-authority",
+      "overbudget-before-effect",
+      "delivery-contract-drift-before-effect",
+      "wrong-world-before-effect",
+      "unauthorized-function-before-effect",
+      "oversized-invoke-before-effect",
+      "unmeasured-component-before-effect",
+      "transport-profile-drift-before-session",
+      "retry-after-attempt-denied",
+      "cohort-drift",
+      "local-guest-build",
+      "unsupported-async-world",
+      "incomplete-bundle",
+      "mismatched-loose-component",
+      "missing-client-bundle"
+    ],
+    "same_cases_and_order_as_baseline": true,
+    "replay_stdout_equal_to_baseline": true,
+    "report_non_claims": [
+      "not-protocol-stability",
+      "not-semantic-equivalence",
+      "not-transport-security",
+      "not-production-readiness",
+      "not-component-correctness",
+      "not-existing-protocol-replacement"
+    ]
+  },
+  "telemetry": {
+    "observed_negative_cases": [
+      "independent-telemetry-authority-deny",
+      "secret-attribute-export-deny",
+      "bounded-queue-export-deny"
+    ],
+    "sink_ref": "blake3:c2e4f2f948f24aeb07cc790900b558e35f34cb863915c422da06a16f63384baf",
+    "exported_spans": 1
+  },
+  "non_claims": [
+    "not remote or cross-host RPC execution",
+    "not transport security or production credential admission",
+    "not protocol stability or semantic equivalence",
+    "not OTLP export or trusted host evidence beyond this fixture",
+    "not release eligibility",
+    "fixture keys and verification time only; the added denials are not production credential admission"
+  ]
+}

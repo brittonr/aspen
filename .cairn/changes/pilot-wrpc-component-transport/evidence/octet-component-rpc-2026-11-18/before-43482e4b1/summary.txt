@@ -1,0 +1,146 @@
+--- octet summary ---
+Status: warning-only
+Findings: 110
+Warnings: 110
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:f02d246e8bea8a06a6fd9a8632b0df393ff968a1e3c60811b472e76cc657823d
+Profile hash: b3:e7b1c63e2765fbf7752db13ec382541b83f1fc6e23fcce9d3b0c08f59d44169a
+
+By crate:
+  molten              109
+  componentrpc        1
+
+By effect:
+  unknown         62
+  failure         32
+  resource        16
+
+By lint:
+  non_trait_imports                  52
+  explicit_defaults                  18
+  path_segment_repetition            10
+  function_length                    6
+  unbounded_collection_growth        6
+  catch_all_on_enum                  4
+  module_file_count                  4
+  unchecked_narrowing                4
+  borrowed_argument_types            2
+  platform_dependent_cast            2
+  usize_in_public_api                2
+
+Index:
+  F1    module_file_count           molten        src/cli/runtime/pilots.rs:1
+  F2    module_file_count           molten        src/cli/runtime/pilots.rs:1
+  F3    module_file_count           molten        src/componentrpc/authority.rs:1
+  F4    module_file_count           molten        src/componentrpc/authority.rs:1
+  F5    non_trait_imports           molten        src/componentrpc/authority.rs:2
+  F6    non_trait_imports           molten        src/componentrpc/authority.rs:2
+  F7    non_trait_imports           molten        src/componentrpc/authority.rs:5
+  F8    non_trait_imports           molten        src/componentrpc/authority.rs:5
+  F9    non_trait_imports           molten        src/componentrpc/bridge.rs:2
+  F10   non_trait_imports           molten        src/componentrpc/bridge.rs:2
+  F11   platform_dependent_cast     molten        src/componentrpc/bridge.rs:95
+  F12   platform_dependent_cast     molten        src/componentrpc/bridge.rs:95
+  F13   usize_in_public_api         molten        src/componentrpc/bridge.rs:114
+  F14   usize_in_public_api         molten        src/componentrpc/bridge.rs:114
+  F15   unchecked_narrowing         molten        src/componentrpc/bridge.rs:128
+  F16   unchecked_narrowing         molten        src/componentrpc/bridge.rs:128
+  F17   non_trait_imports           molten        src/componentrpc/channels.rs:2
+  F18   non_trait_imports           molten        src/componentrpc/channels.rs:2
+  F19   non_trait_imports           molten        src/componentrpc/channels.rs:3
+  F20   non_trait_imports           molten        src/componentrpc/channels.rs:3
+  F21   non_trait_imports           molten        src/componentrpc/channels.rs:4
+  F22   non_trait_imports           molten        src/componentrpc/channels.rs:4
+  F23   non_trait_imports           molten        src/componentrpc/channels.rs:6
+  F24   non_trait_imports           molten        src/componentrpc/channels.rs:6
+  F25   non_trait_imports           molten        src/componentrpc/codec.rs:2
+  F26   non_trait_imports           molten        src/componentrpc/codec.rs:2
+  F27   non_trait_imports           molten        src/componentrpc/codec.rs:3
+  F28   non_trait_imports           molten        src/componentrpc/codec.rs:3
+  F29   non_trait_imports           molten        src/componentrpc/diagnostics.rs:2
+  F30   non_trait_imports           molten        src/componentrpc/diagnostics.rs:2
+  F31   path_segment_repetition     molten        src/componentrpc/diagnostics.rs:11
+  F32   path_segment_repetition     molten        src/componentrpc/diagnostics.rs:11
+  F33   non_trait_imports           molten        src/componentrpc/fixture.rs:3
+  F34   non_trait_imports           molten        src/componentrpc/fixture.rs:3
+  F35   function_length             molten        src/componentrpc/fixture.rs:31
+  F36   function_length             molten        src/componentrpc/fixture.rs:31
+  F37   path_segment_repetition     molten        src/componentrpc/fixture.rs:105
+  F38   path_segment_repetition     molten        src/componentrpc/fixture.rs:105
+  F39   non_trait_imports           molten        src/componentrpc/fixtureauth.rs:2
+  F40   non_trait_imports           molten        src/componentrpc/fixtureauth.rs:2
+  F41   unbounded_collection_growth molten        src/componentrpc/fixtureauth.rs:64
+  F42   unbounded_collection_growth molten        src/componentrpc/fixtureauth.rs:64
+  F43   function_length             molten        src/componentrpc/fixtureauth.rs:69
+  F44   function_length             molten        src/componentrpc/fixtureauth.rs:69
+  F45   catch_all_on_enum           molten        src/componentrpc/fixtureauth.rs:102
+  F46   catch_all_on_enum           molten        src/componentrpc/fixtureauth.rs:102
+  F47   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:142
+  F48   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:142
+  F49   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:143
+  F50   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:143
+  F51   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:159
+  F52   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:159
+  F53   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:160
+  F54   explicit_defaults           molten        src/componentrpc/fixtureauth.rs:160
+  F55   non_trait_imports           molten        src/componentrpc/fixturefabric.rs:2
+  F56   non_trait_imports           molten        src/componentrpc/fixturefabric.rs:2
+  F57   path_segment_repetition     molten        src/componentrpc/journal.rs:6
+  F58   path_segment_repetition     molten        src/componentrpc/journal.rs:6
+  F59   non_trait_imports           molten        src/componentrpc/materialization.rs:4
+  F60   non_trait_imports           molten        src/componentrpc/materialization.rs:4
+  F61   borrowed_argument_types     molten        src/componentrpc/negative.rs:50
+  F62   borrowed_argument_types     molten        src/componentrpc/negative.rs:50
+  F63   unbounded_collection_growth molten        src/componentrpc/package.rs:149
+  F64   unbounded_collection_growth molten        src/componentrpc/package.rs:149
+  F65   non_trait_imports           molten        src/componentrpc/runtime.rs:2
+  F66   non_trait_imports           molten        src/componentrpc/runtime.rs:2
+  F67   non_trait_imports           molten        src/componentrpc/runtime.rs:4
+  F68   non_trait_imports           molten        src/componentrpc/runtime.rs:4
+  F69   explicit_defaults           molten        src/componentrpc/runtime.rs:58
+  F70   explicit_defaults           molten        src/componentrpc/runtime.rs:58
+  F71   non_trait_imports           molten        src/componentrpc/telemetry/authority.rs:2
+  F72   non_trait_imports           molten        src/componentrpc/telemetry/authority.rs:2
+  F73   path_segment_repetition     molten        src/componentrpc/telemetry/bundle.rs:4
+  F74   path_segment_repetition     molten        src/componentrpc/telemetry/bundle.rs:4
+  F75   non_trait_imports           molten        src/componentrpc/telemetry/fixtureauth.rs:2
+  F76   non_trait_imports           molten        src/componentrpc/telemetry/fixtureauth.rs:2
+  F77   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:45
+  F78   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:45
+  F79   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:46
+  F80   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:46
+  F81   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:57
+  F82   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:57
+  F83   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:58
+  F84   explicit_defaults           molten        src/componentrpc/telemetry/fixtureauth.rs:58
+  F85   non_trait_imports           molten        src/componentrpc/telemetry/host.rs:5
+  F86   non_trait_imports           molten        src/componentrpc/telemetry/host.rs:5
+  F87   function_length             molten        src/componentrpc/telemetry/host.rs:23
+  F88   function_length             molten        src/componentrpc/telemetry/host.rs:23
+  F89   non_trait_imports           molten        src/componentrpc/telemetry/host.rs:159
+  F90   catch_all_on_enum           molten        src/componentrpc/telemetry/operator.rs:12
+  F91   catch_all_on_enum           molten        src/componentrpc/telemetry/operator.rs:12
+  F92   unchecked_narrowing         molten        src/componentrpc/telemetry/operator.rs:44
+  F93   unchecked_narrowing         molten        src/componentrpc/telemetry/operator.rs:44
+  F94   non_trait_imports           molten        src/componentrpc/telemetry/projection.rs:2
+  F95   non_trait_imports           molten        src/componentrpc/telemetry/projection.rs:2
+  F96   non_trait_imports           molten        src/componentrpc/transcript.rs:2
+  F97   non_trait_imports           molten        src/componentrpc/transcript.rs:2
+  F98   non_trait_imports           molten        src/componentrpc/transcript.rs:3
+  F99   non_trait_imports           molten        src/componentrpc/transcript.rs:3
+  F100  path_segment_repetition     molten        src/componentrpc/transcript.rs:6
+  F101  path_segment_repetition     molten        src/componentrpc/transcript.rs:6
+  F102  non_trait_imports           molten        src/componentrpc/transport.rs:3
+  F103  non_trait_imports           molten        src/componentrpc/transport.rs:3
+  F104  non_trait_imports           molten        src/componentrpc/transport.rs:5
+  F105  non_trait_imports           molten        src/componentrpc/transport.rs:5
+  F106  non_trait_imports           molten        src/componentrpc/transport.rs:6
+  F107  non_trait_imports           molten        src/componentrpc/transport.rs:6
+  F108  unbounded_collection_growth molten        src/componentrpc/transport.rs:51
+  F109  unbounded_collection_growth molten        src/componentrpc/transport.rs:51
+  F110  non_trait_imports           componentrpc  tests/componentrpc.rs:5
+---

@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir target/octet-component-rpc -- --all-targets --features component-rpc-telemetry

@@ -85,3 +85,9 @@ because the configured Octet scope builds default features only. Molten
 stated reason; its real-bundle run
 rejected the same 38 cases in the same order and replayed identically. Nothing
 reruns that feature-enabled check automatically.
+
+An independent review then found three claim gaps, which Molten `328153ff7`
+closes; the [follow-up run](evidence/real-bundle-followup-run-2026-11-18.json)
+repeats the 38 cases at that commit, and both Octet artifact sets are retained.
+See the review section of the
+[verification record](evidence/verification-2026-11-18.md).
