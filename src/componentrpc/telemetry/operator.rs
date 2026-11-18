@@ -54,7 +54,8 @@ pub async fn run_fixture(input: Input<'_>) -> super::Result<preserves::IOValue> 
         .await;
         match result {
             Err(error) if error.contains(reason) => {}
-            _ => return Err(format!("telemetry case did not fail at {label}")),
+            Err(error) => return Err(format!("telemetry case {label} failed for another reason: {error}")),
+            Ok(_) => return Err(format!("telemetry case {label} exported instead of failing")),
         }
         unexported(input.sink)?;
         cases.push(label);

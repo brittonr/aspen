@@ -5,6 +5,16 @@ use std::os::fd::AsRawFd;
 
 use cap_fs_ext::DirExt;
 use cap_fs_ext::OpenOptionsFollowExt;
+use cap_std::fs::PermissionsExt;
+
+/// Faithful source-tree copies reproduce source directory modes, so a Nix
+/// store closure stages as read-only `0555` directories whose entries cannot
+/// be unlinked. The stage is private to one operation, so cleanup restores
+/// owner access first.
+const PRIVATE_STAGE_DIRECTORY_MODE: u32 = 0o700;
+
+/// Mantle's source-tree entry bound plus every measured member's parents.
+const MAX_PRIVATE_STAGE_DIRECTORIES: usize = 16_384;
 
 pub(super) fn with_private_stage<T>(
     parent: &cap_std::fs::Dir,
@@ -37,10 +47,32 @@ pub(super) fn with_private_stage<T>(
                 run(&directory)
             }
         });
-    directory
-        .remove_open_dir_all()
+    restore_owner_access(&directory)
+        .and_then(|()| directory.remove_open_dir_all())
         .map_err(|_| super::Denial::new("private materialization staging cleanup failed"))?;
     result
+}
+
+/// Visits only directories below the private stage, never following symlinks.
+fn restore_owner_access(stage: &cap_std::fs::Dir) -> std::io::Result<()> {
+    let mut pending = vec![stage.try_clone()?];
+    let mut restored = 0_usize;
+    while let Some(directory) = pending.pop() {
+        for entry in directory.entries()? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            restored += 1;
+            if restored > MAX_PRIVATE_STAGE_DIRECTORIES {
+                return Err(std::io::Error::other("private staging directory bound exceeded"));
+            }
+            let name = entry.file_name();
+            directory.set_permissions(&name, cap_std::fs::Permissions::from_mode(PRIVATE_STAGE_DIRECTORY_MODE))?;
+            pending.push(directory.open_dir_nofollow(&name)?);
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn create_member(root: &cap_std::fs::Dir, relative: &str) -> super::Result<cap_std::fs::File> {

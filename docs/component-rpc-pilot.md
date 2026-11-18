@@ -112,9 +112,11 @@ unsupported call shapes and bounded diagnostic fields.
 it does not widen either hello guest's imports. The selected interface is
 [WASI OTel revision e5262a8](https://github.com/WebAssembly/wasi-otel/tree/e5262a84044aff064c9599eebc05013bb3432795),
 `wasi:otel/tracing@0.2.0-rc.2`. The real callbacks are `current-span-context`,
-`on-start` and `on-end`. Type-only `wasi:otel/types` and wall-clock datetime
-imports are admitted only with no effect functions/resources. Actual clocks,
-network access and arbitrary telemetry interfaces remain denied.
+`on-start` and `on-end`; the tracing import's own record, flags, enum and
+variant type exports are admitted beside exactly those three callbacks, and a
+resource or any other exported item is denied. Type-only `wasi:otel/types` and
+wall-clock datetime imports are admitted only with no effect functions/resources.
+Actual clocks, network access and arbitrary telemetry interfaces remain denied.
 
 Mantle's `wrpc-telemetry-reference-bundle` has schema
 `mantle-wrpc-telemetry-reference-bundle-v1`, role `telemetry`, standalone

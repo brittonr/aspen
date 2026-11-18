@@ -103,13 +103,15 @@ fn admit_imports(component: &component::Component, linker: &mut component::Linke
             return Err("telemetry import is not an interface".into());
         };
         if name == super::INTERFACE {
-            let functions: Vec<_> = interface.exports(component.engine()).collect();
-            if functions.len() != 3 {
-                return Err("OTel tracing function set differs".into());
-            }
-            for (name, function) in functions {
-                let component::types::ComponentItem::ComponentFunc(function) = function else {
-                    return Err("OTel effect is not a function".into());
+            // A real instance type also exports the records, flags and variants
+            // its callbacks use; types carry no capability. Anything else
+            // (resources, modules, nested instances) stays denied.
+            let mut functions = 0_usize;
+            for (name, item) in interface.exports(component.engine()) {
+                let function = match item {
+                    component::types::ComponentItem::Type(_) => continue,
+                    component::types::ComponentItem::ComponentFunc(function) => function,
+                    _ => return Err("OTel tracing interface exports an unadmitted item".into()),
                 };
                 let expected = match name {
                     "on-start" | "on-end" => (1, 0),
@@ -119,6 +121,10 @@ fn admit_imports(component: &component::Component, linker: &mut component::Linke
                 if (function.params().len(), function.results().len()) != expected {
                     return Err("OTel tracing signature differs".into());
                 }
+                functions += 1;
+            }
+            if functions != 3 {
+                return Err("OTel tracing function set differs".into());
             }
             has_tracing = true;
         } else if ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.3"].contains(&name)
@@ -146,4 +152,50 @@ fn persist(root: &cap_std::fs::Dir, value: &preserves::IOValue) -> super::Result
     let mut file = root.open_with("otel-diagnostic.preserves", &options).map_err(super::super::failure)?;
     file.write_all(&bytes).and_then(|()| file.sync_all()).map_err(super::super::failure)?;
     root.open(".").and_then(|directory| directory.sync_all()).map_err(super::super::failure)
+}
+
+#[cfg(test)]
+mod tests {
+    use wasmtime_rpc::component;
+
+    /// A real emitter's tracing import also exports the records its callbacks use.
+    fn admit(exports: &str) -> super::super::Result<()> {
+        let source = format!(
+            r#"(component
+                (import "wasi:otel/tracing@0.2.0-rc.2" (instance
+                    (type $context (record (field "trace-id" string)))
+                    (export "span-context" (type $span-context (eq $context)))
+                    (type $span (record (field "name" string)))
+                    (export "span-data" (type $span-data (eq $span)))
+                    {exports}
+                ))
+            )"#
+        );
+        let bytes = wat::parse_str(source).expect("component text");
+        let engine = super::super::super::runtime::engine().expect("pilot engine");
+        let component = component::Component::new(&engine, bytes).expect("component");
+        super::admit_imports(&component, &mut component::Linker::new(&engine))
+    }
+
+    const CALLBACKS: &str = r#"
+        (export "on-start" (func (param "context" $span-context)))
+        (export "on-end" (func (param "span" $span-data)))
+        (export "current-span-context" (func (result $span-context)))
+    "#;
+
+    #[test]
+    fn tracing_import_admits_its_record_types_and_exact_callbacks() {
+        admit(CALLBACKS).expect("type exports carry no capability");
+    }
+
+    #[test]
+    fn tracing_import_denies_resources_and_incomplete_callback_sets() {
+        let resource = format!(r#"(export "exporter" (type (sub resource))) {CALLBACKS}"#);
+        let error = admit(&resource).expect_err("resource export");
+        assert!(error.contains("unadmitted item"), "{error}");
+        let missing = r#"(export "on-start" (func (param "context" $span-context)))
+            (export "current-span-context" (func (result $span-context)))"#;
+        let error = admit(missing).expect_err("missing on-end");
+        assert!(error.contains("function set differs"), "{error}");
+    }
 }

@@ -265,3 +265,24 @@ fn private_staging_refuses_reused_roots_and_members_and_removes_only_its_child()
     .expect("owned child removed");
     assert!(!parent.dir().try_exists("owned").expect("owned child absent"));
 }
+
+#[test]
+fn private_staging_removes_faithful_read_only_closure_copies() {
+    use cap_std::fs::PermissionsExt;
+
+    let workspace =
+        crate::test_support::Workspace::new("published-materialization-staging-read-only").expect("workspace");
+    let parent = workspace.output().expect("staging parent");
+    staging::with_private_stage(parent.dir(), "owned", |stage| {
+        let _file = staging::create_member(stage, "closure/nested/member")?;
+        // A faithful copy of a Nix store closure keeps its 0555 directory modes.
+        for directory in ["closure/nested", "closure"] {
+            stage
+                .set_permissions(directory, cap_std::fs::Permissions::from_mode(0o555))
+                .expect("read-only copy");
+        }
+        Ok(())
+    })
+    .expect("read-only staged tree removed");
+    assert!(!parent.dir().try_exists("owned").expect("owned child absent"));
+}
