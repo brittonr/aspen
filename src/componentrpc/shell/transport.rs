@@ -64,7 +64,6 @@ impl Client {
     }
     /// A second attempt after the admitted one is denied before any journal or transport effect.
     pub(crate) async fn retry_negative(&self) -> super::Result<&'static str> {
-        let before = self.transcript().await?.reference;
         let result = wrpc_transport::Invoke::invoke(
             self,
             (),
@@ -74,10 +73,12 @@ impl Client {
             Vec::<Vec<Option<usize>>>::new(),
         )
         .await;
-        if result.is_ok() || self.transcript().await?.reference != before {
-            return Err("second attempt reused the consumed session".into());
+        // The consumed-session check runs before the journal and transport; any other denial
+        // reason would mean the second attempt got further than it should.
+        match result {
+            Err(error) if error.to_string() == "duplicate invocation" => Ok("retry-after-attempt-denied"),
+            Err(_) | Ok(_) => Err("second attempt was not denied at the consumed session".into()),
         }
-        Ok("retry-after-attempt-denied")
     }
 }
 

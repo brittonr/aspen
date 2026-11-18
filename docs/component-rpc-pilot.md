@@ -205,5 +205,7 @@ checks that correspondence automatically, so it holds only for this run.
 The [2026-11-18 verification record](../.cairn/changes/pilot-wrpc-component-transport/evidence/verification-2026-11-18.md)
 lists the focused tests, Clippy and Octet over `component-rpc-telemetry`, and
 the Cairn gates. The configured Octet scope builds default features only, so
-the feature-enabled check ran by hand: it first reported 56 findings, which
-Molten `ed52b83c0` repairs. Nothing repeats that check automatically.
+the feature-enabled check ran by hand: it first reported 56 distinct findings
+(110 across the library and test targets). Molten `ed52b83c0` repairs 55 of
+them and allows one with a stated reason. Nothing repeats that check
+automatically.
