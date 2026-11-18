@@ -2,6 +2,7 @@
 pub const MEMORY_BYTES: usize = 64 * 1024 * 1024;
 pub const FUEL: u64 = 10_000_000;
 pub const TIMEOUT_SECONDS: u64 = 10;
+// r[impl molten.component_rpc.nonclaims]
 pub const NONCLAIMS: [&str; 6] = [
     "not-protocol-stability",
     "not-semantic-equivalence",

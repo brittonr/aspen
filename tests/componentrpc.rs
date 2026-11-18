@@ -33,6 +33,7 @@ fn multibyte_string_lengths_are_minimal_and_bounded() {
 }
 
 // r[verify molten.component_rpc.async_scope]
+// r[verify molten.component_rpc.profile]
 #[test]
 fn world_function_and_all_async_paths_are_closed() {
     molten::component_rpc::bridge::admit_shape(molten::component_rpc::INTERFACE, molten::component_rpc::FUNCTION, 0)
@@ -71,4 +72,25 @@ fn diagnostic_projection_excludes_payloads_and_has_a_finite_queue() {
     diagnostics
         .observe(&receipt, molten::component_rpc::diagnostics::Status::Denied)
         .expect("capacity released");
+}
+
+// r[verify molten.component_rpc.nonclaims]
+#[test]
+fn pilot_non_claims_stay_closed_and_reject_production_claims() {
+    let nonclaims = molten::component_rpc::profile::NONCLAIMS;
+    assert_eq!(nonclaims.len(), 6);
+    for required in [
+        "not-protocol-stability",
+        "not-semantic-equivalence",
+        "not-transport-security",
+        "not-production-readiness",
+        "not-component-correctness",
+        "not-existing-protocol-replacement",
+    ] {
+        assert!(nonclaims.contains(&required), "missing non-claim {required}");
+    }
+    molten::component_rpc::profile::classify("pinned-experimental-fixture-only").expect("pilot claim");
+    for overclaim in ["production-ready", "protocol-stable", "semantic-equivalence", ""] {
+        assert!(molten::component_rpc::profile::classify(overclaim).is_err(), "admitted {overclaim:?}");
+    }
 }

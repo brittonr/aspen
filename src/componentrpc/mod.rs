@@ -30,6 +30,7 @@ pub mod transcript;
 #[path = "shell/transport.rs"]
 pub mod transport;
 
+// r[impl molten.component_rpc.profile]
 pub const PROFILE: &str = "molten.component-rpc.hello.v1";
 pub const REVISION: &str = "aa01409ed38bf7a978570ff567c4475376925df6";
 pub const INTERFACE: &str = "wrpc-examples:hello/handler";
