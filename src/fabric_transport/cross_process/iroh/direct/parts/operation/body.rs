@@ -62,6 +62,9 @@ async fn exchange<S: ProtectedSocketService>(
         authority_ref,
     };
     service.check_current(&admitted).map_err(|_| DirectStreamTerminal::Denied)?;
+    // An interrupted open can already have affected the protected service,
+    // even if it never returned a socket or changed transport byte counters.
+    progress.is_open_started = true;
     let socket = tokio::time::timeout(idle, service.open(&admitted))
         .await
         .map_err(|_| DirectStreamTerminal::Timeout)?
@@ -69,10 +72,6 @@ async fn exchange<S: ProtectedSocketService>(
             crate::fabric::FabricPortError::CapabilityUnavailable { .. } => DirectStreamTerminal::Denied,
             crate::fabric::FabricPortError::Timeout { .. } => DirectStreamTerminal::Timeout,
             crate::fabric::FabricPortError::Cancelled { .. } => DirectStreamTerminal::Cancelled,
-            crate::fabric::FabricPortError::UncertainExternalOutcome { .. } => {
-                progress.submitted = true;
-                DirectStreamTerminal::Disconnected
-            }
             _ => DirectStreamTerminal::Disconnected,
         })?;
     // The public API never accepts an early-data connection, so no mutation can

@@ -1,9 +1,16 @@
 use crate::*;
 
-fn operation_digest(generation: u64, case: &str) -> TestResult<[u8; 32]> {
+pub(crate) fn operation_digest(generation: u64, case: &str) -> TestResult<[u8; 32]> {
+    operation_digest_for_bounds(generation, case, config::bounds_for(case))
+}
+
+pub(crate) fn operation_digest_for_bounds(
+    generation: u64,
+    case: &str,
+    bounds: molten::fabric_transport::DirectStreamBounds,
+) -> TestResult<[u8; 32]> {
     let profile = config::profile(case)?;
     let protocol = config::protocol(generation, case)?;
-    let bounds = config::bounds_for(case);
     let contract = molten::preserves_rail::record("fabric-direct-stream-contract-v1", vec![
         molten::preserves_rail::string(&profile.profile_ref),
         molten::preserves_rail::string(&protocol.protocol_id),
@@ -32,7 +39,7 @@ fn operation_digest(generation: u64, case: &str) -> TestResult<[u8; 32]> {
     Ok(*blake3::hash(&molten::preserves_rail::canonical_bytes(&operation)?).as_bytes())
 }
 
-fn endpoint_addr(handoff: &molten::fabric_transport::Endpoint) -> TestResult<iroh::EndpointAddr> {
+pub(crate) fn endpoint_addr(handoff: &molten::fabric_transport::Endpoint) -> TestResult<iroh::EndpointAddr> {
     let identity = handoff
         .descriptor
         .public_endpoint_identity
@@ -50,7 +57,7 @@ fn endpoint_addr(handoff: &molten::fabric_transport::Endpoint) -> TestResult<iro
     Ok(iroh::EndpointAddr::from_parts(identity, addrs))
 }
 
-async fn header(send: &mut iroh::endpoint::SendStream, kind: u8, argument: u64) -> TestResult {
+pub(crate) async fn header(send: &mut iroh::endpoint::SendStream, kind: u8, argument: u64) -> TestResult {
     let mut bytes = [0_u8; 9];
     bytes[0] = kind;
     bytes[1..].copy_from_slice(&argument.to_be_bytes());
@@ -58,7 +65,7 @@ async fn header(send: &mut iroh::endpoint::SendStream, kind: u8, argument: u64) 
     Ok(())
 }
 
-async fn discard_frame(receive: &mut iroh::endpoint::RecvStream) -> TestResult<(u8, u64)> {
+pub(crate) async fn discard_frame(receive: &mut iroh::endpoint::RecvStream) -> TestResult<(u8, u64)> {
     let mut bytes = [0_u8; 9];
     receive.read_exact(&mut bytes).await?;
     let mut argument = [0_u8; 8];

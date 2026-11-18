@@ -24,6 +24,8 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 include!("fixtures/direct-lan-streams/process.rs");
 include!("fixtures/direct-lan-streams/evidence.rs");
 
+#[path = "fixtures/direct-lan-streams/cancellation.rs"]
+mod cancellation;
 #[path = "fixtures/direct-lan-streams/config.rs"]
 mod config;
 #[path = "fixtures/direct-lan-streams/raw.rs"]

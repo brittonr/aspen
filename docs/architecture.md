@@ -542,6 +542,11 @@ Streaming uses bounded buffers, explicit acknowledgement/uncertainty and
 observed cleanup without granting membership, scheduling, storage or VM
 resume authority. Separate-process fixtures do not qualify two-host or
 Kiln/Cloud Hypervisor operation.
+Protected-service opening is conservatively effectful from its first poll:
+cancellation or failure before a socket is returned remains uncertain even
+when transport byte counters are zero. Supported cancellation owns bounded
+cleanup; abandoning the caller's future does not manufacture cleanup evidence
+or release an unobserved listener reservation or consumed registered request.
 
 Iroh is the first remote substrate:
 

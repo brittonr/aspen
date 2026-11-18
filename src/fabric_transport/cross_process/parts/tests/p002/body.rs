@@ -113,3 +113,46 @@ async fn registered_direct_stream_crossed_operation_denies_before_control_apply(
     assert_eq!(error, crate::fabric::FabricPortError::malformed("direct stream operation mismatch"));
     assert_eq!(port.adapter().state(), &before, "crossed operation must not apply any transport transition");
 }
+
+// r[verify molten.fabric_transport.direct_stream_bounds]
+#[tokio::test]
+async fn dropped_registered_direct_stream_request_cannot_dispatch_again() {
+    use crate::system_extension::FabricEffectPort;
+
+    let (mut port, binding, request) = registered_direct_stream_fixture();
+    let (session_id, stream_id) = effect_port_ids();
+    for (setup_ref, setup_operation, setup_command) in setup_commands(&session_id, &stream_id).into_iter().take(2) {
+        port.register(setup_ref.to_string(), setup_command, None).expect("register control setup");
+        port.route(&binding, &effect_request(&binding, setup_operation, setup_ref, 0)).expect("route control setup");
+    }
+    let (request_ref, operation, command) = setup_commands(&session_id, &stream_id)[2].clone();
+    port.register(request_ref.to_string(), command, None).expect("register direct stream");
+    let effect = effect_request(&binding, operation, request_ref, 0);
+    let (_owner, cancellation) = tokio::sync::watch::channel(false);
+    let mut service = UnreachableProtectedService;
+    let started = std::time::Instant::now();
+    {
+        let run = port.proxy_stream(&binding, &effect, request.clone(), &mut service, cancellation);
+        tokio::pin!(run);
+        std::future::poll_fn(|context| {
+            assert!(run.as_mut().poll(context).is_pending(), "network operation unexpectedly completed on its first poll");
+            std::task::Poll::Ready(())
+        }).await;
+        // Drop the actual future while dial is pending, after admission has
+        // consumed the request but before a terminal result can be retained.
+    }
+    let dropped_after = started.elapsed();
+    let quarantined = port.adapter().state().clone();
+    let (_retry_owner, cancellation) = tokio::sync::watch::channel(false);
+    let generation = request.operation.generation;
+    let error = port.proxy_stream(&binding, &effect, request, &mut service, cancellation)
+        .await.expect_err("lost terminal result allowed duplicate registered dispatch");
+    assert!(matches!(error, crate::fabric::FabricPortError::MalformedObservation { .. }));
+    assert_eq!(port.adapter().state(), &quarantined, "replay mutated an already consumed stream");
+    println!("direct-stream-cancellation-observation {}", serde_json::json!({
+        "case": "registered-dial-outer-drop", "generation": generation,
+        "dropped_after_us": dropped_after.as_micros(), "terminal_receipt": null,
+        "independent_protected_effect_bytes": 0, "duplicate_dispatches": 0,
+        "cleanup_observed": false, "unfinished_resources": ["consumed-registered-control-stream"],
+    }));
+}

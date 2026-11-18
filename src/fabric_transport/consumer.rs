@@ -27,6 +27,11 @@ pub trait ProtectedSocketService {
 
     /// Resolve an already admitted resource through the consumer's protected
     /// capability root. The transport never reconstructs ambient socket paths.
+    ///
+    /// The transport treats this future as possibly effectful from its first
+    /// poll. If it is cancelled, exceeds its deadline or returns any error, the
+    /// operation's delivery remains uncertain even when no socket was returned;
+    /// an error class does not prove that no protected effect occurred.
     fn open(
         &mut self,
         admitted: &super::direct::AdmittedOperation,

@@ -7,6 +7,7 @@ pub(super) struct Progress {
     pub(super) sent_frames: u64,
     pub(super) received_frames: u64,
     pub(super) local_consumed_bytes: u64,
+    pub(super) is_open_started: bool,
     pub(super) submitted: bool,
     pub(super) acknowledged_bytes: u64,
     pub(super) deny_code: Option<&'static str>,
@@ -27,15 +28,25 @@ pub(super) struct Input<'a> {
     pub(super) is_cleanup: bool,
 }
 
-pub(super) fn build(input: Input<'_>) -> crate::fabric::FabricPortResult<Evidence> {
-    let progress = input.progress;
-    let delivery = if input.terminal == DirectStreamTerminal::Clean {
+/// Opening the protected service may already have had an effect, so it is
+/// uncertain like consumption, submission or a protected write.
+fn classify_delivery(terminal: DirectStreamTerminal, progress: &Progress) -> DeliveryOutcome {
+    if terminal == DirectStreamTerminal::Clean {
         DeliveryOutcome::Delivered
-    } else if progress.submitted || progress.local_consumed_bytes != 0 || progress.received_bytes != 0 {
+    } else if progress.is_open_started
+        || progress.submitted
+        || progress.local_consumed_bytes != 0
+        || progress.received_bytes != 0
+    {
         DeliveryOutcome::Uncertain
     } else {
         DeliveryOutcome::NotDelivered
-    };
+    }
+}
+
+pub(super) fn build(input: Input<'_>) -> crate::fabric::FabricPortResult<Evidence> {
+    let progress = input.progress;
+    let delivery = classify_delivery(input.terminal, progress);
     let value = crate::preserves_rail::record("fabric-direct-stream-evidence-v1", vec![
         crate::preserves_rail::string("molten.fabric.transport.direct-stream-evidence.v1"),
         crate::preserves_rail::string(input.descriptor_ref),

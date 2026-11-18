@@ -25,3 +25,13 @@ r[molten.fabric_transport.direct_stream_bounds] Direct streams MUST bound connec
 - GIVEN bytes were consumed or submitted
 - WHEN no definitive acknowledgement arrives
 - THEN reconciliation evidence reports uncertainty without automatic retry.
+
+#### Scenario: Protected opening is interrupted
+- GIVEN the protected-service open future may already have performed an effect
+- WHEN cancellation or a deadline drops it before it returns a socket
+- THEN delivery remains uncertain despite zero transport byte counters, and cleanup observation is reported separately.
+
+#### Scenario: The caller drops a running operation
+- GIVEN a listener reservation or registered request has been consumed
+- WHEN the caller drops the public operation future before terminal cleanup
+- THEN no success receipt is manufactured, unobserved listener capacity is not reused, and the registered request cannot be replayed.
