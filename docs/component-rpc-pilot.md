@@ -181,28 +181,28 @@ gates remain required. The separate telemetry bundle cannot borrow the hello
 pair's build result. Source files, a successful producer build or CLI help do
 not qualify the pilot or authorize a locally rebuilt guest substitute.
 
-The [2026-11-17 local control observation](../.cairn/changes/pilot-wrpc-component-transport/evidence/local-controls-2026-11-17.json)
+The [2026-11-17 local control observation](../.cairn/archive/2026-11-18-pilot-wrpc-component-transport/evidence/local-controls-2026-11-17.json)
 retains the clean source commit, selected feature/environment, input and image
 BLAKE3 identities, passing local controls and actual CLI inspection. It
 preserves the earlier pre-test temporary-filesystem failure separately. The
 component-RPC integration maintainers own this repeatable local recipe; it is
 not a producer, transport, telemetry-host or release acceptance record.
 
-The [2026-11-18 real-bundle run](../.cairn/changes/pilot-wrpc-component-transport/evidence/real-bundle-run-2026-11-18.json)
+The [2026-11-18 real-bundle run](../.cairn/archive/2026-11-18-pilot-wrpc-component-transport/evidence/real-bundle-run-2026-11-18.json)
 ran the hello call, offline replay and the telemetry fixture with Molten
 `7e158a95c` against the bundles published by Mantle `c376f843e`, and binds the
 source commit, binary image, producer revision, bundle identities and outputs.
 It runs over the loopback fixture fabric. It is not remote or cross-host RPC,
 transport-security, production-credential or release evidence.
 
-The [2026-11-18 admission run](../.cairn/changes/pilot-wrpc-component-transport/evidence/real-bundle-admission-run-2026-11-18.json)
+The [2026-11-18 admission run](../.cairn/archive/2026-11-18-pilot-wrpc-component-transport/evidence/real-bundle-admission-run-2026-11-18.json)
 repeated that run with Molten `43482e4b1`, which adds the ungranted- and
 unmeasured-component, delivery-contract, transport-profile and second-attempt
 denials; all 38 negative cases were rejected. It also compares each
 `profile.ncl` value that a run can observe with what the run admitted. Nothing
 checks that correspondence automatically, so it holds only for this run.
 
-The [2026-11-18 verification record](../.cairn/changes/pilot-wrpc-component-transport/evidence/verification-2026-11-18.md)
+The [2026-11-18 verification record](../.cairn/archive/2026-11-18-pilot-wrpc-component-transport/evidence/verification-2026-11-18.md)
 lists the focused tests, Clippy and Octet over `component-rpc-telemetry`, and
 the Cairn gates. The configured Octet scope builds default features only, so
 the feature-enabled check ran by hand: it first reported 56 distinct findings
