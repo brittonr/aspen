@@ -1,0 +1,16 @@
+<job-dag-v2 "molten.job-dag.selected-sequence.v2"
+ <version "selected-sequence-v2">
+ <nodes [
+  <job-node-v1 "molten.job-dag.node.v1"
+   <id "c1"> <kind "source"> <stage-artifact <none>>
+   <inputs [<port "after" <none>>]>
+   <outputs [<port "out" <none>>, <port "done" <none>>]>
+   <config <selected-stage-v2 "source-u64" [1, 2] "@SOURCE_SIGNATURE@">>
+   <effects []> <policy []> <evidence []>
+   <checks [<check "stage-artifact-not-closure" "pass">,
+            <check "bounded-stage-kind" "pass">,
+            <check "explicit-effect-boundary" "pass">]>>
+ ]>
+ <edges []> <outputs ["c1"]> <schemas []> <effect-manifests []> <policies []> <evidence []>
+ <checks [<check "canonical-dag" "pass">, <check "no-name-identity" "pass">,
+          <check "stage-artifacts-explicit" "pass">, <check "deterministic-local-profile" "pass">]>>

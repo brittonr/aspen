@@ -126,6 +126,7 @@ pub(super) fn features() -> crate::error::Result<Vec<String>> {
         ("component-rpc", cfg!(feature = "component-rpc")),
         ("component-rpc-telemetry", cfg!(feature = "component-rpc-telemetry")),
         ("executable-extents", cfg!(feature = "executable-extents")),
+        ("job-dag-construction", cfg!(feature = "job-dag-construction")),
         ("marble-object-store", cfg!(feature = "marble-object-store")),
         ("profiler", cfg!(feature = "profiler")),
         ("profiler-alloc", cfg!(feature = "profiler-alloc")),

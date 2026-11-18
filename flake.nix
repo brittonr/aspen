@@ -51,7 +51,7 @@
       flake = false;
     };
     choregraph-src = {
-      url = "git+https://github.com/OnixResearch/choregraph.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+      url = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151";
       flake = false;
     };
     chaoscontrol-src = {
@@ -131,6 +131,11 @@
     };
     quint-connect-src = {
       url = "github:quint-co/quint-connect/4f018f54fc7dd4cef341d10111427bab59d3b307";
+      flake = false;
+    };
+    # Optional job-dag-construction evaluator and the patched embedded Nickel cohort.
+    nickel-eval-src = {
+      url = "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
@@ -379,10 +384,11 @@
             )
             "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";
           mantle-wasm-verifier-src;
-        choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+        choregraphRevision = "c3577352ee1e39391f5204ee234d991c7dbeb151";
         choregraphRepository = "https://github.com/OnixResearch/choregraph.git";
-        choregraphHistoryDependencies = [
+        choregraphDependencies = [
           artifactRootDependencies."choregraph-history"
+          artifactRootDependencies."choregraph-nickel"
           moltenCoreDependencies."choregraph-history"
         ];
         choregraphExpectedLockSource = "git+${choregraphRepository}?rev=${choregraphRevision}#${choregraphRevision}";
@@ -400,14 +406,19 @@
               dependency.git == choregraphRepository
               && dependency.rev == choregraphRevision
               && dependency.version == "0.1.0"
-            ) choregraphHistoryDependencies
+            ) choregraphDependencies
             && choregraph-src.rev == choregraphRevision
-            && builtins.length choregraphLockPackages == 1
-            && (builtins.head choregraphLockPackages).name == "choregraph-history"
+            && builtins.sort builtins.lessThan (map (package: package.name) choregraphLockPackages) == [
+              "choregraph-core"
+              "choregraph-history"
+              "choregraph-kamacite"
+              "choregraph-nickel"
+            ]
             && builtins.elem "crates/choregraph-history" choregraphWorkspace.workspace.members
+            && builtins.elem "crates/choregraph-nickel" choregraphWorkspace.workspace.members
             && choregraphWorkspace.workspace.package.license == "AGPL-3.0-or-later"
             && choregraphHistoryManifest.package.name == "choregraph-history"
-          ) "Molten Choregraph branch-history Cargo/Nix source identity, package, or license drifted";
+          ) "Molten Choregraph history/construction Cargo/Nix source identity, package set, or license drifted";
           choregraph-src;
         chaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85";
         chaosControlRepository = "https://github.com/brittonr/chaoscontrol.git";

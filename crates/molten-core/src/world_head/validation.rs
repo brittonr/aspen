@@ -1,5 +1,5 @@
-use choregraph_history::BranchRef;
-use choregraph_history::plan_branch_advance;
+use choregraph_history::refs::BranchRef;
+use choregraph_history::refs::plan_branch_advance;
 
 use super::WorldHeadDecision;
 use super::WorldHeadIssue;

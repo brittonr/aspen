@@ -4,8 +4,10 @@ let BoundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525" in
 let BoundedExecSource = "https://github.com/OnixResearch/bounded-exec.git" in
 let DurableFilePublicationRevision = "8e05e74e24b45f752d77145c4455385daaf6d6ab" in
 let DurableFilePublicationSource = "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git" in
-let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
+let ChoregraphRevision = "c3577352ee1e39391f5204ee234d991c7dbeb151" in
 let ChoregraphSource = "https://github.com/OnixResearch/choregraph.git" in
+let NickelEvalRevision = "2d1fb2b59f373967cc69e13ec289759d9cd4df46" in
+let NickelEvalSource = "https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git" in
 let ChaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85" in
 let ChaosControlConformanceRevision = "ec8aa799bad4735bf1028a092ca39feb08fb4bb7" in
 let ChaosControlSource = "https://github.com/brittonr/chaoscontrol.git" in
@@ -269,6 +271,28 @@ in
       nix_input = "choregraph-src",
       transport_policy = "https",
       disposition = "runtime",
+    },
+    {
+      manifest_dependency = "choregraph-nickel",
+      package_name = "choregraph-nickel",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ChoregraphSource,
+      immutable_revision = ChoregraphRevision,
+      nix_input = "choregraph-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "nickel-eval",
+      package_name = "nickel-eval",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = NickelEvalSource,
+      immutable_revision = NickelEvalRevision,
+      nix_input = "nickel-eval-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
     },
     {
       manifest_dependency = "chaoscontrol-snapshot-descriptor",

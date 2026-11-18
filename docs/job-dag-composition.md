@@ -169,17 +169,56 @@ The logical source name is retained separately. Missing source locations and
 missing origin entries are reported as unavailable, not synthesized. Evaluator
 text is discarded instead of publishing source/secret-bearing diagnostics.
 
-## Shared construction dependency
+## Shared construction route
 
-[Choregraph #6](https://github.com/OnixResearch/choregraph/issues/6) remains open.
-The inspected available `choregraph-nickel` library exposes flat evaluated target
-projections and import/identity validation, not the requested reusable typed
-fragment/template/instance library. No competing general-purpose composition
-library or shared composition-law claim is added here. Native Nickel functions
-and the explicit Aspen DTO are usable now; qualification of the shared library,
-its nested hygienic instances and cross-target laws remains an upstream
-prerequisite. Aspen stage semantics are not Choregraph machine or numeric graph
-semantics.
+The opt-in `job-dag-construction` feature consumes Choregraph's versioned
+`choregraph.graph-construction.v1` library (Choregraph `c3577352`,
+[#6](https://github.com/OnixResearch/choregraph/issues/6)) through
+`molten::job_dag::lower_constructed_nickel_job`. The default build does not
+include it.
+
+- **Capture.** The caller supplies a logical entry and immutable author modules.
+  The route adds the exact shipped `choregraph/graph-construction-v1.ncl` and
+  `choregraph/graph-construction-contracts-v1.ncl` bytes and renders the
+  parameters into `molten/parameters.ncl`. Author modules cannot reuse those
+  identities. Imports resolve only inside this map.
+- **Evaluation.** nickel-eval's `nickel-eval.captured-modules.v1` profile runs
+  the map in the `molten-nickel-eval-worker` companion, a binary linked to the
+  exact producer library. The caller selects its absolute path and measured
+  content ref, and the measurement is rechecked after evaluation. Limits are
+  2 MiB of input, 1 MiB of output, 67 modules, a 512 MiB address space and
+  3 seconds of wall time.
+- **Elaboration.** `choregraph_nickel::construction::compile_json` checks the
+  real captured binding and elaborates against `job_construction_registry()`.
+  That registry is Aspen-selected: target `molten.job-dag`, profile
+  `selected-sequence-v2`, implementations equal to the exact stage signatures,
+  explicit `Unit` and a copyable/droppable `u64-sequence` type. Author labels
+  cannot select or widen it. Native ceilings follow the runtime: 256 nodes,
+  4,096 edges and 1 MiB of candidate.
+- **Lowering.** The v3 projection becomes a `selected-sequence-v2` JobDag. Node
+  `N` becomes `cN` (see `constructed_node_id`), data edges keep their exact
+  ports, Unit control edges become `done -> after`, and output roots are
+  fragment key paths. The normal parser admits the result.
+
+Every input boundary takes exactly one connection. Fan-in therefore uses the
+construction-only `sum2-u64` join, whose two ordered inputs lower onto two
+`sum-u64` edges; summation makes Aspen's lexical fan-in order irrelevant.
+Ordered `concat-u64` fan-in, effects and other profiles stay on the explicit
+DTO route. A source's `values` must be an exact u64 literal array after
+elaboration.
+
+Provenance binds Choregraph's full compilation association, the nickel-eval
+binding, the worker and registry identities, the lowerer source and the graph.
+`ConstructedNickelJob` also returns the inspectable projection, origins and
+binding. These are linkage, not execution authority. Choregraph's observer laws
+are conditional and do not make Aspen stage semantics equal to Choregraph
+machine semantics.
+
+`tests/job_dag_construction` exercises the route through the real worker. It
+runs the sequence, shared diamond and two-instance module examples against
+directly authored graphs with the same node identities, checks Unit ordering
+against lexical order, matches an independently authored canonical fixture,
+and checks binding sensitivity, negative causes and the node budget.
 
 ## Reproducible qualification commands
 
@@ -194,6 +233,7 @@ nix develop --command bash -c '
   export MOLTEN_GRAPH_PRLIMIT="$(command -v prlimit)"
   cargo test --lib captured_nickel_live -- --ignored --nocapture
 '
+nix develop --command cargo test --features job-dag-construction --test job_dag_construction
 ```
 
 The normal suite includes actual local execution/cache selection, distinct

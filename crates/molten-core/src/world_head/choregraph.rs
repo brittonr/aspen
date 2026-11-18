@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use choregraph_history::Digest;
-use choregraph_history::EventClass;
-use choregraph_history::EventDraft;
-use choregraph_history::EventId;
-use choregraph_history::HistoryGraph;
-use choregraph_history::HistoryLimits;
-use choregraph_history::ParentLink;
+use choregraph_history::dag::Graph;
+use choregraph_history::identity::Digest;
+use choregraph_history::identity::EventId;
+use choregraph_history::model::EventClass;
+use choregraph_history::model::EventDraft;
+use choregraph_history::model::HISTORY_EVENT_VERSION_V1;
+use choregraph_history::model::Limits;
+use choregraph_history::model::ParentLink;
 
 use super::MAX_WORLD_HEAD_LABEL_BYTES;
 use super::MAX_WORLD_HEAD_METADATA_ENTRIES;
@@ -26,7 +27,7 @@ const HEX_PAIR_WIDTH: usize = 2;
 const ISSUES_PER_HISTORY_NODE: usize = 3;
 
 pub(crate) struct ChoregraphWorldHistory {
-    pub graph: HistoryGraph,
+    pub graph: Graph,
     pub events: BTreeMap<WorldCommitRef, EventId>,
 }
 
@@ -43,7 +44,7 @@ pub(crate) fn build_choregraph_history(
     }
 
     let limits = history_limits(bounds).map_err(|issue| vec![issue])?;
-    let mut graph = HistoryGraph::new(limits).map_err(|_| vec![WorldHeadIssue::InvalidBounds("choregraph")])?;
+    let mut graph = Graph::new(limits).map_err(|_| vec![WorldHeadIssue::InvalidBounds("choregraph")])?;
     let mut events = BTreeMap::new();
     debug_assert!(events.len() <= bounds.max_history_nodes);
     let mut pending = nodes.to_vec();
@@ -71,7 +72,7 @@ pub(crate) fn build_choregraph_history(
             parents.sort();
             let is_merge = parents.len() > 1;
             let draft = EventDraft {
-                version: choregraph_history::HISTORY_EVENT_VERSION_V1,
+                version: HISTORY_EVENT_VERSION_V1,
                 class: if is_merge {
                     EventClass::Merge
                 } else {
@@ -132,7 +133,7 @@ fn validate_history_shape(nodes: &[WorldCommitHistoryNode], bounds: &WorldHeadBo
     issues
 }
 
-fn history_limits(bounds: &WorldHeadBounds) -> Result<HistoryLimits, WorldHeadIssue> {
+fn history_limits(bounds: &WorldHeadBounds) -> Result<Limits, WorldHeadIssue> {
     let max_events =
         u32::try_from(bounds.max_history_nodes).map_err(|_| WorldHeadIssue::InvalidBounds("max_history_nodes"))?;
     let max_parents = u32::try_from(bounds.max_parents_per_commit)
@@ -141,8 +142,13 @@ fn history_limits(bounds: &WorldHeadBounds) -> Result<HistoryLimits, WorldHeadIs
         .map_err(|_| WorldHeadIssue::InvalidBounds("max_metadata_entries"))?;
     let max_label_bytes =
         u32::try_from(MAX_WORLD_HEAD_LABEL_BYTES).map_err(|_| WorldHeadIssue::InvalidBounds("max_label_bytes"))?;
-    HistoryLimits::new(max_events, max_parents, max_metadata, max_label_bytes, max_events)
-        .map_err(|_| WorldHeadIssue::InvalidBounds("choregraph"))
+    Ok(Limits {
+        max_events,
+        max_parents,
+        max_metadata_entries: max_metadata,
+        max_label_bytes,
+        max_projection_events: max_events,
+    })
 }
 
 pub(crate) fn digest_from_reference(reference: &str) -> Result<Digest, WorldHeadIssue> {

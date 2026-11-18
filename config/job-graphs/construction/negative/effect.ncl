@@ -1,0 +1,10 @@
+let g = import "./choregraph/graph-construction-v1.ncl" in
+g.finish "bad" "molten.job-dag" "selected-sequence-v2" {} []
+  (g.wire "root" [
+    g.operation "emit" "source-u64" { values = g.literal [1] } [{
+      key = "write", from_state = "ready", action = "start", resource = "disk", ability = "write",
+      request = g.exact_binding "choregraph.packed-preserves.v1"
+        "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      payload = g.slot_binding "payload" "config" "values",
+    }],
+  ] [] [] [])

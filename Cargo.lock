@@ -987,11 +987,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "choregraph-core"
+version = "0.1.0"
+source = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#c3577352ee1e39391f5204ee234d991c7dbeb151"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "choregraph-history"
 version = "0.1.0"
-source = "git+https://github.com/OnixResearch/choregraph.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
+source = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#c3577352ee1e39391f5204ee234d991c7dbeb151"
 dependencies = [
  "blake3",
+]
+
+[[package]]
+name = "choregraph-kamacite"
+version = "0.1.0"
+source = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#c3577352ee1e39391f5204ee234d991c7dbeb151"
+dependencies = [
+ "blake3",
+ "choregraph-core",
+ "preserves 5.0.0-rc.7",
+ "serde",
+]
+
+[[package]]
+name = "choregraph-nickel"
+version = "0.1.0"
+source = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#c3577352ee1e39391f5204ee234d991c7dbeb151"
+dependencies = [
+ "blake3",
+ "choregraph-core",
+ "choregraph-kamacite",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -4951,6 +4982,7 @@ dependencies = [
  "chaoscontrol-smr",
  "chaoscontrol-snapshot-descriptor",
  "choregraph-history",
+ "choregraph-nickel",
  "clap 4.6.1",
  "data-encoding",
  "durable-authority-state-redb",
@@ -4977,6 +5009,7 @@ dependencies = [
  "molten-core",
  "molten-node-host",
  "n0-future",
+ "nickel-eval",
  "nickel-lang",
  "preserves 5.0.0-rc.7",
  "preserves-schema",
@@ -5262,10 +5295,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "nickel-eval"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46#2d1fb2b59f373967cc69e13ec289759d9cd4df46"
+dependencies = [
+ "blake3",
+ "libc",
+ "nickel-lang",
+ "nickel-lang-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "nickel-lang"
 version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5242161492409bbb82716f52e7af9c7d4ce8423d3b31d648fa818518c4d82295"
+source = "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46#2d1fb2b59f373967cc69e13ec289759d9cd4df46"
 dependencies = [
  "codespan-reporting 0.13.1",
  "indexmap 2.14.0",
@@ -5281,8 +5327,7 @@ dependencies = [
 [[package]]
 name = "nickel-lang-core"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692d8a2ba34c633bc37e704dc94f4ca33edaa8fbf6d08efdcadb81db333ccdb6"
+source = "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46#2d1fb2b59f373967cc69e13ec289759d9cd4df46"
 dependencies = [
  "base64 0.22.1",
  "bumpalo",

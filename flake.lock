@@ -561,16 +561,16 @@
     "choregraph-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1787243576,
-        "narHash": "sha256-BO/AlwJBIuW+WXGRQgd2LymvGIYtK0fqd3YYMDtfGBw=",
+        "lastModified": 1794981305,
+        "narHash": "sha256-3ct+0RK3oCsSqNZlxXpbgdw6EJYJf+e+YmvPS7HgAzw=",
         "ref": "refs/heads/main",
-        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
-        "revCount": 69,
+        "rev": "c3577352ee1e39391f5204ee234d991c7dbeb151",
+        "revCount": 75,
         "type": "git",
         "url": "https://github.com/OnixResearch/choregraph.git"
       },
       "original": {
-        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+        "rev": "c3577352ee1e39391f5204ee234d991c7dbeb151",
         "type": "git",
         "url": "https://github.com/OnixResearch/choregraph.git"
       }
@@ -2036,6 +2036,23 @@
         "type": "github"
       }
     },
+    "nickel-eval-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794981983,
+        "narHash": "sha256-W+uGK+aNV8HC59TNLyXYJjXybSG6hOH3hw0Xr17eIOE=",
+        "ref": "refs/heads/main",
+        "rev": "2d1fb2b59f373967cc69e13ec289759d9cd4df46",
+        "revCount": 28,
+        "type": "git",
+        "url": "https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git"
+      },
+      "original": {
+        "rev": "2d1fb2b59f373967cc69e13ec289759d9cd4df46",
+        "type": "git",
+        "url": "https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git"
+      }
+    },
     "nickel-export": {
       "inputs": {
         "cairn": "cairn_2",
@@ -2667,6 +2684,7 @@
         "kamacite-src": "kamacite-src",
         "mantle-wasm-verifier-src": "mantle-wasm-verifier-src",
         "nickel-cli": "nickel-cli",
+        "nickel-eval-src": "nickel-eval-src",
         "nixpkgs": "nixpkgs_9",
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
