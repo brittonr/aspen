@@ -30,3 +30,15 @@ shared Mantle verifier/source-tree API is already selected; the remaining
 bundle admission and end-to-end acceptance criteria stay unchecked. No task is
 closed by confusing a compiled optional feature or diagnostic queue with those
 executions. Molten's component-RPC integration maintainers own this local recipe.
+
+## Producer observation (2026-11-18)
+
+Mantle `994bf653` materialized the client/server bundle and passed its
+real-byte acceptance rail; see the
+[integration record](https://github.com/OnixResearch/mantle/blob/994bf653770d5f7853a49ce9aa68e6c3e6335621/.cairn/changes/materialize-wrpc-producer/evidence/integration-2026-11-18.md).
+The compiled telemetry emitter imports `wasi:otel/tracing@0.2.0-rc.2` plus
+type-only `wasi:otel/types@0.2.0-rc.2` and `wasi:clocks/wall-clock@0.2.3`. The
+telemetry host now admits that observed `0.2.3` clock interface, still only as
+a type-only dependency, instead of `0.2.0`. The correction is compile-checked,
+not executed: the telemetry bundle stops at Octet admission, which needs an
+Octet-owned profile for those imports, so no telemetry task is closed.

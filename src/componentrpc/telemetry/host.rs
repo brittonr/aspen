@@ -121,7 +121,7 @@ fn admit_imports(component: &component::Component, linker: &mut component::Linke
                 }
             }
             has_tracing = true;
-        } else if ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.0"].contains(&name)
+        } else if ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.3"].contains(&name)
             && interface
                 .exports(component.engine())
                 .all(|(_, item)| matches!(item, component::types::ComponentItem::Type(_)))
