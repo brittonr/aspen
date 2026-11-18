@@ -34,12 +34,14 @@ enum Mode {
     Allowed,
     WrongGrant,
     WrongPeer,
+    WrongComponent,
     InvalidSignature,
     Duplicate,
     PolicyDenied,
     MissingToken,
     Expired,
     OverBudget,
+    DeliveryDrift,
 }
 
 pub fn negatives(scope: &super::bridge::Scope) -> super::Result<Vec<&'static str>> {
@@ -47,12 +49,14 @@ pub fn negatives(scope: &super::bridge::Scope) -> super::Result<Vec<&'static str
     for (mode, label) in [
         (Mode::WrongGrant, "ucan-wrong-grant"),
         (Mode::WrongPeer, "unauthorized-peer-before-effect"),
+        (Mode::WrongComponent, "ungranted-component-before-effect"),
         (Mode::InvalidSignature, "ucan-invalid-holder-signature"),
         (Mode::Duplicate, "ucan-duplicate-nonce"),
         (Mode::PolicyDenied, "current-basalt-policy-deny"),
         (Mode::MissingToken, "missing-valid-token"),
         (Mode::Expired, "expired-current-authority"),
         (Mode::OverBudget, "overbudget-before-effect"),
+        (Mode::DeliveryDrift, "delivery-contract-drift-before-effect"),
     ] {
         if issue(scope, 9, mode).is_ok() {
             return Err(format!("real UCAN negative fixture was admitted: {label}"));
@@ -75,6 +79,11 @@ fn issue(scope: &super::bridge::Scope, nonce: u8, mode: Mode) -> super::Result<s
             changed.peer = super::reference(b"ungranted-peer");
             Some(changed)
         }
+        Mode::WrongComponent => {
+            let mut changed = scope.clone();
+            changed.callee = super::reference(b"ungranted-server-component");
+            Some(changed)
+        }
         Mode::PolicyDenied => {
             let mut changed = scope.clone();
             changed.policy = super::authority::policy_ref(&policy)?;
@@ -83,6 +92,11 @@ fn issue(scope: &super::bridge::Scope, nonce: u8, mode: Mode) -> super::Result<s
         Mode::OverBudget => {
             let mut changed = scope.clone();
             changed.resources = super::reference(b"excess-budget");
+            Some(changed)
+        }
+        Mode::DeliveryDrift => {
+            let mut changed = scope.clone();
+            changed.delivery = super::reference(b"at-least-once-automatic-retry");
             Some(changed)
         }
         _ => None,

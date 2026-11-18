@@ -66,6 +66,23 @@ impl Client {
         cases.push("oversized-invoke-before-effect");
         Ok(cases)
     }
+    /// A second attempt after the admitted one is denied before any journal or transport effect.
+    pub(crate) async fn retry_negative(&self) -> super::Result<&'static str> {
+        let before = self.transcript().await?.reference;
+        let result = wrpc_transport::Invoke::invoke(
+            self,
+            (),
+            super::INTERFACE,
+            super::FUNCTION,
+            bytes::Bytes::new(),
+            Vec::<Vec<Option<usize>>>::new(),
+        )
+        .await;
+        if result.is_ok() || self.transcript().await?.reference != before {
+            return Err("second attempt reused the consumed session".into());
+        }
+        Ok("retry-after-attempt-denied")
+    }
 }
 
 fn check_session(session: &Session) -> super::Result<()> {

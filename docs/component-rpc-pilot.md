@@ -97,10 +97,15 @@ opening listeners, consulting wall time or granting live authority.
 
 `run-fixture` uses fixed test-only keys and verification time to exercise real
 signed UCAN admission. It is not a production credential fallback. It runs
-actual wrong-grant, wrong-peer, invalid-holder-signature, duplicate-nonce,
-current-policy-deny, missing-token, expired-authority and resource-deny gates.
+actual wrong-grant, wrong-peer, ungranted-component, invalid-holder-signature,
+duplicate-nonce, current-policy-deny, missing-token, expired-authority,
+resource-deny and delivery-contract-drift gates. A callee other than the
+measured server fails bundle admission, and a caller that expects another
+transport profile is denied by endpoint import admission before any dial.
 Actual `Invoke` calls with wrong world/function and excessive arguments must
-leave the valid session unused; the subsequent real call must still succeed.
+leave the valid session unused; the subsequent real call must still succeed,
+and a second attempt after it is denied without new journal or transport
+effects.
 Package and transcript negative cases are evaluated against the actual
 handoff/completed transcript, never fabricated successful evidence. The
 focused tests in `tests/componentrpc.rs` cover exact mapping boundaries,

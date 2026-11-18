@@ -31,6 +31,7 @@ fn scope(bundle: &super::materialization::Bundle) -> super::Result<super::bridge
 pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::Dir) -> super::Result<Outcome> {
     let scope = scope(bundle)?;
     bundle.check(&scope)?;
+    let component_case = unmeasured_component(bundle, &scope)?;
     let client_lease = super::fixtureauth::lease(&scope, 1)?;
     let server_lease = super::fixtureauth::lease(&scope, 2)?;
     let authority_cases = super::fixtureauth::negatives(&scope)?;
@@ -38,6 +39,7 @@ pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::
     let server_journal = super::journal::Journal::new(output, "server")?;
     let mut server = super::fixturefabric::listener(&server_lease, 21).await?;
     let result = super::fixturefabric::listener(&client_lease, 22).await?;
+    let drift_case = drifted_transport(&client_lease, server.handoff().clone(), &scope).await?;
     let invocation = super::bridge::invocation(&scope)?;
     let response_session = super::profile::response_session(&scope)?;
     let request = super::fixturefabric::client(
@@ -81,6 +83,7 @@ pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::
     let client_result = client_result?;
     let server = server_result?;
     let transcript = client.transcript().await?;
+    let retry_case = client.retry_negative().await?;
     let replay_result = super::transcript::replay(&scope, &transcript)?;
     if replay_result != "hello from Rust" || server.result_wire != transcript.result_wire {
         return Err("remote client/server/replay disagree".into());
@@ -88,6 +91,7 @@ pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::
     let mut negative_cases = super::negative::verify(&transcript)?;
     negative_cases.extend(authority_cases);
     negative_cases.extend(invoke_cases);
+    negative_cases.extend([component_case, drift_case, retry_case]);
     Ok(Outcome {
         client_result,
         client: transcript,
@@ -95,4 +99,40 @@ pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::
         replay_result,
         negative_cases,
     })
+}
+
+/// Only the exact measured server is admissible; another callee is denied before any effect.
+fn unmeasured_component(
+    bundle: &super::materialization::Bundle,
+    scope: &super::bridge::Scope,
+) -> super::Result<&'static str> {
+    let mut unmeasured = scope.clone();
+    unmeasured.callee = super::reference(b"unmeasured-server-component");
+    if bundle.check(&unmeasured).is_ok() {
+        return Err("unmeasured callee component was admitted".into());
+    }
+    Ok("unmeasured-component-before-effect")
+}
+
+/// A caller expecting another transport profile is denied at endpoint import, before any dial.
+async fn drifted_transport(
+    lease: &super::authority::Lease,
+    endpoint: fabric_transport::Endpoint,
+    scope: &super::bridge::Scope,
+) -> super::Result<&'static str> {
+    let invocation = super::bridge::invocation(scope)?;
+    let mut drifted = super::fixturefabric::client(lease, endpoint, 22, scope.session.clone(), invocation)?;
+    drifted.expected.profile_ref = super::reference(b"undeclared-transport-profile");
+    let request = crate::codec::canonical_bytes(&super::bridge::request(scope, &[])?).map_err(super::failure)?;
+    let timeout = std::time::Duration::from_secs(super::profile::TIMEOUT_SECONDS);
+    match fabric_transport::exchange_frame(drifted, &request, timeout).await {
+        Ok(_) => Err("drifted transport profile reached the listener".into()),
+        Err(error) => {
+            let error = error.to_string();
+            if !error.contains("endpoint import denied") || !error.contains("ProfileIdentityMismatch") {
+                return Err(format!("drifted transport profile was not denied at import admission: {error}"));
+            }
+            Ok("transport-profile-drift-before-session")
+        }
+    }
 }
