@@ -1,0 +1,7 @@
+# Aspen source: origin/molten cb3438eb2 (pilots/orchestration and vendor/noble-pure).
+git archive cb3438eb2 pilots/orchestration vendor/noble-pure | tar -x -C SCRATCH
+cp evidence/pure-net-checkpoint-gate-2026-11-18/checkpoint_gate.rs SCRATCH/pilots/orchestration/pure-net/examples/
+cd SCRATCH/pilots/orchestration
+# Aspen's dev shell supplies the pinned nightly-2026-05-26 toolchain that noble-kernel requires.
+nix develop ASPEN_CHECKOUT -c cargo build --release --locked --example checkpoint_gate -p molten-pure-net
+target/release/examples/checkpoint_gate 1 10 50 64 80 90 100 > run.txt

@@ -1,0 +1,131 @@
+{
+  "schema": "aspen.pure-net-checkpoint-gate-observation/v1",
+  "date": "2026-11-18",
+  "issue": 34,
+  "question": "Can a portable pure-net checkpoint avoid enough recomputation to justify itself under the admitted pure-net-eval/v1 profile?",
+  "gate": {
+    "declared_before_measurement": true,
+    "rule": "Proceed only if the recomputation a checkpoint could avoid at the largest admissible evaluation is at least 100 ms and at least 10% of the smallest measured restart-to-terminal latency.",
+    "minimum_avoidable_recomputation_ns": 100000000,
+    "minimum_fraction_of_restart": 0.1
+  },
+  "source": {
+    "repository": "https://github.com/brittonr/aspen",
+    "commit": "cb3438eb23e7e1e4a629d7aeaf4d845ca1823fca"
+  },
+  "environment": {
+    "toolchain": "rustc 1.98.0-nightly (31a9463c6 2026-05-25), Aspen dev shell",
+    "profile": "cargo --release",
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "logical_cpus": 32
+  },
+  "probe": {
+    "path": "checkpoint_gate.rs",
+    "backend": "SequentialNet",
+    "limits": "pure-net Limits::default() (interaction_fuel 100000, max_source_bytes 8192, max_ir_nodes 1024, max_agent_slots 8192)",
+    "workload": "generated `dup + ` chains over one input; each pair adds a fan-out and an addition",
+    "samples_per_size": 31,
+    "measures": "one whole execute() calculation from encoded manifest, program and inputs to receipt, which is exactly the work a restart from input repeats",
+    "rows": [
+      {
+        "pairs": 1,
+        "source_bytes": 5,
+        "program_bytes": 490,
+        "interactions": 3,
+        "total_ns_median": 286909,
+        "total_ns_min": 275387,
+        "total_ns_max": 397176,
+        "compile_error": null
+      },
+      {
+        "pairs": 10,
+        "source_bytes": 59,
+        "program_bytes": 726,
+        "interactions": 30,
+        "total_ns_median": 558739,
+        "total_ns_min": 540976,
+        "total_ns_max": 614494,
+        "compile_error": null
+      },
+      {
+        "pairs": 50,
+        "source_bytes": 299,
+        "program_bytes": 1886,
+        "interactions": 150,
+        "total_ns_median": 1837350,
+        "total_ns_min": 1690755,
+        "total_ns_max": 2296832,
+        "compile_error": null
+      },
+      {
+        "pairs": 64,
+        "source_bytes": 383,
+        "program_bytes": 2292,
+        "interactions": 192,
+        "total_ns_median": 2335675,
+        "total_ns_min": 2200051,
+        "total_ns_max": 2911637,
+        "compile_error": null
+      },
+      {
+        "pairs": 80,
+        "source_bytes": 479,
+        "program_bytes": 2756,
+        "interactions": 240,
+        "total_ns_median": 2896138,
+        "total_ns_min": 2784638,
+        "total_ns_max": 3091745,
+        "compile_error": null
+      },
+      {
+        "pairs": 90,
+        "source_bytes": 539,
+        "program_bytes": null,
+        "interactions": null,
+        "total_ns_median": null,
+        "total_ns_min": null,
+        "total_ns_max": null,
+        "compile_error": "Exhausted(Source)"
+      },
+      {
+        "pairs": 100,
+        "source_bytes": 599,
+        "program_bytes": null,
+        "interactions": null,
+        "total_ns_median": null,
+        "total_ns_min": null,
+        "total_ns_max": null,
+        "compile_error": "Exhausted(Source)"
+      }
+    ],
+    "largest_admissible": {
+      "pairs": 80,
+      "interactions": 240,
+      "total_ns_median": 2896138,
+      "total_ns_max": 3091745
+    },
+    "first_rejected": {
+      "pairs": 90,
+      "compile_error": "Exhausted(Source)"
+    }
+  },
+  "restart_baseline": {
+    "record": ".cairn/archive/2026-11-17-add-pure-net-eval-service/evidence/matched-baseline-2026-11-17.json",
+    "rows_with_restart": 12,
+    "kill_wait_reopen_to_terminal_ns_min": 709220465,
+    "kill_wait_reopen_to_terminal_ns_max": 1990378826,
+    "calculation_wall_ns_max": 15473677
+  },
+  "result": {
+    "avoidable_recomputation_upper_bound_ns": 15473677,
+    "fraction_of_smallest_restart": 0.0218,
+    "passes": false
+  },
+  "decision": "no-go",
+  "reasoning": "A checkpoint can avoid at most the calculation a restart repeats. The largest admissible program calculates in about 3 ms, and the largest archived in-service calculation took 15.5 ms, against restart-to-terminal latencies of 0.71 to 1.99 s that a checkpoint restore would also pay. Even a zero-cost checkpoint fails the gate, so checkpoint encode, store and restore costs were not measured.",
+  "non_claims": [
+    "not a measurement of any checkpoint implementation",
+    "not a claim about profiles with larger limits, parallel reduction or cross-host placement",
+    "not a general Noble performance claim"
+  ]
+}

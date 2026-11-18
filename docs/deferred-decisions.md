@@ -219,6 +219,45 @@ without a named query.
 Reopen with a concrete workflow question, a bounded input snapshot, and a
 comparison against the current first-blocker diagnostics.
 
+## #34 Portable pure-net checkpoints
+
+**Decision: no portable checkpoints for the admitted `pure-net-eval/v1` profile.**
+
+The issue makes measured benefit the gate. Before measuring, the gate was set:
+proceed only if the recomputation a checkpoint could avoid at the largest
+admissible evaluation is at least 100 ms and at least 10% of the smallest
+measured restart-to-terminal latency. A checkpoint can avoid at most the
+calculation a restart repeats, so measuring that calculation bounds the
+benefit of any checkpoint, whatever it costs.
+
+The retained [observation](../evidence/pure-net-checkpoint-gate-2026-11-18/observation.json)
+ran the pilot's own `execute` on the admitted sequential-net backend and default
+limits, at `cb3438eb2`, with generated `dup +` chains over one input:
+
+| Pairs | Interactions | Median calculation | Slowest of 31 |
+| ---: | ---: | ---: | ---: |
+| 1 | 3 | 0.29 ms | 0.40 ms |
+| 10 | 30 | 0.56 ms | 0.61 ms |
+| 50 | 150 | 1.84 ms | 2.30 ms |
+| 64 | 192 | 2.34 ms | 2.91 ms |
+| 80 | 240 | 2.90 ms | 3.09 ms |
+
+At 90 pairs the frontend rejects the source (`Exhausted(Source)`), so the
+admitted source, IR and agent limits keep programs far below the 100,000
+interaction fuel ceiling. The archived
+[matched baseline](../.cairn/archive/2026-11-17-add-pure-net-eval-service/evidence/matched-baseline-2026-11-17.json)
+measured 709 ms to 1.99 s from worker kill to terminal result in its 12
+restart rows, and at most 15.5 ms of in-service calculation. A restored
+checkpoint would still pay the worker restart and store reopen. The avoidable
+work is therefore at most 2.2% of the smallest restart latency and far below
+100 ms. Even a zero-cost checkpoint fails the gate, so checkpoint encode, store
+and restore were not built or measured.
+
+Reopen when an admitted profile allows evaluations whose restart-from-input
+calculation passes the same gate on its largest admissible program, or when a
+parallel, long-running or cross-host placement profile is proposed. Whole-attempt
+retry stays authoritative until then.
+
 ## #52 Repository hygiene
 
 ### Epoch archive dates

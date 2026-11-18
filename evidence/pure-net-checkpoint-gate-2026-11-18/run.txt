@@ -1,0 +1,7 @@
+pairs=1 source_bytes=5 program_bytes=490 interactions=3 samples=31 total_ns_median=286909 total_ns_min=275387 total_ns_max=397176 phases_ns_median=[Complete=81693 Decode=90550 Extract=47099 Lower=26419 ParseCheck=31809 Readback=491 Reduce=40 Setup=611 Validate=1203]
+pairs=10 source_bytes=59 program_bytes=726 interactions=30 samples=31 total_ns_median=558739 total_ns_min=540976 total_ns_max=614494 phases_ns_median=[Complete=162816 Decode=97373 Extract=73348 Lower=121288 ParseCheck=59121 Readback=681 Reduce=40 Setup=1132 Validate=1082]
+pairs=50 source_bytes=299 program_bytes=1886 interactions=150 samples=31 total_ns_median=1837350 total_ns_min=1690755 total_ns_max=2296832 phases_ns_median=[Complete=520687 Decode=131908 Extract=188935 Lower=567917 ParseCheck=186200 Readback=1222 Reduce=50 Setup=2705 Validate=1153]
+pairs=64 source_bytes=383 program_bytes=2292 interactions=192 samples=31 total_ns_median=2335675 total_ns_min=2200051 total_ns_max=2911637 phases_ns_median=[Complete=658647 Decode=135845 Extract=225694 Lower=765417 ParseCheck=237516 Readback=1563 Reduce=50 Setup=3336 Validate=1192]
+pairs=80 source_bytes=479 program_bytes=2756 interactions=240 samples=31 total_ns_median=2896138 total_ns_min=2784638 total_ns_max=3091745 phases_ns_median=[Complete=815721 Decode=144251 Extract=269446 Lower=997764 ParseCheck=279796 Readback=1663 Reduce=50 Setup=3997 Validate=1312]
+pairs=90 source_bytes=539 compile_error=Exhausted(Source)
+pairs=100 source_bytes=599 compile_error=Exhausted(Source)
