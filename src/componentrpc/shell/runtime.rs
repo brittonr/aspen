@@ -1,20 +1,18 @@
 //! Isolated Wasmtime 33 / wRPC 0.15 host; never consumes shared Wasmtime 45 handles.
-use std::collections;
 
-use wasmtime_rpc::component;
 use wasmtime_wasi_rpc::p2::IoView;
 use wasmtime_wasi_rpc::p2::WasiView;
 use wrpc_runtime_wasmtime::WrpcView;
 
 pub struct Context<T> {
     transport: T,
-    table: component::ResourceTable,
+    table: wasmtime_rpc::component::ResourceTable,
     wasi: wasmtime_wasi_rpc::p2::WasiCtx,
     shared: wrpc_runtime_wasmtime::SharedResourceTable,
     limits: wasmtime_rpc::StoreLimits,
 }
 impl<T: Send> IoView for Context<T> {
-    fn table(&mut self) -> &mut component::ResourceTable {
+    fn table(&mut self) -> &mut wasmtime_rpc::component::ResourceTable {
         &mut self.table
     }
 }
@@ -51,11 +49,16 @@ pub fn engine() -> super::Result<wasmtime_rpc::Engine> {
     wasmtime_rpc::Engine::new(&config).map_err(super::failure)
 }
 fn store<T: Send>(engine: &wasmtime_rpc::Engine, transport: T) -> super::Result<wasmtime_rpc::Store<Context<T>>> {
+    #[allow(
+        tigerstyle::explicit_defaults,
+        reason = "wrpc_runtime_wasmtime::SharedResourceTable has a private field; Default is its only constructor"
+    )]
+    let shared = wrpc_runtime_wasmtime::SharedResourceTable::default();
     let context = Context {
         transport,
-        table: component::ResourceTable::new(),
+        table: wasmtime_rpc::component::ResourceTable::new(),
         wasi: wasmtime_wasi_rpc::p2::WasiCtxBuilder::new().build(),
-        shared: wrpc_runtime_wasmtime::SharedResourceTable::default(),
+        shared,
         limits: wasmtime_rpc::StoreLimitsBuilder::new()
             .memory_size(super::profile::MEMORY_BYTES)
             .instances(64)
@@ -77,22 +80,22 @@ pub async fn run_client<T: wrpc_transport::Invoke<Context = ()> + 'static>(
     scope: &super::bridge::Scope,
 ) -> super::Result<u32> {
     let engine = engine()?;
-    let component = component::Component::new(&engine, bundle.client()).map_err(super::failure)?;
+    let component = wasmtime_rpc::component::Component::new(&engine, bundle.client()).map_err(super::failure)?;
     bundle.check(scope)?;
-    let mut linker = component::Linker::<Context<T>>::new(&engine);
+    let mut linker = wasmtime_rpc::component::Linker::<Context<T>>::new(&engine);
     let component_type = component.component_type();
     let imports: Vec<_> = component_type.imports(&engine).collect();
     if imports.len() != 1 || imports[0].0 != super::INTERFACE {
         return Err("client remaining imports differ from unary profile".into());
     }
-    let component::types::ComponentItem::ComponentInstance(instance) = &imports[0].1 else {
+    let wasmtime_rpc::component::types::ComponentItem::ComponentInstance(instance) = &imports[0].1 else {
         return Err("hello import is not an instance".into());
     };
     let exports: Vec<_> = instance.exports(&engine).collect();
     if exports.len() != 1 || exports[0].0 != super::FUNCTION {
         return Err("wrong imported function".into());
     }
-    let component::types::ComponentItem::ComponentFunc(function) = &exports[0].1 else {
+    let wasmtime_rpc::component::types::ComponentItem::ComponentFunc(function) = &exports[0].1 else {
         return Err("wrong hello type".into());
     };
     check_function(function)?;
@@ -100,7 +103,7 @@ pub async fn run_client<T: wrpc_transport::Invoke<Context = ()> + 'static>(
         &engine,
         &mut linker.root(),
         [],
-        collections::HashMap::new(),
+        std::collections::HashMap::new(),
         imports[0].1.clone(),
         "",
         super::INTERFACE,
@@ -119,7 +122,7 @@ pub async fn run_client<T: wrpc_transport::Invoke<Context = ()> + 'static>(
 
 fn check_function(function: &wasmtime_rpc::component::types::ComponentFunc) -> super::Result<()> {
     let results: Vec<_> = function.results().collect();
-    if function.params().len() != 0 || results != [component::Type::String] {
+    if function.params().len() != 0 || results != [wasmtime_rpc::component::Type::String] {
         return Err("hello type differs; futures/streams/resources denied".into());
     }
     Ok(())
@@ -131,7 +134,7 @@ pub async fn call_server<T: wrpc_transport::Invoke<Context = ()> + 'static>(
     lease: &super::authority::Lease,
 ) -> super::Result<Vec<u8>> {
     let engine = engine()?;
-    let component = component::Component::new(&engine, bundle.server()).map_err(super::failure)?;
+    let component = wasmtime_rpc::component::Component::new(&engine, bundle.server()).map_err(super::failure)?;
     bundle.check(lease.scope())?;
     if component.component_type().imports(&engine).next().is_some() {
         return Err("server must be deny-all WASI virtualized with no remaining imports".into());
@@ -142,10 +145,10 @@ pub async fn call_server<T: wrpc_transport::Invoke<Context = ()> + 'static>(
         .find(|(name, _)| *name == super::INTERFACE)
         .ok_or("server missing pinned interface")?
         .1;
-    let component::types::ComponentItem::ComponentInstance(interface) = ty else {
+    let wasmtime_rpc::component::types::ComponentItem::ComponentInstance(interface) = ty else {
         return Err("wrong server interface type".into());
     };
-    let component::types::ComponentItem::ComponentFunc(function) = interface
+    let wasmtime_rpc::component::types::ComponentItem::ComponentFunc(function) = interface
         .exports(&engine)
         .find(|(name, _)| *name == super::FUNCTION)
         .ok_or("server missing hello")?
@@ -156,7 +159,7 @@ pub async fn call_server<T: wrpc_transport::Invoke<Context = ()> + 'static>(
     check_function(&function)?;
     let results: Vec<_> = function.results().collect();
     let mut store = store(&engine, transport)?;
-    let instance = component::Linker::new(&engine)
+    let instance = wasmtime_rpc::component::Linker::new(&engine)
         .instantiate_async(&mut store, &component)
         .await
         .map_err(super::failure)?;
@@ -171,7 +174,7 @@ pub async fn call_server<T: wrpc_transport::Invoke<Context = ()> + 'static>(
         super::channels::Reader(std::io::Cursor::new(Vec::new())),
         writer.clone(),
         &[],
-        &collections::HashMap::new(),
+        &std::collections::HashMap::new(),
         [].iter(),
         &results,
         function,

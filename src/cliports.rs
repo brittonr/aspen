@@ -9,7 +9,7 @@ mod cli_federation {
     pub(crate) use super::federation_port::*;
 }
 #[cfg(any(feature = "spacewasm-pilot", feature = "component-rpc"))]
-#[path = "cli/runtime/pilots.rs"]
+#[path = "cli/runtime/pilots/mod.rs"]
 mod runtime_pilot_port;
 #[cfg(any(feature = "spacewasm-pilot", feature = "component-rpc"))]
 mod cli_pilots {

@@ -11,10 +11,10 @@ pub(crate) fn persist(root: &cap_std::fs::Dir, leaf: &str, value: &preserves::IO
     file.write_all(&bytes).map_err(super::failure)?;
     file.sync_all().map_err(super::failure)
 }
-fn recorded(root: &cap_std::fs::Dir, leaf: &str) -> super::Result<super::transcript::Transcript> {
+fn recorded(root: &cap_std::fs::Dir, leaf: &str) -> super::Result<super::transcript::Call> {
     let bytes = super::package::read(root, leaf)?;
     let value = crate::codec::parse_canonical_bytes(&bytes).map_err(super::failure)?;
-    super::transcript::Transcript::from_value(&value)
+    super::transcript::Call::from_value(&value)
 }
 
 pub async fn run(

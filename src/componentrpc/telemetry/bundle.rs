@@ -1,10 +1,10 @@
 //! Admission of the separate Mantle telemetry emitter; hello bundles remain unchanged.
 use cap_fs_ext::DirExt;
 
-pub struct Bundle {
+pub struct Emitter {
     verified: crate::wasm_component::VerifiedBundle,
 }
-impl Bundle {
+impl Emitter {
     pub fn load_package(package: &cap_std::fs::Dir, staging: &cap_std::fs::Dir) -> super::Result<Self> {
         let bytes = super::super::package::read(package, "manifest.json")?;
         let manifest: serde_json::Value = serde_json::from_slice(&bytes).map_err(super::super::failure)?;

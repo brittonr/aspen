@@ -3,11 +3,11 @@ use std::io::Write;
 
 use cap_fs_ext::OpenOptionsFollowExt;
 
-pub struct Journal {
+pub struct Recorder {
     root: cap_std::fs::Dir,
     role: &'static str,
 }
-impl Journal {
+impl Recorder {
     pub fn new(root: &cap_std::fs::Dir, role: &'static str) -> super::Result<Self> {
         if role != "client" && role != "server" {
             return Err("unsupported journal participant".into());
@@ -27,7 +27,7 @@ impl Journal {
         self.persist("intent", &value)?;
         super::hash(&value)
     }
-    pub fn finish(&self, intent: &str, result: Option<&super::transcript::Transcript>) -> super::Result<()> {
+    pub fn finish(&self, intent: &str, result: Option<&super::transcript::Call>) -> super::Result<()> {
         let (class, reference) = match result {
             Some(transcript) => {
                 self.persist("live", &transcript.value()?)?;

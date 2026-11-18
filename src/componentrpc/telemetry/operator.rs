@@ -9,10 +9,10 @@ pub struct Input<'a> {
 fn unexported(sink: &cap_std::fs::Dir) -> super::Result<()> {
     match sink.symlink_metadata("otel-diagnostic.preserves") {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        _ => Err("negative telemetry case produced an export or sink is not fresh".into()),
+        Err(_) | Ok(_) => Err("negative telemetry case produced an export or sink is not fresh".into()),
     }
 }
-fn scope(bundle: &super::Bundle, receipt: String, sink: &str) -> super::Result<super::Scope> {
+fn scope(bundle: &super::Emitter, receipt: String, sink: &str) -> super::Result<super::Scope> {
     Ok(super::Scope {
         component: super::super::reference(bundle.component()),
         bundle: bundle.reference().into(),
@@ -27,21 +27,21 @@ fn scope(bundle: &super::Bundle, receipt: String, sink: &str) -> super::Result<s
 
 pub async fn run_fixture(input: Input<'_>) -> super::Result<preserves::IOValue> {
     let original = super::super::operator::show(input.rpc_output)?;
-    let bundle = super::Bundle::load_package(input.package, input.staging)?;
+    let bundle = super::Emitter::load_package(input.package, input.staging)?;
     let bytes = super::super::package::read(input.rpc_output, "client.preserves")?;
     let value = crate::codec::parse_canonical_bytes(&bytes).map_err(super::super::failure)?;
-    let transcript = super::super::transcript::Transcript::from_value(&value)?;
+    let transcript = super::super::transcript::Call::from_value(&value)?;
     let scope = scope(&bundle, transcript.reference, input.sink_ref)?;
     unexported(input.sink)?;
     if super::fixtureauth::lease(&scope, 1, false).is_ok() {
         return Err("RPC-only UCAN authorized telemetry export".into());
     }
     let mut cases = vec!["independent-telemetry-authority-deny"];
-    for (mode, reason, label) in [
-        (1, "OTel string field is not approved", "secret-attribute-export-deny"),
-        (2, "span lifecycle/queue budget denied", "bounded-queue-export-deny"),
+    for (mode, nonce, reason, label) in [
+        (1, 3, "OTel string field is not approved", "secret-attribute-export-deny"),
+        (2, 4, "span lifecycle/queue budget denied", "bounded-queue-export-deny"),
     ] {
-        let lease = super::fixtureauth::lease(&scope, mode as u8 + 2, true)?;
+        let lease = super::fixtureauth::lease(&scope, nonce, true)?;
         let result = super::export(super::ExportInput {
             bundle: &bundle,
             lease,

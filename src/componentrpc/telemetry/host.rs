@@ -2,7 +2,6 @@
 use std::io::Write;
 
 use cap_fs_ext::OpenOptionsFollowExt;
-use wasmtime_rpc::component;
 
 struct State {
     receipt: String,
@@ -11,7 +10,7 @@ struct State {
     limits: wasmtime_rpc::StoreLimits,
 }
 pub struct ExportInput<'a> {
-    pub bundle: &'a super::Bundle,
+    pub bundle: &'a super::Emitter,
     pub lease: super::Lease,
     pub sink: &'a cap_std::fs::Dir,
     pub sink_ref: &'a str,
@@ -27,41 +26,11 @@ pub async fn export(input: ExportInput<'_>) -> super::Result<preserves::IOValue>
         return Err("telemetry sink/mode not admitted".into());
     }
     let engine = super::super::runtime::engine()?;
-    let component = component::Component::new(&engine, input.bundle.component()).map_err(super::super::failure)?;
-    let mut linker = component::Linker::<State>::new(&engine);
+    let component =
+        wasmtime_rpc::component::Component::new(&engine, input.bundle.component()).map_err(super::super::failure)?;
+    let mut linker = wasmtime_rpc::component::Linker::<State>::new(&engine);
     admit_imports(&component, &mut linker)?;
-    let mut interface = linker.instance(super::INTERFACE).map_err(super::super::failure)?;
-    interface
-        .func_new("current-span-context", |store, args, results| {
-            anyhow::ensure!(args.is_empty() && results.len() == 1, "wrong current-span-context type");
-            results[0] = super::projection::context(&store.data().receipt);
-            Ok(())
-        })
-        .map_err(super::super::failure)?;
-    interface
-        .func_new("on-start", |mut store, args, results| {
-            anyhow::ensure!(args.len() == 1 && results.is_empty(), "wrong on-start type");
-            let state = store.data_mut();
-            anyhow::ensure!(
-                !state.active && state.spans.len() < super::MAX_SPANS,
-                "span lifecycle/queue budget denied"
-            );
-            anyhow::ensure!(args[0] == super::projection::context(&state.receipt), "untrusted span context");
-            state.active = true;
-            Ok(())
-        })
-        .map_err(super::super::failure)?;
-    interface
-        .func_new("on-end", |mut store, args, results| {
-            anyhow::ensure!(args.len() == 1 && results.is_empty(), "wrong on-end type");
-            let state = store.data_mut();
-            anyhow::ensure!(state.active && state.spans.len() < super::MAX_SPANS, "span lifecycle/queue budget denied");
-            let value = super::projection::span(&args[0], &state.receipt).map_err(anyhow::Error::msg)?;
-            state.spans.push(value);
-            state.active = false;
-            Ok(())
-        })
-        .map_err(super::super::failure)?;
+    define_callbacks(&mut linker)?;
     let state = State {
         receipt: input.lease.scope().receipt.clone(),
         active: false,
@@ -96,10 +65,50 @@ pub async fn export(input: ExportInput<'_>) -> super::Result<preserves::IOValue>
     Ok(diagnostic)
 }
 
-fn admit_imports(component: &component::Component, linker: &mut component::Linker<State>) -> super::Result<()> {
+/// The three tracing callbacks: a trusted context, one active span and a bounded span queue.
+fn define_callbacks(linker: &mut wasmtime_rpc::component::Linker<State>) -> super::Result<()> {
+    let mut interface = linker.instance(super::INTERFACE).map_err(super::super::failure)?;
+    interface
+        .func_new("current-span-context", |store, args, results| {
+            anyhow::ensure!(args.is_empty() && results.len() == 1, "wrong current-span-context type");
+            results[0] = super::projection::context(&store.data().receipt);
+            Ok(())
+        })
+        .map_err(super::super::failure)?;
+    interface
+        .func_new("on-start", |mut store, args, results| {
+            anyhow::ensure!(args.len() == 1 && results.is_empty(), "wrong on-start type");
+            let state = store.data_mut();
+            anyhow::ensure!(
+                !state.active && state.spans.len() < super::MAX_SPANS,
+                "span lifecycle/queue budget denied"
+            );
+            anyhow::ensure!(args[0] == super::projection::context(&state.receipt), "untrusted span context");
+            state.active = true;
+            Ok(())
+        })
+        .map_err(super::super::failure)?;
+    interface
+        .func_new("on-end", |mut store, args, results| {
+            anyhow::ensure!(args.len() == 1 && results.is_empty(), "wrong on-end type");
+            let state = store.data_mut();
+            anyhow::ensure!(state.active && state.spans.len() < super::MAX_SPANS, "span lifecycle/queue budget denied");
+            let value = super::projection::span(&args[0], &state.receipt).map_err(anyhow::Error::msg)?;
+            state.spans.push(value);
+            state.active = false;
+            Ok(())
+        })
+        .map_err(super::super::failure)?;
+    Ok(())
+}
+
+fn admit_imports(
+    component: &wasmtime_rpc::component::Component,
+    linker: &mut wasmtime_rpc::component::Linker<State>,
+) -> super::Result<()> {
     let mut has_tracing = false;
     for (name, item) in component.component_type().imports(component.engine()) {
-        let component::types::ComponentItem::ComponentInstance(interface) = item else {
+        let wasmtime_rpc::component::types::ComponentItem::ComponentInstance(interface) = item else {
             return Err("telemetry import is not an interface".into());
         };
         if name == super::INTERFACE {
@@ -109,8 +118,8 @@ fn admit_imports(component: &component::Component, linker: &mut component::Linke
             let mut functions = 0_usize;
             for (name, item) in interface.exports(component.engine()) {
                 let function = match item {
-                    component::types::ComponentItem::Type(_) => continue,
-                    component::types::ComponentItem::ComponentFunc(function) => function,
+                    wasmtime_rpc::component::types::ComponentItem::Type(_) => continue,
+                    wasmtime_rpc::component::types::ComponentItem::ComponentFunc(function) => function,
                     _ => return Err("OTel tracing interface exports an unadmitted item".into()),
                 };
                 let expected = match name {
@@ -130,7 +139,7 @@ fn admit_imports(component: &component::Component, linker: &mut component::Linke
         } else if ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.3"].contains(&name)
             && interface
                 .exports(component.engine())
-                .all(|(_, item)| matches!(item, component::types::ComponentItem::Type(_)))
+                .all(|(_, item)| matches!(item, wasmtime_rpc::component::types::ComponentItem::Type(_)))
         {
             linker.instance(name).map_err(super::super::failure)?;
         } else {
@@ -156,7 +165,6 @@ fn persist(root: &cap_std::fs::Dir, value: &preserves::IOValue) -> super::Result
 
 #[cfg(test)]
 mod tests {
-    use wasmtime_rpc::component;
 
     /// A real emitter's tracing import also exports the records its callbacks use.
     fn admit(exports: &str) -> super::super::Result<()> {
@@ -173,8 +181,8 @@ mod tests {
         );
         let bytes = wat::parse_str(source).expect("component text");
         let engine = super::super::super::runtime::engine().expect("pilot engine");
-        let component = component::Component::new(&engine, bytes).expect("component");
-        super::admit_imports(&component, &mut component::Linker::new(&engine))
+        let component = wasmtime_rpc::component::Component::new(&engine, bytes).expect("component");
+        super::admit_imports(&component, &mut wasmtime_rpc::component::Linker::new(&engine))
     }
 
     const CALLBACKS: &str = r#"

@@ -135,7 +135,7 @@ pub fn metadata(
 pub fn negative_cases(root: &cap_std::fs::Dir) -> super::Result<Vec<&'static str>> {
     let bytes = read(root, "manifest.json")?;
     let original: serde_json::Value = serde_json::from_slice(&bytes).map_err(super::failure)?;
-    let mut cases = Vec::new();
+    let mut cases = Vec::with_capacity(6);
     for (field, value, label) in [
         ("revision", "wrong-revision", "cohort-drift"),
         ("guest_build_owner", "Molten", "local-guest-build"),

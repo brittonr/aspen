@@ -1,5 +1,4 @@
 //! Optional bounded diagnostic projection, never canonical evidence or an authority source.
-use std::collections;
 
 #[derive(Clone, Copy)]
 pub enum Status {
@@ -8,10 +7,10 @@ pub enum Status {
     Uncertain,
 }
 #[derive(Default)]
-pub struct Diagnostics {
-    queue: collections::VecDeque<preserves::IOValue>,
+pub struct Queue {
+    queue: std::collections::VecDeque<preserves::IOValue>,
 }
-impl Diagnostics {
+impl Queue {
     // r[impl molten.component_rpc.telemetry]
     /// Closed fields prevent credentials, payloads, arbitrary labels and high cardinality IDs.
     /// Export admission is independent and must be performed by the owning telemetry port.

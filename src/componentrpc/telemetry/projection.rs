@@ -1,18 +1,17 @@
 //! Strict OTel-WASI value admission and payload-minimized diagnostic projection.
-use wasmtime_rpc::component;
 
-pub fn context(receipt: &str) -> component::Val {
+pub fn context(receipt: &str) -> wasmtime_rpc::component::Val {
     let digest = blake3::hash(receipt.as_bytes()).to_hex().to_string();
-    component::Val::Record(vec![
-        ("trace-id".into(), component::Val::String(digest[..32].into())),
-        ("span-id".into(), component::Val::String(digest[32..48].into())),
-        ("trace-flags".into(), component::Val::Flags(vec!["sampled".into()])),
-        ("is-remote".into(), component::Val::Bool(false)),
-        ("trace-state".into(), component::Val::List(Vec::new())),
+    wasmtime_rpc::component::Val::Record(vec![
+        ("trace-id".into(), wasmtime_rpc::component::Val::String(digest[..32].into())),
+        ("span-id".into(), wasmtime_rpc::component::Val::String(digest[32..48].into())),
+        ("trace-flags".into(), wasmtime_rpc::component::Val::Flags(vec!["sampled".into()])),
+        ("is-remote".into(), wasmtime_rpc::component::Val::Bool(false)),
+        ("trace-state".into(), wasmtime_rpc::component::Val::List(Vec::new())),
     ])
 }
-fn field<'a>(value: &'a component::Val, name: &str) -> super::Result<&'a component::Val> {
-    let component::Val::Record(fields) = value else {
+fn field<'a>(value: &'a wasmtime_rpc::component::Val, name: &str) -> super::Result<&'a wasmtime_rpc::component::Val> {
+    let wasmtime_rpc::component::Val::Record(fields) = value else {
         return Err("OTel value is not a record".into());
     };
     fields
@@ -21,20 +20,20 @@ fn field<'a>(value: &'a component::Val, name: &str) -> super::Result<&'a compone
         .map(|(_, value)| value)
         .ok_or_else(|| format!("OTel field {name} absent"))
 }
-fn string(value: &component::Val, expected: &str) -> super::Result<()> {
+fn string(value: &wasmtime_rpc::component::Val, expected: &str) -> super::Result<()> {
     match value {
-        component::Val::String(value) if value == expected => Ok(()),
+        wasmtime_rpc::component::Val::String(value) if value == expected => Ok(()),
         _ => Err("OTel string field is not approved".into()),
     }
 }
-fn empty(value: &component::Val) -> super::Result<()> {
+fn empty(value: &wasmtime_rpc::component::Val) -> super::Result<()> {
     match value {
-        component::Val::List(value) if value.is_empty() => Ok(()),
+        wasmtime_rpc::component::Val::List(value) if value.is_empty() => Ok(()),
         _ => Err("OTel payload/array field is not empty".into()),
     }
 }
-fn attributes(value: &component::Val, receipt: &str) -> super::Result<()> {
-    let component::Val::List(values) = value else {
+fn attributes(value: &wasmtime_rpc::component::Val, receipt: &str) -> super::Result<()> {
+    let wasmtime_rpc::component::Val::List(values) = value else {
         return Err("OTel attributes are not a list".into());
     };
     if values.len() > 1 {
@@ -42,7 +41,7 @@ fn attributes(value: &component::Val, receipt: &str) -> super::Result<()> {
     }
     for value in values {
         string(field(value, "key")?, "molten.receipt")?;
-        let component::Val::String(value) = field(value, "value")? else {
+        let wasmtime_rpc::component::Val::String(value) = field(value, "value")? else {
             return Err("OTel attribute value must be JSON text".into());
         };
         if value.len() > super::super::MAX_BYTES {
@@ -57,8 +56,8 @@ fn attributes(value: &component::Val, receipt: &str) -> super::Result<()> {
 }
 
 // r[impl molten.component_rpc.telemetry]
-pub fn span(value: &component::Val, receipt: &str) -> super::Result<preserves::IOValue> {
-    let component::Val::Record(fields) = value else {
+pub fn span(value: &wasmtime_rpc::component::Val, receipt: &str) -> super::Result<preserves::IOValue> {
+    let wasmtime_rpc::component::Val::Record(fields) = value else {
         return Err("span-data must be a record".into());
     };
     if fields.len() != 14 || field(value, "span-context")? != &context(receipt) {
@@ -67,7 +66,7 @@ pub fn span(value: &component::Val, receipt: &str) -> super::Result<preserves::I
     string(field(value, "name")?, "component-rpc-call")?;
     string(field(value, "parent-span-id")?, "")?;
     match field(value, "span-kind")? {
-        component::Val::Enum(kind) if kind == "client" => {}
+        wasmtime_rpc::component::Val::Enum(kind) if kind == "client" => {}
         _ => return Err("unapproved span kind".into()),
     }
     attributes(field(value, "attributes")?, receipt)?;
@@ -77,15 +76,15 @@ pub fn span(value: &component::Val, receipt: &str) -> super::Result<preserves::I
     string(field(instrumentation, "name")?, "molten-component-rpc")?;
     empty(field(instrumentation, "attributes")?)?;
     for name in ["version", "schema-url"] {
-        if !matches!(field(instrumentation, name)?, component::Val::Option(None)) {
+        if !matches!(field(instrumentation, name)?, wasmtime_rpc::component::Val::Option(None)) {
             return Err("unapproved instrumentation metadata".into());
         }
     }
-    if !matches!(field(value, "status")?, component::Val::Variant(name, None) if name == "unset") {
+    if !matches!(field(value, "status")?, wasmtime_rpc::component::Val::Variant(name, None) if name == "unset") {
         return Err("OTel status payload or application acceptance claim denied".into());
     }
     for name in ["dropped-attributes", "dropped-events", "dropped-links"] {
-        if !matches!(field(value, name)?, component::Val::U32(0)) {
+        if !matches!(field(value, name)?, wasmtime_rpc::component::Val::U32(0)) {
             return Err("OTel producer dropped data".into());
         }
     }

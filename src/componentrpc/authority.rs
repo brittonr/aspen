@@ -1,8 +1,5 @@
 //! Current Basalt/UCAN authorization. Possession of an artifact never mints this lease.
-use basalt::ucan;
 use basalt::ucan::OperationProfileAdmission;
-
-use crate::codec;
 
 pub const ABILITY: &str = "component-rpc/invoke";
 pub const CONTRACT: &str = "component-rpc-unary-v1";
@@ -11,8 +8,8 @@ pub struct Credential<'a> {
     pub token: &'a str,
     pub trusted_issuer: &'a str,
     pub expected_holder: &'a str,
-    pub nonce: ucan::HolderInvocationNonce,
-    pub signature: &'a ucan::SignerSignature,
+    pub nonce: basalt::ucan::HolderInvocationNonce,
+    pub signature: &'a basalt::ucan::SignerSignature,
 }
 pub struct Input<'a> {
     pub policy_json: &'a str,
@@ -58,31 +55,31 @@ pub fn policy_ref(json: &str) -> super::Result<String> {
     if json.len() > 65_536 {
         return Err("policy exceeds byte ceiling".into());
     }
-    super::hash(&codec::record("component-rpc-policy-v1", vec![codec::string(json)]))
+    super::hash(&crate::codec::record("component-rpc-policy-v1", vec![crate::codec::string(json)]))
 }
-pub fn binding(scope: &super::bridge::Scope) -> super::Result<ucan::OperationBinding> {
-    let profile = codec::record("component-rpc-operation-v1", vec![
-        codec::string(super::PROFILE),
-        codec::string(super::REVISION),
-        codec::string(ABILITY),
+pub fn binding(scope: &super::bridge::Scope) -> super::Result<basalt::ucan::OperationBinding> {
+    let profile = crate::codec::record("component-rpc-operation-v1", vec![
+        crate::codec::string(super::PROFILE),
+        crate::codec::string(super::REVISION),
+        crate::codec::string(ABILITY),
     ]);
-    let bytes = codec::canonical_bytes(&scope.value()).map_err(super::failure)?;
-    let profile = codec::canonical_bytes(&profile).map_err(super::failure)?;
-    Ok(ucan::OperationBinding::new(
-        ucan::OperationProfileId::from_bytes(*blake3::hash(&profile).as_bytes()),
-        ucan::RequestBindingDigest::from_bytes(*blake3::hash(&bytes).as_bytes()),
+    let bytes = crate::codec::canonical_bytes(&scope.value()).map_err(super::failure)?;
+    let profile = crate::codec::canonical_bytes(&profile).map_err(super::failure)?;
+    Ok(basalt::ucan::OperationBinding::new(
+        basalt::ucan::OperationProfileId::from_bytes(*blake3::hash(&profile).as_bytes()),
+        basalt::ucan::RequestBindingDigest::from_bytes(*blake3::hash(&bytes).as_bytes()),
     ))
 }
-struct ExactProfile(ucan::OperationProfileId);
+struct ExactProfile(basalt::ucan::OperationProfileId);
 impl OperationProfileAdmission for ExactProfile {
     fn admit_operation_profile(
         &self,
-        profile: &ucan::OperationProfileId,
-    ) -> std::result::Result<(), ucan::OperationProfileAdmissionError> {
+        profile: &basalt::ucan::OperationProfileId,
+    ) -> std::result::Result<(), basalt::ucan::OperationProfileAdmissionError> {
         if profile == &self.0 {
             Ok(())
         } else {
-            Err(ucan::OperationProfileAdmissionError::UnknownProfile)
+            Err(basalt::ucan::OperationProfileAdmissionError::UnknownProfile)
         }
     }
 }
@@ -113,7 +110,7 @@ pub(crate) struct Operation {
     pub contract: &'static str,
     pub ability: &'static str,
     pub resource: String,
-    pub binding: ucan::OperationBinding,
+    pub binding: basalt::ucan::OperationBinding,
     pub value: preserves::IOValue,
 }
 
@@ -127,7 +124,7 @@ pub(crate) fn authorize(operation: Operation, input: &Input<'_>) -> super::Resul
     }
     let profiles = ExactProfile(operation.binding.profile());
     let services = input.services;
-    let request = ucan::HolderInvocationRequest::new(
+    let request = basalt::ucan::HolderInvocationRequest::new(
         input.credential.token,
         &operation.resource,
         operation.ability,
@@ -135,34 +132,34 @@ pub(crate) fn authorize(operation: Operation, input: &Input<'_>) -> super::Resul
         input.credential.nonce,
         input.credential.signature,
     );
-    let token = ucan::HolderTokenVerificationContext::new(
+    let token = basalt::ucan::HolderTokenVerificationContext::new(
         services.verification_time,
         services.key_resolver,
         services.proof_store,
         services.revocations,
         services.verification_limits,
     );
-    let policy = ucan::HolderInvocationPolicyContext::new(
+    let policy = basalt::ucan::HolderInvocationPolicyContext::new(
         services.caveat_policies,
         &profiles,
         services.replay,
         services.holder_limits,
     );
-    let verified = ucan::verify_holder_signed_invocation(&request, &token, &policy).map_err(super::failure)?;
-    super::hash(&codec::record("component-rpc-authorized-v1", vec![
+    let verified = basalt::ucan::verify_holder_signed_invocation(&request, &token, &policy).map_err(super::failure)?;
+    super::hash(&crate::codec::record("component-rpc-authorized-v1", vec![
         operation.value,
-        codec::string(operation.contract),
-        codec::string(operation.ability),
-        codec::string(format!("blake3:{}", blake3::Hash::from(*verified.request_digest().as_bytes()))),
+        crate::codec::string(operation.contract),
+        crate::codec::string(operation.ability),
+        crate::codec::string(format!("blake3:{}", blake3::Hash::from(*verified.request_digest().as_bytes()))),
     ]))
 }
 
-fn grant(input: &Input<'_>, resource: &str, ability: &str) -> super::Result<ucan::CapabilityDocument> {
+fn grant(input: &Input<'_>, resource: &str, ability: &str) -> super::Result<basalt::ucan::CapabilityDocument> {
     if input.credential.token.len() > 65_536 {
         return Err("UCAN exceeds byte ceiling".into());
     }
     let services = input.services;
-    let verified = ucan::verify_compact_token_str_with_resolvers_and_revocations(
+    let verified = basalt::ucan::verify_compact_token_str_with_resolvers_and_revocations(
         input.credential.token,
         services.verification_time,
         services.key_resolver,
@@ -177,7 +174,7 @@ fn grant(input: &Input<'_>, resource: &str, ability: &str) -> super::Result<ucan
         return Err("UCAN issuer or holder mismatched".into());
     }
     match verified.authorize_with_policies(resource, ability, services.caveat_policies) {
-        ucan::AuthorizationDecision::Allowed { matched_capability } => Ok(matched_capability),
-        ucan::AuthorizationDecision::Denied { .. } => Err("UCAN scope denied".into()),
+        basalt::ucan::AuthorizationDecision::Allowed { matched_capability } => Ok(matched_capability),
+        basalt::ucan::AuthorizationDecision::Denied { .. } => Err("UCAN scope denied".into()),
     }
 }

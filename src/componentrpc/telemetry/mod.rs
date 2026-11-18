@@ -11,7 +11,7 @@ pub use authority::Scope;
 pub use authority::admit;
 pub use authority::binding;
 pub use authority::resource;
-pub use bundle::Bundle;
+pub use bundle::Emitter;
 pub use host::ExportInput;
 pub use host::export;
 

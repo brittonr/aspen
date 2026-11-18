@@ -1,8 +1,8 @@
 #[cfg(feature = "spacewasm-pilot")]
-#[path = "pilots/spacewasm.rs"]
+#[path = "spacewasm.rs"]
 pub(crate) mod spacewasm;
 #[cfg(feature = "component-rpc")]
-#[path = "pilots/componentrpc.rs"]
+#[path = "componentrpc.rs"]
 pub(crate) mod componentrpc;
 
 type Outcome<T> = molten::error::Result<T>;

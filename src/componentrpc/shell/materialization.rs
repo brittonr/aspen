@@ -1,11 +1,9 @@
 //! No compiler/composer/virtualizer is reachable here. Reuse the published verifier.
 use cap_fs_ext::DirExt;
 
-use crate::wasm_component;
-
 pub struct Bundle {
-    client: wasm_component::VerifiedBundle,
-    server: wasm_component::VerifiedBundle,
+    client: crate::wasm_component::VerifiedBundle,
+    server: crate::wasm_component::VerifiedBundle,
     reference: String,
     wit: String,
 }
@@ -14,8 +12,8 @@ struct Input<'a> {
     pub staging: &'a cap_std::fs::Dir,
     pub client_json: &'a [u8],
     pub server_json: &'a [u8],
-    pub client_profile: &'a wasm_component::RuntimeProfile,
-    pub server_profile: &'a wasm_component::RuntimeProfile,
+    pub client_profile: &'a crate::wasm_component::RuntimeProfile,
+    pub server_profile: &'a crate::wasm_component::RuntimeProfile,
 }
 
 // r[impl molten.component_rpc.materialization]
@@ -39,7 +37,7 @@ impl Bundle {
 
     /// Both bundle DTOs and all referenced members must belong to the authorized root.
     fn load(input: Input<'_>) -> super::Result<Self> {
-        let client = wasm_component::VerifiedBundle::load(
+        let client = crate::wasm_component::VerifiedBundle::load(
             input.root,
             input.staging,
             "rpc-client-snapshot",
@@ -47,7 +45,7 @@ impl Bundle {
             input.client_profile,
         )
         .map_err(super::failure)?;
-        let server = wasm_component::VerifiedBundle::load(
+        let server = crate::wasm_component::VerifiedBundle::load(
             input.root,
             input.staging,
             "rpc-server-snapshot",

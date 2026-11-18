@@ -1,5 +1,4 @@
 //! Telemetry has a separate UCAN ability, policy, sink capability and replay operation.
-use basalt::ucan;
 
 #[derive(Clone)]
 pub struct Scope {
@@ -51,7 +50,7 @@ impl Lease {
 pub fn resource(scope: &Scope) -> String {
     format!("urn:molten:component-rpc:diagnostics:{}:{}:{}", scope.component, scope.receipt, scope.sink)
 }
-pub fn binding(scope: &Scope) -> super::Result<ucan::OperationBinding> {
+pub fn binding(scope: &Scope) -> super::Result<basalt::ucan::OperationBinding> {
     let profile = crate::codec::record("component-rpc-otel-profile-v1", vec![
         crate::codec::string(super::REVISION),
         crate::codec::string(super::INTERFACE),
@@ -59,9 +58,9 @@ pub fn binding(scope: &Scope) -> super::Result<ucan::OperationBinding> {
     ]);
     let profile = crate::codec::canonical_bytes(&profile).map_err(super::super::failure)?;
     let value = crate::codec::canonical_bytes(&scope.value()).map_err(super::super::failure)?;
-    Ok(ucan::OperationBinding::new(
-        ucan::OperationProfileId::from_bytes(*blake3::hash(&profile).as_bytes()),
-        ucan::RequestBindingDigest::from_bytes(*blake3::hash(&value).as_bytes()),
+    Ok(basalt::ucan::OperationBinding::new(
+        basalt::ucan::OperationProfileId::from_bytes(*blake3::hash(&profile).as_bytes()),
+        basalt::ucan::RequestBindingDigest::from_bytes(*blake3::hash(&value).as_bytes()),
     ))
 }
 

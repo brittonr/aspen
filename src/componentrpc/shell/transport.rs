@@ -1,37 +1,33 @@
 //! wRPC unary transport over two independently admitted fabric frame sessions.
 //! Echo acknowledgements are delivery evidence only; the reverse frame is the RPC result.
-use std::sync;
-
-use crate::codec;
-use crate::fabric_transport;
 
 pub struct Session {
-    pub request: fabric_transport::ClientInput,
-    pub result: fabric_transport::Listener,
+    pub request: crate::fabric_transport::ClientInput,
+    pub result: crate::fabric_transport::Listener,
     pub result_session: String,
     pub lease: super::authority::Lease,
     pub tick: u64,
     pub generation: u64,
-    pub journal: super::journal::Journal,
+    pub journal: super::journal::Recorder,
 }
 #[derive(Clone)]
 pub struct Client {
-    session: sync::Arc<tokio::sync::Mutex<Option<Session>>>,
-    observed: sync::Arc<tokio::sync::Mutex<Option<super::transcript::Transcript>>>,
+    session: std::sync::Arc<tokio::sync::Mutex<Option<Session>>>,
+    observed: std::sync::Arc<tokio::sync::Mutex<Option<super::transcript::Call>>>,
 }
 impl Client {
     pub fn new(session: Session) -> super::Result<Self> {
         check_session(&session)?;
         Ok(Self {
-            session: sync::Arc::new(tokio::sync::Mutex::new(Some(session))),
-            observed: sync::Arc::new(tokio::sync::Mutex::new(None)),
+            session: std::sync::Arc::new(tokio::sync::Mutex::new(Some(session))),
+            observed: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         })
     }
-    pub async fn transcript(&self) -> super::Result<super::transcript::Transcript> {
+    pub async fn transcript(&self) -> super::Result<super::transcript::Call> {
         self.observed.lock().await.clone().ok_or_else(|| "RPC did not complete".into())
     }
     pub(crate) async fn preflight_negatives(&self) -> super::Result<Vec<&'static str>> {
-        let mut cases = Vec::new();
+        let mut cases = Vec::with_capacity(3);
         for (interface, function, label) in [
             ("other:world/handler", super::FUNCTION, "wrong-world-before-effect"),
             (super::INTERFACE, "forbidden", "unauthorized-function-before-effect"),
@@ -97,7 +93,7 @@ fn check_session(session: &Session) -> super::Result<()> {
     {
         return Err("transport peer/session/request differs from authorized scope".into());
     }
-    codec::validate_content_ref(&session.result_session).map_err(super::failure)?;
+    crate::codec::validate_content_ref(&session.result_session).map_err(super::failure)?;
     Ok(())
 }
 
@@ -117,7 +113,8 @@ impl wrpc_transport::Invoke for Client {
     where
         P: AsRef<[Option<usize>]> + Send + Sync,
     {
-        super::bridge::admit_shape(instance, function, paths.as_ref().len()).map_err(anyhow::Error::msg)?;
+        let paths = u32::try_from(paths.as_ref().len()).map_err(|_| anyhow::anyhow!("async path count overflows"))?;
+        super::bridge::admit_shape(instance, function, paths).map_err(anyhow::Error::msg)?;
         if !params.is_empty() {
             anyhow::bail!("hello arguments exceed the admitted zero-byte unary budget");
         }
@@ -136,7 +133,7 @@ impl wrpc_transport::Invoke for Client {
         journal
             .finish(&intent, attempted.as_ref().ok().map(|(transcript, _)| transcript))
             .map_err(anyhow::Error::msg)?;
-        let cleanup = result.drain_and_close(fabric_transport::ListenerDrainReason::OperatorRequest).await;
+        let cleanup = result.drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest).await;
         cleanup?;
         let (transcript, wire) =
             attempted.map_err(|error| anyhow::anyhow!("uncertain RPC attempt; reconcile before retry: {error}"))?;
@@ -146,41 +143,41 @@ impl wrpc_transport::Invoke for Client {
 }
 
 async fn invoke_once(
-    request: fabric_transport::ClientInput,
-    result: &mut fabric_transport::Listener,
+    request: crate::fabric_transport::ClientInput,
+    result: &mut crate::fabric_transport::Listener,
     lease: &super::authority::Lease,
     result_session: &str,
-) -> anyhow::Result<(super::transcript::Transcript, Vec<u8>)> {
+) -> anyhow::Result<(super::transcript::Call, Vec<u8>)> {
     let scope = lease.scope();
     let invocation = super::bridge::invocation(scope).map_err(anyhow::Error::msg)?;
     let value = super::bridge::request(scope, &[]).map_err(anyhow::Error::msg)?;
-    let bytes = codec::canonical_bytes(&value)?;
-    let sent = fabric_transport::exchange_frame(request, &bytes, timeout()).await?;
+    let bytes = crate::codec::canonical_bytes(&value)?;
+    let sent = crate::fabric_transport::exchange_frame(request, &bytes, timeout()).await?;
     let received = result
         .accept_one_derived_frame(result_session, timeout(), |bytes| {
-            let value = codec::parse_canonical_bytes(bytes)?;
+            let value = crate::codec::parse_canonical_bytes(bytes)?;
             super::bridge::decode_envelope(&value, &invocation).map_err(crate::failures::Failure::invalid_harness)?;
-            codec::canonical_hash(&value)
+            crate::codec::canonical_hash(&value)
         })
         .await?;
-    let value = codec::parse_canonical_bytes(&received.payload)?;
+    let value = crate::codec::parse_canonical_bytes(&received.payload)?;
     let wire = super::bridge::decode_envelope(&value, &invocation).map_err(anyhow::Error::msg)?;
     let transcript =
-        super::transcript::Transcript::complete(lease, &sent, &received.evidence, &wire).map_err(anyhow::Error::msg)?;
+        super::transcript::Call::complete(lease, &sent, &received.evidence, &wire).map_err(anyhow::Error::msg)?;
     Ok((transcript, wire))
 }
 
 pub struct Server<'a> {
     pub bundle: &'a super::materialization::Bundle,
-    pub listener: &'a mut fabric_transport::Listener,
-    pub response: fabric_transport::ClientInput,
+    pub listener: &'a mut crate::fabric_transport::Listener,
+    pub response: crate::fabric_transport::ClientInput,
     pub lease: super::authority::Lease,
     pub tick: u64,
     pub generation: u64,
-    pub journal: &'a super::journal::Journal,
+    pub journal: &'a super::journal::Recorder,
 }
 
-pub async fn serve_one(input: Server<'_>) -> super::Result<super::transcript::Transcript> {
+pub async fn serve_one(input: Server<'_>) -> super::Result<super::transcript::Call> {
     input.lease.check(input.tick, input.generation)?;
     input.bundle.check(input.lease.scope())?;
     let scope = input.lease.scope();
@@ -197,10 +194,10 @@ pub async fn serve_one(input: Server<'_>) -> super::Result<super::transcript::Tr
     result.map_err(|error| format!("uncertain RPC attempt; reconcile before retry: {error}"))
 }
 
-async fn serve_inner(input: Server<'_>) -> super::Result<super::transcript::Transcript> {
+async fn serve_inner(input: Server<'_>) -> super::Result<super::transcript::Call> {
     let scope = input.lease.scope();
     let invocation = super::bridge::invocation(scope)?;
-    let expected = codec::canonical_bytes(&super::bridge::request(scope, &[])?).map_err(super::failure)?;
+    let expected = crate::codec::canonical_bytes(&super::bridge::request(scope, &[])?).map_err(super::failure)?;
     let received = input
         .listener
         .accept_one_derived_frame(&scope.session, timeout(), |bytes| {
@@ -219,9 +216,9 @@ async fn serve_inner(input: Server<'_>) -> super::Result<super::transcript::Tran
     let result_ref = super::hash(&result)?;
     let mut response = input.response;
     response.request_ref = result_ref;
-    let bytes = codec::canonical_bytes(&result).map_err(super::failure)?;
-    let sent = fabric_transport::exchange_frame(response, &bytes, timeout()).await.map_err(super::failure)?;
-    super::transcript::Transcript::complete(&input.lease, &received.evidence, &sent, &wire)
+    let bytes = crate::codec::canonical_bytes(&result).map_err(super::failure)?;
+    let sent = crate::fabric_transport::exchange_frame(response, &bytes, timeout()).await.map_err(super::failure)?;
+    super::transcript::Call::complete(&input.lease, &received.evidence, &sent, &wire)
 }
 
 pub struct Deny;
@@ -247,7 +244,7 @@ fn timeout() -> std::time::Duration {
     std::time::Duration::from_secs(super::profile::TIMEOUT_SECONDS)
 }
 
-fn endpoint_peer(endpoint: &fabric_transport::Endpoint) -> super::Result<String> {
+fn endpoint_peer(endpoint: &crate::fabric_transport::Endpoint) -> super::Result<String> {
     let identity = endpoint
         .descriptor
         .public_endpoint_identity

@@ -1,22 +1,33 @@
 //! Experimental sync-only component RPC; no existing protocol is rerouted.
 pub mod authority;
 pub mod bridge;
+#[path = "shell/channels.rs"]
 mod channels;
 mod codec;
 pub mod diagnostics;
+#[path = "fixture/run.rs"]
 pub mod fixture;
+#[path = "fixture/authority.rs"]
 mod fixtureauth;
+#[path = "fixture/fabric.rs"]
 mod fixturefabric;
+#[path = "shell/journal.rs"]
 pub mod journal;
+#[path = "shell/materialization.rs"]
 pub mod materialization;
+#[path = "fixture/negative.rs"]
 mod negative;
+#[path = "shell/operator.rs"]
 pub mod operator;
+#[path = "shell/package.rs"]
 mod package;
 pub mod profile;
+#[path = "shell/runtime.rs"]
 mod runtime;
 #[cfg(feature = "component-rpc-telemetry")]
 pub mod telemetry;
 pub mod transcript;
+#[path = "shell/transport.rs"]
 pub mod transport;
 
 pub const PROFILE: &str = "molten.component-rpc.hello.v1";

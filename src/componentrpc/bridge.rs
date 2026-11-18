@@ -1,5 +1,4 @@
 //! Exact hello unary mapping. WIT bytes and Preserves identities stay distinct.
-use crate::codec;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scope {
@@ -20,11 +19,14 @@ pub struct Scope {
 
 impl Scope {
     pub fn value(&self) -> preserves::IOValue {
-        let mut fields = vec![codec::string(super::PROFILE), codec::string(super::REVISION)];
-        fields.extend(self.references().into_iter().map(codec::string));
-        fields.push(codec::string(self.generation.to_string()));
-        fields.push(codec::string(self.deadline_tick.to_string()));
-        codec::record("component-rpc-scope-v1", fields)
+        let mut fields = vec![
+            crate::codec::string(super::PROFILE),
+            crate::codec::string(super::REVISION),
+        ];
+        fields.extend(self.references().into_iter().map(crate::codec::string));
+        fields.push(crate::codec::string(self.generation.to_string()));
+        fields.push(crate::codec::string(self.deadline_tick.to_string()));
+        crate::codec::record("component-rpc-scope-v1", fields)
     }
 
     pub fn references(&self) -> [&str; 11] {
@@ -45,7 +47,7 @@ impl Scope {
 
     pub fn validate(&self, tick: u64) -> super::Result<()> {
         for reference in self.references() {
-            codec::validate_content_ref(reference).map_err(super::failure)?;
+            crate::codec::validate_content_ref(reference).map_err(super::failure)?;
         }
         if self.generation == 0 || tick >= self.deadline_tick {
             return Err("stale invocation generation or deadline".into());
@@ -63,11 +65,11 @@ pub fn request(scope: &Scope, wire: &[u8]) -> super::Result<preserves::IOValue> 
     if !wire.is_empty() {
         return Err("hello has no arguments; nonempty wire is malformed".into());
     }
-    Ok(codec::record("component-rpc-request-v1", vec![
+    Ok(crate::codec::record("component-rpc-request-v1", vec![
         scope.value(),
-        codec::string(super::INTERFACE),
-        codec::string(super::FUNCTION),
-        codec::string(super::reference(wire)),
+        crate::codec::string(super::INTERFACE),
+        crate::codec::string(super::FUNCTION),
+        crate::codec::string(super::reference(wire)),
     ]))
 }
 
@@ -92,7 +94,7 @@ pub fn decode_result(wire: &[u8]) -> super::Result<String> {
                 return Err("nonminimal string length".into());
             }
             let payload = &wire[index + 1..];
-            if payload.len() != length as usize {
+            if usize::try_from(length).ok() != Some(payload.len()) {
                 return Err("string length or trailing bytes mismatch".into());
             }
             return std::str::from_utf8(payload).map(str::to_owned).map_err(super::failure);
@@ -102,16 +104,16 @@ pub fn decode_result(wire: &[u8]) -> super::Result<String> {
 }
 
 pub fn result(invocation: &str, wire: &[u8]) -> super::Result<preserves::IOValue> {
-    codec::validate_content_ref(invocation).map_err(super::failure)?;
-    Ok(codec::record("component-rpc-result-v1", vec![
-        codec::string(invocation),
-        codec::string(decode_result(wire)?),
-        codec::string(super::reference(wire)),
+    crate::codec::validate_content_ref(invocation).map_err(super::failure)?;
+    Ok(crate::codec::record("component-rpc-result-v1", vec![
+        crate::codec::string(invocation),
+        crate::codec::string(decode_result(wire)?),
+        crate::codec::string(super::reference(wire)),
     ]))
 }
 
 // r[impl molten.component_rpc.async_scope]
-pub fn admit_shape(interface: &str, function: &str, paths: usize) -> super::Result<()> {
+pub fn admit_shape(interface: &str, function: &str, paths: u32) -> super::Result<()> {
     if interface != super::INTERFACE || function != super::FUNCTION || paths != 0 {
         return Err("only pinned hello unary is supported; streams/futures/extensions denied".into());
     }
@@ -125,7 +127,7 @@ pub fn encode_result(value: &str) -> super::Result<Vec<u8>> {
     let mut length = value.len() as u32;
     let mut wire = Vec::with_capacity(value.len() + 5);
     loop {
-        let byte = (length & 127) as u8;
+        let byte = u8::try_from(length & 127).map_err(super::failure)?;
         length >>= 7;
         wire.push(if length == 0 { byte } else { byte | 128 });
         if length == 0 {
@@ -137,8 +139,8 @@ pub fn encode_result(value: &str) -> super::Result<Vec<u8>> {
 }
 
 pub fn decode_envelope(value: &preserves::IOValue, invocation: &str) -> super::Result<Vec<u8>> {
-    let fields = codec::simple_record_fields(value, "component-rpc-result-v1", 3).map_err(super::failure)?;
-    let text = codec::required_string_field(&fields[1], "result").map_err(super::failure)?;
+    let fields = crate::codec::simple_record_fields(value, "component-rpc-result-v1", 3).map_err(super::failure)?;
+    let text = crate::codec::required_string_field(&fields[1], "result").map_err(super::failure)?;
     let wire = encode_result(&text)?;
     if result(invocation, &wire)? != *value {
         return Err("cross-call or malformed result envelope".into());
