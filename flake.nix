@@ -386,11 +386,22 @@
           mantle-wasm-verifier-src;
         choregraphRevision = "c3577352ee1e39391f5204ee234d991c7dbeb151";
         choregraphRepository = "https://github.com/OnixResearch/choregraph.git";
+        # The focused Octet workspaces compile the same core sources against their own pins.
+        choregraphCheckWorkspaces = [
+          "world-distribution-octet"
+          "world-head-octet"
+          "world-merge-octet"
+          "world-promotion-octet"
+        ];
         choregraphDependencies = [
           artifactRootDependencies."choregraph-history"
           artifactRootDependencies."choregraph-nickel"
           moltenCoreDependencies."choregraph-history"
-        ];
+        ]
+        ++ map (
+          workspace:
+          (builtins.fromTOML (builtins.readFile (./checks + "/${workspace}/Cargo.toml"))).dependencies."choregraph-history"
+        ) choregraphCheckWorkspaces;
         choregraphExpectedLockSource = "git+${choregraphRepository}?rev=${choregraphRevision}#${choregraphRevision}";
         choregraphLockPackages = builtins.filter (
           package: (package.source or "") == choregraphExpectedLockSource

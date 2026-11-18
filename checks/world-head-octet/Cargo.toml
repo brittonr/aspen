@@ -18,9 +18,9 @@ path = "src/lib.rs"
 
 [dependencies]
 blake3 = "=1.8.5"
-choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
+choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "c3577352ee1e39391f5204ee234d991c7dbeb151", version = "0.1.0" }
 
-[patch."https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git"]
+[patch."https://github.com/OnixResearch/choregraph.git"]
 choregraph-history = { path = "vendor/choregraph-history" }
 
 [lints.rust]

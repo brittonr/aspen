@@ -6,7 +6,7 @@ Molten owns mutable names for immutable world commits. A branch head does not ch
 
 Molten uses these reviewed sources:
 
-- Choregraph `choregraph-history` from `rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF` at `b3e08e19750f53bdbcae970cdf58a47a791ed20b`. Cargo uses its read-only HTTPS seed adapter.
+- Choregraph `choregraph-history` from `https://github.com/OnixResearch/choregraph.git` at `c3577352ee1e39391f5204ee234d991c7dbeb151`.
 - Artifact Auth from `https://github.com/OnixResearch/onix-artifact.git` at `5f3962d7471d1547e044f57daeda72f56621fd52`.
 
 Choregraph supplies immutable event graphs and pure generation-fenced branch plans. It does not own Molten branch policy, storage, or authority.

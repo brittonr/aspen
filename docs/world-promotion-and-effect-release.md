@@ -95,7 +95,7 @@ A lost acknowledgment keeps the attempt uncertain. An attempt left `attempting` 
 
 Molten retains effect-log meaning. Its ordered validator binds each request, outcome, runtime, handler profile, and boundary. It rejects gaps, duplicates, missing outcomes, unused outcomes, mismatches, and live fallback.
 
-Weft revision `dee51eff9940bc53921bd8675b68c5abce8b05dd` withdraws the planned effect runtime. Choregraph revision `b3e08e19750f53bdbcae970cdf58a47a791ed20b` owns branchable history without effect-outcome or dispatch authority.
+Weft revision `dee51eff9940bc53921bd8675b68c5abce8b05dd` withdraws the planned effect runtime. Choregraph revision `c3577352ee1e39391f5204ee234d991c7dbeb151` owns branchable history without effect-outcome or dispatch authority.
 
 `plan_world_promotion_observation_commit` maps one acknowledged outcome into one logical `recorded-effect` transition. The transition binds these values:
 
