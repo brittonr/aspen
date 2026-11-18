@@ -121,6 +121,7 @@ pub(super) fn subject(binding: &crate::core_api::startup_binding::Binding) -> cr
 
 pub(super) fn features() -> crate::error::Result<Vec<String>> {
     let cohort = [
+        ("chaoscontrol-conformance", cfg!(feature = "chaoscontrol-conformance")),
         ("doltlite-oracle", cfg!(feature = "doltlite-oracle")),
         ("component-rpc", cfg!(feature = "component-rpc")),
         ("component-rpc-telemetry", cfg!(feature = "component-rpc-telemetry")),
