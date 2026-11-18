@@ -287,7 +287,6 @@ r[molten.job_dag_state_machine_proof.worker_schedule_replay] Molten MUST prove w
 - THEN validation denies
 - AND diagnostics identify the stage order or output-ref mismatch.
 
-
 ### Requirement: Job DAG responsibilities are semantically separated
 r[molten.job_dag.modularity.boundaries] Job DAG implementation SHOULD separate planning, admission, scheduling, worker execution, blob-ref IO, coordination adapter use, receipt construction, and CLI shell behavior.
 
@@ -329,3 +328,24 @@ r[molten.job_dag.modularity.tests] Job DAG boundary refactors SHOULD include pos
 - GIVEN a job execution boundary is extracted
 - WHEN reviewers inspect tests
 - THEN at least one denied execution case proves no executor invocation is planned
+
+### Requirement: Checked selected sequence profile
+r[molten.job_dag.selected_sequence] Explicit selected-sequence-v2 graphs MUST bind supported stages to registry implementation identities and exact integer-sequence schemas, validate direction, required inputs and multiplicity before execution, route only selected outputs, bound fan-in and preserve port-labelled outputs through caching. V1 MUST retain its existing semantics.
+
+#### Scenario: Distinct partition outputs
+- GIVEN an admitted v2 partition followed by a consumer of left
+- WHEN executed or replayed from cache
+- THEN only the left sequence reaches the consumer.
+
+#### Scenario: Invalid wiring
+- GIVEN an unknown port, schema mismatch, absent required input or excess single-input connection
+- WHEN graph admission runs
+- THEN admission denies before stages execute.
+
+### Requirement: Closed authoring boundary
+r[molten.job_dag.captured_authoring] Captured graph authoring MUST lower bounded closed values through canonical JobDag parsing and preserve control dependencies, explicit instances and selected-output references. Construction provenance MUST NOT grant execution authority.
+
+#### Scenario: Shared producer
+- GIVEN two handles refer to one explicit producer instance
+- WHEN lowered
+- THEN the graph retains one producer and both declared edges.
