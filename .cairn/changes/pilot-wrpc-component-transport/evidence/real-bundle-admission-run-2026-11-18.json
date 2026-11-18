@@ -1,0 +1,412 @@
+{
+  "schema": "aspen.component-rpc.real-bundle-run-observation/v1",
+  "date": "2026-11-18",
+  "change": "pilot-wrpc-component-transport",
+  "maintenance_owner": "Molten component-RPC integration maintainers",
+  "immediate_outcome": "The hello pair re-ran on the same published Mantle bytes with five added pre-effect denials: an ungranted and an unmeasured callee, a drifted delivery contract, a transport-profile drift denied at endpoint import before any dial, and a second attempt after the call. The earlier 33 cases, offline replay and the telemetry fixture ran unchanged.",
+  "durable_capability": "The repeatable real-bundle recipe now executes a denial for every admission dimension the pilot names (peer, component, world, function, policy, UCAN, resource, delivery, retry and replay) plus transport-profile drift, and records a one-off comparison of the Nickel profile declaration with the values the run admitted.",
+  "supersedes_for_coverage": "real-bundle-run-2026-11-18.json (retained unchanged)",
+  "source": {
+    "commit": "43482e4b14a9707cbb418e156abecb191e5a949e",
+    "checkout_clean": true,
+    "profile": "Cargo dev unoptimized, debug information disabled; not a Nix-built deployment or performance profile",
+    "features": [
+      "component-rpc-telemetry"
+    ],
+    "molten_image_blake3": "64b585d02271fed78b9f3501884c933a63f8e9a42a395a6339840b87e37cc84c"
+  },
+  "producer": {
+    "repository": "https://github.com/OnixResearch/mantle",
+    "revision": "c376f843e5b4fc67e0c2ead0f3896639814195c9",
+    "octet_pin": {
+      "revision": "f43a1d9e81a45b15b830930be9ec5c54bfd6db00",
+      "status": "OnixResearch/octet pull request 32, awaiting owner review; not yet on Octet main"
+    },
+    "reference_bundle": {
+      "store_path": "/nix/store/jljgxaqjhj3byqyr1alw9h8lc28ja9cx-mantle-wrpc-reference-bundle-aa01409ed38bf7a978570ff567c4475376925df6",
+      "schema": "mantle-wrpc-reference-bundle-v1",
+      "manifest_identity_blake3": "51c98e4effc6ed3007e629026485b6b2649556168ef95046ae6220233830095e",
+      "members": 262,
+      "client_bundle_identity_blake3": "1eca6df0fa6aa23615ddc9af4251de8b3ebcdd7ad5877fa4c8a195ad07a97d88",
+      "server_bundle_identity_blake3": "848c93c3122dbd317f9fe8d0d12b4bb2fa850b413634a7fe96e9d1c286f7b96d"
+    },
+    "telemetry_bundle": {
+      "store_path": "/nix/store/m63rp1yrz2bnr5pkflpxv80dlmac4w5v-mantle-wrpc-telemetry-reference-bundle-e5262a84044aff064c9599eebc05013bb3432795",
+      "schema": "mantle-wrpc-telemetry-reference-bundle-v1",
+      "manifest_identity_blake3": "0e897e1458139af58ce62a525b7825a8f1d5c279a6968b417dd75a601282b706",
+      "members": 184,
+      "bundle_identity_blake3": "2f2f5c5ea1c49650563112869d71a558789d322db9f69386e330872c3b12f933",
+      "type_only_dependencies": [
+        "wasi:otel/types@0.2.0-rc.2",
+        "wasi:clocks/wall-clock@0.2.3"
+      ]
+    }
+  },
+  "producer_binding": "Producer facts are carried from real-bundle-run-2026-11-18.json: the same immutable store paths were used, and this run admitted the same materialization reference, blake3:1375f1fa640106b44b1a44dd580fbafddde7e78b4d3835f245dfe70cc85ee902.",
+  "runs": [
+    {
+      "command": "molten component-rpc run-fixture --bundle-root REFERENCE_BUNDLE --staging-root FRESH --output-root FRESH",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.78,
+      "stdout_blake3": "6ddeb1e9aa385d8f1c7d7c88e7e482ac625a9cc6c44df133a51f2664ffe867f3",
+      "outcome": "admitted"
+    },
+    {
+      "command": "molten component-rpc show --output-root OUTPUT",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.02,
+      "stdout_blake3": "6ddeb1e9aa385d8f1c7d7c88e7e482ac625a9cc6c44df133a51f2664ffe867f3",
+      "outcome": "read-back"
+    },
+    {
+      "command": "molten component-rpc replay --bundle-root REFERENCE_BUNDLE --staging-root FRESH --output-root OUTPUT",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.1,
+      "stdout_blake3": "5a60c57855ac08fb0e4a4a6b4039916444caad342c6780ac09e89a457cb26a43",
+      "outcome": "replay-verified"
+    },
+    {
+      "command": "molten component-rpc telemetry-fixture --bundle-root TELEMETRY_BUNDLE --staging-root FRESH --rpc-output-root OUTPUT --sink-root FRESH --sink-ref SINK_REF",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 1.2,
+      "stdout_blake3": "26166a88154d9f823fb5d3496c4d57aa1783ea076fea68491212d3f38a128352",
+      "outcome": "diagnostic-exported"
+    },
+    {
+      "command": "molten component-rpc telemetry-show --sink-root SINK",
+      "exit_status": 0,
+      "elapsed_wall_seconds": 0.02,
+      "stdout_blake3": "f38ad0842c92411aab6157c2bb4df9c7acfc8176aa69a52e7eb3c51e7f470069",
+      "outcome": "read-back"
+    }
+  ],
+  "staging_leftovers": 0,
+  "outputs": {
+    "out/client-intent.preserves": {
+      "blake3": "33fbd1351bcc1b9bd477afe1ea64d7745e4ce13c8a2ebbc6a5b5c53eaffce056",
+      "bytes": 1118
+    },
+    "out/client-live.preserves": {
+      "blake3": "145bde38294a541a612e516a276826f3220257b31f0ad9d567ae66fb7e72c677",
+      "bytes": 3691
+    },
+    "out/client-terminal.preserves": {
+      "blake3": "98d5bc3c7df5fd25e325793efa2c921bd7985f0f0a68a3e93febd9615a103c02",
+      "bytes": 223
+    },
+    "out/client.preserves": {
+      "blake3": "145bde38294a541a612e516a276826f3220257b31f0ad9d567ae66fb7e72c677",
+      "bytes": 3691
+    },
+    "out/report.preserves": {
+      "blake3": "6bbcaebbf5b7bc4f9e40847f6c755aa4af6c7bbb577875a57bcf619cc34dc8b3",
+      "bytes": 1449
+    },
+    "out/server-intent.preserves": {
+      "blake3": "4fad6fbb538ebbce9b42469a598705037438b3b824ce176d81d04d208fcb537b",
+      "bytes": 1118
+    },
+    "out/server-live.preserves": {
+      "blake3": "930040e7c08a47bbc069d331339d857c3157329fce174fcfad219ad604b8423b",
+      "bytes": 3691
+    },
+    "out/server-terminal.preserves": {
+      "blake3": "c7cc16de3dc3723af9d5eba1b9454eebfc44818fb49685b73a84f9315405af70",
+      "bytes": 223
+    },
+    "out/server.preserves": {
+      "blake3": "930040e7c08a47bbc069d331339d857c3157329fce174fcfad219ad604b8423b",
+      "bytes": 3691
+    },
+    "sink/otel-diagnostic.preserves": {
+      "blake3": "3d8b3f21046c0e90f39bbeeaaa3db62a32eee6d42aa3e85386435651705fc07c",
+      "bytes": 963
+    },
+    "sink/otel-fixture.preserves": {
+      "blake3": "22cbe2e78e21da7a07c831d1e7eb4f60fd05bf8e0865e9c9fe79c0335898d54a",
+      "bytes": 356
+    }
+  },
+  "rpc": {
+    "contract": "molten.component-rpc.hello.v1",
+    "report_refs": [
+      "blake3:1375f1fa640106b44b1a44dd580fbafddde7e78b4d3835f245dfe70cc85ee902",
+      "blake3:145bde38294a541a612e516a276826f3220257b31f0ad9d567ae66fb7e72c677",
+      "blake3:930040e7c08a47bbc069d331339d857c3157329fce174fcfad219ad604b8423b"
+    ],
+    "client_result": "42",
+    "remote_result": "hello from Rust",
+    "negative_cases": [
+      "reordered-transcript",
+      "duplicate-transcript",
+      "cross-call-replay",
+      "wire-result-drift",
+      "uncertain-delivery",
+      "malformed-mapping",
+      "stream-future-path",
+      "wrong-world",
+      "unauthorized-function",
+      "resource-contract-drift",
+      "stale-current-context",
+      "unauthorized-peer-replay",
+      "production-overclaim",
+      "telemetry-secret-field",
+      "telemetry-queue-overflow",
+      "live-timing-replay",
+      "ucan-wrong-grant",
+      "unauthorized-peer-before-effect",
+      "ungranted-component-before-effect",
+      "ucan-invalid-holder-signature",
+      "ucan-duplicate-nonce",
+      "current-basalt-policy-deny",
+      "missing-valid-token",
+      "expired-current-authority",
+      "overbudget-before-effect",
+      "delivery-contract-drift-before-effect",
+      "wrong-world-before-effect",
+      "unauthorized-function-before-effect",
+      "oversized-invoke-before-effect",
+      "unmeasured-component-before-effect",
+      "transport-profile-drift-before-session",
+      "retry-after-attempt-denied",
+      "cohort-drift",
+      "local-guest-build",
+      "unsupported-async-world",
+      "incomplete-bundle",
+      "mismatched-loose-component",
+      "missing-client-bundle"
+    ],
+    "added_negative_cases": [
+      "ungranted-component-before-effect",
+      "delivery-contract-drift-before-effect",
+      "unmeasured-component-before-effect",
+      "transport-profile-drift-before-session",
+      "retry-after-attempt-denied"
+    ],
+    "previous_cases_missing": [],
+    "report_non_claims": [
+      "not-protocol-stability",
+      "not-semantic-equivalence",
+      "not-transport-security",
+      "not-production-readiness",
+      "not-component-correctness",
+      "not-existing-protocol-replacement"
+    ]
+  },
+  "telemetry": {
+    "observed_negative_cases": [
+      "independent-telemetry-authority-deny",
+      "secret-attribute-export-deny",
+      "bounded-queue-export-deny"
+    ],
+    "scope": {
+      "interface_revision": "e5262a84044aff064c9599eebc05013bb3432795",
+      "interface": "wasi:otel/tracing@0.2.0-rc.2",
+      "component": "blake3:0a701cfe9279b6e72bbcace7a1987c5030cfb1e7f25844a55b14dd51efd84f6f",
+      "bundle": "blake3:2f2f5c5ea1c49650563112869d71a558789d322db9f69386e330872c3b12f933",
+      "wit": "blake3:e21c0a405ea9248a0f8a656b97baa3360d1a2b3adf208ffb3e6c646f055b3642",
+      "receipt": "blake3:145bde38294a541a612e516a276826f3220257b31f0ad9d567ae66fb7e72c677",
+      "sink": "blake3:c2e4f2f948f24aeb07cc790900b558e35f34cb863915c422da06a16f63384baf",
+      "policy": "blake3:2ab16b59b4638a314e4460ccd1c38af50b298f533d9858c554ed4674c57e83b9",
+      "generation": "1",
+      "deadline_tick": "100",
+      "span_queue_bound": "32",
+      "role": "diagnostic-only-no-raw-payloads"
+    },
+    "sink_ref": "blake3:c2e4f2f948f24aeb07cc790900b558e35f34cb863915c422da06a16f63384baf",
+    "exported_spans": 1
+  },
+  "profile_declaration": {
+    "source": "config/component-rpc/profile.ncl",
+    "command": "nickel export --format json config/component-rpc/profile.ncl",
+    "nickel": "1.17.0",
+    "all_equal": true,
+    "comparisons": [
+      {
+        "field": "profile_id",
+        "declared": "molten.component-rpc.hello.v1",
+        "admitted": "molten.component-rpc.hello.v1",
+        "equal": true
+      },
+      {
+        "field": "upstream.revision",
+        "declared": "aa01409ed38bf7a978570ff567c4475376925df6",
+        "admitted": "aa01409ed38bf7a978570ff567c4475376925df6",
+        "equal": true
+      },
+      {
+        "field": "upstream.runtime",
+        "declared": "wrpc-runtime-wasmtime@0.29.0",
+        "admitted": "wrpc-runtime-wasmtime@0.29.0",
+        "equal": true
+      },
+      {
+        "field": "upstream.transport",
+        "declared": "wrpc-transport@0.28.4",
+        "admitted": "wrpc-transport@0.28.4",
+        "equal": true
+      },
+      {
+        "field": "upstream.wasmtime",
+        "declared": "33.0.0",
+        "admitted": "33.0.0",
+        "equal": true
+      },
+      {
+        "field": "wit.interface",
+        "declared": "wrpc-examples:hello/handler",
+        "admitted": "wrpc-examples:hello/handler",
+        "equal": true
+      },
+      {
+        "field": "wit.function",
+        "declared": "hello",
+        "admitted": "hello",
+        "equal": true
+      },
+      {
+        "field": "wit.result",
+        "declared": "string",
+        "admitted": "string",
+        "equal": true
+      },
+      {
+        "field": "wit.parameters",
+        "declared": [],
+        "admitted": [],
+        "equal": true
+      },
+      {
+        "field": "bounds.fuel (client)",
+        "declared": 10000000,
+        "admitted": 10000000,
+        "equal": true
+      },
+      {
+        "field": "bounds.memory_bytes (client)",
+        "declared": 67108864,
+        "admitted": 67108864,
+        "equal": true
+      },
+      {
+        "field": "bounds.instances (client)",
+        "declared": 64,
+        "admitted": 64,
+        "equal": true
+      },
+      {
+        "field": "bounds.tables (client)",
+        "declared": 16,
+        "admitted": 16,
+        "equal": true
+      },
+      {
+        "field": "bounds.memories (client)",
+        "declared": 16,
+        "admitted": 16,
+        "equal": true
+      },
+      {
+        "field": "bounds.table_elements (client)",
+        "declared": 65536,
+        "admitted": 65536,
+        "equal": true
+      },
+      {
+        "field": "bounds.stack_bytes (client)",
+        "declared": 1048576,
+        "admitted": 1048576,
+        "equal": true
+      },
+      {
+        "field": "bounds.fuel (server)",
+        "declared": 10000000,
+        "admitted": 10000000,
+        "equal": true
+      },
+      {
+        "field": "bounds.memory_bytes (server)",
+        "declared": 67108864,
+        "admitted": 67108864,
+        "equal": true
+      },
+      {
+        "field": "bounds.instances (server)",
+        "declared": 64,
+        "admitted": 64,
+        "equal": true
+      },
+      {
+        "field": "bounds.tables (server)",
+        "declared": 16,
+        "admitted": 16,
+        "equal": true
+      },
+      {
+        "field": "bounds.memories (server)",
+        "declared": 16,
+        "admitted": 16,
+        "equal": true
+      },
+      {
+        "field": "bounds.table_elements (server)",
+        "declared": 65536,
+        "admitted": 65536,
+        "equal": true
+      },
+      {
+        "field": "bounds.stack_bytes (server)",
+        "declared": 1048576,
+        "admitted": 1048576,
+        "equal": true
+      },
+      {
+        "field": "non_claims",
+        "declared": [
+          "not-protocol-stability",
+          "not-semantic-equivalence",
+          "not-transport-security",
+          "not-production-readiness",
+          "not-component-correctness",
+          "not-existing-protocol-replacement"
+        ],
+        "admitted": [
+          "not-protocol-stability",
+          "not-semantic-equivalence",
+          "not-transport-security",
+          "not-production-readiness",
+          "not-component-correctness",
+          "not-existing-protocol-replacement"
+        ],
+        "equal": true
+      },
+      {
+        "field": "telemetry.revision",
+        "declared": "e5262a84044aff064c9599eebc05013bb3432795",
+        "admitted": "e5262a84044aff064c9599eebc05013bb3432795",
+        "equal": true
+      },
+      {
+        "field": "telemetry.interface",
+        "declared": "wasi:otel/tracing@0.2.0-rc.2",
+        "admitted": "wasi:otel/tracing@0.2.0-rc.2",
+        "equal": true
+      },
+      {
+        "field": "telemetry.max_spans",
+        "declared": "32",
+        "admitted": "32",
+        "equal": true
+      }
+    ],
+    "scope": "A one-off comparison of the declaration with values this run admitted or reported. No generated binding or test ties profile.ncl to the Rust constants, so later drift is not detected automatically."
+  },
+  "non_claims": [
+    "not remote or cross-host RPC execution",
+    "not transport security or production credential admission",
+    "not protocol stability or semantic equivalence",
+    "not OTLP export or trusted host evidence beyond this fixture",
+    "not release eligibility",
+    "fixture keys and verification time only; the added denials are not production credential admission"
+  ]
+}

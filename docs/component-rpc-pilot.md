@@ -194,3 +194,16 @@ ran the hello call, offline replay and the telemetry fixture with Molten
 source commit, binary image, producer revision, bundle identities and outputs.
 It runs over the loopback fixture fabric. It is not remote or cross-host RPC,
 transport-security, production-credential or release evidence.
+
+The [2026-11-18 admission run](../.cairn/changes/pilot-wrpc-component-transport/evidence/real-bundle-admission-run-2026-11-18.json)
+repeated that run with Molten `43482e4b1`, which adds the ungranted- and
+unmeasured-component, delivery-contract, transport-profile and second-attempt
+denials; all 38 negative cases were rejected. It also compares each
+`profile.ncl` value that a run can observe with what the run admitted. Nothing
+checks that correspondence automatically, so it holds only for this run.
+
+The [2026-11-18 verification record](../.cairn/changes/pilot-wrpc-component-transport/evidence/verification-2026-11-18.md)
+lists the focused tests, Clippy and Octet over `component-rpc-telemetry`, and
+the Cairn gates. The configured Octet scope builds default features only, so
+the feature-enabled check ran by hand: it first reported 56 findings, which
+Molten `ed52b83c0` repairs. Nothing repeats that check automatically.
