@@ -11,7 +11,6 @@ actually bought.
 | `rsa@0.9.10` | no | registry crate behind `secretspec 0.17.0`; needs a secretspec release that accepts rsa 0.10 |
 | `crypto-bigint@0.5.5` | no | registry crate behind `k256 0.13.4` (Basalt's `ucan-nostr` uses secp256k1 ECDSA); needs k256 on elliptic-curve 0.14+ |
 | `imbl-sized-chunks@0.1.3` | no | nickel-lang-vector in the pinned Nickel source; imbl 0.2 support is upstream Nickel work |
-| `tracing-subscriber@0.2.25` | no | `syndicate 0.44.0-rc.3`; needs a syndicate release on tracing-subscriber 0.3 |
 
 The one crate this stack owns in that list was Basalt's `jsonwebtoken`
 dependency: `jsonwebtoken 11.0.0` pins `rsa 0.9` and pulls p256/elliptic-curve,
@@ -58,8 +57,12 @@ The chain was executed and measured:
   passed and `tracing-subscriber 0.2.25` left the lock;
 - the audit went from 4 to 3 vulnerabilities and 23 to 22 advisories.
 
-It still does not land, because every Git pin change invalidates the reviewed
-release bindings: the audit then reports `prerequisite-unavailable: release_guard`
+It landed at `f3f52f753` once the whole pin surface moved together: the release
+profile revision, the `choregraph-src` flake input, both manifests, the four
+focused workspaces and their locks, the hashes, the plans, the notices and the
+four documents that quote the revision. The audit then reported every
+prerequisite at 0, 156 findings and 3 vulnerabilities. A partial repin is what
+fails closed: the audit then reports `prerequisite-unavailable: release_guard`
 and `source-policy` grows by one (`choregraph-history` has no exact binding in the
 current release-profile export). Landing this chain therefore needs the
 release-dependency profile and its four release-evidence sources regenerated for
