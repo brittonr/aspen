@@ -258,6 +258,49 @@ calculation passes the same gate on its largest admissible program, or when a
 parallel, long-running or cross-host placement profile is proposed. Whole-attempt
 retry stays authoritative until then.
 
+## #41 Learned Wasm profile selector
+
+**Decision: no learned selector; keep the reviewed profile admission and choose a
+profile from measured workload shape.**
+
+The reviewed profile model already binds an id, pooling, copy-on-write heap
+images, pre-instantiation, compilation strategy and capacity bounds
+([`optimization.rs`](../src/wasm/performance/policy/optimization.rs)), and the test
+support admits `molten.wasm.optimization.baseline.v1`. What was missing was a
+measurement of whether the choice matters and whether it varies per request.
+
+The [measurement record](../.cairn/archive/2026-11-18-measure-wasm-optimization-profiles/evidence/profile-measurement-2026-11-18.json)
+ran the reviewed configurations from reviewed source
+(`examples/wasm-optimization-profiles.rs`) at `c92e9f883`, release harness,
+Wasmtime 49.0.5, three processes per workload, median of the process medians:
+
+| Workload | baseline | pooling | cow | instance-pre |
+| --- | ---: | ---: | ---: | ---: |
+| `short-lived-instances-v1` (500 samples x 500 instances, µs per 500) | 3488.06 | 1073.89 | 3393.93 | 3458.57 |
+| `bounded-integer-loop-v1` (200 samples, µs per sample) | 146.38 | 138.28 | 144.01 | 143.87 |
+
+Instance churn separates the profiles by 224.8%; per-call work does not (5.9%,
+inside host variance). `cow` and `instance-pre` never beat baseline.
+
+Comparing the three candidates on these two shapes:
+
+- **explicit configuration** (baseline everywhere): 3488.06 and 146.38 µs;
+- **heuristic** (churn shape to pooling, otherwise baseline): 1073.89 and 146.38 µs;
+- **per-workload oracle over the four profiles**: the same choice as the heuristic
+  on both shapes.
+
+The heuristic therefore reaches the oracle on every measured shape, and the
+per-request case that would justify learning — the best profile changing inside
+one process — does not appear. A selector would add an admission artifact, a
+decision record and an inference dependency to reproduce a two-branch mapping.
+
+Reopen only with a workload distribution whose best profile varies per request
+within one process, where the gap exceeds a predeclared share of the phase (for
+example 10%), plus Animus's exported trained artifact and a shared host policy
+contract with a demonstrated second consumer. Absent those, per-deployment
+configuration from these measurements stays authoritative, and neither the
+example nor these numbers are benchmark, production or release evidence.
+
 ## #52 Repository hygiene
 
 ### Epoch archive dates
