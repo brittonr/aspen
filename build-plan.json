@@ -1,30 +1,30 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
-    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0",
+    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "c2a91a2b2dd2fd1212e4b55ec4b750fbeec5905866d49f89eea76421d88a5e31",
-  "inputsHash": "717982f9de381edce21773459069527b312b555db0652df17acc770289e67e03",
+  "cargoLockHash": "d92257244ab69e628c4060c6e2c76de9c496ff10f490deeb929fe7e1e5bb64b2",
+  "inputsHash": "275f8fc0848c2dcb34569875794b8fa428c9bfd91b192b212b1fff565108e4a0",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -460,7 +460,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/onixresearch/cairn"
     },
-    "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-history@0.1.0": {
+    "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0": {
       "crateName": "choregraph-history",
       "version": "0.1.0",
       "edition": "2024",
@@ -468,9 +468,9 @@
       "source": {
         "type": "git",
         "url": "https://github.com/OnixResearch/choregraph.git",
-        "rev": "c3577352ee1e39391f5204ee234d991c7dbeb151",
+        "rev": "318d4932d743fe4a583691efb54c070e351b0c1b",
         "subDir": "crates/choregraph-history",
-        "sha256": "sha256-3ct+0RK3oCsSqNZlxXpbgdw6EJYJf+e+YmvPS7HgAzw="
+        "sha256": "sha256-KK5bBPW77NuLA5lIno+YN0kf3HhArkQCTZ2itcAd9cM="
       },
       "features": [],
       "dependencies": [
@@ -511,7 +511,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
@@ -2002,7 +2002,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -2060,7 +2060,7 @@
           "externCrateName": "chaoscontrol_snapshot_descriptor"
         },
         {
-          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-history@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0",
           "externCrateName": "choregraph_history"
         },
         {
@@ -2120,11 +2120,11 @@
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -2136,11 +2136,11 @@
           "externCrateName": "nickel_lang"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10",
           "externCrateName": "preserves_schema"
         },
         {
@@ -2192,7 +2192,7 @@
           "externCrateName": "steel"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syndicate@0.44.0-rc.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syndicate@0.44.0-rc.9",
           "externCrateName": "syndicate"
         },
         {
@@ -2328,7 +2328,7 @@
       "description": "Aspen: a Rust runtime for distributed systems with explicit authority, bounded effects, and deterministic replay",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2356,7 +2356,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-history@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0",
           "externCrateName": "choregraph_history"
         },
         {
@@ -2392,7 +2392,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -2412,7 +2412,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -2439,7 +2439,7 @@
       "description": "Capability-rooted node host boundary for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -2455,7 +2455,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -2483,7 +2483,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
       "crateName": "vm-cohort-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -3176,11 +3176,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-fuzz/arbitrary/"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.5": {
       "crateName": "arc-swap",
-      "version": "1.9.1",
+      "version": "1.9.5",
       "edition": "2018",
-      "sha256": "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207",
+      "sha256": "84a22b5d51209f6de83d37a0b33d320acb8da88823e42a94c075140708f032a5",
       "source": {
         "type": "crates-io"
       },
@@ -7880,7 +7880,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -11227,11 +11227,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/gimli-rs/gimli"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.4": {
       "crateName": "glob",
-      "version": "0.3.3",
-      "edition": "2015",
-      "sha256": "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280",
+      "version": "0.3.4",
+      "edition": "2021",
+      "sha256": "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b",
       "source": {
         "type": "crates-io"
       },
@@ -14218,7 +14218,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.5",
           "externCrateName": "arc_swap"
         },
         {
@@ -16946,18 +16946,18 @@
       "license": "LGPL-3.0-only",
       "repository": "https://github.com/mhogrefe/malachite"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#matchers@0.0.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#matchers@0.2.0": {
       "crateName": "matchers",
-      "version": "0.0.1",
+      "version": "0.2.0",
       "edition": "2018",
-      "sha256": "f099785f7595cc4b4553a174ce30dd7589ef93391ff414dbb67f62392b9e0ce1",
+      "sha256": "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14",
           "externCrateName": "regex_automata"
         }
       ],
@@ -18478,6 +18478,39 @@
       "description": "General purpose QUIC transport protocol implementation",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/n0-computer/noq"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#nu-ansi-term@0.50.3": {
+      "crateName": "nu-ansi-term",
+      "version": "0.50.3",
+      "edition": "2021",
+      "sha256": "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "ogham@bsago.me",
+        "Ryan Scheel (Havvy) <ryan.havvy@gmail.com>",
+        "Josh Triplett <josh@joshtriplett.org>",
+        "The Nushell Project Developers"
+      ],
+      "description": "Library for ANSI terminal colors and styles (bold, underline)",
+      "license": "MIT",
+      "repository": "https://github.com/nushell/nu-ansi-term"
     },
     "registry+https://github.com/rust-lang/crates.io-index#num-bigint-dig@0.8.6": {
       "crateName": "num-bigint-dig",
@@ -20726,11 +20759,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/tiborschneider/prefix-trie"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6": {
+    "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10": {
       "crateName": "preserves-schema",
-      "version": "6.0.0-rc.6",
+      "version": "6.0.0-rc.10",
       "edition": "2018",
-      "sha256": "458f512c947ac9c78ae28607be09c32405c28ca835a6eb945f70d56ec0e359fd",
+      "sha256": "032247dc7fccb0c7c902fec138a1333b24de883dbd75f0519a6cbe638b51d885",
       "source": {
         "type": "crates-io"
       },
@@ -20741,7 +20774,7 @@
           "externCrateName": "convert_case"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.4",
           "externCrateName": "glob"
         },
         {
@@ -20749,7 +20782,7 @@
           "externCrateName": "lazy_static"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
@@ -20836,11 +20869,11 @@
       "license": "Apache-2.0",
       "repository": "https://gitlab.com/preserves/preserves-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7": {
+    "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10": {
       "crateName": "preserves",
-      "version": "5.0.0-rc.7",
+      "version": "5.0.0-rc.10",
       "edition": "2018",
-      "sha256": "7490e92cf73a682251565384d6646197bbea29b34815210cce205dbf8d3a86fa",
+      "sha256": "a09e9ff7936d8ee550d7295e80105a13da705556bc8f17e88608883203226e96",
       "source": {
         "type": "crates-io"
       },
@@ -22307,43 +22340,6 @@
       "license": "Apache-2.0 WITH LLVM-exception",
       "repository": "https://github.com/bytecodealliance/regalloc2"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.1.10": {
-      "crateName": "regex-automata",
-      "version": "0.1.10",
-      "edition": "2015",
-      "sha256": "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "regex-syntax",
-        "std"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.6.29",
-          "externCrateName": "regex_syntax"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Andrew Gallant <jamslam@gmail.com>"
-      ],
-      "description": "Automata construction and matching using regular expressions.",
-      "homepage": "https://github.com/BurntSushi/regex-automata",
-      "license": "Unlicense/MIT",
-      "repository": "https://github.com/BurntSushi/regex-automata"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14": {
       "crateName": "regex-automata",
       "version": "0.4.14",
@@ -22412,44 +22408,6 @@
       ],
       "description": "Automata construction and matching using regular expressions.",
       "homepage": "https://github.com/rust-lang/regex/tree/master/regex-automata",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-lang/regex"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.6.29": {
-      "crateName": "regex-syntax",
-      "version": "0.6.29",
-      "edition": "2018",
-      "sha256": "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "unicode",
-        "unicode-age",
-        "unicode-bool",
-        "unicode-case",
-        "unicode-gencat",
-        "unicode-perl",
-        "unicode-script",
-        "unicode-segment"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "The Rust Project Developers"
-      ],
-      "description": "A regular expression parser.",
-      "homepage": "https://github.com/rust-lang/regex",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/regex"
     },
@@ -25184,7 +25142,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
           "externCrateName": "heck"
         },
         {
@@ -25579,7 +25537,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.5",
           "externCrateName": "arc_swap"
         },
         {
@@ -25631,7 +25589,7 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#glob@0.3.4",
           "externCrateName": "glob"
         },
         {
@@ -26630,17 +26588,17 @@
           "externCrateName": "lazy_static"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10",
           "externCrateName": "preserves_schema"
         }
       ],
       "buildDependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10",
           "externCrateName": "preserves_schema"
         }
       ],
@@ -26661,16 +26619,20 @@
       "license": "Apache-2.0",
       "repository": "https://git.syndicate-lang.org/syndicate-lang/syndicate-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#syndicate@0.44.0-rc.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#syndicate@0.44.0-rc.9": {
       "crateName": "syndicate",
-      "version": "0.44.0-rc.3",
+      "version": "0.44.0-rc.9",
       "edition": "2018",
-      "sha256": "5a9be013eb6a786a736bf336352a6e598df0abcf2e7aefad163bb7ad03df937e",
+      "sha256": "9b733ffe107c6907421baf1efe0c6cffc972d4a7d0476b2c688911032be7487e",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.5",
+          "externCrateName": "arc_swap"
+        },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake2@0.10.6",
           "externCrateName": "blake2"
@@ -26700,12 +26662,16 @@
           "externCrateName": "parking_lot"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10",
           "externCrateName": "preserves_schema"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tai64@4.1.0",
+          "externCrateName": "tai64"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.52.3",
@@ -26724,13 +26690,13 @@
           "externCrateName": "tracing_futures"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.2.25",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23",
           "externCrateName": "tracing_subscriber"
         }
       ],
       "buildDependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves-schema@6.0.0-rc.10",
           "externCrateName": "preserves_schema"
         },
         {
@@ -26824,6 +26790,37 @@
       "description": "Strongly typed atomic and non-atomic tagged pointers",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/oliver-giersch/tagptr.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#tai64@4.1.0": {
+      "crateName": "tai64",
+      "version": "4.1.0",
+      "edition": "2021",
+      "sha256": "014639506e4f425c78e823eabf56e71c093f940ae55b43e58f682e7bc2f5887a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "RustCrypto Developers"
+      ],
+      "description": "TAI64 and TAI64N (i.e. Temps Atomique International) timestamp support for Rust",
+      "homepage": "https://github.com/RustCrypto/formats/tree/master/tai64",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/formats"
     },
     "registry+https://github.com/rust-lang/crates.io-index#tar@0.4.46": {
       "crateName": "tar",
@@ -28606,11 +28603,11 @@
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#tracing-log@0.1.4": {
+    "registry+https://github.com/rust-lang/crates.io-index#tracing-log@0.2.0": {
       "crateName": "tracing-log",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "edition": "2018",
-      "sha256": "f751112709b4e791d8ce53e32c4ed2d353565a795ce84da2285393f41557bdf2",
+      "sha256": "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3",
       "source": {
         "type": "crates-io"
       },
@@ -28650,100 +28647,47 @@
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#tracing-serde@0.1.3": {
-      "crateName": "tracing-serde",
-      "version": "0.1.3",
-      "edition": "2018",
-      "sha256": "bc6b213177105856957181934e4920de57730fc69bf42c37ee5bb664d406d9e1",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-core@0.1.36",
-          "externCrateName": "tracing_core"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Tokio Contributors <team@tokio.rs>"
-      ],
-      "description": "A compatibility layer for serializing trace data with `serde` ",
-      "homepage": "https://tokio.rs",
-      "license": "MIT",
-      "repository": "https://github.com/tokio-rs/tracing"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.2.25": {
+    "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23": {
       "crateName": "tracing-subscriber",
-      "version": "0.2.25",
+      "version": "0.3.23",
       "edition": "2018",
-      "sha256": "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71",
+      "sha256": "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319",
       "source": {
         "type": "crates-io"
       },
       "features": [
+        "alloc",
         "ansi",
-        "ansi_term",
-        "chrono",
         "default",
         "env-filter",
         "fmt",
-        "json",
-        "lazy_static",
         "matchers",
-        "regex",
+        "nu-ansi-term",
+        "once_cell",
         "registry",
-        "serde",
-        "serde_json",
         "sharded-slab",
         "smallvec",
+        "std",
         "thread_local",
         "tracing",
-        "tracing-log",
-        "tracing-serde"
+        "tracing-log"
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ansi_term@0.12.1",
-          "externCrateName": "ansi_term"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#chrono@0.4.44",
-          "externCrateName": "chrono"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.0",
-          "externCrateName": "lazy_static"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#matchers@0.0.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#matchers@0.2.0",
           "externCrateName": "matchers"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
-          "externCrateName": "regex"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nu-ansi-term@0.50.3",
+          "externCrateName": "nu_ansi_term"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.21.4",
+          "externCrateName": "once_cell"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
-          "externCrateName": "serde_json"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14",
+          "externCrateName": "regex_automata"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#sharded-slab@0.1.7",
@@ -28766,12 +28710,8 @@
           "externCrateName": "tracing_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-log@0.1.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-log@0.2.0",
           "externCrateName": "tracing_log"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-serde@0.1.3",
-          "externCrateName": "tracing_serde"
         }
       ],
       "buildDependencies": [],

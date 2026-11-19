@@ -6,7 +6,7 @@ Molten compares every typed world root. It merges only roots admitted by one exa
 
 The merge core uses these reviewed inputs:
 
-- Choregraph branch history at `c3577352ee1e39391f5204ee234d991c7dbeb151`.
+- Choregraph branch history at `318d4932d743fe4a583691efb54c070e351b0c1b`.
 - Schema Migration Core at `4fe90e130f2871cf69a6febcdc70785adca98aea`.
 - Schema Identity Core at `2562c8aa38a034061f9af9f3e17280494a5b8de2`.
 

@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "c2a91a2b2dd2fd1212e4b55ec4b750fbeec5905866d49f89eea76421d88a5e31",
-  "inputsHash": "99147df10cd87ad7a2af9c74876cf9777da12da15db10c9effbc277be74170ef",
+  "cargoLockHash": "d92257244ab69e628c4060c6e2c76de9c496ff10f490deeb929fe7e1e5bb64b2",
+  "inputsHash": "ae0334671f46bc63eab1afe5f1c654e1ba9ed39ba45568f0ec53a80ddd65e89e",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -340,7 +340,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/trellis"
     },
-    "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-history@0.1.0": {
+    "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0": {
       "crateName": "choregraph-history",
       "version": "0.1.0",
       "edition": "2024",
@@ -348,9 +348,9 @@
       "source": {
         "type": "git",
         "url": "https://github.com/OnixResearch/choregraph.git",
-        "rev": "c3577352ee1e39391f5204ee234d991c7dbeb151",
+        "rev": "318d4932d743fe4a583691efb54c070e351b0c1b",
         "subDir": "crates/choregraph-history",
-        "sha256": "sha256-3ct+0RK3oCsSqNZlxXpbgdw6EJYJf+e+YmvPS7HgAzw="
+        "sha256": "sha256-KK5bBPW77NuLA5lIno+YN0kf3HhArkQCTZ2itcAd9cM="
       },
       "features": [],
       "dependencies": [
@@ -391,7 +391,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
           "externCrateName": "preserves"
         },
         {
@@ -790,7 +790,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -818,7 +818,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-history@0.1.0",
+          "packageId": "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0",
           "externCrateName": "choregraph_history"
         },
         {
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -3975,34 +3975,6 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1": {
-      "crateName": "heck",
-      "version": "0.4.1",
-      "edition": "2018",
-      "sha256": "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Without Boats <woboats@gmail.com>"
-      ],
-      "description": "heck is a case conversion library.",
-      "homepage": "https://github.com/withoutboats/heck",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/withoutboats/heck"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0": {
       "crateName": "heck",
       "version": "0.5.0",
@@ -6331,11 +6303,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/cryptocorrosion/cryptocorrosion"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7": {
+    "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10": {
       "crateName": "preserves",
-      "version": "5.0.0-rc.7",
+      "version": "5.0.0-rc.10",
       "edition": "2018",
-      "sha256": "7490e92cf73a682251565384d6646197bbea29b34815210cce205dbf8d3a86fa",
+      "sha256": "a09e9ff7936d8ee550d7295e80105a13da705556bc8f17e88608883203226e96",
       "source": {
         "type": "crates-io"
       },
@@ -8185,7 +8157,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
           "externCrateName": "heck"
         },
         {

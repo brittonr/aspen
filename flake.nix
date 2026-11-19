@@ -51,7 +51,7 @@
       flake = false;
     };
     choregraph-src = {
-      url = "git+https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151";
+      url = "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b";
       flake = false;
     };
     chaoscontrol-src = {
@@ -384,7 +384,7 @@
             )
             "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";
           mantle-wasm-verifier-src;
-        choregraphRevision = "c3577352ee1e39391f5204ee234d991c7dbeb151";
+        choregraphRevision = "318d4932d743fe4a583691efb54c070e351b0c1b";
         choregraphRepository = "https://github.com/OnixResearch/choregraph.git";
         # The focused Octet workspaces compile the same core sources against their own pins.
         choregraphCheckWorkspaces = [

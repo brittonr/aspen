@@ -6,7 +6,7 @@ Molten owns mutable names for immutable world commits. A branch head does not ch
 
 Molten uses these reviewed sources:
 
-- Choregraph `choregraph-history` from `https://github.com/OnixResearch/choregraph.git` at `c3577352ee1e39391f5204ee234d991c7dbeb151`.
+- Choregraph `choregraph-history` from `https://github.com/OnixResearch/choregraph.git` at `318d4932d743fe4a583691efb54c070e351b0c1b`.
 - Artifact Auth from `https://github.com/OnixResearch/onix-artifact.git` at `5f3962d7471d1547e044f57daeda72f56621fd52`.
 
 Choregraph supplies immutable event graphs and pure generation-fenced branch plans. It does not own Molten branch policy, storage, or authority.

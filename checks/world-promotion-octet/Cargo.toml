@@ -18,7 +18,7 @@ path = "src/lib.rs"
 
 [dependencies]
 blake3 = "=1.8.5"
-choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "c3577352ee1e39391f5204ee234d991c7dbeb151", version = "0.1.0" }
+choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "318d4932d743fe4a583691efb54c070e351b0c1b", version = "0.1.0" }
 transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "eb2bd3441753af97bfcb247cef7cc22d72675b62", version = "0.1.0" }
 
 [lints.rust]

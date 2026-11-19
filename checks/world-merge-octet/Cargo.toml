@@ -19,7 +19,7 @@ path = "src/lib.rs"
 
 [dependencies]
 blake3 = "=1.8.5"
-choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "c3577352ee1e39391f5204ee234d991c7dbeb151", version = "0.1.0" }
+choregraph-history = { git = "https://github.com/OnixResearch/choregraph.git", rev = "318d4932d743fe4a583691efb54c070e351b0c1b", version = "0.1.0" }
 kamacite-core = { path = "vendor/kamacite/crates/kamacite-core", version = "0.1.0" }
 preserves = "=5.0.0-rc.7"
 serde = { version = "=1.0.228", features = ["derive"] }

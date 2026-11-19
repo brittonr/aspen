@@ -2,7 +2,7 @@
   "https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
   "https://github.com/OnixResearch/bounded-exec.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
   "https://github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
-  "https://github.com/OnixResearch/choregraph.git?rev=c3577352ee1e39391f5204ee234d991c7dbeb151#choregraph-core@0.1.0": "sha256-3ct+0RK3oCsSqNZlxXpbgdw6EJYJf+e+YmvPS7HgAzw=",
+  "https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-core@0.1.0": "sha256-KK5bBPW77NuLA5lIno+YN0kf3HhArkQCTZ2itcAd9cM=",
   "https://github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
   "https://github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
   "https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
