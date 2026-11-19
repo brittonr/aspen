@@ -1,11 +1,7 @@
 # Wasm Profile Measurement Specification
 
-## Purpose
+## ADDED Requirements
 
-Make the reviewed Wasm optimization profiles measurable from reviewed source, so
-a profile choice can rest on recorded numbers instead of intuition.
-
-## Requirements
 
 ### Requirement: Reviewed source measures every profile [r[wasm_profile_measurement.tool]]
 
