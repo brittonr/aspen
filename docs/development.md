@@ -223,6 +223,27 @@ cargo run -- test repro export target/molten-reports/tampered.report.preserves -
 cargo run -- test gate check target/molten-reports/bad.failure.preserves --failure-out target/molten-reports/gate.failure.preserves
 ```
 
+## Wasm optimization profile measurement
+
+`examples/wasm-optimization-profiles.rs` measures the four reviewed
+`molten.wasm.optimization.*.v1` configurations on two named workloads and prints
+per-phase `median`/`p90`/`max` samples as JSON. It is diagnostic only: it grants
+no capability, registers no runtime backend, gates nothing, and reports no
+verdict. Build it with `--release`, because the pooling comparison includes host
+allocation paths.
+
+```sh
+cargo test --release --example wasm-optimization-profiles
+cargo run --release --example wasm-optimization-profiles -- loop 200
+cargo run --release --example wasm-optimization-profiles -- short-lived 500
+```
+
+`loop` keeps one instance per sample so per-call cost dominates; `short-lived`
+instantiates `SAMPLES` short-lived instances per sample so instance churn
+dominates. Compare only runs from the same host and build profile, and read the
+numbers as observations: a profile recommendation needs a threshold and a
+consumer policy that this tool does not own.
+
 ## Nix
 
 ```sh
