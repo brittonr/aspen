@@ -69,6 +69,25 @@ release-dependency profile and its four release-evidence sources regenerated for
 the new revisions in the same change — a separate, bounded piece of work rather
 than another `cargo update`.
 
+## The k256 attempt: fixed in Basalt, unresolvable in Molten's graph
+
+`crypto-bigint@0.5.5` reaches the audit through `k256 0.13.4` in the vendored
+`ucan-nostr`. Basalt moved that adapter to `k256 0.14.0` (`1c142e2`, pushed to
+`main`): four key-construction call sites now pass `FieldBytes`, the Schnorr
+signing and verification calls are unchanged, 276 tests pass, and Basalt's own
+lock resolves `crypto-bigint 0.7.11`, so the advisory leaves Basalt's graph.
+
+Molten cannot adopt that revision yet. Resolving `k256 0.14.0` inside Aspen's
+graph fails on the elliptic-curve 0.14 family: `wnaf 0.14.1` requires
+`hybrid-array ^0.4.13`, while `crypto-common ^0.4.7` has `0.4.12` selected, and
+forcing `0.4.15` then breaks `crypto-bigint 0.7.9`'s `ctutils` requirement. Those
+versions arrive through Iroh's crypto stack, so the tangle is upstream of this
+workspace, not a local pin.
+
+Reopen when Iroh's crypto stack moves to `hybrid-array 0.4.13+` with a matching
+`ctutils`. Until then Aspen keeps `k256 0.13.4` and records `crypto-bigint` as
+blocked; Basalt's migration stands on its own.
+
 ## What would actually close the four advisories
 
 Move `secretspec` to an rsa 0.10-compatible release, move `k256` to a release on
