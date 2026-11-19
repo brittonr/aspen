@@ -1,0 +1,67 @@
+{
+  "schema": "molten.dependency-advisory-remediation.v1",
+  "date": "2026-11-19",
+  "change": "remediate-default-closure-advisories",
+  "issue": "aspen#28",
+  "scanner": {
+    "database": "RustSec/advisory-db",
+    "revision": "4ef2df8e806a65e2f1ecc14f56f51249062b23d6",
+    "as_of": "2026-11-19",
+    "target": "x86_64-unknown-linux-gnu",
+    "command": "nix run .#dependency-audit -- --database DB --database-revision 4ef2df8e... --target x86_64-unknown-linux-gnu --as-of 2026-11-19 --out OUT --release-evidence-source ... (four retained sources)"
+  },
+  "before": {
+    "commit": "b6971ceab",
+    "decision": "deny",
+    "findings": {
+      "advisory": 67,
+      "license-policy": 5,
+      "profile-binding": 1,
+      "source-policy": 5,
+      "unavailable-license": 40,
+      "unavailable-notices": 85
+    },
+    "report_blake3": "580a5011503b6476bb1d39e59406df07a5d7e05cebdf3d782fb8d961029b7df6",
+    "status_blake3": "1f5b6306c4ecd136cdee69de42ac3df0538e808e16ff8e55c288ffa1b79bfb63"
+  },
+  "after": {
+    "decision": "deny",
+    "findings": {
+      "advisory": 23,
+      "license-policy": 5,
+      "profile-binding": 1,
+      "source-policy": 5,
+      "unavailable-license": 39,
+      "unavailable-notices": 85
+    },
+    "report_blake3": "8d541cee00468e4ef479239b61d1366884d504a42e493832b4515b8a42fd8627",
+    "status_blake3": "1f5b6306c4ecd136cdee69de42ac3df0538e808e16ff8e55c288ffa1b79bfb63",
+    "binding_blake3": "358ef31a3b9c48597c92dea8587473c40a4b0ce7e1e3fe0859779c4ce66e3b6d"
+  },
+  "refreshed": [
+    "zstd 0.13.3 -> 0.13.4",
+    "zstd-safe 7.2.4 -> 7.4.1",
+    "zstd-sys 2.0.16 -> 2.1.3",
+    "cap-primitives 3.4.5 -> 3.4.6",
+    "hickory-resolver/net/proto 0.26.1 -> 0.26.2",
+    "h2 0.4.14 -> 0.4.16",
+    "rustls 0.23.40 -> 0.23.46",
+    "rustls-webpki 0.103.13 -> 0.103.16",
+    "ctutils 0.4.2 -> 0.4.4",
+    "crossbeam-epoch 0.9.18 -> 0.9.20",
+    "webpki-roots 1.0.7 -> 1.0.10",
+    "webpki-root-certs 1.0.7 -> 1.0.10"
+  ],
+  "remaining_requires_upstream": {
+    "crypto-bigint@0.5.5 (>=0.7.6)": "basalt -> jsonwebtoken -> p256 -> elliptic-curve; needs a basalt/jsonwebtoken refresh",
+    "rsa@0.9.10 (>=0.10.0)": "basalt -> jsonwebtoken; semver-breaking for jsonwebtoken 11",
+    "imbl-sized-chunks@0.1.3 (>=0.2.0)": "nickel-lang -> nickel-lang-vector; needs the pinned Nickel source to move",
+    "tracing-subscriber@0.2.25 (>=0.3.20)": "syndicate 0.44.0-rc.3; needs a syndicate release"
+  },
+  "not_in_audited_closure": "wasmtime/wasmtime-wasi 33.0.0 carry advisories only when the opt-in component-rpc feature resolves the pilot host; the default closure does not include them.",
+  "non_claims": [
+    "deny is not a clean audit",
+    "no release, legal or security judgment",
+    "registry refresh only; no source, SPDX or notice findings resolved"
+  ]
+}

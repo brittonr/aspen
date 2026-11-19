@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "1f4d38a62e33a931763fb917437f5f5953bb4d88f132f8380d4b24e9ba7f3942",
-  "inputsHash": "504d770fbbab727acb305208b7d2e3181bdead5a8e7594f16cbbcf20d975e492",
+  "cargoLockHash": "c2a91a2b2dd2fd1212e4b55ec4b750fbeec5905866d49f89eea76421d88a5e31",
+  "inputsHash": "99147df10cd87ad7a2af9c74876cf9777da12da15db10c9effbc277be74170ef",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -660,7 +660,7 @@
           "externCrateName": "httparse"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -672,7 +672,7 @@
           "externCrateName": "serde_json"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.10",
           "externCrateName": "webpki_roots"
         },
         {
@@ -790,7 +790,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -3974,6 +3974,34 @@
       "description": "A Rust port of Google's SwissTable hash map",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1": {
+      "crateName": "heck",
+      "version": "0.4.1",
+      "edition": "2018",
+      "sha256": "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Without Boats <woboats@gmail.com>"
+      ],
+      "description": "heck is a case conversion library.",
+      "homepage": "https://github.com/withoutboats/heck",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/withoutboats/heck"
     },
     "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0": {
       "crateName": "heck",
@@ -7228,11 +7256,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/pki-types"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.13": {
+    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16": {
       "crateName": "rustls-webpki",
-      "version": "0.103.13",
+      "version": "0.103.16",
       "edition": "2021",
-      "sha256": "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e",
+      "sha256": "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281",
       "source": {
         "type": "crates-io"
       },
@@ -7269,11 +7297,11 @@
       "license": "ISC",
       "repository": "https://github.com/rustls/webpki"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40": {
+    "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46": {
       "crateName": "rustls",
-      "version": "0.23.40",
+      "version": "0.23.46",
       "edition": "2021",
-      "sha256": "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b",
+      "sha256": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
       "source": {
         "type": "crates-io"
       },
@@ -7296,7 +7324,7 @@
           "externCrateName": "pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.13",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16",
           "externCrateName": "webpki"
         },
         {
@@ -8157,7 +8185,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
           "externCrateName": "heck"
         },
         {
@@ -9694,11 +9722,11 @@
       "license": "MIT",
       "repository": "https://github.com/verus-lang/verus"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.7": {
+    "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.10": {
       "crateName": "webpki-roots",
-      "version": "1.0.7",
+      "version": "1.0.10",
       "edition": "2021",
-      "sha256": "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d",
+      "sha256": "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9",
       "source": {
         "type": "crates-io"
       },

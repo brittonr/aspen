@@ -1,30 +1,30 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0",
-    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0",
+    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "1f4d38a62e33a931763fb917437f5f5953bb4d88f132f8380d4b24e9ba7f3942",
-  "inputsHash": "ad2188dfa2de4c09cddcf8eb199c84ce2efc226327e0fe1e759fa4d30c5ab956",
+  "cargoLockHash": "c2a91a2b2dd2fd1212e4b55ec4b750fbeec5905866d49f89eea76421d88a5e31",
+  "inputsHash": "717982f9de381edce21773459069527b312b555db0652df17acc770289e67e03",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -1758,7 +1758,7 @@
           "externCrateName": "httparse"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -1770,7 +1770,7 @@
           "externCrateName": "serde_json"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.10",
           "externCrateName": "webpki_roots"
         },
         {
@@ -2002,7 +2002,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -2120,11 +2120,11 @@
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -2244,7 +2244,7 @@
           "externCrateName": "wit_bindgen"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.4",
           "externCrateName": "zstd"
         }
       ],
@@ -2328,7 +2328,7 @@
       "description": "Aspen: a Rust runtime for distributed systems with explicit authority, bounded effects, and deterministic replay",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2392,7 +2392,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -2412,7 +2412,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -2439,7 +2439,7 @@
       "description": "Capability-rooted node host boundary for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -2455,7 +2455,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -2483,7 +2483,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-graph-construction-20261118/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-advisory-remediation-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
       "crateName": "vm-cohort-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -4635,7 +4635,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.6",
           "externCrateName": "cap_primitives"
         },
         {
@@ -4710,11 +4710,11 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/bytecodealliance/cap-std"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.5": {
+    "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.6": {
       "crateName": "cap-primitives",
-      "version": "3.4.5",
+      "version": "3.4.6",
       "edition": "2021",
-      "sha256": "b6cf3aea8a5081171859ef57bc1606b1df6999df4f1110f8eef68b30098d1d3a",
+      "sha256": "8e0bf07d379916947be6c4a07f43684153d710a2896c31f9e97781362895596c",
       "source": {
         "type": "crates-io"
       },
@@ -4845,7 +4845,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@3.4.6",
           "externCrateName": "cap_primitives"
         },
         {
@@ -6886,7 +6886,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.18",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.20",
           "externCrateName": "crossbeam_epoch"
         },
         {
@@ -6909,11 +6909,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/crossbeam-rs/crossbeam"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.18": {
+    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.20": {
       "crateName": "crossbeam-epoch",
-      "version": "0.9.18",
+      "version": "0.9.20",
       "edition": "2021",
-      "sha256": "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e",
+      "sha256": "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f",
       "source": {
         "type": "crates-io"
       },
@@ -7221,11 +7221,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/block-modes"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#ctutils@0.4.2": {
+    "registry+https://github.com/rust-lang/crates.io-index#ctutils@0.4.4": {
       "crateName": "ctutils",
-      "version": "0.4.2",
+      "version": "0.4.4",
       "edition": "2024",
-      "sha256": "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e",
+      "sha256": "12218662ccac37d9714f2191252553d67585b97df8c839cbe49e0bde278dc865",
       "source": {
         "type": "crates-io"
       },
@@ -7250,7 +7250,6 @@
         "RustCrypto Developers"
       ],
       "description": "Constant-time utility library with selection and equality testing support targeting cryptographic applications. Supports `const fn` where appropriate. Built on the `cmov` crate which provides architecture-specific predication intrinsics. Heavily inspired by the `subtle` crate. ",
-      "homepage": "https://github.com/RustCrypto/utils/tree/master/ctselect",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/utils"
     },
@@ -7881,7 +7880,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
           "externCrateName": "syn"
         }
       ],
@@ -11300,11 +11299,11 @@
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/zkcrypto/group"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.14": {
+    "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16": {
       "crateName": "h2",
-      "version": "0.4.14",
+      "version": "0.4.16",
       "edition": "2021",
-      "sha256": "171fefbc92fe4a4de27e0698d6a5b392d6a0e333506bc49133760b3bcf948733",
+      "sha256": "a9f37a958b41b3b19ee2707c06439c0e9e547e847223eb791ecb0cb821c65e27",
       "source": {
         "type": "crates-io"
       },
@@ -11853,11 +11852,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/KokaKiwi/rust-hex"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#hickory-net@0.26.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#hickory-net@0.26.2": {
       "crateName": "hickory-net",
-      "version": "0.26.1",
+      "version": "0.26.2",
       "edition": "2021",
-      "sha256": "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183",
+      "sha256": "084e7bd6a377435d568f652153e571b50970d7ccc1d1eeec0519f834632287e1",
       "source": {
         "type": "crates-io"
       },
@@ -11898,11 +11897,11 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.14",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16",
           "externCrateName": "h2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.2",
           "externCrateName": "hickory_proto"
         },
         {
@@ -11922,7 +11921,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -11968,11 +11967,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.2": {
       "crateName": "hickory-proto",
-      "version": "0.26.1",
+      "version": "0.26.2",
       "edition": "2021",
-      "sha256": "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643",
+      "sha256": "7e2da0694c15b44c6f68a6b05e0233617008c54080e31d6eb848d858a9c5b38d",
       "source": {
         "type": "crates-io"
       },
@@ -12040,11 +12039,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.2": {
       "crateName": "hickory-resolver",
-      "version": "0.26.1",
+      "version": "0.26.2",
       "edition": "2021",
-      "sha256": "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c",
+      "sha256": "0e4f9f4603319422d482738f3f6fe5aac03157fdbfed1cd85a3ff45adb09072f",
       "source": {
         "type": "crates-io"
       },
@@ -12066,11 +12065,11 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-net@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-net@0.26.2",
           "externCrateName": "hickory_net"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-proto@0.26.2",
           "externCrateName": "hickory_proto"
         },
         {
@@ -12098,7 +12097,7 @@
           "externCrateName": "resolv_conf"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -12453,7 +12452,7 @@
           "externCrateName": "hyper_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -12614,7 +12613,7 @@
           "externCrateName": "futures_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.14",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16",
           "externCrateName": "h2"
         },
         {
@@ -14227,7 +14226,7 @@
           "externCrateName": "derive_more"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.2",
           "externCrateName": "hickory_resolver"
         },
         {
@@ -14251,7 +14250,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -14767,7 +14766,7 @@
           "externCrateName": "derive_more"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.2",
           "externCrateName": "hickory_resolver"
         },
         {
@@ -14839,7 +14838,7 @@
           "externCrateName": "reqwest"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -14883,7 +14882,7 @@
           "externCrateName": "url"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.10",
           "externCrateName": "webpki_roots"
         }
       ],
@@ -15048,7 +15047,7 @@
           "externCrateName": "bytes"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ctutils@0.4.2",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ctutils@0.4.4",
           "externCrateName": "ctutils"
         },
         {
@@ -15068,7 +15067,7 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hickory-resolver@0.26.2",
           "externCrateName": "hickory_resolver"
         },
         {
@@ -15152,7 +15151,7 @@
           "externCrateName": "rustc_hash"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -15306,7 +15305,7 @@
           "externCrateName": "rcgen"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -17339,7 +17338,7 @@
           "externCrateName": "crossbeam_channel"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.18",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.20",
           "externCrateName": "crossbeam_epoch"
         },
         {
@@ -18294,7 +18293,7 @@
           "externCrateName": "rustc_hash"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -18428,7 +18427,7 @@
           "externCrateName": "rustc_hash"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -22626,7 +22625,7 @@
           "externCrateName": "pin_project_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -23141,7 +23140,7 @@
           "externCrateName": "log"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -23149,7 +23148,7 @@
           "externCrateName": "rustls_native_certs"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.13",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16",
           "externCrateName": "webpki"
         }
       ],
@@ -23167,11 +23166,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/rustls-platform-verifier"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.13": {
+    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16": {
       "crateName": "rustls-webpki",
-      "version": "0.103.13",
+      "version": "0.103.16",
       "edition": "2021",
-      "sha256": "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e",
+      "sha256": "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281",
       "source": {
         "type": "crates-io"
       },
@@ -23208,11 +23207,11 @@
       "license": "ISC",
       "repository": "https://github.com/rustls/webpki"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40": {
+    "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46": {
       "crateName": "rustls",
-      "version": "0.23.40",
+      "version": "0.23.46",
       "edition": "2021",
-      "sha256": "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b",
+      "sha256": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
       "source": {
         "type": "crates-io"
       },
@@ -23241,7 +23240,7 @@
           "externCrateName": "pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.13",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.16",
           "externCrateName": "webpki"
         },
         {
@@ -25185,7 +25184,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
           "externCrateName": "heck"
         },
         {
@@ -27607,7 +27606,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.40",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.46",
           "externCrateName": "rustls"
         },
         {
@@ -30594,7 +30593,7 @@
           "externCrateName": "wasmtime_environ"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.4",
           "externCrateName": "zstd"
         }
       ],
@@ -31737,11 +31736,11 @@
       "license": "MIT",
       "repository": "https://github.com/tov/weak-table-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.7": {
+    "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.10": {
       "crateName": "webpki-roots",
-      "version": "1.0.7",
+      "version": "1.0.10",
       "edition": "2021",
-      "sha256": "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d",
+      "sha256": "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9",
       "source": {
         "type": "crates-io"
       },
@@ -33421,11 +33420,11 @@
       "license": "MIT",
       "repository": "https://github.com/dtolnay/zmij"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zstd-safe@7.2.4": {
+    "registry+https://github.com/rust-lang/crates.io-index#zstd-safe@7.4.1": {
       "crateName": "zstd-safe",
-      "version": "7.2.4",
+      "version": "7.4.1",
       "edition": "2018",
-      "sha256": "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d",
+      "sha256": "498d94ad68720c89b4fbe41b9090850651e68cb2dd9210ce7ffbff3a94653819",
       "source": {
         "type": "crates-io"
       },
@@ -33437,7 +33436,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd-sys@2.0.16+zstd.1.5.7",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd-sys@2.1.3+zstd.1.5.7",
           "externCrateName": "zstd_sys"
         }
       ],
@@ -33455,14 +33454,14 @@
         "Alexandre Bury <alexandre.bury@gmail.com>"
       ],
       "description": "Safe low-level bindings for the zstd compression library.",
-      "license": "MIT OR Apache-2.0",
+      "license": "BSD-3-Clause",
       "repository": "https://github.com/gyscos/zstd-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zstd-sys@2.0.16+zstd.1.5.7": {
+    "registry+https://github.com/rust-lang/crates.io-index#zstd-sys@2.1.3+zstd.1.5.7": {
       "crateName": "zstd-sys",
-      "version": "2.0.16+zstd.1.5.7",
+      "version": "2.1.3+zstd.1.5.7",
       "edition": "2018",
-      "sha256": "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748",
+      "sha256": "f729a06d0257428fd9d997ac8db7e1407bd0262ab016b085b36bc52957c0052d",
       "source": {
         "type": "crates-io"
       },
@@ -33495,14 +33494,14 @@
         "Alexandre Bury <alexandre.bury@gmail.com>"
       ],
       "description": "Low-level bindings for the zstd compression library.",
-      "license": "MIT/Apache-2.0",
+      "license": "BSD-3-Clause AND BSD-2-Clause",
       "repository": "https://github.com/gyscos/zstd-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.4": {
       "crateName": "zstd",
-      "version": "0.13.3",
+      "version": "0.13.4",
       "edition": "2018",
-      "sha256": "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a",
+      "sha256": "cdb02c3132d251ab1606e9fc913a7da6c6ed08cc263df15edf082e1dc497d157",
       "source": {
         "type": "crates-io"
       },
@@ -33514,7 +33513,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd-safe@7.2.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zstd-safe@7.4.1",
           "externCrateName": "zstd_safe"
         }
       ],
@@ -33532,7 +33531,7 @@
         "Alexandre Bury <alexandre.bury@gmail.com>"
       ],
       "description": "Binding for the zstd compression library.",
-      "license": "MIT",
+      "license": "BSD-3-Clause",
       "repository": "https://github.com/gyscos/zstd-rs"
     }
   }

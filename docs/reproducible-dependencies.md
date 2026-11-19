@@ -290,6 +290,13 @@ Historical source-migration receipts remain scoped to their original cohort.
 
 ## Updating pins
 
+r[verify molten.dependency_audit.registry_refresh] The before/after audit
+records at one pinned database revision are how a registry-only refresh is
+checked. r[impl molten.dependency_audit.registry_refresh] A registry-only advisory refresh
+changes `Cargo.lock` and both unit2nix plans together and never adds an
+exception in place of an available fix; advisories that need a semver-breaking
+upstream move are recorded with their dependency chain instead.
+
 1. Review the upstream revision and its license/security implications.
 2. Update the Nickel profile and the matching Cargo manifest revision.
 3. Update the matching `flake.nix` input.
