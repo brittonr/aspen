@@ -132,7 +132,7 @@ fn json_round(value: f64) -> f64 {
 
 /// Median, p90 and max of the recorded microseconds; pure in its input order.
 // r[impl wasm_profile_measurement.aggregation]
-fn micros(samples: &mut Vec<Duration>) -> (f64, f64, f64) {
+fn micros(samples: &mut [Duration]) -> (f64, f64, f64) {
     samples.sort_unstable();
     let at = |fraction: f64| samples[((samples.len() - 1) as f64 * fraction).round() as usize].as_secs_f64() * 1e6;
     let (median, p90, max) = (at(0.5), at(0.9), at(1.0));

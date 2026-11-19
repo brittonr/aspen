@@ -1,0 +1,94 @@
+{
+  "schema": "molten.wasm-profile-measurement.v1",
+  "date": "2026-11-18",
+  "change": "measure-wasm-optimization-profiles",
+  "issue": "https://github.com/brittonr/aspen/issues/41",
+  "maintenance_owner": "Molten component-RPC and Wasm runtime maintainers",
+  "immediate_outcome": "Both named workloads ran under the four reviewed optimization profiles from reviewed source, three processes each, with per-phase samples recorded.",
+  "durable_capability": "An in-repo command reproduces these numbers for any host and build profile.",
+  "source": {
+    "commit": "c92e9f883fd8c1d2ad898d2cd9ed1fdc09aef4f2",
+    "checkout_clean": true,
+    "profile": "Cargo release (optimized), debug information disabled; Wasm compiled by Wasmtime 49.0.5 Cranelift with default optimization settings",
+    "binary_image_blake3": "7decd25535937724bdf37d6e4992c6112b5c5894ef4dd10babfa39b06bf88b3f",
+    "command": "cargo run --release --example wasm-optimization-profiles -- WORKLOAD SAMPLES",
+    "processes": 3
+  },
+  "loop": {
+    "workload": "bounded-integer-loop-v1",
+    "samples": 200,
+    "instances_per_sample": 1,
+    "profiles": {
+      "baseline": {
+        "compile_median_us": 319.76,
+        "call_median_us": 146.38,
+        "call_p90_us": 162.08
+      },
+      "pooling": {
+        "compile_median_us": 328.42,
+        "call_median_us": 138.28,
+        "call_p90_us": 151.27
+      },
+      "cow": {
+        "compile_median_us": 329.11,
+        "call_median_us": 144.01,
+        "call_p90_us": 155.65
+      },
+      "instance-pre": {
+        "compile_median_us": 333.85,
+        "call_median_us": 143.87,
+        "call_p90_us": 155.63
+      }
+    },
+    "best": "pooling",
+    "worst": "baseline",
+    "spread_us": 8.1,
+    "spread_percent_of_best": 5.9
+  },
+  "short_lived": {
+    "workload": "short-lived-instances-v1",
+    "samples": 500,
+    "instances_per_sample": 500,
+    "profiles": {
+      "baseline": {
+        "compile_median_us": 480.4,
+        "call_median_us": 3488.06,
+        "call_p90_us": 4004.02
+      },
+      "pooling": {
+        "compile_median_us": 307.72,
+        "call_median_us": 1073.89,
+        "call_p90_us": 1156.17
+      },
+      "cow": {
+        "compile_median_us": 475.62,
+        "call_median_us": 3393.93,
+        "call_p90_us": 3870.32
+      },
+      "instance-pre": {
+        "compile_median_us": 496.37,
+        "call_median_us": 3458.57,
+        "call_p90_us": 3848.84
+      }
+    },
+    "best": "pooling",
+    "worst": "baseline",
+    "spread_us": 2414.17,
+    "spread_percent_of_best": 224.8
+  },
+  "observations": {
+    "pooling_speedup_on_short_lived": 3.25,
+    "cow_ratio_on_short_lived": 0.97,
+    "instance_pre_ratio_on_short_lived": 0.99,
+    "loop_spread_percent_of_best": 5.9
+  },
+  "decision": {
+    "supports": "A static measured mapping from workload shape to profile: pooling for instance churn, baseline for compute-bound single-instance calls.",
+    "does_not_support": "A learned selector, a trained artifact, per-request profile switching, production or cross-host performance claims, or gate/release eligibility."
+  },
+  "non_claims": [
+    "not a benchmark receipt or release evidence",
+    "no production, cross-host or accelerator comparison",
+    "no claim that a profile choice is safe for any workload outside these two"
+  ]
+}
