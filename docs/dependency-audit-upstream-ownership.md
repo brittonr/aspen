@@ -40,6 +40,32 @@ change stands on its own as a narrower crypto surface; adopting it needs a
 release-dependency profile revision that binds `264d248` and a regenerated
 release-evidence source, which is its own change.
 
+
+## The syndicate chain: dependency work that also needs the release profile
+
+`tracing-subscriber@0.2.25` reaches the closure through `syndicate 0.44.0-rc.3`,
+and `syndicate 0.44.0-rc.9` already requires `tracing-subscriber ^0.3.20`. That
+bump is pure dependency work, but it also needs `preserves 5.0.0-rc.10`, which
+our own `choregraph-kamacite` pinned at `=5.0.0-rc.7`.
+
+The chain was executed and measured:
+
+- `choregraph` bumped `preserves` to `5.0.0-rc.10` and regenerated the two
+  Kamacite receipts that the older encoder produced (`318d4932`, 291 tests,
+  clippy and rustfmt clean, pushed to `main`);
+- Molten repinned Choregraph, moved `syndicate` to `0.44.0-rc.9` and `preserves`
+  to `5.0.0-rc.10`; `cargo check --workspace --all-targets`, clippy and rustfmt
+  passed and `tracing-subscriber 0.2.25` left the lock;
+- the audit went from 4 to 3 vulnerabilities and 23 to 22 advisories.
+
+It still does not land, because every Git pin change invalidates the reviewed
+release bindings: the audit then reports `prerequisite-unavailable: release_guard`
+and `source-policy` grows by one (`choregraph-history` has no exact binding in the
+current release-profile export). Landing this chain therefore needs the
+release-dependency profile and its four release-evidence sources regenerated for
+the new revisions in the same change — a separate, bounded piece of work rather
+than another `cargo update`.
+
 ## What would actually close the four advisories
 
 Move `secretspec` to an rsa 0.10-compatible release, move `k256` to a release on
