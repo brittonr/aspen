@@ -54,6 +54,17 @@ world, transport framing, host callbacks and archived evidence all bind 33.0.0.
 The cohort therefore keeps its advisories recorded rather than excepted, and the
 pilot stays experimental until it is retired or re-qualified by its own change.
 
+## Upstream ownership
+
+The four advisories were checked against whether any stack repository owns the
+fixing crate. None of the four is owned here: `rsa` arrives through
+`secretspec 0.17.0`, `crypto-bigint` through `k256 0.13.4`, `imbl-sized-chunks`
+through the pinned Nickel source, and `tracing-subscriber` through
+`syndicate 0.44.0-rc.3`. The one owned move — Basalt replacing `jsonwebtoken`
+with a `ring` RS256 verifier — is recorded in
+[upstream ownership](dependency-audit-upstream-ownership.md), together with why
+adopting that revision does not change this audit yet.
+
 ## Reopening
 
 Reopen the advisory rows when basalt moves jsonwebtoken/rsa, when the pinned
