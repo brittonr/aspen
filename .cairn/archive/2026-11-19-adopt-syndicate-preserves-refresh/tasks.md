@@ -9,4 +9,5 @@
 
 - [x] [serial] Re-run the pinned audit and record the before/after. r[molten.dependency_audit.pin_surface]
   - Same RustSec revision `4ef2df8e`, as-of 2026-11-19: 158 findings and 4 vulnerabilities before, 156 findings and 3 after; every prerequisite reports 0 and `source-policy` is back to 5.
-- [ ] [serial] Run strict Cairn validation and the proposal, design and tasks gates, then sync and archive with this evidence. r[molten.dependency_audit.pin_surface]
+- [x] [serial] Run strict Cairn validation and the proposal, design and tasks gates, then sync and archive with this evidence. r[molten.dependency_audit.pin_surface]
+  - Strict Cairn validation reported 0 issues and the proposal, design and tasks gates reported 0 issues each at `53784e004`.
