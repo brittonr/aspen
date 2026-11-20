@@ -51,7 +51,7 @@ repos:
 
       - id: cairn-validate
         name: cairn validate
-        entry: sh -c 'repo_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"; CAIRN_ROOT="${CAIRN_ROOT:-$repo_root/../cairn}"; nix run "path:$CAIRN_ROOT#cairn" -- validate --root . --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json"'
+        entry: sh -c 'repo_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"; CAIRN_ROOT="${CAIRN_ROOT:-$repo_root/../cairn}"; nix run --offline "path:$CAIRN_ROOT#cairn" -- validate --root . --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json"'
         language: system
         pass_filenames: false
         stages:
