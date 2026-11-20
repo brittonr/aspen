@@ -80,7 +80,5 @@ pub(super) fn record(root: &crate::node_state::DirectoryRoot, key: &str) {
     }) else {
         return;
     };
-    if root.write(&path, &bytes).is_err() {
-        return;
-    }
+    if let Ok(()) = root.write(&path, &bytes) {}
 }
