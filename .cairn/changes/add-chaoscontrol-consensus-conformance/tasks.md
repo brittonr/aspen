@@ -16,7 +16,7 @@
 - [x] [depends:chaoscontrol-smr-chain-contract] Add the no-fault control and bounded loss, reorder, partition, quorum-loss, leader-crash, follower-crash, restart, and snapshot catch-up profiles. r[molten.consensus.chaoscontrol_fault_profile]
 - [x] [serial] Require continuous chain equality, apply-once operation identity, monotonic commit, and deterministic recovered state refs. r[molten.consensus.chaoscontrol_safety]
 - [x] [serial] Require stable quorum, inactive disruptive faults, admitted lifecycle state, and a named virtual progress horizon before liveness evaluation. r[molten.consensus.chaoscontrol_liveness]
-- [ ] [parallel] Share canonical operation corpora and invariant identifiers with whole-system simulation without sharing evidence-profile labels. r[molten.testing.chaoscontrol_smr_claim_boundary]
+- [x] [parallel] Share canonical operation corpora and invariant identifiers with whole-system simulation without sharing evidence-profile labels. r[molten.testing.chaoscontrol_smr_claim_boundary]
 
 ## Phase 4: Evidence import and operator workflow
 
@@ -54,11 +54,13 @@ and Byzantine requests are typed denials.
 binds operation identity and application receipts to the producer chain and is
 now used by the fail-closed importer.
 [`faulttests.rs`](../../../src/fabric_consistency/chaoscontrol/conformance/faulttests.rs)
-exercises divergent, duplicate, rollback, and stalled adapters. The focused
-selection passed 43 conformance tests; the [retained record](evidence/2026-11-20-fault-matrix-safety.md)
+exercises divergent, duplicate, rollback, and stalled adapters.
+[`shared.rs`](../../../src/fabric_consistency/chaoscontrol/conformance/shared.rs)
+shares one canonical operation corpus and invariant vocabulary with the
+bounded simulation while requiring distinct evidence-profile labels. The focused
+selection passed 48 conformance tests; the [retained record](evidence/2026-11-20-fault-matrix-safety.md)
 keeps the exact command and non-claims. The live adapter, measured guest
-cohort, external campaigns, shared simulation corpus, and validation gates
-remain open.
+cohort, external campaigns, and validation gates remain open.
 
 ## Blocker
 

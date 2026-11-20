@@ -46,6 +46,5 @@ admission, and offline importer tests.
 
 The live Rust consumer adapter over admitted Molten consensus/application
 paths, the measured multi-node guest cohort, actual no-fault and fault
-campaigns, replay, shared simulation-corpus identifiers, and the Cairn
-validation/gate closeout remain unchecked. No execution or qualification claim
-is made here.
+campaigns, replay, and the Cairn validation/gate closeout remain unchecked. No
+execution or qualification claim is made here.
