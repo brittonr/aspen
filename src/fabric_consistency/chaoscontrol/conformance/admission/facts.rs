@@ -41,8 +41,6 @@ struct Accumulator<'a> {
     policy: std::collections::BTreeMap<&'a str, &'a super::ExpectedOperation>,
     proposal_ids: std::collections::BTreeSet<&'a str>,
     previous: std::collections::BTreeMap<&'a str, &'a super::super::wire::ApplyBinding>,
-    seen_operations: std::collections::BTreeMap<(&'a str, &'a str), u64>,
-    seen_receipts: std::collections::BTreeSet<&'a String>,
     operation_indices: std::collections::BTreeMap<u64, String>,
     facts: Facts,
 }
@@ -66,8 +64,6 @@ impl<'a> Accumulator<'a> {
         Ok(Self {
             expected, plan, policy, proposal_ids,
             previous: std::collections::BTreeMap::new(),
-            seen_operations: std::collections::BTreeMap::new(),
-            seen_receipts: std::collections::BTreeSet::new(),
             operation_indices: std::collections::BTreeMap::new(),
             facts: Facts {
                 records: Vec::with_capacity(capacity), chains: Vec::with_capacity(capacity),
@@ -87,15 +83,6 @@ impl<'a> Accumulator<'a> {
             return Err(super::ImportIssue::Bounds);
         }
         self.operation(observation)?;
-        if !self.seen_receipts.insert(&apply.application_receipt_ref) {
-            self.facts.failures.insert("reused-application-receipt");
-        }
-        if self.seen_operations
-            .insert((apply.participant_ref.as_str(), apply.operation_ref.as_str()), chain.command_index)
-            .is_some()
-        {
-            self.facts.failures.insert("operation-applied-more-than-once");
-        }
         self.continuity(observation)?;
         self.operation_indices.entry(chain.command_index).or_insert_with(|| apply.operation_ref.clone());
         self.facts.records.push(envelope.clone());
@@ -188,6 +175,15 @@ impl<'a> Accumulator<'a> {
                 self.facts.failures.insert("definitely-rejected-operation-applied");
             }
         }
+        let applies = observations
+            .iter()
+            .map(|observation| super::super::safety::AppliedChain::from(&observation.apply))
+            .collect::<Vec<_>>();
+        let safety =
+            super::super::safety::evaluate(self.plan, &applies).map_err(|_| super::ImportIssue::History)?;
+        self.facts
+            .failures
+            .extend(safety.violations.iter().map(|violation| violation.class.as_str()));
         self.facts.operation_ids = std::mem::take(&mut self.operation_indices).into_values().collect();
         Ok(())
     }

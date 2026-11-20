@@ -20,6 +20,7 @@ pub fn import(expected: &ExpectedCohort, bundle: &Bundle) -> Result<Imported, Im
     import_admitted(expected, bundle, plan)
 }
 
+// r[impl molten.testing.chaoscontrol_smr_evidence]
 fn import_admitted(
     expected: &ExpectedCohort,
     bundle: &Bundle,
@@ -30,6 +31,7 @@ fn import_admitted(
     let facts = checks::facts(expected, &plan, &bundle.observations, &bundle.proposals)?;
     let verified = evidence::history(expected, bundle, &plan, &facts)?;
     checks::stabilization(expected, &facts, bundle.stabilization.as_ref())?;
+    // r[impl molten.consensus.chaoscontrol_liveness]
     let liveness =
         chaoscontrol_smr::evaluate_liveness(&plan, bundle.stabilization.as_ref()).map_err(|_| ImportIssue::Liveness)?;
     if liveness != bundle.liveness {
