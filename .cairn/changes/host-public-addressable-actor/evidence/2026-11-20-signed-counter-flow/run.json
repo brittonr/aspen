@@ -1,0 +1,66 @@
+{
+  "schema": "aspen.addressable-actor-qualification.v1",
+  "date": "2026-11-20",
+  "scope": "pinned positive flow plus independently authored SIGKILL, boundary/revocation, and ordering cohorts",
+  "authority": {
+    "key_name": "molten-experimental-qualification-20261120",
+    "experimental": true,
+    "production_approval": false,
+    "note": "Generated for this controlled run; the trust record was provisioned outside the consumer. Not an independently authorized production operator key."
+  },
+  "signed_output": "/nix/store/wns0dg28g06ma0f8mba8yvk0ci2k4hj4-molten-node-source-binding-v1",
+  "binary_blake3": "blake3:b66fb98a4f5df271ddbc966bfca1c8d03d031b57889b284c1859cc1c93704ece",
+  "selection": {
+    "binding_ref": "blake3:54fe340d728793a3d90a31811e824ade9d395d7768856d1db30d33420302ec41",
+    "policy_ref": "blake3:e045c1f58ded52d1d1454096b8fc7618cebab06fd4b7b250c1be93a88bce394c",
+    "profile_ref": "blake3:902c6db77c69d2d616b95cce54adbf692e886de8fcaa372ae4f24225ee48aa9d"
+  },
+  "experimental_operator_policy_blake3": "blake3:e56f4db818849a0ce6210123042e6d59e440d95f99271caa799c4c3177a804e2",
+  "closure_cache": {
+    "schema": "molten-source-closure-cache-v1",
+    "note": "One full NAR closure measurement per cohort, keyed by output, key, binding, executing binary, build-closure and all six graph inputs. Signature, executable, retained-input, gate and admission checks still run per invocation."
+  },
+  "cohorts": {
+    "positive": {
+      "bundle_ref": "blake3:a7769e119bc69ce555059c6344a380b5569a8b403c4a3158cfc3338967c9b9b0",
+      "artifact": "counter10.json",
+      "artifact_blake3": "blake3:865a37d15c0037cbf17412bc2477c22273c0de0a8606619e1e870b921027708d",
+      "outcome": "pinned-flow-completed",
+      "commands": 24
+    },
+    "sigkill": {
+      "bundle_ref": "blake3:862a141d66ee85f01018d76c1e4a29330615c9f5de120fe4a9473988476a1d31",
+      "artifact": "negative1.json",
+      "artifact_blake3": "blake3:79083693694e2bc92a135b244cc2d296d610724df9588116c1fb73b7ad62ceb0",
+      "scenario": "actual-post-semantic-sigkill-unknown-no-automatic-retry",
+      "commands": 15
+    },
+    "boundary": {
+      "bundle_ref": "blake3:8711948148f302b047a5131608149035d2581292fed6eada2754e7f29b103dcc",
+      "artifact": "boundary1.json",
+      "artifact_blake3": "blake3:4ec6b421eca2770a14c62f02a2dbe14b136738c88f2d05e6b535e2d671365fb9",
+      "scenario": "actual-key-stale-placement-revocation-nondurable-survival-denies",
+      "commands": 32
+    },
+    "ordering": {
+      "bundle_ref": "blake3:212b17ca3458822877de7814821560670fb62a2c556e016274e806fc71c686a2",
+      "artifact": "ordering1.json",
+      "artifact_blake3": "blake3:2883dbd6eccf6c3e866a7d5c8ec67295f2fe684ec0d6e7272fa612eb7fedef89",
+      "scenario": "older-X-new-Y-queued-progress-without-unrelated-claim-or-effect",
+      "commands": 17
+    }
+  },
+  "commands": [
+    "nix build .#molten-startup-source-binding --no-update-lock-file -L",
+    "nix store sign --key-file $EXPERIMENTAL_SECRET $SIGNED_OUTPUT",
+    "molten-service-host-cohort create --profile counter --source-trust $TRUST --signed-output $SIGNED_OUTPUT --issuer-key $ISSUER --holder-key $HOLDER --policy $POLICY --output-parent $PARENT --name <cohort> --actor-namespace-ref $NAMESPACE --actor-type counter --actor-key tenant:one --counter-placement $PLACEMENT",
+    "python3 $COHORT/counter-flow.py --source-trust $TRUST --signed-output $SIGNED_OUTPUT --issuer-key $ISSUER --holder-key $HOLDER --policy $POLICY --timeout 3600 --negative-cohort $NEGATIVE --boundary-cohort $BOUNDARY --ordering-cohort $ORDERING --qualify-revocation"
+  ],
+  "sanitization": "Absolute host scratch paths in the retained transcripts were replaced with $COHORT. No other bytes were changed.",
+  "non_claims": [
+    "experimental signer, not an independently authorized production operator key",
+    "native process-loss and local durable state only, not machine-loss, NVMe, or power-loss durability",
+    "single-node local qualification, not distributed availability, cluster truth, security, or release eligibility",
+    "authored placement and policy are experimental inputs, not production admission"
+  ]
+}

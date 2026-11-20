@@ -96,5 +96,6 @@ malformed, or mismatched entries re-run the full measurement. The cache is
 documented in `docs/node-state-filesystem-authority.md` and covered by focused
 tests.
 
-The signed output must be rebuilt and re-signed before the actor flow can
-benefit, so no retry result is claimed here.
+The signed output was rebuilt and re-signed, and the retry completed on
+2026-11-20. See the [signed counter flow](2026-11-20-signed-counter-flow/run.json)
+for the positive and negative execution records.
