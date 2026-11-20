@@ -1,0 +1,64 @@
+{
+  "schema": "aspen.capability-qualification-run.v1",
+  "date": "2026-11-20",
+  "scope": "exact signed-source consumer fixture under an explicitly experimental signing authority",
+  "authority": {
+    "key_name": "molten-experimental-qualification-20261120",
+    "experimental": true,
+    "production_approval": false,
+    "note": "Generated for this controlled diagnostic run, not an independently authorized production operator key. The trust record was provisioned outside the consumer process."
+  },
+  "signed_output": "/nix/store/z91a9bdzyrigr0sg2xia08f56d9m4cbs-molten-node-source-binding-v1",
+  "binary_blake3": "35fbf48e179093913ce918d4f03d7710f302296eebeb9de246aa287db91e9344",
+  "selection": {
+    "binding_ref": "blake3:24380323af321feb53d0d3b3b0537cf29c7c8a14051f9ba53541099b8792249a",
+    "policy_ref": "blake3:e045c1f58ded52d1d1454096b8fc7618cebab06fd4b7b250c1be93a88bce394c",
+    "profile_ref": "blake3:902c6db77c69d2d616b95cce54adbf692e886de8fcaa372ae4f24225ee48aa9d"
+  },
+  "subject": {
+    "source_ref": "blake3:fff8b53eb12833687d82447569c7fc49cffc219e35aab1d08859ef05a3ee86f6",
+    "build_ref": "blake3:35fbf48e179093913ce918d4f03d7710f302296eebeb9de246aa287db91e9344",
+    "dependency_closure_ref": "blake3:0d2657cf9b3d53423151ce2ae2b103bdde75a1ee4052577b1e669f4fc8976424",
+    "execution_profile": "harness-simulation-v1",
+    "platform": "x86_64-linux"
+  },
+  "artifacts": {
+    "granted_send": "granted-send.preserves",
+    "granted_send_blake3": "blake3:7fa24e8773fc7b14a3ce3c0c79e8c2a5be27cd7d470b44499e6e03a53ee5fb6c",
+    "denied_send": "denied-send.preserves",
+    "denied_send_blake3": "blake3:0f80072c5b1481946dffb428f992ecda103b18772b6ef3ca83cba476383ac0a0",
+    "report_json": "report.json",
+    "report_json_blake3": "blake3:8f5dce0e93e7f2c34d94f65278c2a30a4f0e207a388b4537541addc9ec11a73e",
+    "report_markdown": "report.md",
+    "report_markdown_blake3": "blake3:e71d28f23aae4430424a80118361bd5c2a73b2bb28329b0579bb365eb5d9a6d4",
+    "canonical_report": "report.bin",
+    "canonical_report_blake3": "blake3:689a5cbf88b37b48c242d19f3025c59467ebc9e58372c4c2c19f7cb89ca10d72",
+    "canonical_report_repeat_matches": true
+  },
+  "classification": {
+    "harness-runtime-capability-binding": "bounded-observed",
+    "control-plane-failover": "unsupported",
+    "cross-host-transport": "unsupported",
+    "cross-process-transport": "unsupported",
+    "durable-state-recovery": "unsupported",
+    "effect-uncertainty": "unsupported",
+    "world-replay-promotion-restore": "unsupported"
+  },
+  "commands": [
+    "nix build .#molten-startup-source-binding --no-update-lock-file -L",
+    "nix store sign --key-file $EXPERIMENTAL_SECRET $SIGNED_OUTPUT",
+    "nix store verify --trusted-public-keys $EXPERIMENTAL_PUBLIC $SIGNED_OUTPUT",
+    "python3 scripts/qualify-capability-report.py --source-root $SOURCE_ROOT --matrix $MATRIX --out $RUN",
+    "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario describe --out -",
+    "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario granted-send --out $RUN/granted-send.preserves",
+    "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario denied-send --out $RUN/denied-send.preserves",
+    "cargo -q -Zscript tools/capability-report.rs --matrix $MATRIX --input $RUN/input.json --json-out $RUN/report.json --markdown-out $RUN/report.md --canonical-out $RUN/report.bin",
+    "cargo -q -Zscript tools/capability-report.rs --matrix $MATRIX --input $RUN/input.json --canonical-out $RUN/report-repeat.bin"
+  ],
+  "non_claims": [
+    "experimental signer, not an independently authorized production operator key",
+    "bounded native harness simulation only, not live transport durability or distributed correctness",
+    "six unrelated product capabilities remain unsupported",
+    "no release or production admission is granted by this report"
+  ]
+}
