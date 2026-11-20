@@ -22,18 +22,10 @@
     tigerstyle::ambient_clock,
     reason = "the diagnostic measurement must record elapsed host time per phase"
 )]
-
-use std::time::Duration;
-use std::time::Instant;
-
-use wasmtime::Config;
-use wasmtime::Engine;
-use wasmtime::InstanceAllocationStrategy;
-use wasmtime::InstancePre;
-use wasmtime::Linker;
-use wasmtime::Module;
-use wasmtime::PoolingAllocationConfig;
-use wasmtime::Store;
+#![allow(
+    tigerstyle::ambient_env,
+    reason = "the diagnostic measurement reads its workload and sample count from process arguments"
+)]
 
 /// Per-call cost dominates: a bounded integer loop plus one 64 KiB memory page touched per call.
 const LOOP: &str = r#"
@@ -112,17 +104,17 @@ const PROFILES: [Profile; 4] = [
 ];
 
 // r[impl wasm_profile_measurement.tool]
-fn engine(profile: Profile) -> Result<Engine, Box<dyn std::error::Error>> {
-    let mut config = Config::new();
+fn engine(profile: Profile) -> Result<wasmtime::Engine, Box<dyn std::error::Error>> {
+    let mut config = wasmtime::Config::new();
     config.consume_fuel(true).cranelift_nan_canonicalization(true);
     config.memory_init_cow(profile.copy_on_write);
     if profile.pooling {
-        let mut pooling = PoolingAllocationConfig::default();
+        let mut pooling = wasmtime::PoolingAllocationConfig::new();
         pooling.total_memories(MAX_MEMORIES).total_tables(MAX_TABLES);
         pooling.max_memory_size(MAX_MEMORY_BYTES);
-        config.allocation_strategy(InstanceAllocationStrategy::from(pooling));
+        config.allocation_strategy(wasmtime::InstanceAllocationStrategy::from(pooling));
     }
-    Ok(Engine::new(&config)?)
+    Ok(wasmtime::Engine::new(&config)?)
 }
 
 // r[impl wasm_profile_measurement.aggregation]
@@ -132,7 +124,7 @@ fn json_round(value: f64) -> f64 {
 
 /// Median, p90 and max of the recorded microseconds; pure in its input order.
 // r[impl wasm_profile_measurement.aggregation]
-fn micros(samples: &mut [Duration]) -> (f64, f64, f64) {
+fn micros(samples: &mut [std::time::Duration]) -> (f64, f64, f64) {
     samples.sort_unstable();
     let at = |fraction: f64| samples[((samples.len() - 1) as f64 * fraction).round() as usize].as_secs_f64() * 1e6;
     let (median, p90, max) = (at(0.5), at(0.9), at(1.0));
@@ -140,7 +132,7 @@ fn micros(samples: &mut [Duration]) -> (f64, f64, f64) {
 }
 
 // r[impl wasm_profile_measurement.aggregation]
-fn phase(mut samples: Vec<Duration>) -> serde_json::Value {
+fn phase(mut samples: Vec<std::time::Duration>) -> serde_json::Value {
     let (median, p90, max) = micros(&mut samples);
     serde_json::json!({"median": median, "p90": p90, "max": max})
 }
@@ -148,31 +140,39 @@ fn phase(mut samples: Vec<Duration>) -> serde_json::Value {
 // r[impl wasm_profile_measurement.reporting]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let workload = std::env::args().nth(1).unwrap_or_else(|| "loop".to_string());
-    let short_lived = workload == "short-lived";
-    let default_samples = if short_lived { SHORT_LIVED_SAMPLES } else { LOOP_SAMPLES };
+    let is_short_lived = workload == "short-lived";
+    let default_samples = if is_short_lived {
+        SHORT_LIVED_SAMPLES
+    } else {
+        LOOP_SAMPLES
+    };
     let samples: u64 = std::env::args().nth(2).map(|value| value.parse()).transpose()?.unwrap_or(default_samples);
-    let wat = if short_lived { SHORT_LIVED } else { LOOP };
-    let budget = if short_lived { SHORT_LIVED_BUDGET } else { LOOP_BUDGET };
+    let wat = if is_short_lived { SHORT_LIVED } else { LOOP };
+    let budget = if is_short_lived {
+        SHORT_LIVED_BUDGET
+    } else {
+        LOOP_BUDGET
+    };
     let mut profiles = Vec::with_capacity(PROFILES.len());
     for profile in PROFILES.iter() {
         let engine = engine(*profile)?;
-        let module = Module::new(&engine, wat)?;
-        let linker: Linker<()> = Linker::new(&engine);
-        let pre: Option<InstancePre<()>> = if profile.instance_pre {
+        let module = wasmtime::Module::new(&engine, wat)?;
+        let linker: wasmtime::Linker<()> = wasmtime::Linker::new(&engine);
+        let pre: Option<wasmtime::InstancePre<()>> = if profile.instance_pre {
             Some(linker.instantiate_pre(&module)?)
         } else {
             None
         };
         // One warm-up sample per profile, so the recorded samples measure steady state.
-        let mut compile = Vec::with_capacity(samples as usize);
-        let mut call = Vec::with_capacity(samples as usize);
+        let mut compile = Vec::with_capacity(usize::try_from(samples)?);
+        let mut call = Vec::with_capacity(usize::try_from(samples)?);
         for sample in 0..=samples {
-            let started = Instant::now();
-            let fresh = Module::new(&engine, wat)?;
+            let started = std::time::Instant::now();
+            let fresh = wasmtime::Module::new(&engine, wat)?;
             let compile_elapsed = started.elapsed();
-            let started = Instant::now();
-            for _ in 0..if short_lived { samples } else { 1 } {
-                let mut store = Store::new(&engine, ());
+            let started = std::time::Instant::now();
+            for _ in 0..if is_short_lived { samples } else { 1 } {
+                let mut store = wasmtime::Store::new(&engine, ());
                 store.set_fuel(FUEL)?;
                 let instance = match &pre {
                     Some(pre) => pre.instantiate(&mut store)?,
@@ -198,9 +198,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }));
     }
     let report = serde_json::json!({
-        "workload": if short_lived { "short-lived-instances-v1" } else { "bounded-integer-loop-v1" },
+        "workload": if is_short_lived { "short-lived-instances-v1" } else { "bounded-integer-loop-v1" },
         "samples": samples,
-        "instances_per_sample": if short_lived { samples } else { 1 },
+        "instances_per_sample": if is_short_lived { samples } else { 1 },
         "profiles": profiles,
     });
     println!("{}", serde_json::to_string_pretty(&report)?);
@@ -215,11 +215,11 @@ mod tests {
     #[test]
     fn percentiles_depend_only_on_the_recorded_samples() {
         let mut order = vec![
-            Duration::from_micros(5),
-            Duration::from_micros(1),
-            Duration::from_micros(3),
-            Duration::from_micros(2),
-            Duration::from_micros(4),
+            std::time::Duration::from_micros(5),
+            std::time::Duration::from_micros(1),
+            std::time::Duration::from_micros(3),
+            std::time::Duration::from_micros(2),
+            std::time::Duration::from_micros(4),
         ];
         let mut reversed = order.clone();
         reversed.reverse();
@@ -230,14 +230,14 @@ mod tests {
     // r[verify wasm_profile_measurement.aggregation]
     #[test]
     fn single_sample_is_its_own_percentile() {
-        let mut one = vec![Duration::from_micros(7)];
+        let mut one = vec![std::time::Duration::from_micros(7)];
         assert_eq!(micros(&mut one), (7.0, 7.0, 7.0));
     }
 
     // r[verify wasm_profile_measurement.reporting]
     #[test]
     fn report_names_the_workload_and_sample_counts_without_a_verdict() {
-        let value = phase(vec![Duration::from_micros(4), Duration::from_micros(8)]);
+        let value = phase(vec![std::time::Duration::from_micros(4), std::time::Duration::from_micros(8)]);
         let object = value.as_object().expect("phase object");
         let mut keys: Vec<_> = object.keys().map(String::as_str).collect();
         keys.sort_unstable();
