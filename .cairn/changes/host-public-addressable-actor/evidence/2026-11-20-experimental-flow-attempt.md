@@ -62,3 +62,24 @@ successful installation.
   claimed.
 - The 900-second command timeout may be insufficient under the observed host
   load, but a retry must use a fresh cohort and preserve the exact failure.
+
+## Longer-budget retry (2026-11-20)
+
+A fresh `counter3` cohort was authored with the same signed output, trust,
+seeds and policy. The flow was rerun with `--timeout 3600`. The first
+`native install` command completed after roughly fourteen minutes, including
+the signed-source closure verification. The second `native install` command
+began, and its independent `authorize` invocation was still verifying the full
+signed closure after ten minutes; the retry was stopped before any terminal
+result.
+
+Finding: every `molten addressable-actor` invocation and every independent
+authorizer invocation re-verifies the complete signed output and its closure.
+The authored flow needs roughly fifteen such invocations. Under the observed
+host load this exceeds a bounded session budget even though individual
+commands complete. A future execution needs either substantially lower host
+load or an admitted session-scoped verification/reuse design that preserves
+the same exact source selection. This is a cost/latency blocker, not an
+observed policy denial.
+
+No `counter-execution.json` or negative-cohort result was written.
