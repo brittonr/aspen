@@ -5,6 +5,7 @@
 
 ## Phase 2: Verification
 
-- [ ] [serial] Re-run the pinned audit at one RustSec revision and record that the `profile-binding` finding is gone and every other class is unchanged. r[molten.dependency_audit.dev_feature_review]
+- [x] [serial] Re-run the pinned audit at one RustSec revision and record that the `profile-binding` finding is gone and every other class is unchanged. r[molten.dependency_audit.dev_feature_review]
+  - Re-ran the pinned audit at RustSec `4ef2df8e`, as-of 2026-11-20, with the same four release-evidence sources: 156 findings became 155 and the `profile-binding` finding is gone; advisories stay 22 with 3 vulnerabilities and every prerequisite reports 0. See the [guard-review record](evidence/guard-review-2026-11-20.json).
 - [x] [serial] Run the repository gates and Cairn validation, then sync and archive with this evidence. r[molten.dependency_audit.dev_feature_review]
   - Cairn 0.2.1 validated this change from the store with `--strict` (0 issues) and the proposal, design and tasks gates each reported 0 issues; the audit re-run stays open because the Nix flake app cannot be rebuilt while the store client is wedged.

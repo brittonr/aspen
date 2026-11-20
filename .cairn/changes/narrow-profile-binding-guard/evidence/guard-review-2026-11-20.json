@@ -1,0 +1,46 @@
+{
+  "schema": "molten.dependency-audit-guard-review.v1",
+  "date": "2026-11-20",
+  "change": "narrow-profile-binding-guard",
+  "cause": "Cargo.toml declares a self dev-dependency `molten = { path = \".\", features = [\"test-fixtures\"] }`, so cargo metadata resolves the root molten node with exactly [\"test-fixtures\"]",
+  "metadata_root_features": [
+    "test-fixtures"
+  ],
+  "rule": "accept exactly {\"test-fixtures\"}; deny every other root feature set; binding.features == [] unchanged",
+  "audit": {
+    "database_revision": "4ef2df8e806a65e2f1ecc14f56f51249062b23d6",
+    "as_of": "2026-11-20",
+    "target": "x86_64-unknown-linux-gnu",
+    "findings": {
+      "advisory": 22,
+      "license-policy": 5,
+      "source-policy": 5,
+      "unavailable-license": 38,
+      "unavailable-notices": 85
+    },
+    "total": 155,
+    "profile_binding_present": false,
+    "advisories": 22,
+    "vulnerabilities": 3,
+    "prerequisites": {
+      "metadata": 0,
+      "policy": 0,
+      "release_profile": 0,
+      "license_guard": 0,
+      "release_guard": 0,
+      "source_guard": 0,
+      "notice_capture": 0,
+      "scanner": 1,
+      "rustc": 0,
+      "cargo": 0
+    },
+    "report_blake3": "4f5c855fd6a8d26a3623cf41e49dd661ee9698445f66819c9e4dec95894621fc",
+    "status_blake3": "1f5b6306c4ecd136cdee69de42ac3df0538e808e16ff8e55c288ffa1b79bfb63"
+  },
+  "controls": "cargo -Zscript tools/dependency-audit.rs --self-test passes: [\"test-fixtures\"] accepted, [\"test-fixtures\",\"spacewasm-pilot\"] denied, spacewasm-pilot and world-snapshot-vm-cohort denials unchanged",
+  "gates": "cairn 0.2.1 --strict validate and the proposal/design/tasks gates reported 0 issues each",
+  "non_claims": [
+    "deny is not a clean audit",
+    "guard review only; no dependency, license or advisory finding changes"
+  ]
+}
