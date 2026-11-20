@@ -83,3 +83,18 @@ the same exact source selection. This is a cost/latency blocker, not an
 observed policy denial.
 
 No `counter-execution.json` or negative-cohort result was written.
+
+## Closure-cache fix (2026-11-20)
+
+`node::source_binding::closure_cache` now retains one successful full closure
+measurement per cohort, keyed by the exact output path, selected public key,
+binding bytes, executing-binary measurement, `build-closure`, and all six graph
+inputs. Signature authentication, executable measurement, retained-input
+identity checks, gate validation and candidate admission still run on every
+invocation; only the repeated NAR rehash is skipped on an exact hit. Missing,
+malformed, or mismatched entries re-run the full measurement. The cache is
+documented in `docs/node-state-filesystem-authority.md` and covered by focused
+tests.
+
+The signed output must be rebuilt and re-signed before the actor flow can
+benefit, so no retry result is claimed here.

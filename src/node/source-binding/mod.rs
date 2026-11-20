@@ -3,6 +3,8 @@
 // r[impl molten.startup_binding.refresh]
 
 mod closure;
+#[path = "closure-cache.rs"]
+mod closure_cache;
 mod measure;
 mod process;
 #[cfg(test)]
@@ -185,7 +187,11 @@ fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measureme
         artifacts: &artifacts,
     })
     .map_err(|issue| invalid(format!("source binding admission denied: {issue:?}")))?;
-    closure::validate(&output, &trust)?;
+    let closure_key = closure_cache::key(&output, &trust, &binding_ref, &executing_ref)?;
+    if !closure_cache::is_valid(root, &closure_key) {
+        closure::validate(&output, &trust)?;
+        closure_cache::record(root, &closure_key);
+    }
     let gate_text = std::str::from_utf8(&gate_bytes)
         .map_err(|error| invalid(format!("produced gate receipt is not UTF-8: {error}")))?;
     let gate_value = crate::preserves_rail::parse_text(gate_text)?;

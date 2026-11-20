@@ -60,6 +60,55 @@ fn verifier_process_executes_the_selected_binary_under_valid_bounds() {
     assert!(stdout.starts_with(b"verified "), "{}", String::from_utf8_lossy(&stdout));
 }
 
+// r[verify molten.startup_binding.authentication]
+#[test]
+fn closure_cache_rejects_stale_and_malformed_entries() {
+    let workspace = crate::test_support::process_workspace("source-closure-cache").expect("isolated node root");
+    let root = crate::node_state::DirectoryRoot::open_existing(&workspace).expect("root capability");
+    assert!(!super::closure_cache::is_valid(&root, "key-a"));
+    super::closure_cache::record(&root, "key-a");
+    assert!(super::closure_cache::is_valid(&root, "key-a"));
+    assert!(!super::closure_cache::is_valid(&root, "key-b"));
+    std::fs::write(workspace.join("cache/source-closure-validation.json"), b"{").expect("malformed cache");
+    assert!(!super::closure_cache::is_valid(&root, "key-a"));
+}
+
+fn trust_for(output: &std::path::Path, public_key: &str) -> super::Trust {
+    super::Trust {
+        schema: "molten-node-source-trust-v1".to_owned(),
+        nix: output.join("nix"),
+        output: output.to_path_buf(),
+        public_key: public_key.to_owned(),
+        selection: molten_core::startup_binding::Selection {
+            binding_ref: String::new(),
+            policy_ref: String::new(),
+            profile_ref: String::new(),
+        },
+    }
+}
+
+#[test]
+fn closure_cache_key_binds_every_measurement_input() {
+    let workspace = crate::test_support::process_workspace("source-closure-cache-key").expect("isolated workspace");
+    let output_path = workspace.join("output");
+    std::fs::create_dir(&output_path).expect("output directory");
+    std::fs::write(output_path.join("build-closure"), b"closure").expect("closure input");
+    for role in molten_core::startup_binding::closure::ROLES {
+        std::fs::write(output_path.join(format!("{role}-closure")), role.as_bytes()).expect("graph input");
+    }
+    let output = cap_std::fs::Dir::open_ambient_dir(&output_path, cap_std::ambient_authority()).expect("output dir");
+    let trust = trust_for(&output_path, "key:a");
+    let base = super::closure_cache::key(&output, &trust, "binding-a", "executing-a").expect("key");
+    assert_ne!(base, super::closure_cache::key(&output, &trust, "binding-b", "executing-a").expect("key"));
+    assert_ne!(base, super::closure_cache::key(&output, &trust, "binding-a", "executing-b").expect("key"));
+    assert_ne!(
+        base,
+        super::closure_cache::key(&output, &trust_for(&output_path, "key:b"), "binding-a", "executing-a").expect("key")
+    );
+    std::fs::write(output_path.join("build-closure"), b"changed").expect("changed closure input");
+    assert_ne!(base, super::closure_cache::key(&output, &trust, "binding-a", "executing-a").expect("key"));
+}
+
 /// Test-only accepted source over the synthetic gate receipt; no producer is authenticated.
 pub(in super::super) fn fixture() -> crate::error::Result<super::Accepted> {
     let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
