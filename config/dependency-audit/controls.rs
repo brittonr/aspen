@@ -98,6 +98,14 @@ pub fn run() -> Result<(), String> {
     let root_features: Metadata = serde_json::from_value(root_features).map_err(|e| e.to_string())?;
     require(has(&evaluate(&root_features,&policy,&release,&scanner,&binding,as_of),"profile-binding"),
         "metadata root optional-feature union cannot masquerade as default")?;
+    let mut dev_features = fixture.clone(); dev_features["resolve"]["nodes"][0]["features"] = json!(["test-fixtures"]);
+    let dev_features: Metadata = serde_json::from_value(dev_features).map_err(|e| e.to_string())?;
+    require(!has(&evaluate(&dev_features,&policy,&release,&scanner,&binding,as_of),"profile-binding"),
+        "the crate's own test-fixtures dev-dependency is reviewed")?;
+    let mut extra_features = fixture.clone(); extra_features["resolve"]["nodes"][0]["features"] = json!(["test-fixtures","spacewasm-pilot"]);
+    let extra_features: Metadata = serde_json::from_value(extra_features).map_err(|e| e.to_string())?;
+    require(has(&evaluate(&extra_features,&policy,&release,&scanner,&binding,as_of),"profile-binding"),
+        "test-fixtures does not admit any other root feature")?;
     let expected = reference(b"captured exact bytes");
     require(binding_matches(b"captured exact bytes", &expected) && !binding_matches(b"changed capture", &expected),
         "changed byte binding denies")?;

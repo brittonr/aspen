@@ -252,11 +252,16 @@ fn evaluate(metadata: &Metadata, policy: &Policy, release: &Value, scanner: &Val
         || !metadata.resolve.iter().flat_map(|r| &r.nodes).any(|n| &n.id == id)) {
         eval.unavailable("resolved-closure", "selected dependency graph contains a missing package or resolve node");
     }
-    // The reviewed current Cargo.toml default profile enables no root features.
-    // A changed default or an optional-feature union requires profile review.
+    // The reviewed default profile enables no root features. The crate's own
+    // dev-dependency `molten = { path = ".", features = ["test-fixtures"] }` makes
+    // cargo report that one feature on the root node of every `cargo metadata`
+    // resolve, so exactly that set is reviewed; any other root feature — a changed
+    // default, an optional union or a new dev feature — still requires review.
+    let reviewed_root_features: BTreeSet<String> = ["test-fixtures"].iter().map(|feature| (*feature).to_string()).collect();
     if metadata.resolve.iter().flat_map(|r| &r.nodes).any(|n| !n.features.is_empty()
-        && metadata.packages.iter().any(|p| p.id == n.id && p.name == "molten" && metadata.workspace_members.contains(&p.id))) {
-        eval.unavailable("profile-binding", "resolved root features differ from the reviewed empty default profile");
+        && metadata.packages.iter().any(|p| p.id == n.id && p.name == "molten" && metadata.workspace_members.contains(&p.id))
+        && n.features.iter().cloned().collect::<BTreeSet<String>>() != reviewed_root_features) {
+        eval.unavailable("profile-binding", "resolved root features differ from the reviewed default profile plus the crate's own test-fixtures dev-dependency");
     }
     let workspace: BTreeSet<&str> = metadata.workspace_members.iter().map(String::as_str).collect();
     let mut observations: Vec<&Value> = list.into_iter().flatten().collect();
