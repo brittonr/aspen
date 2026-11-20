@@ -7,7 +7,7 @@
 ## Phase 2: Producer contract and guest packaging
 
 - [x] [depends:chaoscontrol-smr-chain-contract] [depends:chaoscontrol-protocol-observation-cohorts] Pin the immutable ChaosControl package revision, workload schema, observation envelope and cohort schemas, hash profile, and accepted evidence classes through Nix-owned inputs. r[molten.testing.chaoscontrol_smr_profile]
-- [ ] [depends:chaoscontrol-smr-chain-contract] [depends:chaoscontrol-protocol-observation-cohorts] Implement a Rust consumer adapter that invokes the admitted Molten consensus and application paths. r[molten.consensus.chaoscontrol_chain_observation]
+- [x] [depends:chaoscontrol-smr-chain-contract] [depends:chaoscontrol-protocol-observation-cohorts] Implement a Rust consumer adapter that invokes the admitted Molten consensus and application paths. r[molten.consensus.chaoscontrol_chain_observation]
 - [ ] [depends:molten-cross-process-consensus-guest] Package a bounded multi-node Molten guest cohort without workspace-relative runtime inputs. r[molten.testing.chaoscontrol_smr_profile]
 - [x] [parallel] Add a deliberately faulty local adapter fixture for divergence, duplicate application, rollback, and stalled recovery diagnostics. r[molten.testing.chaoscontrol_smr_validation]
 
@@ -57,10 +57,13 @@ now used by the fail-closed importer.
 exercises divergent, duplicate, rollback, and stalled adapters.
 [`shared.rs`](../../../src/fabric_consistency/chaoscontrol/conformance/shared.rs)
 shares one canonical operation corpus and invariant vocabulary with the
-bounded simulation while requiring distinct evidence-profile labels. The focused
-selection passed 48 conformance tests; the [retained record](evidence/2026-11-20-fault-matrix-safety.md)
-keeps the exact command and non-claims. The live adapter, measured guest
-cohort, external campaigns, and validation gates remain open.
+bounded simulation while requiring distinct evidence-profile labels.
+[`conformance_adapter.rs`](../../../src/fabric_consistency/raft/live_cluster/conformance_adapter.rs)
+drives the real three-replica in-process Raft and application paths and projects
+committed quorum observations through `wire`. The focused selection passed 48
+conformance tests plus the native adapter test; the [retained records](evidence/2026-11-20-native-consumer-adapter.md)
+keep the exact commands and non-claims. Measured guest packaging, external
+campaigns, and validation gates remain open.
 
 ## Blocker
 

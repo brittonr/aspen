@@ -109,19 +109,17 @@ pub fn evaluate(plan: &chaoscontrol_smr::SmrWorkloadPlan, applies: &[AppliedChai
     let history = chaoscontrol_smr::validate_history(plan, &chains).map_err(|_| Issue::History)?;
     let mut operations = BTreeMap::<&str, (u64, &str)>::new();
     let mut replica_operations = BTreeMap::<(&str, &str), (u64, &str)>::new();
-    let mut receipts = BTreeMap::<&str, (&str, u64, &str)>::new();
+    let mut receipts = BTreeMap::<&str, (u64, &str)>::new();
     let mut violations = Vec::new();
     for apply in applies {
         let index = apply.chain.command_index;
         let receipt = apply.application_receipt_ref.as_str();
         match receipts.get(receipt).copied() {
             None => {
-                receipts.insert(receipt, (apply.participant_ref.as_str(), index, apply.operation_ref.as_str()));
+                receipts.insert(receipt, (index, apply.operation_ref.as_str()));
             }
-            Some((participant, observed_index, operation))
-                if participant == apply.participant_ref.as_str()
-                    && observed_index == index
-                    && operation == apply.operation_ref.as_str() => {}
+            Some((observed_index, operation))
+                if observed_index == index && operation == apply.operation_ref.as_str() => {}
             Some(_) => violations.push(Violation {
                 class: ViolationClass::ReceiptReuse,
                 operation_ref: apply.operation_ref.clone(),

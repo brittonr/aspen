@@ -142,6 +142,117 @@ pub(super) async fn snapshot_catch_up(
     Ok(())
 }
 
+#[cfg(feature = "chaoscontrol-conformance")]
+pub(super) struct ObservedApply {
+    pub node_id: String,
+    pub request_ref: String,
+    pub command_index: u64,
+    pub receipt_ref: String,
+    pub state_ref: String,
+}
+
+/// Replicate one command and retain each replica's actual apply receipt and state ref.
+#[cfg(feature = "chaoscontrol-conformance")]
+pub(super) async fn replicate_request_observed(
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
+    request_ref: &str,
+    command_ref: &str,
+    command_schema_ref: &str,
+) -> crate::error::Result<Vec<ObservedApply>> {
+    let session_b = node_b.session_ref.clone();
+    let session_c = node_c.session_ref.clone();
+    let proposal = node_a.service.handle_event(ReplicaEvent::Propose {
+        request_ref: request_ref.to_string(),
+        command_ref: command_ref.to_string(),
+        command_schema_ref: command_schema_ref.to_string(),
+    });
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
+    let (proposal, append_b, append_c) = tokio::join!(proposal, receive_b, receive_c);
+    require_applied(proposal)?;
+    let append_b = append_b?;
+    let _append_c = append_c?;
+
+    let session_a = node_a.session_ref.clone();
+    let follower_append = node_b.service.handle_event(append_b.event);
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
+    let (follower_append, append_response) = tokio::join!(follower_append, receive_a);
+    let append_b_transition = require_applied_transition(follower_append)?;
+    let append_a_transition = require_applied_transition(node_a.service.handle_event(append_response?.event).await)?;
+
+    let session_b = node_b.session_ref.clone();
+    let session_c = node_c.session_ref.clone();
+    let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
+    let (heartbeat, commit_b, commit_c) = tokio::join!(heartbeat, receive_b, receive_c);
+    let heartbeat_a = require_applied_transition(heartbeat)?;
+    let commit_b = commit_b?;
+    let _commit_c = commit_c?;
+
+    let session_a = node_a.session_ref.clone();
+    let follower_commit_b = node_b.service.handle_event(commit_b.event);
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
+    let (follower_commit_b, response) = tokio::join!(follower_commit_b, receive_a);
+    let applied_b = require_applied_transition(follower_commit_b)?;
+    let applied_a = require_applied_transition(node_a.service.handle_event(response?.event).await)?;
+
+    let mut observations_a = append_a_transition.observations;
+    observations_a.extend(heartbeat_a.observations);
+    observations_a.extend(applied_a.observations);
+    let mut observations_b = append_b_transition.observations;
+    observations_b.extend(applied_b.observations);
+
+    Ok(vec![
+        observed(node_a, "node-a", request_ref, &applied_a.next, &observations_a)?,
+        observed(node_b, "node-b", request_ref, &applied_b.next, &observations_b)?,
+    ])
+}
+
+#[cfg(feature = "chaoscontrol-conformance")]
+fn observed(
+    node: &Node,
+    node_id: &str,
+    request_ref: &str,
+    next: &ReplicaState,
+    observations: &[ReplicaEffectObservation],
+) -> crate::error::Result<ObservedApply> {
+    let entry = next
+        .log
+        .iter()
+        .find(|entry| entry.request_ref == request_ref)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("committed request entry is missing"))?;
+    let receipt_ref = observations
+        .iter()
+        .find(|observation| observation.kind == ReplicaEffectKind::ApplyCommitted)
+        .map(|observation| observation.evidence_ref.clone())
+        .ok_or_else(|| crate::error::Failure::invalid_harness("application receipt observation is missing"))?;
+    Ok(ObservedApply {
+        node_id: node_id.to_string(),
+        request_ref: request_ref.to_string(),
+        command_index: entry.index,
+        receipt_ref,
+        state_ref: node.service.ports().application.handler().state_ref(),
+    })
+}
+
+#[cfg(feature = "chaoscontrol-conformance")]
+fn require_applied_transition(outcome: ReplicaExecutionOutcome) -> crate::error::Result<ExecutedReplicaTransition> {
+    match outcome {
+        ReplicaExecutionOutcome::Applied(applied) => Ok(applied),
+        ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
+            Err(crate::error::Failure::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
+        }
+        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::Failure::invalid_harness(format!(
+            "live cluster effect {} failed: {}",
+            failed.failed_kind.as_str(),
+            failed.diagnostic
+        ))),
+    }
+}
+
 async fn replicate_commit_notice(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();

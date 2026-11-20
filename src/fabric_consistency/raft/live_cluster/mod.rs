@@ -4,6 +4,9 @@ mod plan;
 pub(in crate::fabric_consistency::raft) mod setup;
 mod workflow;
 
+#[cfg(feature = "chaoscontrol-conformance")]
+mod conformance_adapter;
+
 const NODE_A_SECRET_BYTE: u8 = 17;
 const NODE_B_SECRET_BYTE: u8 = 19;
 const NODE_C_SECRET_BYTE: u8 = 23;
@@ -20,6 +23,19 @@ pub(super) struct ApplicationHandler {
     pub(super) applied_request_refs: Vec<String>,
     pub(super) restored_application_state_ref: Option<String>,
     pub(super) collaboration: Option<crate::collaboration_scope::Application>,
+}
+
+#[cfg(feature = "chaoscontrol-conformance")]
+impl ApplicationHandler {
+    /// Deterministic projection of the actual applied request sequence.
+    pub(super) fn state_ref(&self) -> String {
+        let applied = self.applied_request_refs.iter().map(crate::preserves_rail::string).collect();
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+            "live-cluster-application-state-v1",
+            vec![crate::preserves_rail::sequence(applied)],
+        ))
+        .expect("canonical live-cluster application state")
+    }
 }
 
 impl CommittedBatchHandler for ApplicationHandler {
