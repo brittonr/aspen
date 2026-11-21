@@ -57,3 +57,11 @@ second  0.03s
 The second run reached the daemon restart check, confirming the cached gate was
 accepted. Guest setup dropped from about 5:50 to 2:46 and all nodes were ready by
 3:50; `scope::select` remains slow under exact single-step.
+
+## Guest partition observation
+
+With admission cached and loopback up, all three guest nodes start and bind
+iroh endpoints. The first scope round returns `collaboration-scope/partition`
+from all three nodes; the node logs contain only the bound endpoint line. The
+guest runs a single vCPU while three Raft processes share it, so the next
+question is election/heartbeat progress rather than source admission.

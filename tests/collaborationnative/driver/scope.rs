@@ -31,6 +31,7 @@ pub(super) fn select(
     let started = super::setup::now()?;
     loop {
         rounds += 1;
+        eprintln!("scope: round {rounds}");
         for &index in eligible {
             let node = nodes.get(index).ok_or("metadata candidate missing")?;
             let fixture = cohort.nodes.get(index).ok_or("metadata fixture missing")?;
@@ -38,6 +39,8 @@ pub(super) fn select(
             let first = match observe(node, fixture, tick)? {
                 Ok(value) => value,
                 Err(error) => {
+                    eprintln!("scope: node {index} observe error: {error}");
+                    eprintln!("scope: node {index} log tail: {}", log_tail(node));
                     last = error;
                     continue;
                 }
@@ -54,10 +57,17 @@ pub(super) fn select(
                     if final_read.currentness.committed_index == first.currentness.committed_index
                         && final_read.currentness.logical_now == first.currentness.committed_index =>
                 {
+                    eprintln!("scope: node {index} stable at {}", final_read.currentness.committed_index);
                     return Ok((index, tick, final_read));
                 }
-                Ok(_) => last = "applied position moved during trust alignment".into(),
-                Err(error) => last = error,
+                Ok(_) => {
+                    eprintln!("scope: node {index} position moved during alignment");
+                    last = "applied position moved during trust alignment".into();
+                }
+                Err(error) => {
+                    eprintln!("scope: node {index} second observe error: {error}");
+                    last = error;
+                }
             }
         }
         if super::setup::now()?.saturating_sub(started) >= 1800 {
@@ -68,6 +78,12 @@ pub(super) fn select(
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
+}
+
+fn log_tail(node: &super::Node) -> String {
+    let bytes = std::fs::read(&node.log).unwrap_or_default();
+    let start = bytes.len().saturating_sub(4096);
+    String::from_utf8_lossy(&bytes[start..]).into_owned()
 }
 
 fn observe(
