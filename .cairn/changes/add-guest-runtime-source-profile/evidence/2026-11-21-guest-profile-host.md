@@ -29,3 +29,13 @@ baseline observations=blake3:48ab2650cc296f88684f026d89265d6f5b0c253d40ab1b9251b
 Host-only baseline: three processes on one host with an experimental runtime-only
 signer. No KVM guest campaign is claimed. The profile does not prove the omitted
 build, compiler, or gate closures.
+
+## Guest bottleneck
+
+The guest image reaches all three node setups, starts all three nodes, and then
+enters `scope::select`. Each scope observation invokes `flow::authorize`
+(two `molten node service-host` previews) plus the operation itself; every
+process re-runs source authentication through the guest Nix daemon. Under
+exact single-step, those invocations take minutes, so the driver does not finish
+within the bounded run. Loopback was brought up explicitly and node setup now
+completes; the remaining cost is repeated per-process authentication.

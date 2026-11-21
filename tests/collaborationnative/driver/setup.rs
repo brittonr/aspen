@@ -15,13 +15,16 @@ pub fn prepare(
     tick: u64,
 ) -> crate::producer::Result<()> {
     let window = crate::authority::Window::around_now()?;
+    eprintln!("setup {index}: provision host");
     issuer.provision_host(&node.root, window)?;
+    eprintln!("setup {index}: provision scope");
     issuer.provision_scope(&node.root, &crate::authority::scope::TrustInput {
         policies: &[SCOPE_POLICY],
         revoked_tokens: &[],
         logical_position: 0,
         unix_seconds: now()?,
     })?;
+    eprintln!("setup {index}: startup");
     write_startup(node, tick)?;
     let activation_host = crate::driver::process::Host {
         signed_main,
@@ -30,21 +33,29 @@ pub fn prepare(
         index,
         control: None,
     };
+    eprintln!("setup {index}: activation authorize");
     let operation =
         super::operations::wire::operation("install", vec![molten::preserves_rail::string(crate::producer::GROUP_ID)]);
     super::flow::authorize(&activation_host, node, &operation, 0)?;
+    eprintln!("setup {index}: activation authorized");
+    eprintln!("setup {index}: activation invoke");
     let (success, output) = super::process::invoke(&activation_host, "install", 0, None)?;
+    eprintln!("setup {index}: activation done success={success}");
     if !success {
         return Err(format!("pre-serve group activation denied: {output}").into());
     }
     // The current-process validation reference is a fact of the executing binary, so the exact
     // load request is read from a real preview rather than reconstructed from authoring evidence.
+    eprintln!("setup {index}: preview load");
     let load = preview_load(signed_main, node, tick)?;
+    eprintln!("setup {index}: preview load complete");
     let validation_ref = load.state_ref.clone();
     sign_host(node, issuer, &load, window, nonce(index, 0)?)?;
+    eprintln!("setup {index}: sign install");
     let install =
         crate::authority::host::install_effects_request(&node.bundle_ref, &node.effects, &validation_ref, tick)?;
     sign_host(node, issuer, &install, window, nonce(index, 1)?)?;
+    eprintln!("setup {index}: sign install complete");
     // `serve` admits its first live status operation at the declared startup tick, so the operator
     // must authorize that exact request before the process starts.
     let status = preserves::IOValue::record(preserves::IOValue::symbol("node-service-host-status-v1"), Vec::new());
@@ -55,13 +66,17 @@ pub fn prepare(
         index,
         control: None,
     };
+    eprintln!("setup {index}: status authorize");
     crate::driver::flow::authorize(&host, node, &status, tick)?;
+    eprintln!("setup {index}: status authorized");
     // Selection is published only after explicit group activation. Startup must reject a selected
     // runtime whose member is not Running; it must not silently defer required admission.
+    eprintln!("setup {index}: write effects");
     node.root.write_new(
         &molten::node_state::RelativePath::parse(crate::producer::EFFECTS)?,
         &molten::node_service_host::effects::config::encode(&node.effects)?,
     )?;
+    eprintln!("setup {index}: complete");
     Ok(())
 }
 
@@ -88,7 +103,9 @@ pub(super) fn authorize_replacement(
         index,
         control: None,
     };
+    eprintln!("setup {index}: preview load");
     let load = preview_load(signed_main, node, tick)?;
+    eprintln!("setup {index}: preview load complete");
     let install =
         crate::authority::host::install_effects_request(&node.bundle_ref, &node.effects, &load.state_ref, tick)?;
     super::process::sign(&host, node, &install, tick, 3)?;

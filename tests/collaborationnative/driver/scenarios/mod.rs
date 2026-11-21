@@ -86,15 +86,29 @@ impl Session {
             &crate::authority::Issuer,
             molten::collaboration_scope::native_runtime::Observation,
         ) -> crate::producer::Result<super::operations::Intent> {
+        eprintln!("driver: session open");
         let nodes = start_nodes(cohort, None)?;
+        eprintln!("driver: nodes started");
+        eprintln!("driver: scope select");
         let (actor, tick, observation) = super::scope::select(&nodes, cohort, &[0, 1, 2])?;
+        eprintln!("driver: scope selected actor={actor}");
+        eprintln!("driver: membership");
         let (member, native_status) = super::status::membership(&nodes[actor], &cohort.nodes[actor], tick + 1)?;
+        eprintln!("driver: membership complete");
+        eprintln!("driver: build intent");
         let intent = build(&nodes[actor].issuer, observation)?;
+        eprintln!("driver: intent built");
         for fixture in &cohort.nodes {
+            eprintln!("driver: publish intent");
             super::scope::publish_command(fixture, &intent)?;
+            eprintln!("driver: publish complete");
         }
+        eprintln!("driver: submit");
         let work = super::flow::submit(&nodes[actor], &cohort.nodes[actor], &member, &intent, member.tick + 1)?;
+        eprintln!("driver: submit complete");
+        eprintln!("driver: readmit");
         let claim_ref = super::flow::readmit(&nodes[actor], &cohort.nodes[actor], &work, work.submit_tick + 1)?;
+        eprintln!("driver: readmit complete");
         let mut session = Self {
             nodes,
             member,
@@ -103,7 +117,9 @@ impl Session {
             claim_ref,
             native_status,
         };
+        eprintln!("driver: require live");
         session.require_live()?;
+        eprintln!("driver: live");
         Ok(session)
     }
 
@@ -158,7 +174,9 @@ pub(super) fn start_nodes(
     for (position, node) in cohort.nodes.iter().enumerate() {
         let index = u64::try_from(position).map_err(|_| "cohort position exceeds the admitted bound")?;
         let issuer = crate::authority::Issuer::new(super::operations::seed(index)?)?;
+        eprintln!("driver: setup node {index}");
         super::setup::prepare(&cohort.signed_main, node, &issuer, index, 1)?;
+        eprintln!("driver: setup node {index} complete");
         if unconfigured == Some(position) {
             node.root.remove_regular_file(&molten::node_state::RelativePath::parse(crate::producer::EFFECTS)?)?;
         }
@@ -166,10 +184,14 @@ pub(super) fn start_nodes(
     }
     let mut nodes = Vec::with_capacity(prepared.len());
     for (node, index, issuer) in prepared {
+        eprintln!("driver: start node {index}");
         nodes.push(super::start(&cohort.signed_main, node, index, issuer)?);
+        eprintln!("driver: start node {index} complete");
     }
     for node in &mut nodes {
+        eprintln!("driver: await ready node {}", node.index);
         super::await_ready(node)?;
+        eprintln!("driver: ready node {}", node.index);
     }
     Ok(nodes)
 }

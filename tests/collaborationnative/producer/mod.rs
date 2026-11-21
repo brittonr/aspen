@@ -119,6 +119,7 @@ pub(super) fn admit(input: Input<'_>) -> Result<Source> {
     let name = format!("collaboration-node-{}", input.index);
     let path = input.workspace.join(&name);
     std::fs::create_dir(&path)?;
+    eprintln!("producer: node {} init", input.index);
     init(input.signed_main, &path, input.index)?;
     let root = molten::node_state::DirectoryRoot::open_existing(&path)?;
     // Initial startup verifies the independently signed selection before it admits anything, so
@@ -137,7 +138,9 @@ pub(super) fn admit(input: Input<'_>) -> Result<Source> {
         root.create_dir_all(&molten::node_state::RelativePath::parse("cache")?)?;
         root.write_new(&molten::node_state::RelativePath::parse("cache/source-closure-validation.json")?, &bytes)?;
     }
+    eprintln!("producer: node {} run", input.index);
     run(input.signed_main, &path, input.index)?;
+    eprintln!("producer: node {} run complete", input.index);
     root.create_layout()?;
     for name in ["artifacts", "evidence"] {
         root.create_dir_all(&molten::node_state::RelativePath::parse(name)?)?;
