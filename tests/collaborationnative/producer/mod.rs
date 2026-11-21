@@ -125,6 +125,18 @@ pub(super) fn admit(input: Input<'_>) -> Result<Source> {
     // the trust record must be installed after init creates the root and before run reads it.
     let (output, trust) = selection(input.source_trust)?;
     root.write_new(&molten::node_state::RelativePath::parse("source-gate-trust.json")?, &trust)?;
+    // An independently provisioned cohort cache avoids re-measuring the same immutable
+    // closure in every guest. The exact accepted key is still checked against the actual
+    // output, trust, binding, executable, build-closure and all six retained graphs.
+    if let Some(cache) = std::env::var_os("MOLTEN_TEST_CLOSURE_CACHE") {
+        let cache = std::path::PathBuf::from(cache);
+        let bytes = std::fs::read(&cache).map_err(|error| format!("closure cache: {error}"))?;
+        if bytes.len() > 4_096 {
+            return Err("closure cache exceeds its bound".into());
+        }
+        root.create_dir_all(&molten::node_state::RelativePath::parse("cache")?)?;
+        root.write_new(&molten::node_state::RelativePath::parse("cache/source-closure-validation.json")?, &bytes)?;
+    }
     run(input.signed_main, &path, input.index)?;
     root.create_layout()?;
     for name in ["artifacts", "evidence"] {
