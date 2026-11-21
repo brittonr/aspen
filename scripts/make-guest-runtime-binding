@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Build a declared runtime-only guest source binding from a full signed output.
+#
+# This profile is deliberately narrower than full build provenance: `build-closure`
+# and all six graphs contain only the runtime cohort of the selected binaries.
+set -euo pipefail
+if [ "$#" -ne 3 ]; then
+    echo "usage: $0 FULL_OUTPUT SECRET_KEY OUT_DIR" >&2
+    exit 2
+fi
+full=$1
+secret=$2
+out=$3
+for f in "$full/bin/molten" "$full/bin/molten-collaboration-scope" "$full/binding.json" "$full/policy" "$full/profile"; do
+    [ -f "$f" ] || { echo "missing $f" >&2; exit 2; }
+done
+[ -f "$secret" ] || { echo "missing secret key" >&2; exit 2; }
+
+mkdir -p "$out"
+stage=$(mktemp -d)
+trap 'chmod -R u+w "$stage" 2>/dev/null || true; rm -rf "$stage" || true' EXIT
+mkdir -p "$stage/bin"
+
+cp "${MOLTEN_GUEST_EXECUTABLE:-$full/bin/molten}" "$stage/bin/molten"
+cp "$full/bin/molten-collaboration-scope" "$stage/bin/"
+cp "$full/policy" "$full/profile" "$stage/"
+cp "$full/gate-receipt.preserves" "$full/remediation-plan.preserves" "$stage/"
+cp -a "$full/primary" "$full/library" "$stage/"
+
+# Runtime store paths: every resolved shared library and its runtime references.
+{ ldd "$full/bin/molten"; ldd "$full/bin/molten-collaboration-scope"; } \
+    | awk '/=> \/nix\/store/{print $3}' | sort -u \
+    | while IFS= read -r lib; do nix-store -qR "$lib"; done | sort -u > "$stage/.runtime-paths"
+
+roles=(candidate-build candidate-compiler candidate-runtime gate-build gate-compiler gate-runtime)
+graphs_json='['
+first=1
+for role in "${roles[@]}"; do
+    cp "$stage/.runtime-paths" "$stage/$role-closure"
+    graph_ref=$(b3sum --no-names "$stage/$role-closure")
+    [ "$first" -eq 1 ] || graphs_json+=','
+    first=0
+    graphs_json+=$(python3 -c 'import json,sys; print(json.dumps({"role":sys.argv[1],"graph_ref":"blake3:"+sys.argv[2],"paths":open(sys.argv[3]).read().splitlines()}))' "$role" "$graph_ref" "$stage/$role-closure")
+done
+graphs_json+=']'
+
+paths_json='['
+first=1
+while IFS= read -r path; do
+    nar=$(nix-store --dump "$path" | b3sum --no-names)
+    [ "$first" -eq 1 ] || paths_json+=','
+    first=0
+    paths_json+=$(python3 -c 'import json,sys; print(json.dumps({"path":sys.argv[1],"nar_ref":"blake3:"+sys.argv[2]}))' "$path" "$nar")
+done < "$stage/.runtime-paths"
+paths_json+=']'
+python3 - "$stage" "$graphs_json" "$paths_json" <<'PY'
+import json, sys
+stage, graphs, paths = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
+closure = {"schema": "molten-measured-build-closure-v1", "graphs": graphs, "paths": paths}
+open(f"{stage}/build-closure", "w").write(json.dumps(closure, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+rm "$stage/.runtime-paths"
+
+python3 - "$stage" "$full" <<'PY'
+import json, sys
+stage, full = sys.argv[1], sys.argv[2]
+binding = json.load(open(f"{full}/binding.json"))
+binding["producer_profile"] = "molten-nix-guest-runtime-binding-v1"
+binding["executable_ref"] = "blake3:" + __import__("subprocess").check_output(
+    ["b3sum", "--no-names", f"{stage}/bin/molten"], text=True).strip()
+binding["dependencies_ref"] = "blake3:" + __import__("subprocess").check_output(
+    ["b3sum", "--no-names", f"{stage}/build-closure"], text=True).strip()
+open(f"{stage}/binding.json", "w").write(json.dumps(binding, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+
+expr="let pkgs = import <nixpkgs> {}; src = builtins.path { path = \"$stage\"; name = \"molten-guest-runtime-binding-v1\"; }; in pkgs.runCommand \"molten-guest-runtime-binding-v1\" {} ''cp -a \${src}/. \$out/''"
+guest_store=$(nix build --impure --no-link --print-out-paths --option builders '' --expr "$expr" | tail -1)
+nix store sign --key-file "$secret" "$guest_store"
+public=$(nix key convert-secret-to-public < "$secret")
+binding_ref=$(b3sum --no-names "$guest_store/binding.json")
+policy_ref=$(b3sum --no-names "$guest_store/policy")
+profile_ref=$(b3sum --no-names "$guest_store/profile")
+cat > "$out/source-trust.json" <<JSON
+{
+  "schema": "molten-node-source-trust-v1",
+  "nix": "/nix/store/6rwk5j1qqk7na4la5m2ka34p734braxa-nix-2.36.0/bin/nix",
+  "output": "$guest_store",
+  "public_key": "$public",
+  "selection": {
+    "binding_ref": "blake3:$binding_ref",
+    "policy_ref": "blake3:$policy_ref",
+    "profile_ref": "blake3:$profile_ref"
+  }
+}
+JSON
+printf 'output=%s\ntrust=%s\n' "$guest_store" "$out/source-trust.json"

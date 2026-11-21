@@ -1,0 +1,23 @@
+## Context
+
+`molten_core::startup_binding::admit` accepted only `molten-nix-source-binding-v1`. The closure validator already supports a role-complete graph set; it does not itself decide whether those graphs represent a full build or a runtime cohort.
+
+## Decisions
+
+### 1. A distinct producer profile, not a relaxed full profile
+
+**Choice:** Add `molten-nix-guest-runtime-binding-v1` and accept it only as an exact string. The full profile remains unchanged.
+
+**Rationale:** A boolean or schema change would silently admit weaker provenance under the existing name.
+
+### 2. Runtime cohort is measured, not fabricated
+
+**Choice:** The producer builds `build-closure` and all six graph files from the resolved runtime library closure and real BLAKE3 NAR identities. It emits an input-addressed Nix output and signs it with the operator key.
+
+**Rationale:** Admission still measures every path it claims. The only narrowing is the declared cohort.
+
+### 3. Guest trust remains a separate operator decision
+
+**Choice:** The guest trust record selects the new output and its binding. No existing full-output trust is rewritten.
+
+**Rationale:** Authority to run a guest runtime profile is explicit and revocable.

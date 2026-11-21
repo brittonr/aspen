@@ -100,6 +100,8 @@ fn historical_and_fixture_producer_profiles_are_not_promoted() {
     binding.schema = SCHEMA.into();
     binding.producer_profile = "explicit-test-fixture".into();
     assert_eq!(admit(&binding, &selected, &observed), Err(Issue::UnsupportedProducer));
+    binding.producer_profile = GUEST_RUNTIME_PRODUCER_PROFILE.into();
+    assert_eq!(admit(&binding, &selected, &observed), Ok(()));
     binding.producer_profile = PRODUCER_PROFILE.into();
     binding.policy_ref = reference('4');
     assert_eq!(admit(&binding, &selected, &observed), Err(Issue::PolicyMismatch));
