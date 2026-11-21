@@ -22,7 +22,18 @@ The [model declarations][properties] and [proof entry points][theorems] agree on
 
 The [trace binding][binding] is separate evidence: wrappers report ordered writes, messages, replies, application calls and role changes; boot readback resolves an announced write that may or may not have survived a crash. A per-node sequence gap is an error. For reports mapped to several model actions (or with custom handling), the correspondence and the implication from the binding's `Safe` summary to model properties are argued, not mechanically proved. The authors report that their patched three- and five-voter runs conformed; the driver also checks client-visible behavior, including reads, outside the theorem above. Source inspection confirms these distinctions but does not establish a proof-checker verdict, reproduce the authors' executions, or verify either implementation.
 
-## Official checker replay: not run
+## Bounded TLC result; proof replay not run
+
+The original [three-file subset][hashes] passed all three upstream SHA-256 checks. On Linux x86_64, Aspen's pinned TLA+ 1.7.4 package (`TLC2 2.19`, revision `5a47802`) checked the unmodified [`MCCount2.cfg`][count] and `MCRaft.tla`:
+
+```sh
+timeout --kill-after=5s 120s "$TLA_PACKAGE/bin/tlc" \
+  -workers 2 -metadir states-tlc-2.19 -config MCCount2.cfg MCRaft.tla
+```
+
+The checker exited zero: **113,485 generated, 6,488 distinct, zero queued**, graph depth 18. The distinct count matches the authors' bounded result. The checker JAR BLAKE3 was `36e4d95a99aa33dde9ff7b288bf3092f3dfbb26e450fc9758ee765cdb250ce38` and the retained result BLAKE3 was `e5a367f61bfaea2b6658384f9ece0e2af706d3bdb664ec112ab26d6a951c88c6`. The first invocation exited 1 before evaluation because this TLC version rejects the upstream script's `-noGenerateSpecTE` flag; the corrected command above changed only packaging/runtime options, not model bytes or declared bounds.
+
+The result covers the invariants listed in `MCCount2.cfg` with pre-vote and snapshots disabled. It does not replay the TLAPS or Lean proofs, validate an implementation trace, or exercise Aspen. No checker dependency or default rail changed.
 
 The smallest direct TLAPS candidate for the named safety theorems is a single-module check, run from `antithesis-fm/` in a disposable copy of the HashiCorp pin, with `TLAPM` pointing to an exact tool build:
 
@@ -52,7 +63,7 @@ Start with an explicit opt-in, fixed-membership three-voter live run (write, lea
 2. Emit the initial state and a state after every mapped step. For a `RaftReadIndex`-style `vars`, assign every node's `currentTerm`, `votedFor`, `role`, ordered `log` (index, term, stable entry identity), `commitIndex`, `matchIndex` and `votes`, plus `acked` and `reads`. The last two need actual client write-response and read-invocation order, request identities, the required/observed index and term, each probe acknowledger, and completion or cancellation. In particular, local commit alone does not establish `acked`, and a pending-read count cannot determine `reads`. Any state the adopted model adds (e.g. message queue, `next_index`, fencing/rejoin, `last_applied`, snapshot boundary and retained suffix) also needs a complete projection, or an explicit out-of-scope restriction for the first run.
 3. State exactly which live substeps map to `Init`, a permitted `Next` action or stutter, and how modeled history is derived from recorded events. Do not invent intermediate states to make an atomic abstract RPC fit; change the abstraction or select a run whose genuine boundaries fit it. Reject missing or undecodable state, unresolved refs, gaps and unsupported mappings; never fill them by guessing or report them as `valid`. Check a clean trace and a separately authorized negative control against the **same baseline** spec/config, retaining the first failing edge or invariant and the input evidence. A valid result is conformance of one recorded sequence, not exhaustive safety, liveness or a proof of Rust.
 
-This note does not implement the later [live-capture slice of #63](https://github.com/brittonr/aspen/issues/63#issuecomment-7048725486), change [Aspen #62](https://github.com/brittonr/aspen/issues/62), or move schema/checker ownership from [trace-lab #6](https://github.com/OnixResearch/trace-lab/issues/6). No Aspen run, mutation, build or checker run was performed.
+This note does not implement the later [live-capture slice of #63](https://github.com/brittonr/aspen/issues/63#issuecomment-7048725486), change [Aspen #62](https://github.com/brittonr/aspen/issues/62), or move schema/checker ownership from [trace-lab #6](https://github.com/OnixResearch/trace-lab/issues/6). No Aspen implementation trace or mutant was checked.
 
 [hraft]: https://github.com/antithesishq/hashicorp-raft-formalized/tree/abcc6e40ec7a082a480be956981f345aa989664c/antithesis-fm
 [properties]: https://github.com/antithesishq/hashicorp-raft-formalized/blob/abcc6e40ec7a082a480be956981f345aa989664c/antithesis-fm/spec/HashicorpRaft.tla#L455-L490
