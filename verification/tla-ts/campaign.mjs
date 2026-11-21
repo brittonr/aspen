@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { DIVE_RELEASE, DIVE_SCHEMA, diveArgs, parseDive, parseDiveVersion, readDiveReport, verifyDiveArchive } from "./dive.mjs";
 
 export const PUBLICATION_SHA256 = "cf962f00ab297186f919e32c8f5cf28f6e78f1e92703b9a3d8f02044a487c84a";
 export const CHECKER_TIMEOUT_MS = 180_000;
@@ -34,9 +35,10 @@ export function parseTlc(text, exitCode) {
 
 // r[impl molten.consensus.fast_path_model.fault_corpus]
 // r[impl molten.consensus.fast_path_model.validation]
-export function validatePair(tlc, ts, mutant = false) {
+// r[impl molten.consensus.fast_path_model.dive_parity]
+export function validatePair(tlc, ts, dive, mutant = false) {
   const expected = mutant ? "invariant-violation" : "success";
-  for (const result of [tlc, ts]) {
+  for (const result of [tlc, ts, dive]) {
     requireThat(result.status === expected, `${result.tool}: expected ${expected}, got ${result.status}`);
     requireThat(Number.isSafeInteger(result.generatedStates) && result.generatedStates > 0,
       `${result.tool}: missing generated-state count`);
@@ -54,24 +56,56 @@ export function validatePair(tlc, ts, mutant = false) {
   }
   // Full searches must enumerate the same graph. A mutant stops at its first
   // violation; successor order can change its visited prefix, not its verdict.
-  const countsAgree = tlc.distinctStates === ts.distinctStates && tlc.generatedStates === ts.generatedStates;
-  if (!mutant) requireThat(countsAgree, "semantic parity failed: exhaustive state counts differ");
+  const divergences = [ts, dive].filter((result) =>
+    tlc.distinctStates !== result.distinctStates || tlc.generatedStates !== result.generatedStates);
+  const countsAgree = divergences.length === 0;
+  if (!mutant && !countsAgree) {
+    const counts = (result) => `${result.tool} ${result.generatedStates} generated / ${result.distinctStates} distinct`;
+    throw new Error(`semantic parity failed: exhaustive state counts differ: ${counts(tlc)} vs ${divergences.map(counts).join(", ")}`);
+  }
   return { verdictsAgree: true, countsAgree, exhaustive: !mutant };
+}
+
+export function requireCheckerCapture(result, stem, elapsedMs, timeout) {
+  if (result.error?.code === "ETIMEDOUT" || elapsedMs > timeout) {
+    throw new Error(`${stem}: checker timeout (limit ${timeout} ms)`);
+  }
+  requireThat(!result.error && !result.signal && Number.isInteger(result.status),
+    `${stem}: checker process failed: ${result.error?.message ?? result.signal ?? "missing exit status"}`);
+}
+
+function bindRetainedFiles(output, names, remaining) {
+  if (!names.length) return [];
+  const result = spawnSync("b3sum", ["--", ...names], {
+    cwd: output, encoding: "utf8", timeout: Math.max(1, Math.floor(remaining)), killSignal: "SIGKILL",
+  });
+  requireThat(result.status === 0 && !result.error && !result.signal,
+    `BLAKE3 retention failed: ${result.error?.message || result.stderr || result.signal || `exit ${result.status}`}`);
+  const lines = result.stdout.trimEnd().split("\n");
+  requireThat(lines.length === names.length, "BLAKE3 retention returned incomplete digests");
+  return names.map((name, index) => {
+    const match = lines[index].match(/^([0-9a-f]{64})  (.+)$/);
+    requireThat(match && match[2] === name, `BLAKE3 retention did not bind ${name}`);
+    return { name, blake3: match[1] };
+  });
 }
 
 // r[impl molten.consensus.fast_path_model.evidence]
 // r[impl molten.consensus.fast_path_model.nonclaims]
-export function runCampaign(outputDirectory, extractedRoot) {
+export function runCampaign(outputDirectory, extractedRoot, diveArchive, diveExecutable) {
   const here = dirname(fileURLToPath(import.meta.url));
   const modelDirectory = resolve(here, "../tla");
   const output = resolve(outputDirectory);
   // Refuse reuse: a prior successful summary must never mask this invocation.
   mkdirSync(output);
   const started = performance.now();
+  const remaining = () => CAMPAIGN_TIMEOUT_MS - (performance.now() - started);
   const report = {
     schema: "molten.consensus-model-campaign.v1",
     evidenceKind: "finite-model-only",
+    claimScope: "Agreement with TLC is not proof of Aspen's Rust implementation.",
     status: "failed",
+    authoritativeChecker: "tlc",
     bounds: { replicas: 3, commands: 2, views: 3 },
     perCheckerLimitMs: CHECKER_TIMEOUT_MS,
     campaignLimitMs: CAMPAIGN_TIMEOUT_MS,
@@ -81,65 +115,100 @@ export function runCampaign(outputDirectory, extractedRoot) {
     report.elapsedMs = performance.now() - started;
     writeFileSync(join(output, "campaign.json"), `${JSON.stringify(report, null, 2)}\n`);
   };
+  const retained = [];
+  const retain = (name, data) => {
+    writeFileSync(join(output, name), data);
+    retained.push(name);
+  };
+  const runCaptured = (stem, executable, args) => {
+    const timeout = Math.min(CHECKER_TIMEOUT_MS, Math.floor(remaining()));
+    requireThat(timeout > 0, "campaign deadline exceeded");
+    const runStarted = performance.now();
+    const result = spawnSync(executable, args, { timeout, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
+    const elapsedMs = performance.now() - runStarted;
+    retain(`${stem}.stdout`, result.stdout ?? "");
+    retain(`${stem}.stderr`, result.stderr ?? "");
+    return { result, elapsedMs, timeout };
+  };
+  let failure;
   try {
     const archive = readFileSync(join(here, "tla-ts-0.0.10.tgz"));
     requireThat(createHash("sha256").update(archive).digest("hex") === PUBLICATION_SHA256,
       "TLA-ts archive pin mismatch; use the reviewed import procedure, never patch the archive");
     report.tlaTsPublicationSha256 = PUBLICATION_SHA256;
+    report.diveRelease = { ...DIVE_RELEASE, reportSchema: DIVE_SCHEMA };
+    verifyDiveArchive(readFileSync(resolve(diveArchive)));
+    const dive = resolve(diveExecutable);
+    const probeArgs = ["--version"];
+    const probe = runCaptured("dive-version", dive, probeArgs);
+    report.diveVersionProbe = {
+      executable: dive, args: probeArgs, elapsedMs: probe.elapsedMs,
+      exitCode: probe.result.status, signal: probe.result.signal,
+    };
+    requireCheckerCapture(probe.result, "dive-version", probe.elapsedMs, probe.timeout);
+    report.diveVersion = parseDiveVersion(probe.result.stdout.toString("utf8"), probe.result.status);
     for (const name of ["ConsensusFastPath.tla", "ConsensusFastPath.cfg", "ConsensusFastPathMissingPromise.cfg"]) {
       copyFileSync(join(modelDirectory, name), join(output, name));
+      retained.push(name);
     }
     const model = join(output, "ConsensusFastPath.tla");
     for (const [label, config] of [["baseline", "ConsensusFastPath.cfg"], ["missing-promise", "ConsensusFastPathMissingPromise.cfg"]]) {
-      for (const tool of ["tlc", "tla-ts"]) {
-        const remaining = CAMPAIGN_TIMEOUT_MS - (performance.now() - started);
-        requireThat(remaining > 0, "campaign deadline exceeded");
+      const summaries = [];
+      const configPath = join(output, config);
+      const mutant = label === "missing-promise";
+      for (const tool of ["tlc", "tla-ts", "dive"]) {
         const stem = `${label}-${tool}`;
-        const args = tool === "tlc"
-          ? ["-workers", "1", "-metadir", join(output, `${stem}-states`), "-config", join(output, config), model]
-          : [join(here, "check.mjs"), model, join(output, config), resolve(extractedRoot)];
-        const executable = tool === "tlc" ? "tlc" : process.execPath;
-        const runStarted = performance.now();
-        const result = spawnSync(executable, args, {
-          encoding: "utf8",
-          timeout: Math.min(CHECKER_TIMEOUT_MS, remaining),
-          killSignal: "SIGKILL",
-          maxBuffer: 64 * 1024 * 1024,
-        });
-        const elapsedMs = performance.now() - runStarted;
-        writeFileSync(join(output, `${stem}.stdout`), result.stdout ?? "");
-        writeFileSync(join(output, `${stem}.stderr`), result.stderr ?? "");
+        const [executable, args] = tool === "tlc"
+          ? ["tlc", ["-workers", "1", "-metadir", join(output, `${stem}-states`), "-config", configPath, model]]
+          : tool === "tla-ts"
+            ? [process.execPath, [join(here, "check.mjs"), model, configPath, resolve(extractedRoot)]]
+            : [dive, diveArgs(model, configPath)];
+        const { result, elapsedMs, timeout } = runCaptured(stem, executable, args);
         const observed = { label, tool, elapsedMs, exitCode: result.status, signal: result.signal, executable, args };
         report.runs.push(observed);
         save();
-        requireThat(!result.error && !result.signal && elapsedMs <= CHECKER_TIMEOUT_MS,
-          `${stem}: checker failed or exceeded deadline: ${result.error?.message ?? result.signal ?? elapsedMs}`);
-        const summary = tool === "tlc"
-          ? parseTlc(`${result.stdout}\n${result.stderr}`, result.status)
-          : JSON.parse(result.stdout);
+        requireCheckerCapture(result, stem, elapsedMs, timeout);
+        let summary;
+        if (tool === "dive") {
+          const nativeReport = readDiveReport(result.stdout, result.status, result.stderr.toString("utf8"));
+          retain(`${stem}.report.json`, result.stdout);
+          summary = parseDive(nativeReport, result.status, mutant);
+        } else {
+          summary = tool === "tlc"
+            ? parseTlc(`${result.stdout}\n${result.stderr}`, result.status)
+            : JSON.parse(result.stdout);
+        }
         if (tool === "tla-ts") {
           requireThat(result.status === 0 && summary.tool === "tla-ts@0.0.10", `${stem}: checker API failure`);
         }
         observed.result = summary;
-        writeFileSync(join(output, `${stem}.json`), `${JSON.stringify(summary, null, 2)}\n`);
+        summaries.push(summary);
+        retain(`${stem}.json`, `${JSON.stringify(summary, null, 2)}\n`);
         save();
       }
+      report[mutant ? "mutant" : "baseline"] = validatePair(...summaries, mutant);
     }
-    report.baseline = validatePair(report.runs[0].result, report.runs[1].result);
-    report.mutant = validatePair(report.runs[2].result, report.runs[3].result, true);
-    requireThat(performance.now() - started <= CAMPAIGN_TIMEOUT_MS, "campaign exceeded agreed 720 second bound");
-    report.status = "passed";
-    save();
-    return report;
   } catch (error) {
-    report.error = `${error.name}: ${error.message}`;
-    save();
-    throw error;
+    failure = error;
   }
+  try {
+    report.retained_files = bindRetainedFiles(output, retained, remaining());
+  } catch (error) {
+    if (failure) report.retentionError = error.message;
+    else failure = error;
+  }
+  if (!failure && remaining() < 0) failure = new Error("campaign exceeded agreed 720 second bound");
+  if (failure) report.error = `${failure.name}: ${failure.message}`;
+  else report.status = "passed";
+  save();
+  if (failure) throw failure;
+  return report;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [output, root] = process.argv.slice(2);
-  if (!output || !root) throw new Error("usage: campaign.mjs NEW_OUTPUT_DIRECTORY EXTRACTED_NPM_ROOT");
-  runCampaign(output, root);
+  const [output, root, diveArchive, diveExecutable] = process.argv.slice(2);
+  if (!output || !root || !diveArchive || !diveExecutable) {
+    throw new Error("usage: campaign.mjs NEW_OUTPUT_DIRECTORY EXTRACTED_NPM_ROOT DIVE_ARCHIVE DIVE_EXECUTABLE");
+  }
+  runCampaign(output, root, diveArchive, diveExecutable);
 }

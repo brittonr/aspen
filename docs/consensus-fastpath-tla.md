@@ -51,53 +51,69 @@ on `RecoveryProgress`. This assumes the abstract original path can eventually
 perform enabled recovery work; it does not claim liveness through a permanent
 partition. Cascading view increases are bounded by three, not silently excluded.
 
-## Required TLC / TLA-ts semantic campaign
+## Required TLC / TLA-ts / Dive semantic campaign
 
-Pins: TLA+ **1.7.4 / TLC 2.19**, and the unchanged npm **TLA-ts 0.0.10**
-publication (see `verification/tla-ts/README.md`). `check.mjs` invokes the
-published asynchronous `check({source, config})`, including temporal checking,
-and exports real verdicts, generated/distinct/queued counts and formatted
-counterexample states. A parse is never accepted as a semantic verdict.
+TLC **2.19 / TLA+ 1.7.4** is authoritative. TLA-ts uses the unchanged npm
+**0.0.10** publication and its asynchronous `check({source, config})` API,
+including final liveness checking. The third checker is the MIT-licensed
+[Dive **0.1.0** x86_64 Linux release](https://github.com/Chelis-Lang/dive/releases/tag/v0.1.0),
+tag commit `94cbbed9ae02ad3d30bbe2191bd2619a839b8795`, archive SHA-256
+`cf0a0e2ac8fdccc2c7c73ca563ee567703a64b9ebd7f418eca6a4102263ab65d`.
+The check invokes `dive check SPEC --config CFG --workers 1 --compat=tlc --output json`
+and reads only [schema 3](https://github.com/Chelis-Lang/dive/blob/94cbbed9ae02ad3d30bbe2191bd2619a839b8795/docs/user/reports-and-errors.md).
+Dive's TLC profile performs a final temporal check; it does not reproduce
+TLC's lasso choice. A parse is never accepted as a semantic verdict.
 
 The agreed engineering bound is **180 seconds per checker/config, 720 seconds
-for the four sequential runs**, excluding Nix/tool builds. Both individual and
-total durations are retained. Timeouts, missing tools, unsupported operators,
-exceptions, incomplete searches, unexpected exits, wrong versions and baseline
-state-count mismatches fail closed. Bounds/properties must not be weakened to
-fit this limit.
+for the six sequential checker runs**, excluding Nix/tool builds. Individual
+and total durations are retained. Wrong pins or versions, timeouts, missing
+tools, refusals (Dive exit 3), budget stops (Dive exit 5), malformed reports,
+exceptions, incomplete searches, unexpected exits and baseline count mismatches
+fail closed. Bounds and properties must not be weakened to fit this limit.
 
-The four runs are baseline TLC, baseline TLA-ts, missing-promise mutant TLC,
-and missing-promise mutant TLA-ts. The baseline must exhaust the graph, agree
-on success, and report identical generated **and distinct** state counts.
-`ConsensusFastPathMissingPromise.cfg` disables only the promise guard; both
-checkers must report `NoMissingPromise` and a nonempty causal trace. The mutant
-stops at its first violation, so its visited-prefix counts are retained and
-compared but are not misrepresented as exhaustive graph counts; different
-successor orders can give different prefixes. Investigate any mismatch in the
-retained raw traces rather than changing the model.
+The campaign runs TLC, TLA-ts and Dive on the same baseline, then on the same
+mutant. The baseline must exhaust the graph and report success, an empty
+queue, and generated **and distinct** counts identical to TLC. In particular,
+Dive must report a completed and exhausted temporal check; safety-only success
+is not enough. `ConsensusFastPathMissingPromise.cfg` disables only the promise
+guard; all three checkers must report `NoMissingPromise` with a causal trace of
+more than one state. The mutant stops at its first violation, so its visited
+prefix counts are observations, not parity assertions: different successor
+orders can give different prefixes. Investigate any mismatch in the retained
+raw traces rather than changing the model.
 
-After root flake integration:
+Run the existing check on x86_64 Linux:
 
 ```sh
 nix build --keep-failed .#checks.x86_64-linux.consensus-fastpath-model-parity
 ```
 
-The output directory contains `campaign.json`, the exact source/config copies,
-per-run `.stdout`, `.stderr`, `.json` summaries, and TLC metadata. On failure,
-`--keep-failed` preserves the failed build directory. For an explicit local
-output directory that survives failure, inside a shell containing the same
-pinned TLC and Node:
+The output contains `campaign.json` with the Dive pin, exact commands,
+observed version, durations and BLAKE3 digests for the source/config copies,
+raw `.stdout` and `.stderr`, and `.json` summaries. Dive's `.report.json` files
+retain the byte-exact native JSON. TLC state-store scratch is not evidence.
+On failure, `--keep-failed` preserves the failed build directory. For an
+explicit local output directory that survives failure, use a shell with the
+same pinned TLC and Node, `b3sum`, and a verified Dive release runnable on the
+host. See [`verification/tla-ts/README.md`](../verification/tla-ts/README.md)
+for the archive layout.
 
 ```sh
 scratch=$(mktemp -d)
+release=dive-v0.1.0-x86_64-unknown-linux-gnu
+# Set this to the absolute path of the exact pinned release archive.
+dive_archive=/absolute/path/to/$release.tar.gz
+printf '%s  %s\n' cf0a0e2ac8fdccc2c7c73ca563ee567703a64b9ebd7f418eca6a4102263ab65d "$dive_archive" | sha256sum --check || exit 1
+tar -xzf "$dive_archive" -C "$scratch" "$release/dive"
 tar -xzf verification/tla-ts/tla-ts-0.0.10.tgz -C "$scratch"
 node --test verification/tla-ts/campaign.test.mjs
-node verification/tla-ts/campaign.mjs "$scratch/evidence" "$scratch"
+node verification/tla-ts/campaign.mjs "$scratch/evidence" "$scratch" "$dive_archive" "$scratch/$release/dive"
 ```
 
 The test inputs in `campaign.test.mjs` are labeled synthetic reader tests, not
-observed checker logs. They cover count divergence, incomplete/parse-only
-output, tool drift, wrong mutant properties and missing traces.
+observed checker logs. They cover count divergence, refusal, budget stops,
+incomplete or parse-only output, timeout, pin/version drift, wrong mutant
+properties and missing traces.
 
 ## Required Quint-to-Rust lane (separate)
 
@@ -155,8 +171,8 @@ the campaign requires the generated two-state trace before claiming evidence.
 Not established. In the pinned Quint source,
 [`compileToTlaplus`](https://github.com/quint-co/quint/blob/3eaa85fc01820ea25bd7cb7baee0bb8d5c02c8b0/quint/src/compileToTlaplus.ts)
 uses an **Apalache server** to translate analyzed Quint IR. Merely having Quint
-or generating simulation traces does not establish TLC/TLA-ts verdict or state
-count parity. An additional pinned Apalache/compiler cohort, emitted-module
+or generating simulation traces does not establish verdict or state-count
+parity with TLC. An additional pinned Apalache/compiler cohort, emitted-module
 review and aligned state mapping would be needed to qualify that route. This
 change keeps the hand-written `.tla` as parity authority; the Quint API model
 is intentionally a separate abstraction.
@@ -176,18 +192,19 @@ not dropped. Do not substitute UPDR output for implementation proofs.
 
 ## Integration and evidence status
 
-Root `flake.nix` imports `nix/consensus-fastpath-model.nix` for the TLC/TLA-ts
-checks and `nix/consensus-fastpath-quint.nix` for the pinned Quint evaluator and
-normal/guard-mutated Rust conformance check. The Cargo dev dependency, lock,
-Git-source hashes and both unit2nix plans carry the exact cohort above.
+Root `flake.nix` imports `nix/consensus-fastpath-model.nix` for the x86_64 Linux
+three-checker parity rail and `nix/consensus-fastpath-quint.nix` for the pinned
+Quint evaluator and normal/guard-mutated Rust conformance check. The Cargo dev
+dependency, lock, Git-source hashes and both unit2nix plans carry the exact
+Quint cohort above.
 
 Both the hermetic `nextest` check and the developer `nextest-ci` app include
 the pinned Quint evaluator directly; they do not depend on an ambient dev
 shell. Source copying and normal/mutant builds remain outside the 720-second
-TLC/TLA-ts model budget.
+model campaign budget.
 
-The parent completed both campaigns on 2026-11-13. With three replicas, two
-commands and three views, TLC and TLA-ts each generated 6,312,147 states and
+The original two-checker and Quint campaigns completed on 2026-11-13. With
+three replicas, two commands and three views, TLC and TLA-ts each generated 6,312,147 states and
 visited 966,147 distinct states with an empty queue. Both rejected the actual
 missing-promise mutation with a six-state `NoMissingPromise` trace. The pinned
 Quint TypeScript campaign passed 64 traces of at most 48 steps, all four real
@@ -201,6 +218,19 @@ not claimed. The [Quint campaign](../.cairn/archive/2026-11-15-check-consensus-f
 retains its traces and normal/mutant replay observations. These are bounded
 observations; final source/lifecycle acceptance remains distinct from
 model-checker or replay success.
+
+[Issue #62's separate Dive trial](https://github.com/brittonr/aspen/issues/62)
+records the same baseline counts and the six-state `NoMissingPromise` trace
+on unchanged inputs. That trial is not execution evidence from the integrated
+three-checker rail and is not a speed comparison. Dive agreeing with TLC is
+not a proof of Aspen's Rust implementation.
+
+The [integrated three-checker run](../.cairn/archive/2026-11-21-add-dive-consensus-fastpath-checker/evidence/verification.md)
+then passed all five synthetic controls and six checker invocations. Dive,
+TLC and TLA-ts agreed on 6,312,147 generated and 966,147 distinct baseline
+states with no queued states; all three retained a six-state
+`NoMissingPromise` trace for the mutant. The archived bundle binds the exact
+model, configurations, version, options, streams and per-checker durations.
 
 An additional isolated `nextest-ci` app run on 2026-11-14 passed all four real
 Rust replay tests with ambient Quint absent. It used genuine locked

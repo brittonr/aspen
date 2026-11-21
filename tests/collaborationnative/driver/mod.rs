@@ -103,12 +103,11 @@ fn exited_child_cannot_supply_readiness() -> crate::producer::Result<()> {
 fn collaboration_native_baseline() -> crate::producer::Result<()> {
     let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
     let output = output_of(&trust)?;
-    let evidence = evidence_root()?;
+    let evidence = evidence_root(std::env::var_os(EVIDENCE_ROOT_ENV).as_deref())?;
     let workspace = crate::test_support::process_workspace("collaboration-native-baseline")?;
     let mut cohort = crate::producer::prepare(
         workspace.as_ref(),
-        &output.join("bin/molten"),
-        &output.join("bin/molten-collaboration-scope"),
+        &output,
         &trust,
         std::env::var_os(CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,
@@ -124,7 +123,7 @@ fn collaboration_native_baseline() -> crate::producer::Result<()> {
 fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> crate::producer::Result<()> {
     let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
     let output = output_of(&trust)?;
-    let evidence = evidence_root()?;
+    let evidence = evidence_root(std::env::var_os(EVIDENCE_ROOT_ENV).as_deref())?;
     let closure_cache = std::env::var_os(CLOSURE_CACHE_ENV);
     let closure_cache = closure_cache.as_deref().map(std::path::Path::new);
     let selection = match std::env::var_os(CASE_SELECTION_ENV) {
@@ -136,14 +135,7 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
     };
     if selection.is_none() {
         let workspace = crate::test_support::process_workspace("collaboration-native-effect")?;
-        let mut cohort = crate::producer::prepare(
-            workspace.as_ref(),
-            &output.join("bin/molten"),
-            &output.join("bin/molten-collaboration-scope"),
-            &trust,
-            closure_cache,
-            None,
-        )?;
+        let mut cohort = crate::producer::prepare(workspace.as_ref(), &output, &trust, closure_cache, None)?;
         cohort.release_endpoints();
         let observation = operations::drive(&cohort)?;
         eprintln!("baseline observations={}", scenarios::retain(&observation, evidence.as_ref())?);
@@ -151,14 +143,8 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
     for case in selection.unwrap_or_else(|| scenarios::Case::all().to_vec()) {
         let label = case.label();
         let workspace = crate::test_support::process_workspace(label)?;
-        let mut cohort = crate::producer::prepare(
-            workspace.as_ref(),
-            &output.join("bin/molten"),
-            &output.join("bin/molten-collaboration-scope"),
-            &trust,
-            closure_cache,
-            case.frame_budget()?,
-        )?;
+        let mut cohort =
+            crate::producer::prepare(workspace.as_ref(), &output, &trust, closure_cache, case.frame_budget()?)?;
         cohort.release_endpoints();
         let observation = case.run(&cohort).map_err(|error| format!("{label}: {error}"))?;
         eprintln!("{label} observations={}", scenarios::retain(&observation, evidence.as_ref())?);
@@ -166,11 +152,8 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
     Ok(())
 }
 
-fn evidence_root() -> crate::producer::Result<Option<molten::node_state::DirectoryRoot>> {
-    Ok(std::env::var_os(EVIDENCE_ROOT_ENV)
-        .map(std::path::PathBuf::from)
-        .map(|path| molten::node_state::DirectoryRoot::open(&path))
-        .transpose()?)
+fn evidence_root(path: Option<&std::ffi::OsStr>) -> crate::producer::Result<Option<molten::node_state::DirectoryRoot>> {
+    Ok(path.map(std::path::Path::new).map(molten::node_state::DirectoryRoot::open).transpose()?)
 }
 
 /// Parse a bounded, duplicate-free selection of known case labels.

@@ -1,0 +1,29 @@
+[32m✓[0m Created [1m/build/aspen/.deepsec[0m
+  [2mFirst project:[0m [1maspen[0m → ..
+
+Scaffold-only setup complete. Next:
+
+  cd .deepsec
+  pnpm install                          [2m# installs deepsec[0m
+  [2m# Set AI_GATEWAY_API_KEY in .env.local (or skip if claude/codex CLI is logged in)[0m
+
+  [33mPaste this into your coding agent[0m [2m(Claude Code, Cursor, Codex, OpenCode, Pi, etc.):[0m
+
+    [36mRead node_modules/deepsec/SKILL.md to understand the tool. Then[0m
+    [36mread data/aspen/SETUP.md and follow it: open .., skim[0m
+    [36mits README + AGENTS.md/CLAUDE.md + a handful of representative[0m
+    [36mcode files, then replace each section of data/aspen/INFO.md.[0m
+    [36m[0m
+    [36mKeep it SHORT — target 50–100 lines total. Pick 3–5 examples per[0m
+    [36msection, not exhaustive enumeration. Name primitives (auth[0m
+    [36mhelpers, middleware) but no line numbers. Skip generic CWE[0m
+    [36mcategories — built-in matchers cover those. Cover only what's[0m
+    [36mproject-specific. INFO.md is injected into every scan batch;[0m
+    [36mverbose context dilutes signal.[0m
+
+  Then run:
+    pnpm deepsec scan
+    pnpm deepsec process
+
+  [2m# --project-id is auto-resolved while there's only one project.[0m
+  [2m# Register another codebase later: deepsec init-project <root>[0m

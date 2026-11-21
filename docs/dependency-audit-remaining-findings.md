@@ -4,9 +4,12 @@ The 2026-11-19 remediation refreshed every registry crate whose advisory had a
 semver-compatible fix and took the default closure's reachable vulnerabilities
 from 38 to 4
 ([record](../.cairn/archive/2026-11-19-remediate-default-closure-advisories/evidence/advisory-remediation-2026-11-19.json)).
-The audit still denies: 156 findings remain. The syndicate chain landed at
-`f3f52f753`, which removed `tracing-subscriber@0.2.25`; three advisories remain. This page records each remaining
-class, who owns it, and what would reopen it. It grants no exception.
+The syndicate chain landed at `f3f52f753`, removing `tracing-subscriber@0.2.25`.
+The [current default Linux audit observation](../evidence/dependency-audit-default-2026-11-21/observation.json)
+evaluated 740 packages at RustSec `4ef2df8e806a65e2f1ecc14f56f51249062b23d6`.
+It still denies: 155 findings, including 22 advisory records and three
+reachable vulnerabilities. The observation records every finding and the
+passing prerequisite and planted-advisory fixture checks. It grants no exception.
 
 ## Advisories that need an upstream move
 
@@ -23,7 +26,7 @@ advisory's attack path is not exercised. That scoping does not fix the pinned
 version and is not a claim that RSA decryption would be safe here.
 
 No `[[advisory-exception]]` is added. An exception requires owner, review and a
-90-day expiry; these four are blocked upstream work, and an exception would
+90-day expiry; these three vulnerability records are blocked upstream work, and an exception would
 convert a known mismatch into silent acceptance. A vendored `[patch]` inside
 this workspace is not a substitute either: it would diverge from the pinned
 identities the release evidence binds.
@@ -33,8 +36,9 @@ identities the release evidence binds.
 | Finding | Count | Meaning | Closure |
 | --- | ---: | --- | --- |
 | `unavailable-notices` | 85 | the crate source ships no file starting `LICENSE`, `NOTICE`, `COPYING`, `COPYRIGHT` or `AUTHORS` and declares no `license-file`; the audit retains only local bytes | an upstream release that ships the text |
-| `unavailable-license` | 39 | the package declares no valid SPDX expression; a `license-file` alone is not an expression | an upstream SPDX expression |
+| `unavailable-license` | 38 | the package declares no valid SPDX expression; a `license-file` alone is not an expression | an upstream SPDX expression |
 | `license-policy` | 5 | the declared SPDX expression is outside `allowed_licenses` in the audit policy | a reviewed license choice or an upstream relicense |
+| `source-policy` | 5 | a resolved source is outside the audit source policy | confirm exact source acquisition and apply a reviewed source policy |
 
 The audit tool has no exception path for notice or SPDX findings, by design:
 accepting a package without its license text would make the retained notice
@@ -56,9 +60,8 @@ pilot stays experimental until it is retired or re-qualified by its own change.
 
 ## Upstream ownership
 
-The four advisories were checked against whether any stack repository owns the
-fixing crate. None of the four is owned here: `rsa` arrives through
-`secretspec 0.17.0`, `crypto-bigint` through `k256 0.13.4`, `imbl-sized-chunks`
+None of the three fixing crates is owned here: `rsa` arrives through
+`secretspec 0.17.0`, `crypto-bigint` through `k256 0.13.4`, and `imbl-sized-chunks`
 through the pinned Nickel source. The one owned move — Basalt replacing `jsonwebtoken`
 with a `ring` RS256 verifier — is recorded in
 [upstream ownership](dependency-audit-upstream-ownership.md), together with why
@@ -66,8 +69,8 @@ adopting that revision does not change this audit yet.
 
 ## Reopening
 
-Reopen the advisory rows when basalt moves jsonwebtoken/rsa, when the pinned
-Nickel source moves `nickel-lang-vector` to imbl 0.2, or when syndicate ships a
+Reopen the advisory rows when the Basalt-related closure can move RSA and k256,
+or when the pinned Nickel source moves `nickel-lang-vector` to imbl 0.2.
 Reopen the evidence rows when an upstream
 publishes the missing license text, or when a reviewed SPDX-only acceptance rule
 is proposed with its own requirement and expiry. Reopen the cohort row only

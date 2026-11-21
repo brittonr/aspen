@@ -18,8 +18,7 @@ fn installed_native_effect_rejects_a_mismatched_configuration() -> crate::produc
     let workspace = crate::test_support::process_workspace("collaboration-native-mismatched-installation")?;
     let mut cohort = crate::producer::prepare(
         workspace.as_ref(),
-        &output.join("bin/molten"),
-        &output.join("bin/molten-collaboration-scope"),
+        &output,
         &trust,
         std::env::var_os(crate::driver::CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,
@@ -85,8 +84,7 @@ fn installed_native_effect_startup_failure_publishes_no_readiness() -> crate::pr
     let workspace = crate::test_support::process_workspace("collaboration-native-worker-startup-failure")?;
     let mut cohort = crate::producer::prepare(
         workspace.as_ref(),
-        &output.join("bin/molten"),
-        &output.join("bin/molten-collaboration-scope"),
+        &output,
         &trust,
         std::env::var_os(crate::driver::CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,

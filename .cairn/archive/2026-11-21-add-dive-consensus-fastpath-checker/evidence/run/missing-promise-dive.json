@@ -1,0 +1,11 @@
+{
+  "tool": "dive 0.1.0 (v0.1.0-0-g94cbbed9)",
+  "status": "invariant-violation",
+  "generatedStates": 1736,
+  "distinctStates": 667,
+  "queuedStates": 424,
+  "violation": {
+    "name": "NoMissingPromise",
+    "traceLength": 6
+  }
+}

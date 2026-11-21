@@ -1,0 +1,134 @@
+{
+  "tool": "tla-ts@0.0.10",
+  "status": "invariant-violation",
+  "generatedStates": 1736,
+  "distinctStates": 667,
+  "queuedStates": 424,
+  "depth": 6,
+  "violation": {
+    "name": "NoMissingPromise",
+    "trace": [
+      {
+        "action": null,
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 0 @@ r2 :> 0 @@ r3 :> 0)",
+          "fastCommitted": "{}",
+          "promised": "{}",
+          "accepted": "{}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{}",
+          "recoveryMarker": "FALSE"
+        }
+      },
+      {
+        "action": "Propose",
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 0 @@ r2 :> 0 @@ r3 :> 0)",
+          "fastCommitted": "{}",
+          "promised": "{}",
+          "accepted": "{c1}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{}",
+          "recoveryMarker": "FALSE"
+        }
+      },
+      {
+        "action": "Acknowledge",
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 1 @@ r2 :> 0 @@ r3 :> 0)",
+          "fastCommitted": "{}",
+          "promised": "{}",
+          "accepted": "{c1}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{}",
+          "recoveryMarker": "FALSE"
+        }
+      },
+      {
+        "action": "Acknowledge",
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 0)",
+          "fastCommitted": "{}",
+          "promised": "{}",
+          "accepted": "{c1}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{}",
+          "recoveryMarker": "FALSE"
+        }
+      },
+      {
+        "action": "Acknowledge",
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 1)",
+          "fastCommitted": "{}",
+          "promised": "{}",
+          "accepted": "{c1}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{}",
+          "recoveryMarker": "FALSE"
+        }
+      },
+      {
+        "action": "FastCommit",
+        "state": {
+          "phase": "\"normal\"",
+          "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 1)",
+          "fastCommitted": "{c1}",
+          "promised": "{}",
+          "accepted": "{c1}",
+          "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+          "commitOrder": "<<>>",
+          "decisionOrder": "<<c1>>",
+          "replied": "<<>>",
+          "accelView": "1",
+          "committed": "{}",
+          "recoverySet": "{}",
+          "baseView": "1",
+          "certificates": "{[command |-> c1, acceleration |-> 1, base |-> 1, acknowledgements |-> (r1 :> 1 @@ r2 :> 1 @@ r3 :> 1), promises |-> {}, predecessors |-> {}]}",
+          "recoveryMarker": "FALSE"
+        }
+      }
+    ]
+  },
+  "failure": null
+}

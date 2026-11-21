@@ -14,7 +14,7 @@ let NonClaims = [
   "redaction-does-not-prove-confidentiality",
   "scan-does-not-prove-completeness-beyond-plan",
 ] in
-let Binding = {
+let BindingContract = {
   machine | Token,
   generation | Token,
   pack | PackRef,
@@ -27,17 +27,17 @@ let Binding = {
   accounting | Ref,
   adapter | Ref,
 } in
-let Mapping = {
+let MappingContract = {
   signal | P.contract (P.is_one_of ["process", "scheduler", "block", "network", "pressure", "adapter-health"]),
   descriptor_ref | Ref,
   aggregation | Exact "sum",
   labels | P.contract (fun v => std.is_array v && std.array.length v == 0),
 } in
-let Profile = {
+let ProfileContract = {
   schema | Exact "molten.linux-ebpf-observation.profile.v1",
   profile_ref | Ref,
-  binding | Binding,
-  mappings | Array Mapping
+  binding | BindingContract,
+  mappings | Array MappingContract
     | P.contract (fun v => P.is_non_empty_bounded_array 6 v
       && P.distinct_by (fun m => m.signal) v && P.distinct_by (fun m => m.descriptor_ref) v),
   max_records | Bound 65536,
@@ -56,4 +56,4 @@ let Profile = {
   scope | Exact "local-component",
   non_claims | P.contract (fun v => v == NonClaims),
 } in
-{ Profile = Profile, Binding = Binding, Mapping = Mapping, non_claims = NonClaims }
+{ Profile = ProfileContract, Binding = BindingContract, Mapping = MappingContract, non_claims = NonClaims }

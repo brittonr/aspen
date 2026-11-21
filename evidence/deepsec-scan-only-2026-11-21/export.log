@@ -1,0 +1,6 @@
+[1mExporting findings (md-dir)[0m
+  Projects: aspen
+  Filter: hiding resolved verdicts (fixed/false-positive/accepted-risk)
+  [aspen] 0 finding(s)
+
+[32mExported 0 finding(s)[0m → [1m/nix/store/q36ggpslpw9lyyky6arw68s1ws3k7xdw-aspen-deepsec-scan-only/findings/[0m

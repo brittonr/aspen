@@ -21,3 +21,7 @@ evidence-bearing acceptance:
 - Mantle's independently admitted immutable revision/bundle publication binding. Its 2026-10-30 local integration verified bundle `774331f6c2defe75e30c354b2b3080838cf56438bbd99268779fe4590f8c9f39`, but `materialize-molten-spacewasm-abi` still leaves publication unchecked; a local materialization is not an authorized trust pin;
 - exact-member static receipts and independently selected immutable verifier identity for Octet's archived `spacewasm-molten-abi-pilot` profile (`b3:2fd08aba3959f85f58aaac323758df3e286872cf14e7b52985a1b8d7c4647956`);
 - a compatible ChaosControl full-Molten-ABI differential producer/report and independent verifier/probe pins. The inspected archived/current rail is hostless, uses `chaoscontrol.spacewasm-mvp-differential-report.v1` and Wasmtime 41.0.3; it is not the required `chaoscontrol.spacewasm-molten-abi-differential.v1` / Wasmtime 49.0.5 cohort.
+
+## Local verification (2026-11-21)
+
+Pueue task 46 ran `cargo test --locked -p molten --features spacewasm-pilot --lib spacewasm::`: 31 passed, one independently provisioned case ignored. The pinned Nickel CLI also exported the checked authoring profile after the contract-export shadowing repair; `production` and `release` remained `false`. Neither check provides the missing independent publication, exact-verifier, or full-ABI differential evidence above.

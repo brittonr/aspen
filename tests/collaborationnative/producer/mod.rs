@@ -46,19 +46,20 @@ impl Cohort {
 /// must run through the externally signed main executable in the owning harness.
 pub fn prepare(
     workspace: &std::path::Path,
-    signed_main: &std::path::Path,
-    signed_scope: &std::path::Path,
+    signed_output: &std::path::Path,
     source_trust: &std::path::Path,
     closure_cache: Option<&std::path::Path>,
     max_frame_bytes: Option<u64>,
 ) -> Result<Cohort> {
     let cohort = transport::Cohort::reserve(max_frame_bytes)?;
+    let signed_main = signed_output.join("bin/molten");
+    let signed_scope = signed_output.join("bin/molten-collaboration-scope");
     let mut nodes = Vec::with_capacity(3);
     for index in 0..3 {
         let source = admit(Input {
             workspace,
-            signed_main,
-            signed_scope,
+            signed_main: &signed_main,
+            signed_scope: &signed_scope,
             source_trust,
             closure_cache,
             index,
@@ -83,7 +84,7 @@ pub fn prepare(
     }
     Ok(Cohort {
         nodes,
-        signed_main: signed_main.to_owned(),
+        signed_main,
         reservations: cohort.reservations,
     })
 }

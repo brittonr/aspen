@@ -1,0 +1,42 @@
+[1mScanning[0m /build/aspen for project [1maspen[0m
+[2m  Discovering files… 1/35[0m
+[2m  Discovering files… 35/35[0m
+[2m  Running matchers…[0m
+[2m  Progress 1/75 matchers — 0 hits so far[0m
+[2m  Progress 19/75 matchers — 74 hits so far[0m
+[2m  Progress 38/75 matchers — 74 hits so far[0m
+[2m  Progress 57/75 matchers — 74 hits so far[0m
+[2m  Progress 75/75 matchers — 80 hits so far[0m
+[2m  Progress 75/75 matchers — 80 hits so far[0m
+
+[1mDetected tech[0m
+  github-actions, rust
+  [2m75/198 matchers active[0m [2m(123 dormant — your repo doesn't use those frameworks)[0m
+
+[1mCoverage by language[0m
+  rust        2886 files   0 hits       [33m0.00%[0m
+  python      26 files     3 hits       11.5%
+  javascript  3 files      1 hits       33.3%
+
+[1mMatchers that fired[0m
+  secrets-exposure                     [2m74 matches[0m
+  crypto-usage                         [2m4 matches[0m
+  github-workflow-security             [2m2 matches[0m
+
+[1mTop files by candidate count[0m
+  release-policy-build-plan.json                           [2m1 hit (secrets-exposure)[0m
+  build-plan.json                                          [2m1 hit (secrets-exposure)[0m
+  vendor/sources.lock.json                                 [2m1 hit (secrets-exposure)[0m
+  evidence/tracey/inherited-debt-classification.json       [2m1 hit (secrets-exposure)[0m
+  evidence/tracey/inherited-debt-baseline.json             [2m1 hit (secrets-exposure)[0m
+
+[33m⚠ Low matcher coverage for rust[0m [2m(very low)[0m
+  Scanned 2886 rust file(s) but produced 0 candidate(s) (0.00%).
+  [2mdeepsec may not have built-in matchers for your rust stack.[0m
+  [2mSee docs/writing-matchers.md for how to add a custom matcher plugin.[0m
+
+[32mScan complete[0m [2min 6.3s[0m [2m—[0m [1m80[0m file(s) with candidates, [1m80[0m total matches
+[2mRun ID: 20261121212641-f4d605415d5ae3a1[0m
+
+[1mNext[0m
+  [36mpnpm deepsec process --project-id aspen[0m

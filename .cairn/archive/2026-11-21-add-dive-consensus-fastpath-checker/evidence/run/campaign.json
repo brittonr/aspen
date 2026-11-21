@@ -1,0 +1,431 @@
+{
+  "schema": "molten.consensus-model-campaign.v1",
+  "evidenceKind": "finite-model-only",
+  "claimScope": "Agreement with TLC is not proof of Aspen's Rust implementation.",
+  "status": "passed",
+  "authoritativeChecker": "tlc",
+  "bounds": {
+    "replicas": 3,
+    "commands": 2,
+    "views": 3
+  },
+  "perCheckerLimitMs": 180000,
+  "campaignLimitMs": 720000,
+  "runs": [
+    {
+      "label": "baseline",
+      "tool": "tlc",
+      "elapsedMs": 64231.180572,
+      "exitCode": 0,
+      "signal": null,
+      "executable": "tlc",
+      "args": [
+        "-workers",
+        "1",
+        "-metadir",
+        "/build/campaign/baseline-tlc-states",
+        "-config",
+        "/build/campaign/ConsensusFastPath.cfg",
+        "/build/campaign/ConsensusFastPath.tla"
+      ],
+      "result": {
+        "tool": "TLC 2.19 / TLA+ 1.7.4",
+        "status": "success",
+        "generatedStates": 6312147,
+        "distinctStates": 966147,
+        "queuedStates": 0,
+        "violation": null
+      }
+    },
+    {
+      "label": "baseline",
+      "tool": "tla-ts",
+      "elapsedMs": 84162.880611,
+      "exitCode": 0,
+      "signal": null,
+      "executable": "/nix/store/q1r7qkrnbhakljr4j228v2yi2874jkl9-nodejs-slim-24.15.0/bin/node",
+      "args": [
+        "/build/source/verification/tla-ts/check.mjs",
+        "/build/campaign/ConsensusFastPath.tla",
+        "/build/campaign/ConsensusFastPath.cfg",
+        "/build"
+      ],
+      "result": {
+        "tool": "tla-ts@0.0.10",
+        "status": "success",
+        "generatedStates": 6312147,
+        "distinctStates": 966147,
+        "queuedStates": 0,
+        "depth": 41,
+        "violation": null,
+        "failure": null
+      }
+    },
+    {
+      "label": "baseline",
+      "tool": "dive",
+      "elapsedMs": 56623.84786500002,
+      "exitCode": 0,
+      "signal": null,
+      "executable": "/build/dive-v0.1.0-x86_64-unknown-linux-gnu/dive",
+      "args": [
+        "check",
+        "/build/campaign/ConsensusFastPath.tla",
+        "--config",
+        "/build/campaign/ConsensusFastPath.cfg",
+        "--workers",
+        "1",
+        "--compat=tlc",
+        "--output",
+        "json"
+      ],
+      "result": {
+        "tool": "dive 0.1.0 (v0.1.0-0-g94cbbed9)",
+        "status": "success",
+        "generatedStates": 6312147,
+        "distinctStates": 966147,
+        "queuedStates": 0,
+        "violation": null
+      }
+    },
+    {
+      "label": "missing-promise",
+      "tool": "tlc",
+      "elapsedMs": 1198.9364690000075,
+      "exitCode": 12,
+      "signal": null,
+      "executable": "tlc",
+      "args": [
+        "-workers",
+        "1",
+        "-metadir",
+        "/build/campaign/missing-promise-tlc-states",
+        "-config",
+        "/build/campaign/ConsensusFastPathMissingPromise.cfg",
+        "/build/campaign/ConsensusFastPath.tla"
+      ],
+      "result": {
+        "tool": "TLC 2.19 / TLA+ 1.7.4",
+        "status": "invariant-violation",
+        "generatedStates": 1736,
+        "distinctStates": 667,
+        "queuedStates": 424,
+        "violation": {
+          "name": "NoMissingPromise",
+          "traceLength": 6
+        }
+      }
+    },
+    {
+      "label": "missing-promise",
+      "tool": "tla-ts",
+      "elapsedMs": 250.53269399999408,
+      "exitCode": 0,
+      "signal": null,
+      "executable": "/nix/store/q1r7qkrnbhakljr4j228v2yi2874jkl9-nodejs-slim-24.15.0/bin/node",
+      "args": [
+        "/build/source/verification/tla-ts/check.mjs",
+        "/build/campaign/ConsensusFastPath.tla",
+        "/build/campaign/ConsensusFastPathMissingPromise.cfg",
+        "/build"
+      ],
+      "result": {
+        "tool": "tla-ts@0.0.10",
+        "status": "invariant-violation",
+        "generatedStates": 1736,
+        "distinctStates": 667,
+        "queuedStates": 424,
+        "depth": 6,
+        "violation": {
+          "name": "NoMissingPromise",
+          "trace": [
+            {
+              "action": null,
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 0 @@ r2 :> 0 @@ r3 :> 0)",
+                "fastCommitted": "{}",
+                "promised": "{}",
+                "accepted": "{}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{}",
+                "recoveryMarker": "FALSE"
+              }
+            },
+            {
+              "action": "Propose",
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 0 @@ r2 :> 0 @@ r3 :> 0)",
+                "fastCommitted": "{}",
+                "promised": "{}",
+                "accepted": "{c1}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{}",
+                "recoveryMarker": "FALSE"
+              }
+            },
+            {
+              "action": "Acknowledge",
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 1 @@ r2 :> 0 @@ r3 :> 0)",
+                "fastCommitted": "{}",
+                "promised": "{}",
+                "accepted": "{c1}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{}",
+                "recoveryMarker": "FALSE"
+              }
+            },
+            {
+              "action": "Acknowledge",
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 0)",
+                "fastCommitted": "{}",
+                "promised": "{}",
+                "accepted": "{c1}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{}",
+                "recoveryMarker": "FALSE"
+              }
+            },
+            {
+              "action": "Acknowledge",
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 1)",
+                "fastCommitted": "{}",
+                "promised": "{}",
+                "accepted": "{c1}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{}",
+                "recoveryMarker": "FALSE"
+              }
+            },
+            {
+              "action": "FastCommit",
+              "state": {
+                "phase": "\"normal\"",
+                "ackView": "(r1 :> 1 @@ r2 :> 1 @@ r3 :> 1)",
+                "fastCommitted": "{c1}",
+                "promised": "{}",
+                "accepted": "{c1}",
+                "executionOrder": "(r1 :> <<>> @@ r2 :> <<>> @@ r3 :> <<>>)",
+                "commitOrder": "<<>>",
+                "decisionOrder": "<<c1>>",
+                "replied": "<<>>",
+                "accelView": "1",
+                "committed": "{}",
+                "recoverySet": "{}",
+                "baseView": "1",
+                "certificates": "{[command |-> c1, acceleration |-> 1, base |-> 1, acknowledgements |-> (r1 :> 1 @@ r2 :> 1 @@ r3 :> 1), promises |-> {}, predecessors |-> {}]}",
+                "recoveryMarker": "FALSE"
+              }
+            }
+          ]
+        },
+        "failure": null
+      }
+    },
+    {
+      "label": "missing-promise",
+      "tool": "dive",
+      "elapsedMs": 18.392126999999164,
+      "exitCode": 12,
+      "signal": null,
+      "executable": "/build/dive-v0.1.0-x86_64-unknown-linux-gnu/dive",
+      "args": [
+        "check",
+        "/build/campaign/ConsensusFastPath.tla",
+        "--config",
+        "/build/campaign/ConsensusFastPathMissingPromise.cfg",
+        "--workers",
+        "1",
+        "--compat=tlc",
+        "--output",
+        "json"
+      ],
+      "result": {
+        "tool": "dive 0.1.0 (v0.1.0-0-g94cbbed9)",
+        "status": "invariant-violation",
+        "generatedStates": 1736,
+        "distinctStates": 667,
+        "queuedStates": 424,
+        "violation": {
+          "name": "NoMissingPromise",
+          "traceLength": 6
+        }
+      }
+    }
+  ],
+  "tlaTsPublicationSha256": "cf962f00ab297186f919e32c8f5cf28f6e78f1e92703b9a3d8f02044a487c84a",
+  "diveRelease": {
+    "tag": "v0.1.0",
+    "commit": "94cbbed9ae02ad3d30bbe2191bd2619a839b8795",
+    "version": "dive 0.1.0 (v0.1.0-0-g94cbbed9)",
+    "target": "x86_64-unknown-linux-gnu",
+    "sha256": "cf0a0e2ac8fdccc2c7c73ca563ee567703a64b9ebd7f418eca6a4102263ab65d",
+    "license": "MIT",
+    "reportSchema": 3
+  },
+  "diveVersionProbe": {
+    "executable": "/build/dive-v0.1.0-x86_64-unknown-linux-gnu/dive",
+    "args": [
+      "--version"
+    ],
+    "elapsedMs": 14.043029000000004,
+    "exitCode": 0,
+    "signal": null
+  },
+  "diveVersion": "dive 0.1.0 (v0.1.0-0-g94cbbed9)",
+  "elapsedMs": 206541.08871100002,
+  "baseline": {
+    "verdictsAgree": true,
+    "countsAgree": true,
+    "exhaustive": true
+  },
+  "mutant": {
+    "verdictsAgree": true,
+    "countsAgree": true,
+    "exhaustive": false
+  },
+  "retained_files": [
+    {
+      "name": "dive-version.stdout",
+      "blake3": "85cfb1e13a62a4c535b1f0b1f5457960e6ac803124ad60fb114c58a29974e078"
+    },
+    {
+      "name": "dive-version.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "ConsensusFastPath.tla",
+      "blake3": "fbf9f90d8f580a7cc21bdfd12c3640ad893c5254fbe141730b55e0739095f0ce"
+    },
+    {
+      "name": "ConsensusFastPath.cfg",
+      "blake3": "606103db97eae92b1cf26b1c1682da44135683801641b1303ae62a41d2a70cd5"
+    },
+    {
+      "name": "ConsensusFastPathMissingPromise.cfg",
+      "blake3": "0231c36995869eedb2a8dfd6e906c6949ad93c3a3481e59eaa5fe73cd8447657"
+    },
+    {
+      "name": "baseline-tlc.stdout",
+      "blake3": "b3d7de77d8d8d0fe26ad7d1df44f7d442c8d9396c30b46f3ebd622c03497a971"
+    },
+    {
+      "name": "baseline-tlc.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "baseline-tlc.json",
+      "blake3": "2286dd217e353edd042018854ad1545a7082df6d4c08d1a520036dc0c7d9c237"
+    },
+    {
+      "name": "baseline-tla-ts.stdout",
+      "blake3": "6dbe047b9a1e1f2b829c0b7f383f77290b8b1ec5cc4cc437420f719f5289557e"
+    },
+    {
+      "name": "baseline-tla-ts.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "baseline-tla-ts.json",
+      "blake3": "e239a06460f88318812aecbcae77839c7c3a282c4e2e33f3216c2370e8fabb0e"
+    },
+    {
+      "name": "baseline-dive.stdout",
+      "blake3": "e87c4a4317bec5193026fc4b07be9aa05da5adf00a1b9189871590be1182f2f8"
+    },
+    {
+      "name": "baseline-dive.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "baseline-dive.report.json",
+      "blake3": "e87c4a4317bec5193026fc4b07be9aa05da5adf00a1b9189871590be1182f2f8"
+    },
+    {
+      "name": "baseline-dive.json",
+      "blake3": "3c098ee00b7e4988081bf0616002cdd00a49e8a2ec3cb238503b0986f8bbe32f"
+    },
+    {
+      "name": "missing-promise-tlc.stdout",
+      "blake3": "d205caa01f8795bcdf19bb440ffae5659bba547e0cfd238e2befb9b1e352a863"
+    },
+    {
+      "name": "missing-promise-tlc.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "missing-promise-tlc.json",
+      "blake3": "b672bdf803e31af4268962e949fb84ed61ea3043cdf85556dc8234ff15720453"
+    },
+    {
+      "name": "missing-promise-tla-ts.stdout",
+      "blake3": "0442b5bb64180e230e351170e56507ab5b3906e7d679df5d3cc82c7a6a2f005e"
+    },
+    {
+      "name": "missing-promise-tla-ts.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "missing-promise-tla-ts.json",
+      "blake3": "fb96cfb4608009fb6181edd5cc50fea9e237b23d2e9909256d3b1670dd2d5da1"
+    },
+    {
+      "name": "missing-promise-dive.stdout",
+      "blake3": "2df8f262883866a8265cc892ee6157ff461e4e6765e624cd5f74e3a9b342808b"
+    },
+    {
+      "name": "missing-promise-dive.stderr",
+      "blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "missing-promise-dive.report.json",
+      "blake3": "2df8f262883866a8265cc892ee6157ff461e4e6765e624cd5f74e3a9b342808b"
+    },
+    {
+      "name": "missing-promise-dive.json",
+      "blake3": "205ada6579e705d04a5e6b48469c6c66eaa9b1235dd7948679a359fe88a4cf12"
+    }
+  ]
+}
