@@ -97,6 +97,25 @@ fn exited_child_cannot_supply_readiness() -> crate::producer::Result<()> {
 // r[verify molten.system_extension.native_effect_consumer]
 #[test]
 #[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
+fn collaboration_native_baseline() -> crate::producer::Result<()> {
+    let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
+    let output = output_of(&trust)?;
+    let workspace = crate::test_support::process_workspace("collaboration-native-baseline")?;
+    let mut cohort = crate::producer::prepare(
+        workspace.as_ref(),
+        &output.join("bin/molten"),
+        &output.join("bin/molten-collaboration-scope"),
+        &trust,
+        None,
+    )?;
+    cohort.release_endpoints();
+    let observation = operations::drive(&cohort)?;
+    eprintln!("baseline observations={}", scenarios::retain(&observation, None)?);
+    Ok(())
+}
+
+#[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> crate::producer::Result<()> {
     let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
     let output = output_of(&trust)?;
