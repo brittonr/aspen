@@ -2,6 +2,7 @@
 // r[impl molten.audit_f02.real_evidence]
 // r[impl molten.startup_binding.refresh]
 
+mod admission_cache;
 mod closure;
 #[path = "closure-cache.rs"]
 mod closure_cache;
@@ -164,10 +165,10 @@ pub(super) fn load(root: &crate::node_state::DirectoryRoot) -> crate::error::Res
 
 fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measurement) -> crate::error::Result<Accepted> {
     let path = crate::node_state::RelativePath::parse("source-gate-trust.json")?;
-    let trust: Trust = serde_json::from_slice(&root.read(&path, 16_384)?)
-        .map_err(|error| invalid(format!("source trust selection: {error}")))?;
+    let trust_bytes = root.read(&path, 16_384)?;
+    let trust: Trust =
+        serde_json::from_slice(&trust_bytes).map_err(|error| invalid(format!("source trust selection: {error}")))?;
     validate_trust(&trust)?;
-    process::authenticate(&trust)?;
     let output = cap_std::fs::Dir::open_ambient_dir(&trust.output, cap_std::ambient_authority())
         .map_err(crate::error::Failure::from)?;
     let binding_bytes = measure::read(&output, "binding.json", 65_536)?;
@@ -175,11 +176,28 @@ fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measureme
         serde_json::from_slice(&binding_bytes).map_err(|error| invalid(format!("source binding: {error}")))?;
     validate_retained_inputs(&output, &binding)?;
     let binding_ref = crate::preserves_rail::content_ref_from_bytes(&binding_bytes);
+    let (artifacts, gate_bytes) = measure_artifacts(&output)?;
+    let mut cache_key = None;
+    if matches!(measurement, Measurement::CurrentProcess)
+        && binding.producer_profile == molten_core::startup_binding::GUEST_RUNTIME_PRODUCER_PROFILE
+    {
+        cache_key = Some(admission_cache::key(
+            &trust_bytes,
+            &binding_ref,
+            &admission_cache::executing_identity()?,
+            &artifacts,
+        )?);
+        if let Some(key) = cache_key.as_deref() {
+            if let Some(accepted) = admission_cache::load(root, key) {
+                return Ok(accepted);
+            }
+        }
+    }
     let executing_ref = match measurement {
         Measurement::CurrentProcess => measure::executing_ref()?,
         Measurement::SelectedOutput => measure::selected_executable_ref(&output)?,
     };
-    let (artifacts, gate_bytes) = measure_artifacts(&output)?;
+    process::authenticate(&trust)?;
     molten_core::startup_binding::admit(&binding, &trust.selection, &molten_core::startup_binding::Observation {
         binding_ref: &binding_ref,
         executing_ref: &executing_ref,
@@ -196,7 +214,11 @@ fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measureme
         .map_err(|error| invalid(format!("produced gate receipt is not UTF-8: {error}")))?;
     let gate_value = crate::preserves_rail::parse_text(gate_text)?;
     let gate_ref = crate::octet_gate::validate_produced_octet_gate_receipt(&gate_value)?;
-    accepted(binding_ref, gate_ref, gate_value, &executing_ref)
+    let accepted = accepted(binding_ref, gate_ref, gate_value, &executing_ref)?;
+    if let Some(key) = cache_key.as_deref() {
+        admission_cache::record(root, key, &executing_ref, &accepted)?;
+    }
+    Ok(accepted)
 }
 
 fn validate_retained_inputs(

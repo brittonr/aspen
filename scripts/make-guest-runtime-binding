@@ -74,7 +74,7 @@ open(f"{stage}/binding.json", "w").write(json.dumps(binding, sort_keys=True, sep
 PY
 
 expr="let pkgs = import <nixpkgs> {}; src = builtins.path { path = \"$stage\"; name = \"molten-guest-runtime-binding-v1\"; }; in pkgs.runCommand \"molten-guest-runtime-binding-v1\" {} ''cp -a \${src}/. \$out/''"
-guest_store=$(nix build --impure --no-link --print-out-paths --option builders '' --expr "$expr" | tail -1)
+guest_store=$(nix build --impure --no-link --print-out-paths --option builders '' --option substituters '' --expr "$expr" | tail -1)
 nix store sign --key-file "$secret" "$guest_store"
 public=$(nix key convert-secret-to-public < "$secret")
 binding_ref=$(b3sum --no-names "$guest_store/binding.json")

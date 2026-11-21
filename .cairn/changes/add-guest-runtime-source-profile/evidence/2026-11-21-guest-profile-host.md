@@ -39,3 +39,21 @@ process re-runs source authentication through the guest Nix daemon. Under
 exact single-step, those invocations take minutes, so the driver does not finish
 within the bounded run. Loopback was brought up explicitly and node setup now
 completes; the remaining cost is repeated per-process authentication.
+
+## Admission cache
+
+The guest profile now records a source-gate admission in
+`cache/source-gate-admission.json`. The key binds trust bytes, binding, executing
+path and length, and measured artifacts; retained inputs and artifacts are still
+revalidated on every hit. Full-profile admission never reads or writes it.
+
+Host timing on one node root:
+
+```
+first  10.10s
+second  0.03s
+```
+
+The second run reached the daemon restart check, confirming the cached gate was
+accepted. Guest setup dropped from about 5:50 to 2:46 and all nodes were ready by
+3:50; `scope::select` remains slow under exact single-step.

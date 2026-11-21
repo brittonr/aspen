@@ -46,3 +46,17 @@ r[molten.startup_binding.guest_campaign] A KVM guest campaign MUST retain the ou
 - GIVEN a completed guest campaign
 - WHEN evidence is retained
 - THEN the receipt MUST include the runtime-only non-claims.
+
+### Requirement: Repeated guest admission may reuse an exact-key cache
+
+r[molten.startup_binding.guest_admission_cache] The guest profile MAY reuse a successful source-gate admission within one node root when the cache key binds the exact trust bytes, binding, executing-file path and length, and measured artifacts. A hit MUST revalidate retained inputs and the artifact cohort and MUST NOT be used by the full producer profile.
+
+#### Scenario: Exact key is reused
+- GIVEN a guest-profile process has completed source admission in a node root
+- WHEN another process in that root presents the same trust, binding, executable identity, and artifacts
+- THEN it MAY reuse the recorded gate without another Nix signature or closure query.
+
+#### Scenario: Inputs change
+- GIVEN any trust, binding, executable identity, artifact, or profile changes
+- WHEN admission runs
+- THEN the cache MUST miss and full admission MUST run.
