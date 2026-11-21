@@ -2,7 +2,6 @@
 // r[impl molten.audit_f02.real_evidence]
 // r[impl molten.startup_binding.refresh]
 
-mod admission_cache;
 mod closure;
 #[path = "closure-cache.rs"]
 mod closure_cache;
@@ -177,22 +176,9 @@ fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measureme
     validate_retained_inputs(&output, &binding)?;
     let binding_ref = crate::preserves_rail::content_ref_from_bytes(&binding_bytes);
     let (artifacts, gate_bytes) = measure_artifacts(&output)?;
-    let mut cache_key = None;
-    if matches!(measurement, Measurement::CurrentProcess)
-        && binding.producer_profile == molten_core::startup_binding::GUEST_RUNTIME_PRODUCER_PROFILE
-    {
-        cache_key = Some(admission_cache::key(
-            &trust_bytes,
-            &binding_ref,
-            &admission_cache::executing_identity()?,
-            &artifacts,
-        )?);
-        if let Some(key) = cache_key.as_deref() {
-            if let Some(accepted) = admission_cache::load(root, key) {
-                return Ok(accepted);
-            }
-        }
-    }
+    // A node-root cache is not a trust source. Reauthenticate both producer and executing bytes
+    // even when the signed output declares the narrower guest runtime cohort.
+    // r[impl molten.startup_binding.guest_admission]
     let executing_ref = match measurement {
         Measurement::CurrentProcess => measure::executing_ref()?,
         Measurement::SelectedOutput => measure::selected_executable_ref(&output)?,
@@ -214,11 +200,7 @@ fn load_measured(root: &crate::node_state::DirectoryRoot, measurement: Measureme
         .map_err(|error| invalid(format!("produced gate receipt is not UTF-8: {error}")))?;
     let gate_value = crate::preserves_rail::parse_text(gate_text)?;
     let gate_ref = crate::octet_gate::validate_produced_octet_gate_receipt(&gate_value)?;
-    let accepted = accepted(binding_ref, gate_ref, gate_value, &executing_ref)?;
-    if let Some(key) = cache_key.as_deref() {
-        admission_cache::record(root, key, &executing_ref, &accepted)?;
-    }
-    Ok(accepted)
+    accepted(binding_ref, gate_ref, gate_value, &executing_ref)
 }
 
 fn validate_retained_inputs(

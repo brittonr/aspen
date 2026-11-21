@@ -1,0 +1,79 @@
+{
+  "schema": "chaoscontrol.assertion-summary.v2",
+  "catalog_status": "accepted",
+  "collision_safe_evidence": true,
+  "assertions": [
+    {
+      "id": 2857709567,
+      "identity": {
+        "descriptor": {
+          "identity_version": 1,
+          "namespace": "build:chaoscontrol-molten-guest:0.1.0",
+          "logical_key": {
+            "type": "automatic",
+            "source_site": "crates/chaoscontrol-molten-guest/src/main.rs:241:13"
+          },
+          "compatibility_id": 2857709567,
+          "kind": "always",
+          "message": "the admitted Molten driver completed its selected case successfully",
+          "source_file": "crates/chaoscontrol-molten-guest/src/main.rs",
+          "source_line": 241,
+          "source_column": 13,
+          "guest": "molten-collaboration-native",
+          "category": "completion"
+        },
+        "fingerprint": "64f89d15a2423c2c97e4b66ed517d08976918bcadd50ac4423deb9a5b10b840f",
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0125006275696c643a6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573743a302e312e30023400016372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e72733a3234313a3133030100000443007468652061646d6974746564204d6f6c74656e2064726976657220636f6d706c65746564206974732073656c65637465642063617365207375636365737366756c6c79052c006372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e7273060400f10000000704000d000000081b006d6f6c74656e2d636f6c6c61626f726174696f6e2d6e6174697665090a00636f6d706c6574696f6e0a0400ff2f55aa",
+        "catalog_tokens": [
+          "01bcd4f98eea9a8e2a390c9180a5ac5129127d7b4d2d42b3317e9af060674f7f"
+        ]
+      },
+      "message": "the admitted Molten driver completed its selected case successfully",
+      "kind": "always",
+      "must_hit": true,
+      "guest": "molten-collaboration-native",
+      "category": "completion",
+      "verdict": "failed",
+      "hit_count": 0,
+      "true_count": 0,
+      "false_count": 0
+    },
+    {
+      "id": 1624964519,
+      "identity": {
+        "descriptor": {
+          "identity_version": 1,
+          "namespace": "build:chaoscontrol-molten-guest:0.1.0",
+          "logical_key": {
+            "type": "automatic",
+            "source_site": "crates/chaoscontrol-molten-guest/src/main.rs:249:13"
+          },
+          "compatibility_id": 1624964519,
+          "kind": "unreachable",
+          "message": "the admitted Molten driver could not start",
+          "source_file": "crates/chaoscontrol-molten-guest/src/main.rs",
+          "source_line": 249,
+          "source_column": 13,
+          "guest": "uncategorized",
+          "category": "uncategorized"
+        },
+        "fingerprint": "b123449b74da329c7b39c8e469dfef92c81d1610633b1d63bf29d553c01563a4",
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0125006275696c643a6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573743a302e312e30023400016372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e72733a3234393a313303010003042a007468652061646d6974746564204d6f6c74656e2064726976657220636f756c64206e6f74207374617274052c006372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e7273060400f90000000704000d000000080d00756e63617465676f72697a6564090d00756e63617465676f72697a65640a0400a7fdda60",
+        "catalog_tokens": [
+          "01bcd4f98eea9a8e2a390c9180a5ac5129127d7b4d2d42b3317e9af060674f7f"
+        ]
+      },
+      "message": "the admitted Molten driver could not start",
+      "kind": "unreachable",
+      "must_hit": false,
+      "guest": "uncategorized",
+      "category": "uncategorized",
+      "verdict": "passed",
+      "hit_count": 0,
+      "true_count": 0,
+      "false_count": 0
+    }
+  ],
+  "liveness_gaps": [],
+  "distinct_failing_assertions": 0
+}

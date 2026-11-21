@@ -15,6 +15,8 @@ const LIVE_EVENT_TIMEOUT_MS: &str = "43200000";
 /// minutes per node on a loaded host; the supervisor bound must outlast that verification.
 const READINESS_SECONDS: u64 = 3_600;
 const SOURCE_TRUST_ENV: &str = "MOLTEN_TEST_SOURCE_TRUST";
+const EVIDENCE_ROOT_ENV: &str = "MOLTEN_TEST_EVIDENCE_ROOT";
+const CLOSURE_CACHE_ENV: &str = "MOLTEN_TEST_CLOSURE_CACHE";
 /// Optional comma-separated labels from `scenarios::Case::label` for targeted re-execution after a
 /// host interruption. Acceptance requires the default (unset) full sequence of baseline and cases.
 const CASE_SELECTION_ENV: &str = "MOLTEN_TEST_NATIVE_CASES";
@@ -95,22 +97,25 @@ fn exited_child_cannot_supply_readiness() -> crate::producer::Result<()> {
 // r[verify molten.system_extension.native_effect_uncertainty]
 // r[verify molten.system_extension.native_effect_lifetime]
 // r[verify molten.system_extension.native_effect_consumer]
+// r[verify molten.startup_binding.guest_admission]
 #[test]
 #[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn collaboration_native_baseline() -> crate::producer::Result<()> {
     let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
     let output = output_of(&trust)?;
+    let evidence = evidence_root()?;
     let workspace = crate::test_support::process_workspace("collaboration-native-baseline")?;
     let mut cohort = crate::producer::prepare(
         workspace.as_ref(),
         &output.join("bin/molten"),
         &output.join("bin/molten-collaboration-scope"),
         &trust,
+        std::env::var_os(CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,
     )?;
     cohort.release_endpoints();
     let observation = operations::drive(&cohort)?;
-    eprintln!("baseline observations={}", scenarios::retain(&observation, None)?);
+    eprintln!("baseline observations={}", scenarios::retain(&observation, evidence.as_ref())?);
     Ok(())
 }
 
@@ -119,10 +124,9 @@ fn collaboration_native_baseline() -> crate::producer::Result<()> {
 fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> crate::producer::Result<()> {
     let trust = std::path::PathBuf::from(std::env::var_os(SOURCE_TRUST_ENV).ok_or("signed source trust")?);
     let output = output_of(&trust)?;
-    let evidence = std::env::var_os("MOLTEN_TEST_EVIDENCE_ROOT")
-        .map(std::path::PathBuf::from)
-        .map(|path| molten::node_state::DirectoryRoot::open(&path))
-        .transpose()?;
+    let evidence = evidence_root()?;
+    let closure_cache = std::env::var_os(CLOSURE_CACHE_ENV);
+    let closure_cache = closure_cache.as_deref().map(std::path::Path::new);
     let selection = match std::env::var_os(CASE_SELECTION_ENV) {
         None => None,
         Some(raw) => {
@@ -137,6 +141,7 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
             &output.join("bin/molten"),
             &output.join("bin/molten-collaboration-scope"),
             &trust,
+            closure_cache,
             None,
         )?;
         cohort.release_endpoints();
@@ -151,6 +156,7 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
             &output.join("bin/molten"),
             &output.join("bin/molten-collaboration-scope"),
             &trust,
+            closure_cache,
             case.frame_budget()?,
         )?;
         cohort.release_endpoints();
@@ -158,6 +164,13 @@ fn installed_native_effect_commits_through_raft_and_returns_a_completion() -> cr
         eprintln!("{label} observations={}", scenarios::retain(&observation, evidence.as_ref())?);
     }
     Ok(())
+}
+
+fn evidence_root() -> crate::producer::Result<Option<molten::node_state::DirectoryRoot>> {
+    Ok(std::env::var_os(EVIDENCE_ROOT_ENV)
+        .map(std::path::PathBuf::from)
+        .map(|path| molten::node_state::DirectoryRoot::open(&path))
+        .transpose()?)
 }
 
 /// Parse a bounded, duplicate-free selection of known case labels.

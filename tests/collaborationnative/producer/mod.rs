@@ -49,6 +49,7 @@ pub fn prepare(
     signed_main: &std::path::Path,
     signed_scope: &std::path::Path,
     source_trust: &std::path::Path,
+    closure_cache: Option<&std::path::Path>,
     max_frame_bytes: Option<u64>,
 ) -> Result<Cohort> {
     let cohort = transport::Cohort::reserve(max_frame_bytes)?;
@@ -59,6 +60,7 @@ pub fn prepare(
             signed_main,
             signed_scope,
             source_trust,
+            closure_cache,
             index,
         })?;
         let service = service::build(&source, &cohort.mechanisms)?;
@@ -99,6 +101,7 @@ pub(super) struct Input<'a> {
     pub signed_main: &'a std::path::Path,
     pub signed_scope: &'a std::path::Path,
     pub source_trust: &'a std::path::Path,
+    pub closure_cache: Option<&'a std::path::Path>,
     pub index: usize,
 }
 
@@ -129,9 +132,8 @@ pub(super) fn admit(input: Input<'_>) -> Result<Source> {
     // An independently provisioned cohort cache avoids re-measuring the same immutable
     // closure in every guest. The exact accepted key is still checked against the actual
     // output, trust, binding, executable, build-closure and all six retained graphs.
-    if let Some(cache) = std::env::var_os("MOLTEN_TEST_CLOSURE_CACHE") {
-        let cache = std::path::PathBuf::from(cache);
-        let bytes = std::fs::read(&cache).map_err(|error| format!("closure cache: {error}"))?;
+    if let Some(cache) = input.closure_cache {
+        let bytes = std::fs::read(cache).map_err(|error| format!("closure cache: {error}"))?;
         if bytes.len() > 4_096 {
             return Err("closure cache exceeds its bound".into());
         }

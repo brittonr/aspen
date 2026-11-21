@@ -21,3 +21,9 @@
 **Choice:** The guest trust record selects the new output and its binding. No existing full-output trust is rewritten.
 
 **Rationale:** Authority to run a guest runtime profile is explicit and revocable.
+
+### 4. A node-root cache does not confer source authority
+
+**Choice:** Verify the selected signature, executing bytes, and retained gate on every guest admission. Reuse only the existing closure measurement cache after authentication, under its existing immutable-store assumption.
+
+**Rationale:** File path and length are not evidence of the executing bytes or of current successful authentication. A faster run under that earlier experiment is not qualification of the hardened path.

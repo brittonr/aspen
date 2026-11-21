@@ -84,6 +84,7 @@ fn cohort_rejects_tamper_missing_and_duplicate_roles() {
 // r[verify molten.audit_f02.fixture_isolation]
 // r[verify molten.startup_binding.refresh]
 #[test]
+// r[verify molten.startup_binding.guest_profile]
 fn historical_and_fixture_producer_profiles_are_not_promoted() {
     let mut binding = binding();
     let selected = selection();

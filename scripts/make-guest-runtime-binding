@@ -3,6 +3,7 @@
 #
 # This profile is deliberately narrower than full build provenance: `build-closure`
 # and all six graphs contain only the runtime cohort of the selected binaries.
+# r[impl molten.startup_binding.guest_producer]
 set -euo pipefail
 if [ "$#" -ne 3 ]; then
     echo "usage: $0 FULL_OUTPUT SECRET_KEY OUT_DIR" >&2

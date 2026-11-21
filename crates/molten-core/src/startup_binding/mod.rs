@@ -8,6 +8,7 @@ use std::vec;
 pub const SCHEMA: &str = "molten-node-source-binding-v1";
 pub const PRODUCER_PROFILE: &str = "molten-nix-source-binding-v1";
 /// Guest profile: the retained closure is the runtime cohort only. It is not full build provenance.
+// r[impl molten.startup_binding.guest_profile]
 pub const GUEST_RUNTIME_PRODUCER_PROFILE: &str = "molten-nix-guest-runtime-binding-v1";
 pub const REQUIRED_ROLES: [&str; 4] = [
     "primary-cohort",
@@ -76,9 +77,7 @@ pub fn admit(binding: &Binding, selected: &Selection, observed: &Observation<'_>
     if binding.schema != SCHEMA {
         return Err(Issue::UnsupportedSchema);
     }
-    if binding.producer_profile != PRODUCER_PROFILE
-        && binding.producer_profile != GUEST_RUNTIME_PRODUCER_PROFILE
-    {
+    if binding.producer_profile != PRODUCER_PROFILE && binding.producer_profile != GUEST_RUNTIME_PRODUCER_PROFILE {
         return Err(Issue::UnsupportedProducer);
     }
     validate_identities(binding, selected, observed)?;

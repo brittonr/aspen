@@ -21,6 +21,7 @@ fn installed_native_effect_rejects_a_mismatched_configuration() -> crate::produc
         &output.join("bin/molten"),
         &output.join("bin/molten-collaboration-scope"),
         &trust,
+        std::env::var_os(crate::driver::CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,
     )?;
     cohort.release_endpoints();
@@ -87,6 +88,7 @@ fn installed_native_effect_startup_failure_publishes_no_readiness() -> crate::pr
         &output.join("bin/molten"),
         &output.join("bin/molten-collaboration-scope"),
         &trust,
+        std::env::var_os(crate::driver::CLOSURE_CACHE_ENV).as_deref().map(std::path::Path::new),
         None,
     )?;
     cohort.release_endpoints();

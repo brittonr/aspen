@@ -4,7 +4,7 @@
 
 Admit one explicitly narrowed, signed runtime-only source cohort for bounded guests without changing full source-binding semantics.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: The guest profile is distinct
 
@@ -31,7 +31,7 @@ r[molten.startup_binding.guest_producer] The guest producer MUST build `build-cl
 
 ### Requirement: Guest admission proves only the recorded runtime
 
-r[molten.startup_binding.guest_admission] Guest admission MUST measure and authenticate the exact runtime cohort and executing binary, and MUST NOT claim omitted build, compiler, or gate closure paths.
+r[molten.startup_binding.guest_admission] Guest admission MUST authenticate the selected producer and measure the exact runtime cohort and executing binary. It MUST NOT rely on a node-root cache for output authentication, executable identity, or gate validation, or claim omitted build, compiler, or gate closure paths.
 
 #### Scenario: Runtime cohort is retained
 - GIVEN a guest output and trust
@@ -46,17 +46,3 @@ r[molten.startup_binding.guest_campaign] A KVM guest campaign MUST retain the ou
 - GIVEN a completed guest campaign
 - WHEN evidence is retained
 - THEN the receipt MUST include the runtime-only non-claims.
-
-### Requirement: Repeated guest admission may reuse an exact-key cache
-
-r[molten.startup_binding.guest_admission_cache] The guest profile MAY reuse a successful source-gate admission within one node root when the cache key binds the exact trust bytes, binding, executing-file path and length, and measured artifacts. A hit MUST revalidate retained inputs and the artifact cohort and MUST NOT be used by the full producer profile.
-
-#### Scenario: Exact key is reused
-- GIVEN a guest-profile process has completed source admission in a node root
-- WHEN another process in that root presents the same trust, binding, executable identity, and artifacts
-- THEN it MAY reuse the recorded gate without another Nix signature or closure query.
-
-#### Scenario: Inputs change
-- GIVEN any trust, binding, executable identity, artifact, or profile changes
-- WHEN admission runs
-- THEN the cache MUST miss and full admission MUST run.
