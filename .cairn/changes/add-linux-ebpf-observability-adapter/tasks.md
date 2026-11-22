@@ -70,3 +70,21 @@ The approved inventory-corrected derivation `4d4vr0wbvir98kvrpxppikfjzhf5aabr-vm
 The approved direct-I/O derivation `77smg9q5bfn45ldvjgwb5h6nvha0s7iy-vm-test-run-onixos-native-bpf-observation-vm-only.drv` (harness `3703d51ed09d376f702195641c21b13caa7c2958`, Pueue task 37) passed generation 1 with all six nonzero signals. The actual unprivileged Aspen consumer returned `complete=true`, `health=healthy`, `status=exported`, and six samples; 5,512 attempts and submissions reconciled with zero producer drops, consumer drops, or pending records. Its snapshot ref was `blake3:2f3badb1a48734d6695674f7dcff66c96ee55908cab770be1fce536717beb9f5`. The test reached and passed the generation-mismatch, file-write, loader, unreadable, missing, stale, malformed-accounting, loss-bound and over-bound denials.
 
 Generation 2's collector exited 0 but cleanup failed, and the publisher correctly kept its window unpublished. The console retained only `cleanup_error=true`, not the underlying phase. The replacement and cancellation checks and final guarded evidence export did not run. QEMU and virtual LAN teardown completed. Log BLAKE3 `44c722da15fc6c2bd314e16d55936444161c6c4417d44832d14602c2b64af623` (consumer at lines 872–881, second-generation failure and teardown at 938–970).
+
+## Passing cleanup-corrected disposable VM (2026-11-22)
+
+Pueue task 26 ran the single approved derivation `1v3vcaz62cyxgyv2massbd3kizqv6ab7-vm-test-run-onixos-native-bpf-observation-vm-only.drv` (OnixOS harness `9f2a1cbabf71f2ada537a63a50955c4090b24eb6`, Linux `6.18.20`, BTF `blake3:08c14844b3b9cde37f8b3bba9effde104fa59194195777f3dd859db3919e8064`) and exited 0. It used the same collector, Aspen consumer and assertions. The harness waits for the cgroup to become empty within the existing five-second cleanup budget before removing it and allowing publication.
+
+The real executable `blake3:05fc85f43b1af84b838100449b60832147e07076f7c316cc341108f4d07cb6a6` ran under a non-root, empty-capability, `NoNewPrivs=1` context, measured by the pre-consumer probe. The retained generation-1 expected binding (`blake3:826ac8e9b2ac27a8b90abb492a55fa80d250192f28e0a8236435afd5894c467c`) and checked profile (`blake3:a36781b09703d698bf40f5a318dc48ec5458fa80a213e4b0687ce416bc23f60e`) bind the exact machine, generation, canonical Pack and kernel build, program, BTF, schema, scope and accounting. The fixture passed the signed experimental authority, capability, foreign-scope, stale owner, and read-only cgroupfs controls, plus the consumer's write, loader, generation, unreadable, missing, stale, malformed-accounting, loss and over-bound denials.
+
+| Generation | Attempts and submissions | Observed outcome |
+| --- | ---: | --- |
+| 1 | 2,320 | All six signals; Aspen `complete=true`, `healthy`, `exported`. |
+| 2 | 1,704 | Replacement published after cleanup; old selection denied and endpoint revoked. No pressure signal in this window. |
+| 3 | 4,969 | Cancelled, final close and owned-cgroup cleanup succeeded; no endpoint published. |
+
+All three captures recorded zero producer drops, consumer drops and pending records. Only generation 1 was accepted by the Aspen consumer, with six samples and snapshot `blake3:e58fb9a37ea05475c98a5f3352ba63cc834ca260a1f1fcfc540349c84ac3d1aa`. Its exact result bytes are `blake3:b5f040c91728f27178c8cef8a9e0535c4c2eaaca01abb5b330d0b588dc104b15`.
+
+The guarded export is retained beneath `native-observation-vm-evidence/bpf-observation-evidence` in the locally rooted output `/nix/store/i43rdrfaj1c7in2j1ii5gsv4rcjpr7fd-vm-test-run-onixos-native-bpf-observation-vm-only`. Its guard checked 50 files (889,745 bytes) against bytes from 15 runtime secret files and found no match. The VM and virtual LAN tore down. Private console BLAKE3: `b9b7e5361d312b39013aad82d512e1cc88d1161211c2923966444be27a5ab1cf`.
+
+This is a passing producer/consumer and lifecycle result for one pinned disposable cohort. The OnixOS fix is on the local fixture branch; no independently supported host endpoint or installed Aspen node service was qualified. The provider dependency, full adapter conformance, node wiring and archive gate remain open.
