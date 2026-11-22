@@ -107,3 +107,42 @@ fn missing_window_spends_read_capability() {
     assert!(matches!(reader.poll(10, false), Err(EbpfEndpointFailure::Read(EbpfReadFailure::Closed))));
     assert_eq!(open().poll(10, false).expect("new read capability").wire_ref, selected);
 }
+
+// r[verify linux_ebpf_observability.failure]
+// r[verify linux_ebpf_observability.confidentiality]
+#[test]
+fn oversized_sum_is_unavailable_before_metric_projection() {
+    let (profile, mut adapter, mut window, context) = fixture();
+    let workspace = crate::test_support::process_workspace("ebpf-metric-range").expect("owned workspace");
+    let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
+    let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
+    window.records[0].value = i64::MAX as u64;
+    window.records[1].signal = window.records[0].signal;
+    for (increment, required) in [(0, true), (1, true), (1, false)] {
+        window.records[1].value = increment;
+        adapter.required = required;
+        root.write(&leaf, &serde_json::to_vec(&window).unwrap()).unwrap();
+        let observation = observe_linux_ebpf(EbpfServiceInput {
+            profile: &profile,
+            adapter: &adapter,
+            capability: Some(EbpfReadCapability {
+                root: &root,
+                leaf: leaf.clone(),
+                content_ref: None,
+            }),
+            control: control(),
+            context: context.clone(),
+        })
+        .expect("the service returns a typed observation outcome");
+        if increment == 0 {
+            assert_eq!(observation.status.artifact.kind, AdapterOutcomeKind::Exported);
+            assert!(observation.samples.iter().any(|sample| sample.artifact.value == i64::MAX));
+            assert!(!observation.deny_required_readiness);
+        } else {
+            assert_eq!(observation.status.artifact.kind, AdapterOutcomeKind::Corrupt);
+            assert!(observation.samples.is_empty());
+            assert_eq!(observation.health.artifact.state, HealthState::Unavailable);
+            assert_eq!(observation.deny_required_readiness, required);
+        }
+    }
+}
