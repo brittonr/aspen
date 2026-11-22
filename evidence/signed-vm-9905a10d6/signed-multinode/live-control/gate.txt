@@ -1,0 +1,3 @@
+node control live workflow bundle gate receipt blake3:556b8d1f28b645110213d56ec898e36c7c6733a44171290cccadf488f4dcbfbc written to /var/lib/molten/vm-evidence/live-control/gate.preserves
+node live workflow bundle gate decision=pass bundle=blake3:32adf4b043d67320c707900a69ce99fa239fc01ebb9cc4fef5a0151db48d4d1b verify=blake3:ab8676a30cf0e79ef411326c1df4bf6a16bb8cf45b078a5743cb468d027f4aa0 recomputed-verify=blake3:ab8676a30cf0e79ef411326c1df4bf6a16bb8cf45b078a5743cb468d027f4aa0 diagnostics=0
+next-step=import-bundle command="molten node live-workflow-bundle-import ..."

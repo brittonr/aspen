@@ -1,0 +1,3 @@
+node control live workflow bundle apply receipt blake3:e8f820b6c60e0347d3fd7b2d9c7f7ddfb68382257cacfea948431d86b51c4926 written to /var/lib/molten/vm-evidence/live-control/apply.preserves
+node live workflow bundle apply decision=pass bundle=blake3:32adf4b043d67320c707900a69ce99fa239fc01ebb9cc4fef5a0151db48d4d1b gate=blake3:556b8d1f28b645110213d56ec898e36c7c6733a44171290cccadf488f4dcbfbc import=blake3:37c1b92200129814c24c320ed7213b52762bb0e2a4d2bf5a94f51300eeaebc31 imported=7 send=none diagnostics=0
+next-step=send-live-workflow-bundle command="molten node live-workflow-bundle-apply ... --send"

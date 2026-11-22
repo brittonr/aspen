@@ -1,0 +1,3 @@
+node control live workflow bundle ack export receipt blake3:1c2436e534e2b985f2f31f7f3a740be99d779c97846575be89765f0bf507e27d written to /var/lib/molten/vm-evidence/live-control/ack-export.preserves
+node live workflow bundle ack export decision=pass ack=blake3:13db8155580de3b119b9a4e0965090c3f9b0f893046075c05ffc1f3d33be8d3e bundle=blake3:32adf4b043d67320c707900a69ce99fa239fc01ebb9cc4fef5a0151db48d4d1b receiver_decision=pass diagnostics=0
+next-step=import-ack command="molten node live-workflow-bundle-ack-import --state-root <sender> <ack>"

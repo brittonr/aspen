@@ -1,0 +1,3 @@
+node control live workflow protocol gate receipt blake3:196bb5656915a6d55c23a05f98d534bc49a6105467aeb94d33e4c050eedb2c97 written to /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves
+node live workflow protocol gate decision=pass receipt=blake3:196bb5656915a6d55c23a05f98d534bc49a6105467aeb94d33e4c050eedb2c97 protocol=blake3:f1fdb95640734c8c0c8b8bb72031a52ff530838831f759a7e668db5b773fe992 session=session:node-control-live-workflow:blake3-32adf4b043d67320c707900a69ce99fa239fc01ebb9cc4fef5a0151db48d4d1b operations=6 messages=3 diagnostics=0
+next-step=archive-workflow-protocol command="molten node show <protocol-gate-receipt>"

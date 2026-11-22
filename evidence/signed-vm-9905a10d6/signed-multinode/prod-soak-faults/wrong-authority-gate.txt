@@ -1,0 +1,3 @@
+node control live workflow bundle gate receipt blake3:0d22001b7b1348dc0bd7600af4fe5b98ab1d2cc7d71f611830137827dd9bbfcf written to /var/lib/molten/vm-evidence/prod-soak-faults/wrong-authority-gate.preserves
+node live workflow bundle gate decision=deny bundle=blake3:32adf4b043d67320c707900a69ce99fa239fc01ebb9cc4fef5a0151db48d4d1b verify=none recomputed-verify=blake3:e5a0427cba223ae118be60ca4d5819d6b8312d58ae0e8b1af2fd5fdd2933d0ab diagnostics=2
+next-step=import-missing-ticket-or-grant command="molten node live-ticket-import ...; molten node authority-grant-import ..."

@@ -1,0 +1,64 @@
+{
+  "schema": "aspen.vm-source-provisioning-observation.v1",
+  "source_commit": "9905a10d621dcd42f97fba2743c4343da814793b",
+  "platform": "x86_64-linux",
+  "signed_multinode": {
+    "task": 54,
+    "nix_selector": "nix run .#nixos-vm-multinode-signed -L",
+    "local_build_options": {"builders": "", "max_jobs": 1, "cores": 4, "substituters": ["https://cache.nixos.org"]},
+    "outer_deadline_seconds": 7200,
+    "driver_deadline_seconds": 14400,
+    "startup_deadline_seconds": 3600,
+    "resources_per_guest": {"vcpus": 8, "memory_mib": 8192, "store_image": true, "private_writable_store_overlay": true},
+    "exit_code": 0,
+    "driver_script_wall_seconds": 2778.48,
+    "result": "complete-signed-multinode-campaign-passed",
+    "app_derivation": "/nix/store/dpxzbzbsjghlpfq4g2sm4ji44gzmaycl-molten-vm-source-gate-signed.drv",
+    "test_derivation": "/nix/store/x58ihkgsksxdwfdxkjr4949s1dmy9l53-vm-test-run-molten-nixos-vm-multinode-signed.drv",
+    "test_output": "/nix/store/fhznkm0aq1qpyj6kj6jbdal56c75lmrh-vm-test-run-molten-nixos-vm-multinode-signed",
+    "package_derivation": "/nix/store/5ni33plr9zdb6c8vysyn8hdm9p35sgm-rust_molten-0.1.0.drv",
+    "package_output": "/nix/store/4pjsvhj2frq9pap47isv7fxiz8rpah3j-rust_molten-0.1.0",
+    "source_binding_derivation": "/nix/store/328ahxvb2sc6vlrmqg69c5nvznda334y-molten-node-source-binding-v1.drv",
+    "source_binding_output": "/nix/store/h7njg32hg90iw417dm6qvp6qd23dnnf1-molten-node-source-binding-v1",
+    "selected_output_member_blake3": {
+      "binding.json": "18f810044e1ec9b669ee435e8752246e7666443b6edc067d053ba03775219a6c",
+      "policy": "e045c1f58ded52d1d1454096b8fc7618cebab06fd4b7b250c1be93a88bce394c",
+      "profile": "902c6db77c69d2d616b95cce54adbf692e886de8fcaa372ae4f24225ee48aa9d",
+      "build-closure": "201fb0c7500fd031bf00fd38d1c2171155542dee0298bd32a669d8234b16b2fa",
+      "bin/molten": "8243687fa44e4a345f9247b3957abce02d18fcf432bf97802fbd35f796882ea3"
+    },
+    "scope": "Both systemd roots, fresh receiver and sender roots, live control and service jobs, service restart, and executable VM fault validation completed. The actual node-status-health-write denial retained EACCES and matching independent before/after protected-state observations. Network partition remained unavailable for its declared executable-fault profile.",
+    "raw_log_blake3": "4a76d486bab09d324a3210794b24baa0662e745d75ba9b6f323d8149efabb5f8",
+    "retained_packet": {
+      "file_count": 132,
+      "directory": "signed-multinode",
+      "byte_manifest": "signed-multinode.b3sum",
+      "byte_manifest_blake3": "5e3745fb6fb8e588e6ff79732fb954207da5380f0918939431ee87e744fd6e1a",
+      "verified_identical_to_realized_output": true,
+      "canonical_refs": {
+        "vm_test_run": "blake3:887ba2df37acc577ef3cf206f078f39187e456a5f17b7d875d38da521ef55623",
+        "evidence_manifest": "blake3:88b7d27d5ac94d0f6f31e127bf325eef0db1e11d5b9b11fd391226270041189f",
+        "evidence_validation": "blake3:e4d6e39c4d420376bc37bb85a3b53873e79b4db463df51e4b6d06e40b1747bcf",
+        "fault_validation": "blake3:9dc033c543fcb4c220991fdf41da80ebc353168939684302f3d90dc9be9894d0"
+      }
+    }
+  },
+  "unsigned_multinode": {
+    "task": 61,
+    "nix_selector": "nix build .#checks.x86_64-linux.nixos-vm-multinode --builders '' --max-jobs 1 --cores 4 --option substituters https://cache.nixos.org --no-link --print-out-paths -L",
+    "outer_deadline_seconds": 4200,
+    "exit_code": 0,
+    "driver_script_wall_seconds": 19.10,
+    "result": "missing-trust-denied-on-both-nodes",
+    "test_derivation": "/nix/store/wnqfsg9haa8i1nq96wm2xfacl93wl9zk-vm-test-run-molten-nixos-vm-multinode.drv",
+    "test_output": "/nix/store/h37hrcmbv3hr0k3hffw565jacwvhd6yz-vm-test-run-molten-nixos-vm-multinode",
+    "absent_evidence_on_both_nodes": ["startup.preserves", "health.preserves", "control-loop.preserves", "heartbeat.preserves"],
+    "raw_log_blake3": "70f4e356432358ed22f3a7c0c315bb175b93bff54e6884c57f1e1785fd51fec6"
+  },
+  "limits": [
+    "The signer is selected and provisioned by the disposable fixture, outside node startup. No independent producer/operator or external deployment trust was established.",
+    "The unsigned check is a successful denial assertion, not a signed startup pass.",
+    "Driver duration is not a product startup measurement. These are not release, later-source, or general cross-host qualification results.",
+    "Original driver logs remain local diagnostics; exported canonical receipts govern the execution claim."
+  ]
+}
