@@ -82,6 +82,8 @@ A native `invalid` verdict preserves the witness as bounded failure evidence. `u
 
 **Choice:** A pure Molten importer validates producer identities, cluster and artifact refs, workload profile, operation completeness, fault outcomes, recovery, checker cohort, verdict, witness, teardown, and non-claims.
 
+The importing operator supplies an independently checked fault profile and, for a disruptive run, the exact content reference of the provider effect record. The no-fault profile accepts no fault events or effect reference. The initial disruptive profiles each bind one fault attempt; its measured controller interval from apply to heal covers the declared disruption and stays within the heal deadline, and recovery stays within the post-heal deadline. The importer does not choose or fabricate the independent provider record.
+
 The shell stores a canonical external live-reliability receipt in the Molten ledger. The receipt cannot satisfy authority, policy, resource, provenance, transport, retention, deployment, or release gates.
 
 **Rationale:** Live observations are supporting evidence, not ambient trust.

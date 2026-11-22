@@ -13,6 +13,7 @@ pub(super) struct Paths {
 struct ExpectedInput {
     profile: molten::live_reliability::profile::Register,
     plan: molten::live_reliability::generator::OperationPlan,
+    fault: molten::live_reliability::evidence::ExpectedFault,
     identities: std::collections::BTreeMap<String, String>,
     endpoints: std::collections::BTreeSet<String>,
     max_events: usize,
@@ -32,7 +33,7 @@ pub(super) fn run(paths: Paths) -> molten::error::Result<()> {
     let reference_checked = paths.reference_checker.as_ref().map(|checker|
         super::checked(checker, &evidence.history, &paths.work_root)).transpose()?;
     let expected = molten::live_reliability::evidence::Expected {
-        admitted, plan: input.plan, identities: input.identities, endpoints: input.endpoints,
+        admitted, plan: input.plan, fault: input.fault, identities: input.identities, endpoints: input.endpoints,
         max_events: input.max_events, max_witness_bytes: input.max_witness_bytes,
         max_recovery_ms: input.max_recovery_ms, checked, reference_checked, readiness: input.readiness,
     };

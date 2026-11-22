@@ -9,11 +9,25 @@ fn profile() -> crate::live_reliability::profile::Register {
         "schema":"molten.live-register-profile.v1", "group":"group", "service":"registry", "keys":["key"],
         "initial_value":null,"values":[1,2],"generator_ref":reference("generator"),"adapter_ref":reference("adapter"),
         "model_ref":reference("model"),"outcome_ref":reference("outcome"),"seed":7,"read_weight":1,"write_weight":1,
-        "clients":["client"],"endpoints":["endpoint-a","endpoint-b"],"concurrency":1,"operations":5,"control_operations":1,
-        "consistency_model":"register","recovery":{"timeout_ms":1000,"stable_membership_observations":1,
+        "clients":["client"],"endpoints":["endpoint-a","endpoint-b","endpoint-c"],"concurrency":1,
+        "operations":6,"control_operations":1,
+        "consistency_model":"register","recovery":{"timeout_ms":1000,"stable_membership_observations":2,
         "require_all_endpoint_reads":true},"evidence":{"max_attempts_per_operation":1,"max_events":32,"max_uncertain":1,
         "max_bytes":1048576,"checker_states":100,"checker_branches":100,"checker_memo_bytes":4096,"checker_reductions":10}
     })).expect("profile")
+}
+
+pub(super) fn no_fault() -> super::super::ExpectedFault {
+    super::super::ExpectedFault {
+        profile: crate::live_reliability::fault::Profile {
+            fault: crate::live_reliability::fault::Mechanism::NoFault,
+            heal_deadline_ms: 100,
+            recovery_deadline_ms: 100,
+            stable_membership_ms: 1,
+            final_read_deadline_ms: 100,
+        },
+        effect_ref: None,
+    }
 }
 
 pub(super) fn fixture() -> (super::super::Expected, super::super::Observed) {
@@ -59,6 +73,7 @@ pub(super) fn fixture() -> (super::super::Expected, super::super::Observed) {
     let expected = super::super::Expected {
         admitted,
         plan,
+        fault: no_fault(),
         identities,
         endpoints: profile().endpoints.into_iter().collect(),
         max_events: 32,
@@ -76,9 +91,12 @@ fn history(
     plan: &crate::live_reliability::generator::OperationPlan,
     source: &str,
 ) -> (serde_json::Value, Vec<super::super::FinalRead>) {
+    const SECOND_SAMPLE_NS: u64 = 1_000_000;
     let mut events = vec![
-        serde_json::json!({"kind":"lifecycle","event_index":0,"phase":"ready","controller_time_ns":0}),
-        serde_json::json!({"kind":"lifecycle","event_index":1,"phase":"stable-membership","controller_time_ns":0}),
+        serde_json::json!({"kind":"lifecycle","event_index":0,"phase":"stable-membership","controller_time_ns":0}),
+        serde_json::json!({"kind":"lifecycle","event_index":1,"phase":"ready","controller_time_ns":SECOND_SAMPLE_NS}),
+        serde_json::json!({"kind":"lifecycle","event_index":2,"phase":"stable-membership",
+            "controller_time_ns":SECOND_SAMPLE_NS}),
     ];
     let mut recovery = Vec::with_capacity(admitted.profile().endpoints.len());
     let mut current = crate::live_reliability::generator::Value::Null;
@@ -86,11 +104,12 @@ fn history(
         let is_write = operation.function == crate::live_reliability::generator::Function::Write;
         let outcome =
             crate::live_reliability::history::PublicOutcome::Acknowledged(if is_write { None } else { Some(current) });
+        let event_index = events.len() as u64;
         let observation = crate::live_reliability::history::AttemptObservation {
             ordinal: 0,
-            event_index: events.len() as u64,
-            started_ns: events.len() as u64,
-            completed_ns: events.len() as u64 + 1,
+            event_index,
+            started_ns: SECOND_SAMPLE_NS + event_index,
+            completed_ns: SECOND_SAMPLE_NS + event_index + 1,
             source_artifact: source.into(),
             outcome,
         };
@@ -108,16 +127,16 @@ fn history(
                 attempt_id: crate::live_reliability::history::attempt_id(operation, 0),
                 value: serde_json::to_value(current).expect("value"),
                 ready: true,
-                ready_event: 0,
-                stable_membership_event: 1,
-                stable_membership_observations: 1,
+                ready_event: 1,
+                stable_membership_event: 2,
+                stable_membership_observations: 2,
                 stable_membership: true,
                 elapsed_ms: 0,
             });
         }
     }
     events.push(serde_json::json!({"kind":"lifecycle","phase":"teardown",
-        "event_index":events.len(),"controller_time_ns":events.len()}));
+        "event_index":events.len(),"controller_time_ns":SECOND_SAMPLE_NS + events.len() as u64}));
     let p = admitted.profile();
     (
         serde_json::json!({"schema_version":2,"workload_profile":admitted.profile_ref(),"source_artifact":source,

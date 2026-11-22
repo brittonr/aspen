@@ -4,6 +4,7 @@
 pub struct Expected {
     pub admitted: crate::live_reliability::profile::Admitted,
     pub plan: crate::live_reliability::generator::OperationPlan,
+    pub fault: ExpectedFault,
     pub identities: std::collections::BTreeMap<String, String>,
     pub endpoints: std::collections::BTreeSet<String>,
     pub max_events: usize,
@@ -12,6 +13,14 @@ pub struct Expected {
     pub checked: crate::live_reliability::checker::CheckedReport,
     pub reference_checked: Option<crate::live_reliability::checker::CheckedReport>,
     pub readiness: std::collections::BTreeMap<String, crate::live_reliability::evidenceproof::ExpectedReadiness>,
+}
+
+/// Fault policy and effect record independently selected by the importing operator.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpectedFault {
+    pub profile: crate::live_reliability::fault::Profile,
+    pub effect_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -129,7 +138,7 @@ pub fn import(expected: &Expected, evidence: &Observed) -> Result<ExternalReceip
     {
         return Err(Issue::History);
     }
-    checks::validate_faults(evidence, events)?;
+    checks::validate_faults(expected, evidence, events)?;
     checks::validate_recovery(expected, evidence, events)?;
     crate::live_reliability::evidenceproof::validate(&expected.endpoints, &expected.readiness, &evidence.readiness)?;
     let verdict = checks::validate_report(expected, evidence)?;
@@ -154,7 +163,8 @@ pub fn import(expected: &Expected, evidence: &Observed) -> Result<ExternalReceip
     };
     let receipt = serde_json::json!({"schema":"molten.external-live-reliability.v1",
         "environment":"onixos-live", "status":status, "verdict":verdict,
-        "authority":false, "scope":"exact finite admitted history only", "evidence":evidence});
+        "authority":false, "scope":"exact finite admitted history only",
+        "fault_profile":expected.fault.profile, "evidence":evidence});
     let value = crate::preserves_rail::record("external-live-reliability-receipt-v1", vec![
         crate::live_reliability::checker::canonical_value(&receipt).map_err(|_| Issue::Bounds)?,
     ]);

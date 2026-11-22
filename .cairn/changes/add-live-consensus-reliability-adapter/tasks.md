@@ -1,34 +1,36 @@
 ## Phase 1: Workload and semantic core
 
-- [ ] [serial] Define the typed service-registry register profile with exact key, initial value, value corpus, generator, seed, weights, clients, concurrency, operations, consistency model, recovery, and evidence bounds. r[molten.consensus.live_register_profile]
-- [ ] [serial] Implement the pure bounded read/write generator with deterministic operation plans and complete choice records. r[molten.consensus.live_operation_generator]
-- [ ] [serial] Implement pure public-operation projection and `ok`, `fail`, `info`, pending, retry, logical-ID, and attempt-ID mapping. r[molten.consensus.live_operation_history]
-- [ ] [parallel] Add positive write/read fixtures and negative changed-ID, malformed-response, false-definite-failure, unsupported-value, and incomplete-pair fixtures. r[molten.testing.live_reliability_validation]
+- [x] [serial] Define the typed service-registry register profile with exact key, initial value, value corpus, generator, seed, weights, clients, concurrency, operations, consistency model, recovery, and evidence bounds. r[molten.consensus.live_register_profile]
+- [x] [serial] Implement the pure bounded read/write generator with deterministic operation plans and complete choice records. r[molten.consensus.live_operation_generator]
+- [x] [serial] Implement pure public-operation projection and `ok`, `fail`, `info`, pending, retry, logical-ID, and attempt-ID mapping. r[molten.consensus.live_operation_history]
+- [x] [parallel] Add positive write/read fixtures and negative changed-ID, malformed-response, false-definite-failure, unsupported-value, and incomplete-pair fixtures. r[molten.testing.live_reliability_validation]
+
+The [register profile and admission](../../../src/reliability/model/profile.rs) bind one bounded key and the null initial value to the generator, adapter, outcome and register-model identities. The retained [local verification](#local-verification-2026-11-21) includes `live_reliability::profile::tests` for the deterministic seeded plan and denied cross-key and unbounded profiles.
 
 ## Phase 2: Public client and deployment adapter
 
-- [ ] [depends:chaoscontrol-semantic-history-contract] [serial] Pin the semantic-history v2 schema, register model, checker report, and evidence classes through immutable Nix inputs. r[molten.testing.live_reliability_cohort]
+- [x] [depends:chaoscontrol-semantic-history-contract] [serial] Pin the semantic-history v2 schema, register model, checker report, and evidence classes through immutable Nix inputs. r[molten.testing.live_reliability_cohort]
 - [ ] [depends:onixos-live-reliability-contract] [serial] Implement the Molten product adapter for setup, write, read, recover, final-read, and teardown through public coordination endpoints. r[molten.consensus.live_public_adapter]
 - [ ] [depends:onixos-molten-native-service] [serial] Package the exact multi-node Molten service cohort for disposable OnixOS clusters. r[molten.testing.live_reliability_cohort]
-- [ ] [parallel] Add a deliberately faulty public fixture for stale reads, lost acknowledged writes, divergence, duplicate application, and stalled recovery. r[molten.testing.live_reliability_validation]
+- [x] [parallel] Add a deliberately faulty public fixture for stale reads, lost acknowledged writes, divergence, duplicate application, and stalled recovery. r[molten.testing.live_reliability_validation]
 
 ## Phase 3: Live fault and recovery profiles
 
 - [ ] [depends:onixos-live-reliability-contract] [serial] Add no-fault, process-restart, temporary-partition, heal, recovery, and final-read profiles. r[molten.consensus.live_fault_profile]
-- [ ] [serial] Require final public reads from every admitted endpoint after declared readiness and stable membership facts. r[molten.consensus.live_recovery]
-- [ ] [parallel] Keep clock, durability, Byzantine, queue, lock, and transaction profiles explicitly unsupported. r[molten.consensus.live_fault_profile] r[molten.testing.live_reliability_claim_boundary]
+- [x] [serial] Require final public reads from every admitted endpoint after declared readiness and stable membership facts. r[molten.consensus.live_recovery]
+- [x] [parallel] Keep clock, durability, Byzantine, queue, lock, and transaction profiles explicitly unsupported. r[molten.consensus.live_fault_profile] r[molten.testing.live_reliability_claim_boundary]
 
 ## Phase 4: Checker and evidence integration
 
 - [ ] [serial] Invoke the pinned register checker over complete live histories and retain valid, invalid, and unknown reports. r[molten.consensus.live_linearizability]
 - [ ] [parallel] Add optional pinned reference-checker runs and block promotion on disagreement. r[molten.consensus.live_linearizability]
-- [ ] [serial] Implement a pure fail-closed importer for producer, cohort, profile, generator, history, fault, recovery, checker, witness, teardown, and non-claim facts. r[molten.testing.live_reliability_evidence]
+- [x] [serial] Implement a pure fail-closed importer for producer, cohort, profile, generator, history, fault, recovery, checker, witness, teardown, and non-claim facts. r[molten.testing.live_reliability_evidence]
 - [ ] [serial] Add a thin shell that stores a canonical external live-reliability receipt without granting other evidence or authority roles. r[molten.testing.live_reliability_evidence]
-- [ ] [parallel] Compare simulation, NixOS VM, ChaosControl KVM, and live profiles without merging their evidence classes. r[molten.testing.live_reliability_claim_boundary]
+- [x] [parallel] Compare simulation, NixOS VM, ChaosControl KVM, and live profiles without merging their evidence classes. r[molten.testing.live_reliability_claim_boundary]
 
 ## Phase 5: Validation and closeout
 
-- [ ] [parallel] Add malformed history, incomplete recovery, unobserved fault, stale artifact, checker disagreement, teardown gap, and overclaim rejection fixtures. r[molten.testing.live_reliability_validation]
+- [x] [parallel] Add malformed history, incomplete recovery, unobserved fault, stale artifact, checker disagreement, teardown gap, and overclaim rejection fixtures. r[molten.testing.live_reliability_validation]
 - [ ] [serial] Run pure adapter and importer tests, public client fixtures, disposable live campaigns, checker conformance, evidence validation, and Nix checks. r[molten.testing.live_reliability_validation]
 - [ ] [serial] Run Cairn proposal, design, tasks, and validation gates before sync or archive. r[molten.testing.live_reliability_validation]
 
@@ -37,3 +39,30 @@
 The provider contracts are no longer missing specifications: ChaosControl's semantic-history contract is archived, and OnixOS retains archived `2026-08-30-add-live-black-box-reliability-rail` and `2026-08-30-onixos-molten-native-service` changes. Historical source, pure/VM controls and checked archive tasks do not establish current-producer admission or a live campaign.
 
 Live behavior still requires the exact current provider integration, independently provisioned signed-output/source trust and credentials, an admitted production-shaped coordination endpoint/native service cohort, actual disposable hosts, complete histories/fault observations, checker results and teardown evidence. The retained v0.1.0 service and an experimental three-node recipe cannot satisfy those requirements. Existing generator, history, importer and public-client source must be reconciled rather than replaced; no unchecked execution criterion is completed by this prerequisite correction.
+
+## Local verification (2026-11-21)
+
+The root library invocation in pueue task 47 selected zero tests because its filters named source paths, not mounted module names. The retained libtest executable (BLAKE3 `333843ab160a5897195393b3b4ac86209d80f85af7fbfb2bc6dc006cde0659bb`) ran directly with the corrected filters:
+
+```sh
+"$MOLTEN_LIBTEST" 'fabric_observability::kernel::' \
+  'fabric_observability::nodeadmission::observertests::' 'live_reliability::'
+```
+
+71 passed, zero failed or ignored; 61 were reliability tests. The output BLAKE3 was `0f9ec2420cd7e6e1ec2469fc22988b4a2236f7f3b79dc620b9d24f5952c33105`. Checks cover the generator, operation/attempt history, actual loopback public fixtures, experimental recipe and receipt/import controls with prevalidated checker results. Neither a provider fault nor a deployed cohort or pinned external checker ran.
+
+The importer now requires the selected fault policy and, for a disruptive run, the independently verified provider effect reference. A standalone smoke of the exact admission functions accepted a complete partition and an explicit no-fault run, and denied late recovery, a different mechanism or effect reference, and a missing scheduled fault. This exercises pure validation only; deployed evidence and checker conformance remain unchecked.
+
+An isolated smoke of the exact changed recovery functions (harness BLAKE3 `12570ad6f1dd3a6d4a58cf1ac7e023112b9540a83f683d3acdc93549960ccef7`) accepted a complete sampled interval. It denied a one-nanosecond final-read overrun, a short stability interval, pre-recovery samples, and an overstated sample count. Pueue task 56 passed nine importer tests from before the new timing test was selected; it is not that test's execution evidence.
+
+Pueue task 63 selected the exact new regression and stopped at `Fault` before reaching the timing checks: the inherited in-memory fixture described only two endpoints, below the existing three-endpoint minimum. The corrected fixture keeps the original non-final workload and covers three final endpoint reads. Production admission and timing bounds are unchanged.
+
+Pueue task 66 passed all ten tests in `cargo test --locked -p molten --lib live_reliability::evidence::tests::`, including the revised three-endpoint recovery and imported partition controls. The same selection passed `cargo fmt --check` and `cargo clippy --locked -p molten --bin molten -- -D warnings` (log BLAKE3 `74c686ed5642cf0e98e81b57f21769086fff0466fce8c94e16c2032efe79c2ae`). This verifies fail-closed final-read requirements and pure admission with in-memory observations, not execution by an independent provider or a live history.
+
+## Pinned checker contract and executed shell control
+
+The existing [`chaoscontrol-conformance-src`](../../../flake.nix) input supplies the semantic-history v2 schema, pure register model, report v1 and evidence classes. An offline Nix evaluation resolved [`flake.lock`](../../../flake.lock) revision `ec8aa799bad4735bf1028a092ca39feb08fb4bb7`, NAR identity `sha256-BE2LOEEOiKEtMbttrpR4qRRh00eFlBlGL45E7epz5VE=`. The local build inputs matched that Nix source byte-for-byte: `semantic_history.rs` BLAKE3 `0677c9fe262f5703bf0c693d7abf57040b8aa231bf8d7d1db60703805b5d7a27` and `semantic-contract.rs` BLAKE3 `3b5e9176986bf29eca25a975bedd09573e3a231cafd6c56669d7d8b7615f32cd`.
+
+`cargo build --offline --locked -p chaoscontrol-evidence --bin semantic-history-contract` on the exact Git archive produced checker BLAKE3 `e87455e339cf5688e4ef7e92b4f1e67d16710940626213d422775a2af75f25eb`; its `selftest` passed. The previously built Aspen binary (BLAKE3 `d63c4a4987143d12312922eb943f73aa5d5a139125266471c4aa26be345e34c5`) then ran `molten reliability check` with that executable, the measured CLI source reference, a fresh work directory per case, 20,000 ms per checker operation and a 1 MiB input/output bound. Its result objects for the pinned `valid`, `invalid`, and `unknown-bound` register fixtures matched the producer's respective reports. A different expected executable digest denied with `checker-identity` before writing the work history or report.
+
+These are source binding, checker and synthetic CLI controls. They are not a hermetic checker package, a live history, a reference-checker run, or an imported provider campaign.
