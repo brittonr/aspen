@@ -295,12 +295,15 @@ pub(super) fn validate_checked(expected: &super::Expected, evidence: &super::Obs
     {
         return Err(super::Issue::Checker);
     }
-    match (&evidence.reference_report, &expected.reference_checked) {
-        (None, None) => {}
-        (Some(report), Some(checked))
-            if checked.history_ref == history_ref
-                && checked.report == *report
-                && expected.identities.get("reference-checker") == Some(&checked.checker_ref) => {}
+    match (
+        expected.identities.get("reference-checker"),
+        &evidence.reference_report,
+        &expected.reference_checked,
+    ) {
+        (None, None, None) => {}
+        (Some(reference), Some(report), Some(checked))
+            if checked.history_ref == history_ref && checked.report == *report && reference == &checked.checker_ref => {
+        }
         _ => return Err(super::Issue::Checker),
     }
     Ok(())

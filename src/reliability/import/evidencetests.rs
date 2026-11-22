@@ -174,6 +174,16 @@ fn selected_fault_without_observed_effect_and_teardown_gap_are_rejected() {
     assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Teardown));
 }
 
+// r[verify molten.consensus.live_linearizability]
+#[test]
+fn selected_reference_checker_cannot_be_omitted() {
+    let (mut expected, mut evidence) = support::fixture();
+    expected.identities.insert("reference-checker".into(), support::reference("reference checker"));
+    evidence.identities = expected.identities.clone();
+
+    assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Checker));
+}
+
 #[test]
 fn unknown_bound_and_reference_disagreement_never_promote() {
     let (mut expected, mut evidence) = support::fixture();

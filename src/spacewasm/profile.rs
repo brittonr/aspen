@@ -11,6 +11,11 @@ pub const NON_CLAIMS: &[&str] = &[
     "not-release-eligible",
 ];
 
+// Match the integer and transfer envelopes in config/spacewasm/contracts.ncl.
+const MAX_CHECKED_INTEGER: u64 = 9_007_199_254_740_991;
+const MAX_TRANSFER_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_CONTINUATIONS: u32 = 65_536;
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Limits {
@@ -88,30 +93,29 @@ impl Profile {
         }
         let l = &self.limits;
         let bounds = [
-            l.allocation_bytes,
-            l.ir_bytes,
-            l.stack_bytes,
-            l.segment_fuel,
-            l.total_fuel,
-            l.hostcall_bytes,
-            l.input_bytes,
-            l.output_bytes,
-            l.continuation_bytes,
-            l.retention_turns,
+            (l.allocation_bytes, i32::MAX as u64),
+            (l.ir_bytes, 65_536),
+            (l.stack_bytes, i32::MAX as u64),
+            (l.segment_fuel, MAX_CHECKED_INTEGER),
+            (l.total_fuel, MAX_CHECKED_INTEGER),
+            (l.hostcall_bytes, MAX_TRANSFER_BYTES),
+            (l.input_bytes, MAX_TRANSFER_BYTES),
+            (l.output_bytes, MAX_TRANSFER_BYTES),
+            (l.continuation_bytes, MAX_CHECKED_INTEGER),
+            (l.retention_turns, MAX_CHECKED_INTEGER),
         ];
-        if bounds.contains(&0)
+        if bounds
+            .iter()
+            .any(|&(value, limit)| !(1..=limit).contains(&value) || usize::try_from(value).is_err())
             || l.memory_pages == 0
             || l.memory_pages > 256
             || l.table_elements != 0
-            || l.continuation_count == 0
+            || !(1..=MAX_CONTINUATIONS).contains(&l.continuation_count)
             || l.segment_fuel > l.total_fuel
             || l.ir_bytes > l.allocation_bytes
-            || l.ir_bytes > 65536
             || l.stack_bytes > l.allocation_bytes
             || l.hostcall_bytes > u64::from(l.memory_pages) * 65536
-            || l.allocation_bytes > i32::MAX as u64
             || !l.stack_bytes.is_multiple_of(4)
-            || bounds.iter().any(|bound| usize::try_from(*bound).is_err())
         {
             return Err("invalid independent resource envelope".into());
         }
@@ -145,5 +149,29 @@ impl Profile {
             crate::codec::sequence(self.non_claims.iter().map(crate::codec::string).collect()),
         ]);
         crate::codec::canonical_hash(&value).map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // r[verify molten.spacewasm_core.resources]
+    #[test]
+    fn checked_profile_limits_reject_out_of_envelope_requests() {
+        for (field, maximum) in [
+            ("input_bytes", 16_777_216_u64),
+            ("output_bytes", 16_777_216),
+            ("continuation_count", 65_536),
+            ("total_fuel", 9_007_199_254_740_991),
+            ("continuation_bytes", 9_007_199_254_740_991),
+            ("retention_turns", 9_007_199_254_740_991),
+        ] {
+            let mut checked = serde_json::to_value(super::Profile::default()).expect("valid profile JSON");
+            checked["limits"][field] = serde_json::json!(maximum.min(usize::MAX as u64));
+            let admissible: super::Profile = serde_json::from_value(checked.clone()).expect("bounded profile");
+            admissible.validate().unwrap_or_else(|error| panic!("{field} at the bound denied: {error}"));
+            checked["limits"][field] = serde_json::json!(maximum + 1);
+            let excessive: super::Profile = serde_json::from_value(checked).expect("oversized numeric field");
+            assert!(excessive.validate().is_err(), "{field} above the bound accepted");
+        }
     }
 }

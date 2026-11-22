@@ -27,3 +27,11 @@ evidence-bearing acceptance:
 Pueue task 46 ran `cargo test --locked -p molten --features spacewasm-pilot --lib spacewasm::`: 31 passed, one independently provisioned case ignored. The pinned Nickel CLI also exported the checked authoring profile after the contract-export shadowing repair; `production` and `release` remained `false`. Neither check provides the missing independent publication, exact-verifier, or full-ABI differential evidence above.
 
 Current prerequisite readback still has no admitted bundle: Mantle revision `aa81952cce99ac7bb5e2bff95a97bcb4b785b8ca` leaves immutable publication and consumer execution unchecked, Octet revision `3ddd21ef671f206537d42ad2289467b530b96255` retains explicitly fixture-only static receipts, and the current ChaosControl differential still declares `chaoscontrol.spacewasm-mvp-differential-report.v1`. None supplies the missing full-ABI candidate input.
+
+## Checked profile ceilings
+
+Nickel 1.17.0 exported the default profile and accepted the declared ceiling, then denied ceiling plus one, independently for `input_bytes`, `output_bytes`, `continuation_count`, `total_fuel`, `retention_turns`, and `continuation_bytes`. Production and release remained false.
+
+On `a5d10a49e` plus only the regression, Pueue task 39 ran `cargo test --offline --locked -p molten --features spacewasm-pilot --lib spacewasm::profile::tests::checked_profile_limits_reject_out_of_envelope_requests -- --exact`. It failed with exit 101 at `input_bytes above the bound accepted` (log BLAKE3 `be04b05649b7f71558794783c5c5f21f07b45cb2890846d25def73546d4f5119`). This reproduced the deviation at Rust admission without any guest allocation or external execution.
+
+Pueue task 49 ran `cargo test --offline --locked -p molten --features spacewasm-pilot --lib -- live_reliability::evidence::tests:: spacewasm::` with all six Rust ceilings enforced. The repaired regression passed at each ceiling and denied ceiling plus one. The combined selection passed 44 tests with one independently provisioned replay case ignored (log BLAKE3 `3df9fd1b4b01e48f6c3d4047ee7278d4e5b3beaa4613c5e39e7c248739f9cc19`). This closes the Nickel/runtime envelope discrepancy, not the external materialization or differential evidence gates.
