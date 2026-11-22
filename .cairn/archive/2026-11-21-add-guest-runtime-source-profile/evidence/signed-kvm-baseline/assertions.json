@@ -1,0 +1,79 @@
+{
+  "schema": "chaoscontrol.assertion-summary.v2",
+  "catalog_status": "accepted",
+  "collision_safe_evidence": true,
+  "assertions": [
+    {
+      "id": 2565890805,
+      "identity": {
+        "descriptor": {
+          "identity_version": 1,
+          "namespace": "build:chaoscontrol-molten-guest:0.1.0",
+          "logical_key": {
+            "type": "automatic",
+            "source_site": "crates/chaoscontrol-molten-guest/src/main.rs:320:13"
+          },
+          "compatibility_id": 2565890805,
+          "kind": "always",
+          "message": "the admitted Molten driver completed its selected case successfully",
+          "source_file": "crates/chaoscontrol-molten-guest/src/main.rs",
+          "source_line": 320,
+          "source_column": 13,
+          "guest": "molten-collaboration-native",
+          "category": "completion"
+        },
+        "fingerprint": "0eba148c967cd5c7bb8111b34b3d4ea4c0e8edca90e8fa3dde2f7c78d7f87255",
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0125006275696c643a6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573743a302e312e30023400016372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e72733a3332303a3133030100000443007468652061646d6974746564204d6f6c74656e2064726976657220636f6d706c65746564206974732073656c65637465642063617365207375636365737366756c6c79052c006372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e7273060400400100000704000d000000081b006d6f6c74656e2d636f6c6c61626f726174696f6e2d6e6174697665090a00636f6d706c6574696f6e0a0400f562f098",
+        "catalog_tokens": [
+          "4f32d06f4c23c387cdc0ff8dd582ede0b147267f2f39986b38c7d35e4ec01935"
+        ]
+      },
+      "message": "the admitted Molten driver completed its selected case successfully",
+      "kind": "always",
+      "must_hit": true,
+      "guest": "molten-collaboration-native",
+      "category": "completion",
+      "verdict": "passed",
+      "hit_count": 1,
+      "true_count": 1,
+      "false_count": 0
+    },
+    {
+      "id": 2400264749,
+      "identity": {
+        "descriptor": {
+          "identity_version": 1,
+          "namespace": "build:chaoscontrol-molten-guest:0.1.0",
+          "logical_key": {
+            "type": "automatic",
+            "source_site": "crates/chaoscontrol-molten-guest/src/main.rs:328:13"
+          },
+          "compatibility_id": 2400264749,
+          "kind": "unreachable",
+          "message": "the admitted Molten driver could not run or retain its observation",
+          "source_file": "crates/chaoscontrol-molten-guest/src/main.rs",
+          "source_line": 328,
+          "source_column": 13,
+          "guest": "uncategorized",
+          "category": "uncategorized"
+        },
+        "fingerprint": "939f3c53d68fe3bc888d381a1baae5edf956444f79072815ce4f1e6c87b8910e",
+        "canonical_descriptor": "6368616f73636f6e74726f6c2e617373657274696f6e2d64657363726970746f722e763100010a0125006275696c643a6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573743a302e312e30023400016372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e72733a3332383a3133030100030442007468652061646d6974746564204d6f6c74656e2064726976657220636f756c64206e6f742072756e206f722072657461696e20697473206f62736572766174696f6e052c006372617465732f6368616f73636f6e74726f6c2d6d6f6c74656e2d67756573742f7372632f6d61696e2e7273060400480100000704000d000000080d00756e63617465676f72697a6564090d00756e63617465676f72697a65640a04002d22118f",
+        "catalog_tokens": [
+          "4f32d06f4c23c387cdc0ff8dd582ede0b147267f2f39986b38c7d35e4ec01935"
+        ]
+      },
+      "message": "the admitted Molten driver could not run or retain its observation",
+      "kind": "unreachable",
+      "must_hit": false,
+      "guest": "uncategorized",
+      "category": "uncategorized",
+      "verdict": "passed",
+      "hit_count": 0,
+      "true_count": 0,
+      "false_count": 0
+    }
+  ],
+  "liveness_gaps": [],
+  "distinct_failing_assertions": 0
+}

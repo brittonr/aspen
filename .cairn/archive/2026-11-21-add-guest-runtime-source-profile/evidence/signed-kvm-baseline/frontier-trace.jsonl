@@ -1,0 +1,4 @@
+{"kind":"header","schema":"chaoscontrol.frontier-trace.v1","policy":"campaign","seed":42,"max_rounds":1,"max_frontier":50,"branch_factor":1,"stale_round_limit":10,"mode":"input-tree","journal":{"epoch":0,"recovered_epochs":0,"closed_selections":0}}
+{"kind":"root","proposals":[{"score_bits":4611911198408756429,"marker":false}],"retained":[{"seq":0,"times_selected":0,"score_bits":4611911198408756429}]}
+{"kind":"round","round":0,"mode":"input-tree","outcome":"executed","draws":{"unit_bits":4604317194420431787,"index":null},"selection":{"seq":0,"explore":false},"work":{"candidates_examined":1,"eligible_candidates":1},"branches":[{"slot":"probe","new_edges":30,"snapshot":true,"new_bugs":0,"proposals":[{"score_bits":4644064436842135552,"marker":false}]}],"admitted":[1],"pruned":[],"retained":[{"seq":0,"times_selected":1,"score_bits":4611911198408756429},{"seq":1,"times_selected":0,"score_bits":4644064436842135552}]}
+{"kind":"stop","stop":"completed","rounds_completed":1}
