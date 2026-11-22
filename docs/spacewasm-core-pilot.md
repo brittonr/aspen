@@ -122,9 +122,11 @@ grant, and counted work before and after the call. Lifecycle events have no
 segment grant. The v2 execution and replay status envelopes bind these v2
 events; readback does not reinterpret older cumulative work as a grant.
 Continuations retain owned stack/PC/memory/table state, not serialized pointers.
-Actor generation, artifact, profile, input, authority, resource, effects, and
-logical retention are fenced on every resume. Stale failures drop guest/code/stack
-state; consuming `cleanup()` drops the remaining store and allocation guard.
+Resume and cancellation recheck actor generation, artifact, profile, input,
+authority, resource, effects, and logical retention. A turn may equal, but not
+precede, the last accepted turn. Acceptance never extends the retention deadline
+measured from creation. Stale failures drop guest/code/stack state; consuming
+`cleanup()` drops the remaining store and allocation guard.
 
 `authority::AuthorizedHost` verifies actual UCAN, Basalt policy, exact holder
 signature, operation profile, and replay admission immediately before calling the

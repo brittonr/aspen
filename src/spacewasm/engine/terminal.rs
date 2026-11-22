@@ -13,11 +13,7 @@ impl super::Engine {
                 "terminal-continuation-reused".into(),
             ));
         }
-        if context.current.current().as_ref() != Ok(&self.binding)
-            || self.shared.current.current().as_ref() != Ok(&self.binding)
-            || context.logical_turn < self.created
-            || context.logical_turn - self.created > self.plan.profile.limits.retention_turns
-        {
+        if !self.admit_turn(context) {
             return self.terminate(Some(continuation::Failure::Denied("stale continuation".into())));
         }
         let failure = if reason.is_empty() || reason.len() > 256 {

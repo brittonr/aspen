@@ -17,7 +17,7 @@
 ## Phase 3: Fabric integration and confidentiality
 
 - [x] [serial] Project admitted windows into existing canonical metric samples, bounded events, adapter status, snapshots, health inputs, and evidence refs without backend-specific identities. r[linux_ebpf_observability.projection]
-- [ ] [serial] Enforce existing descriptor, label, series, event, queue, snapshot, freshness, scope, and diagnostics bounds for every eBPF-derived observation. r[linux_ebpf_observability.confidentiality]
+- [x] [serial] Enforce existing descriptor, label, series, event, queue, snapshot, freshness, scope, and diagnostics bounds for every eBPF-derived observation. r[linux_ebpf_observability.confidentiality]
 - [x] [parallel] Add redaction and denial fixtures for command lines, payloads, packet contents, private paths, socket/peer identifiers, secret-like text, raw kernel identifiers, and unmapped fields. r[linux_ebpf_observability.confidentiality] r[linux_ebpf_observability.verification]
 - [x] [parallel] Add health/readiness assertions proving partial, stale, lost, or unavailable required windows cannot satisfy complete local readiness and local observations cannot satisfy cluster or release scope. r[linux_ebpf_observability.failure] r[linux_ebpf_observability.confidentiality]
 
@@ -152,3 +152,17 @@ The exact `checks.x86_64-linux.linux-ebpf-observation-boundary` check passed wit
 The repaired `fabric_observability::` selection passed 15 `molten-core` tests and 24 `molten` tests with `spacewasm-pilot,chaoscontrol-conformance` enabled for the latter. The real-file control exports `i64::MAX` exactly and reports `Corrupt` with unavailable health and no samples at `i64::MAX + 1`; only the required source denies readiness.
 
 Formatting, both zero-finding Octet producers, the ordered `strict-ci` gate (`blake3:2f0efcfd520e07e1f90256d4da59ebfe3963ea540201118c2a2838da76099c26`), denied-warning Clippy and pinned strict Cairn validation passed (log BLAKE3 `4b7335f032c7a926f2653b32e00e8177662943ca4b43c35754c257408529f8b1`). This does not close the installed-node supervision or provider evidence tasks.
+
+## Fabric queue budget control
+
+On `e682822a9e` plus the two local regressions, `window_reader_respects_fabric_queue_budget` failed with exit 101 because it admitted a reader whose configured wire allowance exceeded the enclosing fabric queue budget by one byte. At equality the real fixture read its entire bounded window. The failing selection's log BLAKE3 is `280e494c8739e61c2bbf688f8e58c925c647189f0fd7cf9280be498ea874fef8`.
+
+The exact `checks.x86_64-linux.linux-ebpf-observation-boundary` structural check passed with the queue fence, realizing `wywsgns8kwpsz3spk89pydik37qf17h8-molten-linux-ebpf-observation-boundary` (log BLAKE3 `2a3dc854c7e81834f653678185cf87139bc47a1829d843a37a3c07efdee2cce4`). This check did not run an installed observer.
+
+The first post-fix ordered check stopped before tests because the queue regression name repeated an ancestor module word. It reported one workspace Octet finding and zero library findings (log BLAKE3 `e4bd9638d249bf3a87abe13f7a4bb86b8441039973781bc8abfe98f9415e9ba9`). Only the regression name changed in response.
+
+The repaired `wire_allowance_must_fit_queue_budget` case reads the exact-limit file and rejects the one-byte excess during reader admission. Both zero-finding Octet producers, the 3,169-source corpus, `strict-ci` (`blake3:998f2c9a1ddc2dd2585e36dbc5d1f9873bf815de9909a46d27579ac23bcc400c`), 15 core and 61 feature-enabled library tests, formatting, denied-warning Clippy and strict Cairn validation passed (log BLAKE3 `69dd0e3521678e8e97d639ff09eeeb05b2994560beb21a012ee59dca3331b58f`). One independently provisioned SpaceWasm test stayed ignored. The bounds implementation is complete; installed-node execution and provider acceptance remain open.
+
+## Installed observer handoff
+
+The stock bounded loopback [NixOS service module](../../../nix/modules/molten.nix) invokes `node serve` without a `--linux-observation-selection`. An installed observer composition needs an explicit selection and a fresh, separately admitted grant for each replacement or restart; repeating a bounded `serve` with a spent grant is not rollover. The installed test must retain current generation and final accounting from the provider and separately observe closure of the node's read access. The module source inspection is not execution evidence.

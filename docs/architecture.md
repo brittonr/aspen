@@ -108,6 +108,11 @@ ownership, the archived paired-parity baseline, the approved operated-deadline
 delta, rollback and non-claims. Producer publication and passing parity do not
 establish component correctness or release eligibility.
 
+The [SpaceWasm core pilot](spacewasm-core-pilot.md) is separate from Component
+Model selection. Its engine retains in-memory continuations, rechecks admission
+on resume and cancellation, and accepts only nondecreasing logical turns within
+the original retention window. It does not export portable continuation state.
+
 The non-test roots are `wasm_component::consumer::Actor` and
 `system_extension::component::Executor`. Installation binds a verified Mantle
 snapshot, a separate current admission envelope, exact artifact/import facts and

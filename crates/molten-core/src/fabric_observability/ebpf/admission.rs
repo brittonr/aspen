@@ -3,6 +3,7 @@ use super::*;
 pub const EBPF_WINDOW_SCHEMA: &str = "onixos.bpf-observation.window.v1";
 
 // r[impl linux_ebpf_observability.profile]
+// r[impl linux_ebpf_observability.confidentiality]
 pub fn validate_ebpf_profile(
     profile: &super::super::ObservationProfile,
     adapter: &EbpfProfile,
@@ -12,6 +13,7 @@ pub fn validate_ebpf_profile(
         || adapter.max_records > 65536
         || adapter.max_bytes == 0
         || adapter.max_bytes > 4 * 1024 * 1024
+        || adapter.max_bytes as u64 > profile.bounds.max_queued_bytes
         || adapter.max_streams == 0
         || adapter.max_streams > 4096
         || adapter.window_ticks == 0

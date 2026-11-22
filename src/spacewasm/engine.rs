@@ -1,5 +1,7 @@
 mod state;
 mod terminal;
+#[cfg(test)]
+mod tests;
 
 use std::cell;
 use std::rc;
@@ -44,6 +46,7 @@ pub struct Engine {
     output_ptr: u32,
     fuel: u64,
     created: u64,
+    last_turn: u64,
     terminal: bool,
     events: Vec<receipt::Event>,
     budget: allocation::Budget,
@@ -144,6 +147,7 @@ impl Engine {
             output_ptr: 0,
             fuel: 0,
             created: start.logical_turn,
+            last_turn: start.logical_turn,
             terminal: false,
             events: Vec::new(),
             budget,
@@ -193,12 +197,7 @@ impl Engine {
                 "terminal-continuation-reused".into(),
             ));
         }
-        let current = context.current.current();
-        if current.as_ref() != Ok(&self.binding)
-            || context.logical_turn < self.created
-            || self.shared.current.current().as_ref() != Ok(&self.binding)
-            || context.logical_turn - self.created > self.plan.profile.limits.retention_turns
-        {
+        if !self.admit_turn(context) {
             return self.terminate(Some(continuation::Failure::Denied("stale continuation".into())));
         }
         let result = self.segment(context.logical_turn);
@@ -206,6 +205,21 @@ impl Engine {
             Ok(progress) => progress,
             Err(error) => self.terminate(Some(error)),
         }
+    }
+
+    // r[impl molten.spacewasm_core.resume]
+    fn admit_turn(&mut self, context: &continuation::ResumeContext) -> bool {
+        let turn = context.logical_turn;
+        // `last_turn` starts at creation and only advances after admission.
+        if turn < self.last_turn
+            || turn - self.created > self.plan.profile.limits.retention_turns
+            || context.current.current().as_ref() != Ok(&self.binding)
+            || self.shared.current.current().as_ref() != Ok(&self.binding)
+        {
+            return false;
+        }
+        self.last_turn = turn;
+        true
     }
 
     pub fn cleanup(mut self) -> Vec<receipt::Event> {

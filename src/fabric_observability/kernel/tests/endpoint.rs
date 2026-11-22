@@ -146,3 +146,28 @@ fn oversized_sum_is_unavailable_before_metric_projection() {
         }
     }
 }
+
+// r[verify linux_ebpf_observability.confidentiality]
+#[test]
+fn wire_allowance_must_fit_queue_budget() {
+    let (mut profile, mut adapter, window, _) = fixture();
+    let workspace = crate::test_support::process_workspace("ebpf-queue-budget").expect("owned workspace");
+    let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
+    let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
+    let bytes = serde_json::to_vec(&window).unwrap();
+    adapter.max_bytes = bytes.len();
+    profile.bounds.max_queued_bytes = bytes.len() as u64;
+    root.write(&leaf, &bytes).unwrap();
+    let open = |profile: &ObservationProfile| {
+        EbpfEndpointReader::open(&root, leaf.clone(), profile, &adapter, EbpfEndpointSelection {
+            epoch: window.generation,
+            deadline: window.end,
+            content_ref: None,
+        })
+    };
+    let at_bound = open(&profile).unwrap().poll(window.end, false).expect("exact wire budget is admitted");
+    assert_eq!(at_bound.window.encoded_bytes, bytes.len());
+
+    profile.bounds.max_queued_bytes -= 1;
+    assert!(matches!(open(&profile), Err(EbpfEndpointFailure::Admission(EbpfIssue::Bounds))));
+}
