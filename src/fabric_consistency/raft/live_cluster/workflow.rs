@@ -1,5 +1,6 @@
 use super::*;
 
+/// Elect the first node with the second node's vote, without handling the initial appends.
 pub(super) async fn elect_node_a(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
     let timer_ref = node_a.service.state().active_election_timer_ref.clone();
     let session_b = node_b.session_ref.clone();
@@ -36,6 +37,17 @@ pub(super) async fn replicate_request(
     node_c: &mut Node,
     request_ref: &str,
 ) -> crate::error::Result<()> {
+    replicate_until_commit(node_a, node_b, node_c, request_ref).await?;
+    replicate_commit_notice(node_a, node_b, node_c).await
+}
+
+/// Reach the leader's applied commit without notifying either follower of that commit.
+pub(super) async fn replicate_until_commit(
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
+    request_ref: &str,
+) -> crate::error::Result<ExecutedReplicaTransition> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let proposal = node_a.service.handle_event(ReplicaEvent::Propose {
@@ -55,8 +67,7 @@ pub(super) async fn replicate_request(
     let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (follower_append, append_response) = tokio::join!(follower_append, receive_a);
     require_applied(follower_append)?;
-    require_applied(node_a.service.handle_event(append_response?.event).await)?;
-    replicate_commit_notice(node_a, node_b, node_c).await
+    require_applied_transition(node_a.service.handle_event(append_response?.event).await)
 }
 
 pub(super) async fn quorum_read(
@@ -65,25 +76,9 @@ pub(super) async fn quorum_read(
     node_c: &mut Node,
     request_ref: &str,
 ) -> crate::error::Result<()> {
-    let session_b = node_b.session_ref.clone();
-    let session_c = node_c.session_ref.clone();
-    let read = node_a.service.handle_event(ReplicaEvent::Read {
-        request_ref: request_ref.to_string(),
-        mode: crate::fabric_consistency::ReadMode::Linearizable,
-    });
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
-    let (read, probe_b, probe_c) = tokio::join!(read, receive_b, receive_c);
-    require_applied(read)?;
-    let probe_b = probe_b?;
-    let _probe_c = probe_c?;
-
-    let session_a = node_a.session_ref.clone();
-    let acknowledge = node_b.service.handle_event(probe_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
-    let (acknowledge, response) = tokio::join!(acknowledge, receive_a);
-    require_applied(acknowledge)?;
-    let outcome = node_a.service.handle_event(response?.event).await;
+    let (_, probe_b) = start_quorum_read(node_a, node_b, node_c, request_ref).await?;
+    let response = quorum_read_acknowledgement(node_a, node_b, probe_b).await?;
+    let outcome = node_a.service.handle_event(response.event).await;
     match outcome {
         ReplicaExecutionOutcome::Applied(applied)
             if applied.observations.iter().any(|observation| observation.kind == ReplicaEffectKind::ReadOutcome) =>
@@ -95,6 +90,40 @@ pub(super) async fn quorum_read(
         ))),
         other => require_applied(other),
     }
+}
+
+pub(super) async fn start_quorum_read(
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
+    request_ref: &str,
+) -> crate::error::Result<(ExecutedReplicaTransition, ReceivedReplicaEvent)> {
+    let session_b = node_b.session_ref.clone();
+    let session_c = node_c.session_ref.clone();
+    let read = node_a.service.handle_event(ReplicaEvent::Read {
+        request_ref: request_ref.to_string(),
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
+    });
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
+    let (read, probe_b, probe_c) = tokio::join!(read, receive_b, receive_c);
+    let started = require_applied_transition(read)?;
+    let probe_b = probe_b?;
+    let _probe_c = probe_c?;
+    Ok((started, probe_b))
+}
+
+pub(super) async fn quorum_read_acknowledgement(
+    node_a: &mut Node,
+    node_b: &mut Node,
+    probe_b: ReceivedReplicaEvent,
+) -> crate::error::Result<ReceivedReplicaEvent> {
+    let session_a = node_a.session_ref.clone();
+    let acknowledge = node_b.service.handle_event(probe_b.event);
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
+    let (acknowledge, response) = tokio::join!(acknowledge, receive_a);
+    require_applied(acknowledge)?;
+    response
 }
 
 pub(super) async fn snapshot_catch_up(
@@ -238,8 +267,9 @@ fn observed(
     })
 }
 
-#[cfg(feature = "chaoscontrol-conformance")]
-fn require_applied_transition(outcome: ReplicaExecutionOutcome) -> crate::error::Result<ExecutedReplicaTransition> {
+pub(super) fn require_applied_transition(
+    outcome: ReplicaExecutionOutcome,
+) -> crate::error::Result<ExecutedReplicaTransition> {
     match outcome {
         ReplicaExecutionOutcome::Applied(applied) => Ok(applied),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
@@ -274,15 +304,5 @@ async fn replicate_commit_notice(node_a: &mut Node, node_b: &mut Node, node_c: &
 }
 
 fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error::Result<()> {
-    match outcome {
-        ReplicaExecutionOutcome::Applied(_) => Ok(()),
-        ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(crate::error::Failure::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
-        }
-        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::Failure::invalid_harness(format!(
-            "live cluster effect {} failed: {}",
-            failed.failed_kind.as_str(),
-            failed.diagnostic
-        ))),
-    }
+    require_applied_transition(outcome).map(|_applied| ())
 }

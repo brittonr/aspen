@@ -1,0 +1,96 @@
+--- a/src/fabric_consistency/raft/live_cluster/trace_capture.rs
++++ b/src/fabric_consistency/raft/live_cluster/trace_capture.rs
+@@ -17,8 +17,8 @@
+ use crate::preserves_rail::string;
+ use crate::preserves_rail::u64_value;
+ 
+-const CAPTURE_TAG: &str = "live-raft-read-index-trace-v1";
+-const CAPTURE_STEPS: usize = 6;
++const CAPTURE_TAG: &str = "live-raft-read-index-guard-control-v1";
++const CAPTURE_STEPS: usize = 4;
+ const MAX_PACKED_CAPTURE_BYTES: usize = 4_096;
+ 
+ // r[impl molten.testing.live_raft_trace.capture]
+@@ -64,10 +64,7 @@
+ // handle Raft events. A's first write is acknowledged before B learns of any commit.
+ async fn capture(a: &mut Node, b: &mut Node, c: &mut Node) -> [IOValue; CAPTURE_STEPS] {
+     let earlier_request = test_ref("read-index-trace-earlier-write");
+-    let retry_request = test_ref("read-index-trace-retry");
+-    let new_request = test_ref("read-index-trace-new-write");
+     let current_request = test_ref("read-index-trace-current");
+-    assert_ne!(retry_request, current_request);
+ 
+     workflow::elect_node_a(a, b, c).await.expect("trace elect A");
+     let applied = workflow::replicate_until_commit(a, b, c, &earlier_request).await.expect("trace earlier commit");
+@@ -89,50 +86,11 @@
+     assert_ne!(checkpoint.commit_term, checkpoint.term);
+     assert!(b.service.state().pending_reads.is_empty());
+ 
+-    let outcome = b
+-        .service
+-        .handle_event(ReplicaEvent::Read {
+-            request_ref: retry_request.clone(),
+-            mode: ReadMode::Linearizable,
+-        })
+-        .await;
+-    let retry = workflow::require_applied_transition(outcome).expect("trace retry read turn");
+-    let (retried_index, retry_outcome) = observed_read(b, &retry, &retry_request, ReadDisposition::Retryable);
+-    let retry_boundary = LeaderBoundary::observe(&retry.next);
+-    assert_eq!(retry_boundary, checkpoint);
+-    assert_eq!(retried_index, retry_boundary.last_applied);
+-    assert!(retry.next.pending_reads.is_empty());
+-
+-    let applied = workflow::replicate_until_commit(b, a, c, &new_request).await.expect("trace B commit");
+-    let persist = applied
+-        .observations
+-        .iter()
+-        .find(|effect| effect.kind == ReplicaEffectKind::PersistCommit)
+-        .expect("missing executed B commit persistence");
+-    // The commit of B's current-term entry also publishes the now-covered earlier entry.
+-    let covered = observed_outcome(b, &applied, ReplicaEffectKind::ProposalOutcome);
+-    assert_eq!(covered.kind, ReplicaObservationKind::Proposal {
+-        request_ref: earlier_request,
+-        disposition: ProposalDisposition::Committed,
+-        committed_index: Some(earlier_index),
+-    });
+-    let (new_index, proposal) = observed_proposal(b, &applied, &new_request);
+-    let committed = LeaderBoundary::observe(&applied.next);
+-    assert_eq!(committed.node_id, checkpoint.node_id);
+-    assert_eq!(committed.term, checkpoint.term);
+-    assert_eq!(committed.commit_term, committed.term);
+-    assert_eq!(committed.commit_index, new_index);
+-    assert_eq!(committed.last_log_index, new_index);
+-    assert_eq!(committed.last_applied, new_index);
+-    assert!(new_index > earlier_index);
+-    assert!(applied.next.pending_reads.is_empty());
+-
+-    let [started, current] = capture_quorum_read(b, a, c, &current_request, &committed, earlier_index).await;
++    // Exercise the same real read transport before B commits its own entry.
++    let [started, current] = capture_quorum_read(b, a, c, &current_request, &checkpoint, earlier_index).await;
+     [
+         earlier_ack,
+         record("leader-checkpoint", vec![checkpoint.value()]),
+-        record("read-retry", vec![retry_boundary.value(), retry_outcome]),
+-        record("new-commit", vec![committed.value(), proposal, string(&persist.evidence_ref)]),
+         started,
+         current,
+     ]
+@@ -178,7 +136,7 @@
+     assert_eq!(completed, *committed);
+     assert!(applied.next.pending_reads.is_empty(), "B left the completed read pending");
+     assert_eq!(read_index, pending.required_index);
+-    assert!(read_index >= earlier_index, "current quorum read omitted an acknowledged write");
++    assert!(read_index < earlier_index, "guard-control read did not omit the acknowledged write");
+     [
+         start,
+         record("quorum-read-current", vec![completed.value(), ack, read_outcome]),
+--- a/src/fabric_consistency/raft/transition/client.rs
++++ b/src/fabric_consistency/raft/transition/client.rs
+@@ -61,6 +61,7 @@
+         // r[impl molten.consensus.linearizable_reads]
+         // An earlier leader may have committed and acknowledged an index above this leader's commit
+         // index, so a read index taken now could miss that write.
++        #[cfg(not(test))] // Disposable negative-control build only.
+         crate::fabric_consistency::ReadMode::Linearizable if !support::is_commit_index_current(state) => {
+             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+         }

@@ -1,0 +1,1 @@
+{"command":"validate-trace","failure":{"check":"next","detail":"the step into this state does not satisfy the next-state relation line 92, col 20 to line 92, col 23 of module RaftReadIndexWindow","state":1},"length":3,"notes":[],"result":"invalid","schema_version":4,"validation_goal":"sample"}
