@@ -83,10 +83,12 @@ fn only_complete_current_local_windows_can_satisfy_local_readiness() {
         fabric_observability::ClaimScope::Cluster,
         fabric_observability::ClaimScope::ReleaseProduction,
     ] {
-        assert_ne!(
-            fabric_observability::evaluate_health_readiness(&profile, &policy(scope), healthy, &inputs).readiness,
-            fabric_observability::ReadinessDecision::Pass
-        );
+        let mut attempted = policy(scope);
+        // A digest of the actual local health artifact is still only local evidence.
+        attempted.scope_evidence_refs.push(inputs[0].health_ref.clone());
+        let decision = fabric_observability::evaluate_health_readiness(&profile, &attempted, healthy, &inputs);
+        assert_eq!(decision.readiness, fabric_observability::ReadinessDecision::Deny);
+        assert!(decision.issues.contains(&fabric_observability::ObservabilityIssue::ClaimScopeOverreach));
     }
     window.final_close_succeeded = false;
     let partial = project_ebpf_window(&profile, &adapter, &window, &context, 10).expect("partial fixture");

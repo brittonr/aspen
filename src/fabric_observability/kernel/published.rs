@@ -56,16 +56,16 @@ impl<'a> EbpfEndpointReader<'a> {
         })
     }
 
+    /// Attempt one immutable window. Every outcome consumes this read capability.
     pub fn poll(&mut self, now: u64, cancelled: bool) -> Result<EbpfEndpointReadback, EbpfEndpointFailure> {
         if self.closed {
             return Err(EbpfEndpointFailure::Read(EbpfReadFailure::Closed));
         }
+        self.close();
         if cancelled {
-            self.close();
             return Err(EbpfEndpointFailure::Read(EbpfReadFailure::Cancelled));
         }
         if now > self.selection.deadline {
-            self.close();
             return Err(EbpfEndpointFailure::Timeout);
         }
         let file = match self
@@ -77,21 +77,16 @@ impl<'a> EbpfEndpointReader<'a> {
                 return Err(EbpfEndpointFailure::Read(EbpfReadFailure::Missing));
             }
             crate::node_state::FileObservation::NonRegular(_) => {
-                self.close();
                 return Err(EbpfEndpointFailure::Read(EbpfReadFailure::Malformed));
             }
             crate::node_state::FileObservation::Regular(file) => file,
         };
         if file.size() > self.adapter.max_bytes as u64 {
-            self.close();
             return Err(EbpfEndpointFailure::Read(EbpfReadFailure::OverBound));
         }
         let bytes = file
             .read_bounded(self.adapter.max_bytes as u64)
             .map_err(|_| EbpfEndpointFailure::Read(EbpfReadFailure::Permission))?;
-        // An immutable published epoch is consumed once. Drift/malformed reads
-        // require a new independently admitted capability rather than retry merge.
-        self.close();
         let wire_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
         if self.selection.content_ref.is_some_and(|expected| expected != wire_ref) {
             return Err(EbpfEndpointFailure::Admission(EbpfIssue::Binding));

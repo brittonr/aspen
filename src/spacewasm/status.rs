@@ -144,10 +144,14 @@ impl Readback {
     pub fn identity(&self) -> &str {
         &self.identity
     }
+    // r[impl molten.spacewasm_core.nonclaims]
     pub fn render(&self) -> String {
         format!(
-            "SpaceWasm fixture: {}\nStatus: {}\nReceipt: {}\nProduction evidence: false\nexperimental-not-release-evidence",
+            "SpaceWasm fixture: {}\nProfile: {}\nStatus: {}\nReceipt: {}\n\
+             Production evidence: false\nexperimental-not-release-evidence\n\
+             Promotion blocker: experimental pilot; promotion requires a later accepted change",
             self.fixture,
+            profile::ID,
             if self.passed { "passed" } else { "blocked" },
             self.identity
         )
@@ -304,6 +308,25 @@ mod tests {
         bytes.push(0);
         root.write("receipt", bytes).unwrap();
         assert!(super::readback(&root, path, expected()).is_err());
+    }
+
+    // r[verify molten.spacewasm_core.nonclaims]
+    #[test]
+    fn passing_fixture_readback_reports_promotion_blocker() {
+        let (_temporary, root) = root();
+        let report = sample();
+        let identity = store(&root, &super::denial_value(&report, None));
+        let readback = super::readback(&root, std::path::Path::new("receipt"), super::Expected {
+            kind: super::Kind::AdmissionDenial,
+            receipt: &identity,
+            profiles: &[&report.profile],
+        })
+        .unwrap();
+        let display = readback.render();
+        assert!(display.lines().any(|line| line == "Profile: spacewasm-core-mvp-pilot"));
+        assert!(display.lines().any(|line| line == "Status: passed"));
+        assert!(display.lines().any(|line| line == "Production evidence: false"));
+        assert!(display.lines().any(|line| line.starts_with("Promotion blocker: ")));
     }
 
     #[test]

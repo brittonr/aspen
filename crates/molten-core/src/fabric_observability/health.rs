@@ -6,6 +6,7 @@ use crate::fabric::valid_fabric_token;
 
 // r[impl molten.fabric_observability.pure_core]
 // r[impl molten.fabric_observability.health_scope]
+// r[impl linux_ebpf_observability.confidentiality]
 pub fn evaluate_health_readiness(
     profile: &ObservationProfile,
     policy: &ReadinessPolicy,
@@ -39,7 +40,8 @@ pub fn evaluate_health_readiness(
             }
         }
     }
-    if strongest_scope < policy.target_scope && policy.scope_evidence_refs.is_empty() {
+    // References identify supporting artifacts, but cannot attest their evidence role or scope.
+    if strongest_scope < policy.target_scope {
         issues.push(ObservabilityIssue::ClaimScopeOverreach);
     }
     supporting_refs.sort();

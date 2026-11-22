@@ -32,7 +32,7 @@ The [register profile and admission](../../../src/reliability/model/profile.rs) 
 
 - [x] [parallel] Add malformed history, incomplete recovery, unobserved fault, stale artifact, checker disagreement, teardown gap, and overclaim rejection fixtures. r[molten.testing.live_reliability_validation]
 - [ ] [serial] Run pure adapter and importer tests, public client fixtures, disposable live campaigns, checker conformance, evidence validation, and Nix checks. r[molten.testing.live_reliability_validation]
-- [ ] [serial] Run Cairn proposal, design, tasks, and validation gates before sync or archive. r[molten.testing.live_reliability_validation]
+- [x] [serial] Run Cairn proposal, design, tasks, and validation gates before sync or archive. r[molten.testing.live_reliability_validation]
 
 ## Blocker
 
@@ -76,3 +76,11 @@ These are source binding, checker and synthetic CLI controls. They are not a her
 On `a5d10a49e` plus only the regression, Pueue task 34 ran `cargo test --offline --locked -p molten --lib live_reliability::evidence::tests::selected_reference_checker_cannot_be_omitted -- --exact`. It failed with exit 101: a complete fixture named an independently selected reference checker, but omitting both its execution and report still returned a receipt (`None` instead of `Some(Checker)`). Log BLAKE3: `6f9c5520a7f775074b0e4b16758e2422494e61e8a002c3c9d8777e7f3a8657f2`.
 
 Pueue task 49 ran the feature-enabled library selection `live_reliability::evidence::tests:: spacewasm::` on the repaired inputs: 44 passed, none failed, and one independently provisioned SpaceWasm case remained ignored (log BLAKE3 `3df9fd1b4b01e48f6c3d4047ee7278d4e5b3beaa4613c5e39e7c248739f9cc19`). The selected-reference omission, unexecuted checker report and checker-disagreement controls all denied. These validate importer decisions over supplied observations; they do not qualify an independent reference executable or a live provider history.
+
+## Immutable executable controls
+
+The checker now reuses one sealed, measured executable image for `check` and `validate`, avoiding in-place changes to an already-open source inode. An initial regression run denied at Rustix's unsupported `AT_EMPTY_PATH` flag combination. The repair checks the same opened descriptor through procfs before creating the image.
+
+An offline locked build from ChaosControl `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` produced checker BLAKE3 `483b2caf9d2dc6edf060cf8ddb843a55d7642892a3f444bd99f3307d4ddcbb5c`; its `selftest` passed. The actual `molten reliability check` ran `check` and `validate` with that image over its synthetic valid, invalid and bound-exhaustion histories. The observed `valid`, `invalid` and `unknown` reports matched the producer fixtures byte for byte; a wrong executable digest denied before writing history or report. The CLI smoke log BLAKE3 is `bc6158201044b7452cf2931f1329406c7034cfb5d7da4efac3c73d24f94bca98`.
+
+The pinned Cairn provider policy passed proposal, design, tasks and strict validation. There was no installed OnixOS history, provider fault, or independently admitted reference executable. No live checker qualification, sync or archive is claimed.

@@ -25,7 +25,7 @@
 
 - [ ] [serial] Wire checked generated profile input, adapter enablement, capability delivery, status composition, and optional/required service policy into the Molten node shell. r[linux_ebpf_observability.profile] r[linux_ebpf_observability.boundary]
 - [x] [parallel] Document OnixOS ownership, supported signal/cohort scope, endpoint setup, aggregation/order limits, event loss, privacy, debugging, cleanup ownership, and non-claims. r[linux_ebpf_observability.confidentiality]
-- [ ] [parallel] Add evidence-role guards proving telemetry cannot grant capability, authorize repair, detach programs, establish application correctness or cluster truth, or satisfy production/release gates. r[linux_ebpf_observability.confidentiality]
+- [x] [parallel] Add evidence-role guards proving telemetry cannot grant capability, authorize repair, detach programs, establish application correctness or cluster truth, or satisfy production/release gates. r[linux_ebpf_observability.confidentiality]
 - [ ] [serial] Run focused `molten-core`, Nickel fixture/export, live adapter, simulation-parity, redaction, supervision, and integration positive/negative checks. r[linux_ebpf_observability.verification]
 - [ ] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only with current bounded host-endpoint evidence including explicit loss and cleanup outcomes. r[linux_ebpf_observability.verification]
 
@@ -130,3 +130,9 @@ The first combined Octet run timed out after reporting owner-path warnings in `o
 Strict Cairn validation with the immutable provider checkout passed after the owner-path repair (log BLAKE3 `47f0ae5131263bd52a2eb9dbca089e2b6009ca01bf83845df73855d676d51267`).
 
 After the owner-path repair, formatting, all seven `fabric_observability::nodeadmission::observertests::` tests, and denied-warning library Clippy passed (combined log BLAKE3 `463ded042580e15b49ad6cdb944473c6bcaf42b4c530ef75fa80e50270889427`).
+
+## Scope-reference control
+
+On base `4b06df45b` plus the regression, `cargo test --offline --locked -p molten-core --lib fabric_observability::ebpf::readiness::only_complete_current_local_windows_can_satisfy_local_readiness -- --exact` failed with `Pass` for a broader scope when the policy cited an actual local health digest (log BLAKE3 `462a7ffe8a60a51e354db1f0d93a228e2fe4d9e193a022c4fd2b284ecb9086d3`). The guard now requires supporting health inputs at the claimed scope, not bare references. All 15 `molten-core` fabric observability tests passed after the fix (log BLAKE3 `9104d14dcbf95ec64c8a62ece9c94c1b111b83c777f71a5e37a9c9ae4b16f446`), including authority denial, local readiness and the cluster/release scope negatives. The pinned `linux-ebpf-observation-boundary` Nix check realized `bcs7pc5p1ci356yzr8g1b5fjgs8c418z-molten-linux-ebpf-observation-boundary`. This guards the local evidence role; it does not qualify installed service supervision.
+
+The root library selection passed all 21 `fabric_observability::` tests, including real-file/recording parity, signed startup selection, and the new regression that requires a fresh read capability after an unavailable window. The pump does not re-open a window within the spent capability, even if the exact bytes later appear. The combined log (`d388b4d57bebd3880bc8b89c4dd73d0da0eed5e3714f5c71c0dfcbd852b62315`) preserves its unrelated checker failure. No new OnixOS collection or installed-node lifecycle was run.

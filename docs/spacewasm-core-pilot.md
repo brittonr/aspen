@@ -139,6 +139,9 @@ not cross-engine equivalence claims.
 admission/effect contexts; it does not mint a fixture grant. `fixture::replay`
 compares independently admitted segmented and uninterrupted executions. Operator
 `status` values bind canonical observations and remain experimental.
+`molten spacewasm show` displays the pilot profile and promotion blocker even
+when a fixture passes. A passing expected-denial fixture remains a denial
+receipt, not evidence of actor execution or a production result.
 `operator::run_configuration(root, relative_configuration, output)` is the
 capability-rooted fixture command boundary. It verifies actual producer artifacts,
 creates real Ed25519 UCAN/holder signatures under an isolated fixture-only trust

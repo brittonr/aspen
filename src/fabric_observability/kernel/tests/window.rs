@@ -315,3 +315,27 @@ fn copied_endpoint_cannot_retry_after_same_cohort_byte_substitution() {
     assert_eq!(readback.wire_ref, selected);
     assert_eq!(readback.endpoint_ref, canonical_ebpf_window_ref(&window).unwrap());
 }
+
+// r[verify linux_ebpf_observability.failure]
+#[test]
+fn missing_window_consumes_the_endpoint_epoch() {
+    let (profile, adapter, window, _) = fixture();
+    let workspace = crate::test_support::process_workspace("ebpf-missing-window").expect("owned workspace");
+    let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
+    let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
+    let bytes = serde_json::to_vec(&window).unwrap();
+    let selected = crate::preserves_rail::content_ref_from_bytes(&bytes);
+    let open = || {
+        EbpfEndpointReader::open(&root, leaf.clone(), &profile, &adapter, EbpfEndpointSelection {
+            epoch: window.generation,
+            deadline: 15,
+            content_ref: Some(&selected),
+        })
+        .unwrap()
+    };
+    let mut reader = open();
+    assert!(matches!(reader.poll(10, false), Err(EbpfEndpointFailure::Read(EbpfReadFailure::Missing))));
+    root.write(&leaf, &bytes).unwrap();
+    assert!(matches!(reader.poll(10, false), Err(EbpfEndpointFailure::Read(EbpfReadFailure::Closed))));
+    assert_eq!(open().poll(10, false).expect("new read capability").wire_ref, selected);
+}

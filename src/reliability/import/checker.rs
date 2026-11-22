@@ -39,7 +39,7 @@ impl CheckedReport {
 }
 
 // r[impl molten.consensus.live_linearizability]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, String> {
     use std::os::fd::AsRawFd;
     if !checker.executable.is_absolute()
@@ -50,15 +50,7 @@ pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, Strin
     {
         return Err("checker-admission".into());
     }
-    let mut executable = std::fs::File::open(&checker.executable).map_err(|e| e.to_string())?;
-    if !executable.metadata().map_err(|e| e.to_string())?.is_file() {
-        return Err("checker-not-file".into());
-    }
-    let mut hasher = blake3::Hasher::new();
-    std::io::copy(&mut executable, &mut hasher).map_err(|e| e.to_string())?;
-    if format!("blake3:{}", hasher.finalize().to_hex()) != checker.executable_blake3 {
-        return Err("checker-identity".into());
-    }
+    let executable = pinned_executable(checker)?;
     let bytes = serde_json::to_vec(files.history).map_err(|e| e.to_string())?;
     if bytes.len() > checker.max_bytes {
         return Err("history-bound".into());
@@ -92,12 +84,69 @@ pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, Strin
     })
 }
 
-#[cfg(not(unix))]
-pub fn run(_: &Admitted, _: &Files<'_>) -> Result<CheckedReport, String> {
-    Err("checker-requires-unix-capability-paths".into())
+#[cfg(target_os = "linux")]
+fn pinned_executable(checker: &Admitted) -> Result<std::fs::File, String> {
+    use std::os::fd::AsRawFd;
+
+    use rustix::fs::Access;
+    use rustix::fs::AtFlags;
+    use rustix::fs::MemfdFlags;
+    use rustix::fs::Mode;
+    use rustix::fs::SealFlags;
+
+    const MAX_EXECUTABLE_BYTES: u64 = 128 * 1024 * 1024;
+
+    let source = rustix::fs::open(
+        &checker.executable,
+        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::CLOEXEC | rustix::fs::OFlags::NONBLOCK,
+        Mode::empty(),
+    )
+    .map(std::fs::File::from)
+    .map_err(|e| e.to_string())?;
+    let metadata = source.metadata().map_err(|e| e.to_string())?;
+    if !metadata.is_file() {
+        return Err("checker-not-file".into());
+    }
+    if !(1..=MAX_EXECUTABLE_BYTES).contains(&metadata.len()) {
+        return Err("checker-executable-bound".into());
+    }
+    let source_fd_path = format!("/proc/self/fd/{}", source.as_raw_fd());
+    rustix::fs::accessat(rustix::fs::CWD, source_fd_path, Access::EXEC_OK, AtFlags::EACCESS)
+        .map_err(|e| format!("checker-executable-access:{e}"))?;
+
+    // An open file pins its inode, not its contents. Hash the sealed image that both child
+    // operations will execute, rather than measuring a file that can be rewritten in place.
+    let fd = rustix::fs::memfd_create(
+        "reliability-checker",
+        MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING | MemfdFlags::EXEC,
+    )
+    .map_err(|e| e.to_string())?;
+    let mut image = std::fs::File::from(fd);
+    let copied =
+        std::io::copy(&mut std::io::Read::take(source, metadata.len()), &mut image).map_err(|e| e.to_string())?;
+    if copied != metadata.len() {
+        return Err("checker-identity".into());
+    }
+    rustix::fs::fchmod(&image, Mode::RUSR | Mode::XUSR).map_err(|e| e.to_string())?;
+    rustix::fs::fcntl_add_seals(&image, SealFlags::WRITE | SealFlags::GROW | SealFlags::SHRINK | SealFlags::SEAL)
+        .map_err(|e| e.to_string())?;
+    let mut executable =
+        std::fs::File::open(format!("/proc/self/fd/{}", image.as_raw_fd())).map_err(|e| e.to_string())?;
+    drop(image);
+    let mut hasher = blake3::Hasher::new();
+    std::io::copy(&mut executable, &mut hasher).map_err(|e| e.to_string())?;
+    if format!("blake3:{}", hasher.finalize().to_hex()) != checker.executable_blake3 {
+        return Err("checker-identity".into());
+    }
+    Ok(executable)
 }
 
-#[cfg(unix)]
+#[cfg(not(target_os = "linux"))]
+pub fn run(_: &Admitted, _: &Files<'_>) -> Result<CheckedReport, String> {
+    Err("checker-requires-linux-capability-paths".into())
+}
+
+#[cfg(target_os = "linux")]
 fn execute(binary: &str, action: &str, directory: &str, timeout_ms: u64) -> Result<(), String> {
     let mut child = std::process::Command::new(binary)
         .arg(action)
@@ -132,7 +181,7 @@ fn execute(binary: &str, action: &str, directory: &str, timeout_ms: u64) -> Resu
 
 /// Stops and reaps the checker; a failed stop is reported with the original diagnostic, never
 /// hidden.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn terminate(child: &mut std::process::Child, diagnostic: String) -> String {
     match child.kill().and_then(|()| child.wait()) {
         Ok(_) => diagnostic,
@@ -197,4 +246,59 @@ pub fn semantic_history_id(history: &crate::live_reliability::history::Document)
     hasher.update(&(bytes.len() as u64).to_le_bytes());
     hasher.update(&bytes);
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    // r[verify molten.consensus.live_linearizability]
+    #[test]
+    fn executes_only_the_pinned_image_for_both_actions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // A shell fixture exercises execution and substitution, not register semantics.
+        let script = r#"#!/bin/sh
+set -eu
+case "$1" in
+    check)
+        printf '%s\n' '{"verdict":"valid"}' > "$3"
+        if [ -f "${3%/*}/rewrite" ]; then
+            printf '#!/bin/sh\nexit 0\n' > "${3%/*}/checker"
+        fi
+        ;;
+    validate)
+        [ ! -f "${3%/*}/rewrite" ]
+        ;;
+    *) exit 2 ;;
+esac
+"#;
+        let workspace = crate::test_support::process_workspace("live-checker-image").expect("owned workspace");
+        let root: &std::path::Path = workspace.as_ref();
+        let directory =
+            cap_std::fs::Dir::open_ambient_dir(root, cap_std::ambient_authority()).expect("open work directory");
+        let executable = root.join("checker");
+        std::fs::write(&executable, script).expect("write checker");
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).expect("make checker executable");
+        let config = super::Admitted {
+            executable,
+            executable_blake3: format!("blake3:{}", blake3::hash(script.as_bytes()).to_hex()),
+            checker_ref: format!("blake3:{}", blake3::hash(b"reference-fixture").to_hex()),
+            timeout_ms: 5_000,
+            max_bytes: 1024,
+        };
+        let history = serde_json::json!({"input":"synthetic"});
+        let files = super::Files {
+            root: &directory,
+            history: &history,
+        };
+        let checked = super::run(&config, &files).expect("execute check then validate with the original image");
+        assert_eq!(checked.report(), &serde_json::json!({"verdict":"valid"}));
+
+        directory.write("rewrite", b"").expect("enable substitution during check");
+        assert_eq!(super::run(&config, &files).unwrap_err(), "checker-validate-failed");
+        assert_eq!(directory.read("checker").expect("rewritten inode").as_slice(), b"#!/bin/sh\nexit 0\n");
+
+        directory.remove_file("history.json").expect("clear work history");
+        assert_eq!(super::run(&config, &files).unwrap_err(), "checker-identity");
+        assert!(!directory.exists("history.json"));
+    }
 }

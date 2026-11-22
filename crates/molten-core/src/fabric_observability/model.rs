@@ -316,6 +316,7 @@ pub struct ReadinessPolicy {
     pub policy_ref: String,
     pub target_scope: ClaimScope,
     pub required_source_ids: Vec<String>,
+    /// Links retained with the policy; these do not widen the scope of admitted health inputs.
     pub scope_evidence_refs: Vec<String>,
     pub allow_degraded: bool,
     pub as_of_tick: u64,

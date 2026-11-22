@@ -33,6 +33,6 @@ Missing, corrupt, mismatched, unexpected, over-bound, permission-denied, unsuppo
 
 ## Health, readiness, and operator views
 
-Node and system-extension status project into the canonical health model. Readiness consumes supplied ticks rather than reading a clock, rejects stale or missing required sources, and preserves local-component, adapter, system-extension, cluster, operator, and release-production scopes. Promotion beyond the strongest supplied scope requires explicit scope evidence. A local healthy node cannot silently become cluster or release readiness.
+Node and system-extension status project into the canonical health model. Readiness consumes supplied ticks, rejects stale or missing required sources, and preserves local-component, adapter, system-extension, cluster, operator, and release-production scopes. The decision requires a current admitted health input at or above the requested scope. References retained with a policy cannot widen that scope; a local health digest is not cluster or release evidence.
 
 Operator snapshots are bounded canonical artifacts over current series and evidence refs. They can report pass, degraded, unavailable, or deny for the declared scope. They do not grant capabilities, authorize repair, prove service correctness, establish global cluster truth, or establish release eligibility.

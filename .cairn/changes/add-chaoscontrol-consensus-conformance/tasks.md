@@ -28,7 +28,7 @@
 ## Phase 5: Validation
 
 - [ ] [serial] Run pure projection and importer tests, positive and negative fixtures, guest packaging, no-fault and fault campaigns, replay, claim-boundary, and offline bundle checks. r[molten.testing.chaoscontrol_smr_validation]
-- [ ] [serial] Run Cairn validation and proposal, design, and tasks gates before sync or archive. r[molten.testing.chaoscontrol_smr_validation]
+- [x] [serial] Run Cairn validation and proposal, design, and tasks gates before sync or archive. r[molten.testing.chaoscontrol_smr_validation]
 
 ## Offline consumer cutover (2026-11-17)
 
@@ -70,3 +70,7 @@ campaigns, and validation gates remain open.
 The SMR workload and protocol-observation contracts are archived in ChaosControl as `2026-08-07-add-smr-chain-workload` and `2026-11-05-add-protocol-observation-cohorts`. The consumer now pins `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` and supplies the compatible inline encoder and bounded instrumentation importer. Missing producer specifications, an immutable source pin and the data-envelope handoff are no longer blockers.
 
 Actual campaigns and imported execution evidence still require a measured cross-process Molten guest cohort with admitted distinct-guest transport and persistent-device mappings, complete source/build/runtime closure and actual committed-apply/independent-oracle observations. The current memory-backed supervisor and native three-child signal directory do not supply that contract. Neither an in-process model, native stdout, historical release receipt nor strict-SMP rejection can substitute for a supported single-vCPU-per-guest multi-VM observation.
+
+## Local conformance verification
+
+The offline feature-enabled library run on base `4b06df45b` plus the local guard changes passed all 68 tests under `fabric_consistency::chaoscontrol::`. The combined run also selected an unrelated reliability checker regression which failed before its repair; the log BLAKE3 is `d388b4d57bebd3880bc8b89c4dd73d0da0eed5e3714f5c71c0dfcbd852b62315`. The pinned Cairn provider policy passed strict validation and the proposal, design and tasks gates. The measured multi-guest closure and no-fault/fault campaign and replay tasks are still open. The earlier one-VM collaboration workload does not discharge these tasks.

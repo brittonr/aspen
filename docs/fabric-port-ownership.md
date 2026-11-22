@@ -135,8 +135,11 @@ Clock, durability, Byzantine, locks, queues, transactions, production readiness,
 
 `molten reliability check --checker CHECKER.json --history HISTORY.json --work-root EXISTING_DIR --report REPORT.json`
 executes both checker operations. The checker configuration names its absolute executable path, measured
-`executable_blake3`, immutable `checker_ref`, `timeout_ms`, and `max_bytes`. Matching supplied refs are not an
-alternative to hashing and executing the binary. The dedicated work directory is opened once as a capability.
+`executable_blake3`, immutable `checker_ref`, `timeout_ms`, and `max_bytes`. On Linux, the runner snapshots
+a regular executable of at most 128 MiB, seals and measures that image, then runs both operations from it.
+A changing file cannot replace the image between the two actions. Sealing unavailable or a digest mismatch
+fails closed. The executable digest does not measure its interpreter or runtime dependencies; select those
+through the admitted checker cohort. The dedicated work directory is opened once as a capability.
 `molten reliability import --expected EXPECTED.json --evidence EVIDENCE.json --checker CHECKER.json
 --work-root EXISTING_DIR --ledger LEDGER --receipt RECEIPT.preserves` recomputes the report before import;
 an optional `--reference-checker CONFIG.json` must likewise execute to support a supplied reference report.
