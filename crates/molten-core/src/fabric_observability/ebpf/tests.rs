@@ -129,9 +129,9 @@ fn accounting_loss_cancellation_and_close_cannot_claim_complete() {
 #[test]
 fn record_sequence_overflow_and_unknown_signal_are_denied() {
     let (mut profile, mut window) = fixture();
-    let mut next = window.records[0].clone();
-    next.sequence = 2;
-    window.records.push(next);
+    window.records.push(window.records[0].clone());
+    assert_eq!(aggregate(&profile, &window), Err(EbpfIssue::Sequence));
+    window.records.last_mut().unwrap().sequence = 2;
     assert_eq!(aggregate(&profile, &window), Err(EbpfIssue::Sequence));
     window.records.last_mut().unwrap().sequence = 1;
     window.records.last_mut().unwrap().value = u64::MAX;
@@ -155,6 +155,10 @@ fn mismatched_generation_schema_scope_and_accounting_are_denied() {
         }
         assert_eq!(validate_binding(&profile, &drift), Err(EbpfIssue::Binding));
     }
+    let mut drift = window;
+    drift.binding.pack = format!("onix:blake3:bpf-pack:{:064x}", 28);
+    assert_eq!(validate_ebpf_binding(&drift.binding), Ok(()));
+    assert_eq!(validate_binding(&profile, &drift), Err(EbpfIssue::Binding));
 }
 
 // r[verify linux_ebpf_observability.verification]

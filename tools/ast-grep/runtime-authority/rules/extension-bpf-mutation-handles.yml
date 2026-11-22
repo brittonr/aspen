@@ -8,7 +8,10 @@ metadata:
   non_claim: structural-api-boundary-only
 files:
   - src/system_extension/**/*.rs
+  - crates/molten-core/src/system_extension/**/*.rs
 rule:
   all:
-    - kind: identifier
+    - any:
+        - kind: identifier
+        - kind: type_identifier
     - regex: '^(aya|libbpf_rs|libbpf_sys|bcc|EbpfLoader|BpfLoader|MapMut|ProgramFd|LinkFd)$'

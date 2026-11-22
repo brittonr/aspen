@@ -1,30 +1,42 @@
 ## Phase 1: Profile and pure core
 
 - [ ] [depends:onixos.add-generation-bound-observation-endpoint] Add exact positive and negative read-only endpoint handoff fixtures binding machine, generation, BPF Pack/program, kernel/BTF, schema, scope, and loss accounting. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.boundary]
-- [ ] [serial] Extend the typed fabric observability Nickel contracts with Linux eBPF signal mappings, windows, freshness, event detail, queue/record/byte/cardinality bounds, loss policy, required status, redaction, and non-claims. r[linux_ebpf_observability.profile]
-- [ ] [serial] Define bounded endpoint metadata, raw record, accounting, epoch, and projection DTOs in `molten-core`. r[linux_ebpf_observability.profile] r[linux_ebpf_observability.projection]
-- [ ] [serial] Implement pure endpoint/cohort/scope admission, record validation, descriptor mapping, window aggregation, partial-order handling, loss reconciliation, epoch completion, and canonical projection. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.projection] r[linux_ebpf_observability.ordering] r[linux_ebpf_observability.failure]
-- [ ] [parallel] Add positive process/scheduler/block/network/pressure/adapter-health aggregate fixtures and deterministic canonicalization assertions. r[linux_ebpf_observability.verification]
-- [ ] [parallel] Add negative unknown schema/field/signal, cohort/scope/generation mismatch, duplicate/sequence gap, cross-CPU total-order claim, overflow, stale window, missing accounting, and over-bound fixtures. r[linux_ebpf_observability.verification]
+- [x] [serial] Extend the typed fabric observability Nickel contracts with Linux eBPF signal mappings, windows, freshness, event detail, queue/record/byte/cardinality bounds, loss policy, required status, redaction, and non-claims. r[linux_ebpf_observability.profile]
+- [x] [serial] Define bounded endpoint metadata, raw record, accounting, epoch, and projection DTOs in `molten-core`. r[linux_ebpf_observability.profile] r[linux_ebpf_observability.projection]
+- [x] [serial] Implement pure endpoint/cohort/scope admission, record validation, descriptor mapping, window aggregation, partial-order handling, loss reconciliation, epoch completion, and canonical projection. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.projection] r[linux_ebpf_observability.ordering] r[linux_ebpf_observability.failure]
+- [x] [parallel] Add positive process/scheduler/block/network/pressure/adapter-health aggregate fixtures and deterministic canonicalization assertions. r[linux_ebpf_observability.verification]
+- [x] [parallel] Add negative unknown schema/field/signal, cohort/scope/generation mismatch, duplicate/sequence gap, cross-CPU total-order claim, overflow, stale window, missing accounting, and over-bound fixtures. r[linux_ebpf_observability.verification]
 
 ## Phase 2: Linux read adapter
 
-- [ ] [serial] Implement a thin capability-rooted Linux endpoint reader that performs bounded open/poll/copy/close effects and delegates every semantic decision to `molten-core`. r[linux_ebpf_observability.boundary] r[linux_ebpf_observability.failure]
+- [x] [serial] Implement a thin capability-rooted Linux endpoint reader that performs bounded open/poll/copy/close effects and delegates every semantic decision to `molten-core`. r[linux_ebpf_observability.boundary] r[linux_ebpf_observability.failure]
 - [ ] [serial] Wire adapter supervision for start, endpoint handshake, poll, generation rollover, cancellation, final accounting, close, and restart without BPF mutation operations. r[linux_ebpf_observability.boundary] r[linux_ebpf_observability.failure]
-- [ ] [parallel] Add structural guards preventing loader libraries, BPF syscalls, writable map/link handles, ambient bpffs traversal, and privileged credentials from entering Molten or extension APIs. r[linux_ebpf_observability.boundary]
+- [x] [parallel] Add structural guards preventing loader libraries, BPF syscalls, writable map/link handles, ambient bpffs traversal, and privileged credentials from entering Molten or extension APIs. r[linux_ebpf_observability.boundary]
 - [ ] [parallel] Add positive host-endpoint and deterministic recording-adapter parity tests plus negative unavailable, permission, timeout, backpressure, malformed record, cancellation, close failure, and generation-change tests. r[linux_ebpf_observability.verification]
 
 ## Phase 3: Fabric integration and confidentiality
 
 - [ ] [serial] Project admitted windows into existing canonical metric samples, bounded events, adapter status, snapshots, health inputs, and evidence refs without backend-specific identities. r[linux_ebpf_observability.projection]
 - [ ] [serial] Enforce existing descriptor, label, series, event, queue, snapshot, freshness, scope, and diagnostics bounds for every eBPF-derived observation. r[linux_ebpf_observability.confidentiality]
-- [ ] [parallel] Add redaction and denial fixtures for command lines, payloads, packet contents, private paths, socket/peer identifiers, secret-like text, raw kernel identifiers, and unmapped fields. r[linux_ebpf_observability.confidentiality] r[linux_ebpf_observability.verification]
-- [ ] [parallel] Add health/readiness assertions proving partial, stale, lost, or unavailable required windows cannot satisfy complete local readiness and local observations cannot satisfy cluster or release scope. r[linux_ebpf_observability.failure] r[linux_ebpf_observability.confidentiality]
+- [x] [parallel] Add redaction and denial fixtures for command lines, payloads, packet contents, private paths, socket/peer identifiers, secret-like text, raw kernel identifiers, and unmapped fields. r[linux_ebpf_observability.confidentiality] r[linux_ebpf_observability.verification]
+- [x] [parallel] Add health/readiness assertions proving partial, stale, lost, or unavailable required windows cannot satisfy complete local readiness and local observations cannot satisfy cluster or release scope. r[linux_ebpf_observability.failure] r[linux_ebpf_observability.confidentiality]
 
 ## Phase 4: Wiring and closeout
 
 - [ ] [serial] Wire checked generated profile input, adapter enablement, capability delivery, status composition, and optional/required service policy into the Molten node shell. r[linux_ebpf_observability.profile] r[linux_ebpf_observability.boundary]
-- [ ] [parallel] Document OnixOS ownership, supported signal/cohort scope, endpoint setup, aggregation/order limits, event loss, privacy, debugging, cleanup ownership, and non-claims. r[linux_ebpf_observability.confidentiality]
+- [x] [parallel] Document OnixOS ownership, supported signal/cohort scope, endpoint setup, aggregation/order limits, event loss, privacy, debugging, cleanup ownership, and non-claims. r[linux_ebpf_observability.confidentiality]
 - [ ] [parallel] Add evidence-role guards proving telemetry cannot grant capability, authorize repair, detach programs, establish application correctness or cluster truth, or satisfy production/release gates. r[linux_ebpf_observability.confidentiality]
 - [ ] [serial] Run focused `molten-core`, Nickel fixture/export, live adapter, simulation-parity, redaction, supervision, and integration positive/negative checks. r[linux_ebpf_observability.verification]
 - [ ] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only with current bounded host-endpoint evidence including explicit loss and cleanup outcomes. r[linux_ebpf_observability.verification]
+
+## Local verification (2026-11-21)
+
+The pinned Nickel CLI exported `config/linux-ebpf/fixtures/profile.ncl` after fixing the recursive contract exports. The five negative inputs independently denied at `scope`, `loss_policy`, `pack`, `signal`, and `max_records`. These synthetic authoring controls do not admit a provider, exercise BPF attachment or read a live window.
+
+Pueue task 47 ran `cargo test --locked -p molten-core --lib fabric_observability::ebpf::` (8 passed; core executable BLAKE3 `84056c835c250423f0d84944f4c73bbff4de5e2f94022f98246858487fce8c0e`). Its root library filter matched **zero** tests. Running the same retained root libtest executable with `fabric_observability::kernel::` and `fabric_observability::nodeadmission::observertests::` in the [shared local native run](../add-live-consensus-reliability-adapter/tasks.md#local-verification-2026-11-21) passed 6 reader/window tests and 4 observer admission tests. This executed real bounded file reads over fixture records, not the OnixOS provider.
+
+Pueue task 58 ran `cargo test --locked -p molten-core --lib fabric_observability::ebpf::tests::` (6 passed; log BLAKE3 `f16805a1c34ab2d8917c819339dd883c5f70203c783fba11429308d06d472783`). It exercised duplicate and skipped sequence numbers, arithmetic overflow, unmapped signals, cohort/scope/generation mismatch, missing accounting, stale and over-bound windows, and total-order overclaims. The separate root library selection above exercised the closed window decoder against unknown fields, signals and schema. These are fixture regressions; they did not load or observe a BPF program.
+
+A local child-process prerequisite check could not reduce its capability bounding set to zero (`setpriv --bounding-set=-all`: operation not permitted). An isolated user-namespace probe also stopped before launching a consumer (`/proc/self/setgroups`: operation not permitted). The CLI requires a non-root child with all five capability sets empty and `NoNewPrivs=1`; it was not run here. The exact unprivileged consumer and provider-window run still need the authorized disposable target.
+
+The hermetic `checks.x86_64-linux.linux-ebpf-observation-boundary` derivation passed with ast-grep 0.42.1 on the local builder (log BLAKE3 `30f75e98c7470a3c1156d82daf567cfcb7d99f3cea16f59b993d8072c781a36b`). The exact planted diagnostics were 27 reader/exporter, six extension-handle and five loader-import matches; all safe controls returned no findings. The only allowed reader match was the example's exact own-PID status path. The remote attempt refused before execution because the configured cache was unavailable; the retry changed only build routing. This is syntax-level containment, not arbitrary alias or transitive dependency analysis, a privilege test, or provider observation evidence.

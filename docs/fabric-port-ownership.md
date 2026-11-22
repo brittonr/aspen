@@ -141,14 +141,24 @@ alternative to hashing and executing the binary. The dedicated work directory is
 --work-root EXISTING_DIR --ledger LEDGER --receipt RECEIPT.preserves` recomputes the report before import;
 an optional `--reference-checker CONFIG.json` must likewise execute to support a supplied reference report.
 The expected input contains the original product profile and operation plan, exact identity map/endpoints,
-and finite event, witness, and recovery bounds. A caller's unexecuted checker report is insufficient.
+independently selected `fault` inputs, and finite event, witness, and recovery bounds. A caller's
+unexecuted checker report is insufficient.
 Import stores a canonical external-evidence receipt and prints bounded operator status; it grants no authority.
 
 Each final recovery row binds `endpoint`, `attempt_id`, tagged `value`, `ready`, `ready_event`,
 `stable_membership_event`, `stable_membership_observations`, `stable_membership`, and `elapsed_ms`.
 The referenced `ready` and `stable-membership` lifecycle event indices must precede that endpoint's planned
 final read. Elapsed time derives from controller monotonic event time rather than a supplied success marker.
+Fresh `stable-membership` samples must span at least `fault.profile.stable_membership_ms`;
+the final read must complete within `fault.profile.final_read_deadline_ms` of the later of readiness
+and the last referenced sample. This bounds the observed samples, not continuous membership.
 Fault evidence separately binds selected/applied/observed event indices and healed/recovered lifecycle indices.
+In `EXPECTED.json`, `fault.profile` is the typed policy selected for the run; `fault.effect_ref` must be
+`null` or omitted for `no-fault`. For a restart or partition, the operator must independently verify the
+provider effect record against the selected policy and supply its exact content reference. The importer
+does not infer the actual partition sides from a mechanism label. It verifies that both effect stages
+bind that reference, that apply-to-heal spans the declared disruption within the heal deadline, and
+that heal-to-recovery stays within the recovery deadline.
 The terminal history event must be a `teardown` lifecycle observation as well as a completed teardown fact.
 `molten reliability compare --profiles PROFILES.json --report REPORT.json` retains environment, adapter,
 fault mechanism, time source, checker, finite verdict, and non-claims for every profile without merging them.

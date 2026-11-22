@@ -9,7 +9,10 @@ metadata:
 files:
   - src/**/*.rs
   - crates/**/*.rs
+  - examples/ebpf-observe.rs
 rule:
   all:
-    - kind: identifier
+    - any:
+        - kind: identifier
+        - kind: type_identifier
     - regex: '^(aya|libbpf_rs|libbpf_sys|bcc)$'

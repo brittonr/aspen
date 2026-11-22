@@ -7,16 +7,25 @@ metadata:
   surface: linux-ebpf-observation
   non_claim: structural-boundary-only-not-host-privilege-proof
 files:
-  - src/fabric_observability/kernel/*.rs
-  - crates/molten-core/src/fabric_observability/ebpf/*.rs
+  - src/fabric_observability/kernel/**/*.rs
+  - crates/molten-core/src/fabric_observability/ebpf/**/*.rs
+  - examples/ebpf-observe.rs
 ignores:
-  - "**/*tests.rs"
-  - "**/readiness.rs"
+  # These modules write synthetic endpoint inputs with test workspace capabilities.
+  - src/fabric_observability/kernel/tests/receipt.rs
+  - src/fabric_observability/kernel/tests/window.rs
 rule:
   any:
     - all:
-        - kind: identifier
+        - any:
+            - kind: identifier
+            - kind: type_identifier
         - regex: '^(aya|libbpf_rs|libbpf_sys|bcc|EbpfLoader|BpfLoader|MapMut|ProgramFd|LinkFd)$'
+    - all:
+        - any:
+            - kind: string_literal
+            - kind: raw_string_literal
+        - regex: '^(r#*)?"/(proc|sys/fs/bpf)(/|")'
     - pattern: libc::syscall($$$ARGS)
     - pattern: nix::unistd::setuid($$$ARGS)
     - pattern: nix::unistd::seteuid($$$ARGS)
@@ -25,8 +34,11 @@ rule:
     - pattern: caps::set($$$ARGS)
     - pattern: std::process::Command::new($$$ARGS)
     - pattern: std::fs::read_dir($$$ARGS)
+    - pattern: fs::read_dir($$$ARGS)
     - pattern: std::fs::File::open($$$ARGS)
+    - pattern: File::open($$$ARGS)
     - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: Dir::open_ambient_dir($$$ARGS)
     - pattern: unsafe { $$$BODY }
     - pattern: $ROOT.write($$$ARGS)
     - pattern: $ROOT.remove_file($$$ARGS)

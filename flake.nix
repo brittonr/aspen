@@ -1522,6 +1522,21 @@
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
+            # r[verify linux_ebpf_observability.boundary]
+            linuxEbpfObservationBoundaryCheck =
+              pkgs.runCommand "molten-linux-ebpf-observation-boundary"
+                {
+                  nativeBuildInputs = [
+                    pkgs.ast-grep
+                    pkgs.jq
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  bash "$src/tools/ast-grep/runtime-authority/check-linux-ebpf-observation.sh" "$src"
+                  touch "$out"
+                '';
             # Feature-independent guard: the fabricated Octet gate receipt may only be referenced by
             # its definition and test files. The planted tree proves the guard fires on a non-test caller.
             testFixtureCallersCheck =
@@ -3423,6 +3438,7 @@
             '';
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
+            linux-ebpf-observation-boundary = linuxEbpfObservationBoundaryCheck;
             node-state-authority = nodeStateAuthorityCheck;
             test-fixture-callers = testFixtureCallersCheck;
             materialization-authority = materializationAuthorityCheck;
