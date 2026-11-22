@@ -94,3 +94,19 @@ This is a passing producer/consumer and lifecycle result for one pinned disposab
 ## Current OnixOS provider attempt
 
 The separately approved `mm362ynm3imcvsmbhm3wg6jwjwg9v075-vm-test-run-onixos-native-bpf-observation-vm-only.drv` (OnixOS `747c519132dc7d209a64dc57fa156919ce107037`) published and read back generation 1. The same all-six assertion denied the run because no nonzero `pressure` record was observed. Aspen did not consume this window, and the replacement, cancellation and guarded export were not reached. Driver teardown completed. Private console BLAKE3: `2eb68938031fea6ee4cd6abfc7a782cf33dcb05b6283cff5c2540894cc74ac81`. This neither supersedes the exact earlier pass nor qualifies the newer cohort.
+
+## Passing pressure-corrected OnixOS fixture
+
+The one separately authorized derivation `n9zhp0na10s1cf2256il275wgzxrxsil-vm-test-run-onixos-native-bpf-observation-vm-only.drv` passed with OnixOS harness `626a0ba11f1e2e47a63ba67fdf5b6b31c1416fd4`, on the upstream base `f6668778464f713abc9d301c0ebedd0628bf79bb`. The guest reported `Dynamic Preempt: full` on Linux `6.18.20`, BTF `blake3:08c14844b3b9cde37f8b3bba9effde104fa59194195777f3dd859db3919e8064`. It started collection only after the bounded same-CPU workload was ready. The producer BPF program and the six-signal assertion were unchanged.
+
+| Generation | Attempts and submissions | Observed outcome |
+| --- | ---: | --- |
+| 1 | 21,968 | All six signals, including runnable preemption; Aspen reported complete, healthy and exported with six samples. |
+| 2 | 7,125 | All six signals; owned cleanup and replacement succeeded; the old binding denied and the endpoint was revoked. |
+| 3 | 8,491 | Cancellation finalized counters and removed the owned cgroup; no window was published. |
+
+All three captures recorded zero producer drops, consumer drops and pending records. The real Aspen executable `blake3:05fc85f43b1af84b838100449b60832147e07076f7c316cc341108f4d07cb6a6` ran non-root with empty capability sets and `NoNewPrivs=1`. Its generation-1 accepted binding was `blake3:1272d4de2c70522508228361352064785f8477687bbac7eb0a362ff15cbb9832` and the checked profile was `blake3:7c5f9240316a51d2d8f2d290030787e13bf1eaa85ec260f279043389d39ef768`. Its consumer result (`blake3:3e76d7ab0e07bf5b1895b95d9e4b959c80b3d381d950158c464d898f90a15cf4`) names local snapshot `blake3:35a1c029170e58d933485aff579bdb75ee93c9ca044caff360e9e21f21bcf438`.
+
+The same negative assertions passed for authority, foreign scope, capabilities, stale or mismatched selection, unavailable endpoint, malformed accounting, loss and record bounds. The guest exporter checked 50 files (3,204,019 bytes) against bytes from 15 runtime secret files and found no match. The guarded export is under `native-observation-vm-evidence/bpf-observation-evidence` in the locally rooted `/nix/store/xnlc4id4hmyx5fqw1ysb4v0dilr9g908-vm-test-run-onixos-native-bpf-observation-vm-only` output. QEMU and virtual LAN teardown completed (private console BLAKE3 `9b4cb7de7375e343b64b8b791ec361accbd11b087add48cc7dcf18f146a53e1c`).
+
+This is a passing disposable fixture with an upstream-based provider, not installed-node support, a normal-host preemption guarantee, production authority or release eligibility. The provider integration and Aspen node supervision remain open.
