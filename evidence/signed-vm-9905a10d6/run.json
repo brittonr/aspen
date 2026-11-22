@@ -55,6 +55,25 @@
     "absent_evidence_on_both_nodes": ["startup.preserves", "health.preserves", "control-loop.preserves", "heartbeat.preserves"],
     "raw_log_blake3": "70f4e356432358ed22f3a7c0c315bb175b93bff54e6884c57f1e1785fd51fec6"
   },
+  "module_source_admission": {
+    "task": 76,
+    "nix_selector": "nix run .#nixos-vm-molten-module -L",
+    "local_build_options": {"builders": "", "max_jobs": 1, "cores": 4, "substituters": ["https://cache.nixos.org"]},
+    "outer_deadline_seconds": 4800,
+    "driver_deadline_seconds": 7200,
+    "startup_deadline_seconds": 3600,
+    "driver_script_wall_seconds": 1619.31,
+    "exit_code": 0,
+    "test_derivation": "/nix/store/m5kdbgnn896mzby331f92862w2rhback-vm-test-run-molten-module.drv",
+    "test_output": "/nix/store/4hiav54jv21l41qn7w1av52yz07swgs1-vm-test-run-molten-module",
+    "source_binding_derivation": "/nix/store/328ahxvb2sc6vlrmqg69c5nvznda334y-molten-node-source-binding-v1.drv",
+    "result": "module-lifecycle-and-all-six-source-admission-denials-passed",
+    "positive_controls": ["signed startup", "restart using the selected trust and retained state", "clean shutdown"],
+    "denial_controls": ["absent trust", "stale binding selection", "wrong selected signer", "wrong selected output", "altered executing binary", "altered retained policy in a private bind mount"],
+    "asserted_no_new_startup_receipt_for_each_denial": true,
+    "evidence_boundary": "The Nix driver executed its success/denial and absence assertions on the same source binding as the signed multinode campaign. This module rail did not export guest receipt contents.",
+    "raw_log_blake3": "2113735915ff8b2fcd2391c82b809d87cc05d1a80662121187832ae02c4c2781"
+  },
   "limits": [
     "The signer is selected and provisioned by the disposable fixture, outside node startup. No independent producer/operator or external deployment trust was established.",
     "The unsigned check is a successful denial assertion, not a signed startup pass.",
