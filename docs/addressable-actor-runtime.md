@@ -149,6 +149,12 @@ not enqueued again on a later attempt. It resumes through the same current FIFO
 preview and independently authorized fenced claim; altered, active, terminal
 or ambiguous rows are not treated as fresh queued work.
 
+### Counter message shape and authority
+
+The pinned Elixir process-types [accepted server example](https://github.com/castagnag/elixir-process-types/blob/2cda5f21a99f5d6f92004be6da0d498c36fb6add/examples/server_decorated.exs) sends `{:work_add, 12}`; its [rejected counterpart](https://github.com/castagnag/elixir-process-types/blob/2cda5f21a99f5d6f92004be6da0d498c36fb6add/examples/server_errors.exs) uses an unknown `:wrk_add` tag and a wrong-typed `:total` recipient. Aspen has no equivalent static send/receive or closure typing. Its fixed counter surface accepts a canonical `addressable-counter-add-v1` record with exact actor/request refs and a positive `u64`. The [public request command](../src/addressable_actor/command/actions/parts/p001/body.rs) decodes it and checks the assigned actor before calling the delivery owner. A wrong tag or non-integer field is a payload rejection before enqueue, even with otherwise valid authority. A well-shaped add still needs separate source, placement and operation admission; the [callback](../src/addressable_actor/counter/mod.rs) decodes again before changing semantic state.
+
+This is source comparison, not a run of the Elixir prototype or a claim that the generic mailbox validates every application's payload. It does not cover delegated closures, last-handle quiescence, or dormant-agent recovery.
+
 ### Pinned runnable flow
 
 Build the reviewed immutable source producer with the repository's locked Nix inputs. This build runs the real source-admission producer; a local Cargo binary or a fabricated receipt cannot replace it:

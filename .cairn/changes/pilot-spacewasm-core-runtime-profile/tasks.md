@@ -25,3 +25,5 @@ evidence-bearing acceptance:
 ## Local verification (2026-11-21)
 
 Pueue task 46 ran `cargo test --locked -p molten --features spacewasm-pilot --lib spacewasm::`: 31 passed, one independently provisioned case ignored. The pinned Nickel CLI also exported the checked authoring profile after the contract-export shadowing repair; `production` and `release` remained `false`. Neither check provides the missing independent publication, exact-verifier, or full-ABI differential evidence above.
+
+Current prerequisite readback still has no admitted bundle: Mantle revision `aa81952cce99ac7bb5e2bff95a97bcb4b785b8ca` leaves immutable publication and consumer execution unchecked, Octet revision `3ddd21ef671f206537d42ad2289467b530b96255` retains explicitly fixture-only static receipts, and the current ChaosControl differential still declares `chaoscontrol.spacewasm-mvp-differential-report.v1`. None supplies the missing full-ABI candidate input.
