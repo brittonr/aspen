@@ -2,6 +2,7 @@ use super::*;
 
 mod plan;
 pub(in crate::fabric_consistency::raft) mod setup;
+#[path = "trace/capture.rs"]
 mod trace_capture;
 mod workflow;
 

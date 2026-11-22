@@ -15,6 +15,7 @@ files:
   - examples/ebpf-observe.rs
 ignores:
   # These modules write synthetic endpoint inputs with test workspace capabilities.
+  - src/fabric_observability/kernel/tests/endpoint.rs
   - src/fabric_observability/kernel/tests/receipt.rs
   - src/fabric_observability/kernel/tests/window.rs
   - src/fabric_observability/nodeadmission/observertests.rs

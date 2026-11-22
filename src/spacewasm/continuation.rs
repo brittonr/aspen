@@ -62,6 +62,98 @@ pub struct ResumeContext {
     pub logical_turn: u64,
 }
 
+/// The requested runner grant is the smaller of the segment ceiling and the remaining turn work.
+// r[impl molten.spacewasm_core.functional_core]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SegmentPlan {
+    logical_turn: u64,
+    segment_ceiling: u64,
+    total_ceiling: u64,
+    prior_spent: u64,
+    grant: u64,
+}
+
+impl SegmentPlan {
+    pub fn new(logical_turn: u64, segment_ceiling: u64, total_ceiling: u64, prior_spent: u64) -> Result<Self, Failure> {
+        if segment_ceiling == 0 || segment_ceiling > total_ceiling || prior_spent > total_ceiling {
+            return Err(Failure::Proof("invalid-segment-budget".into()));
+        }
+        let grant = segment_ceiling.min(total_ceiling - prior_spent);
+        if grant == 0 {
+            return Err(Failure::TotalFuel);
+        }
+        Ok(Self {
+            logical_turn,
+            segment_ceiling,
+            total_ceiling,
+            prior_spent,
+            grant,
+        })
+    }
+
+    pub fn grant(&self) -> u64 {
+        self.grant
+    }
+
+    pub fn observe(self, consumed: u64, end: SegmentEnd) -> Result<SegmentObservation, Failure> {
+        if consumed == 0 || consumed > self.grant || (end == SegmentEnd::OutOfFuel && consumed != self.grant) {
+            return Err(Failure::Proof("segment-work-does-not-match-grant".into()));
+        }
+        Ok(SegmentObservation {
+            plan: self,
+            post_spent: self.prior_spent + consumed,
+            end,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SegmentEnd {
+    Finished,
+    OutOfFuel,
+    HostPause,
+    Trap,
+    HarnessFailure,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SegmentObservation {
+    plan: SegmentPlan,
+    post_spent: u64,
+    end: SegmentEnd,
+}
+
+impl SegmentObservation {
+    pub fn prior_spent(&self) -> u64 {
+        self.plan.prior_spent
+    }
+
+    pub fn post_spent(&self) -> u64 {
+        self.post_spent
+    }
+
+    pub(super) fn detail(&self) -> &'static str {
+        match self.end {
+            SegmentEnd::Finished => "finished",
+            SegmentEnd::OutOfFuel => "out-of-fuel",
+            SegmentEnd::HostPause => "host-pause",
+            SegmentEnd::Trap => "deterministic-trap",
+            SegmentEnd::HarnessFailure => "harness-failure",
+        }
+    }
+
+    pub(super) fn value(&self) -> preserves::IOValue {
+        crate::codec::record("spacewasm-segment-v1", vec![
+            crate::codec::u64_value(self.plan.logical_turn),
+            crate::codec::u64_value(self.plan.segment_ceiling),
+            crate::codec::u64_value(self.plan.total_ceiling),
+            crate::codec::u64_value(self.plan.grant),
+            crate::codec::u64_value(self.plan.prior_spent),
+            crate::codec::u64_value(self.post_spent),
+        ])
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Failure {
     Denied(String),

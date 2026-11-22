@@ -281,20 +281,13 @@ pub fn compare_replay(segmented: Report, uninterrupted: Report) -> Result<Replay
 fn terminal_evidence(report: &Report, observation: &receipt::Observation) -> Result<(), String> {
     let binding = report.binding.identity()?;
     let identity = observation.identity()?;
-    if report
-        .events
-        .iter()
-        .enumerate()
-        .any(|(index, event)| event.binding != binding || event.sequence != index as u64 || event.resource.is_none())
-    {
-        return Err("execution events lack exact binding, sequence or actual resources".into());
-    }
-    let mut terminals = report.events.iter().filter(|event| event.phase == "terminal");
-    if terminals.next().is_none_or(|event| event.detail != identity) || terminals.next().is_some() {
+    receipt::validate_events(&report.events, &binding)?;
+    let mut terminals = report.events.iter().filter(|event| event.phase() == "terminal");
+    if terminals.next().is_none_or(|event| event.detail() != identity) || terminals.next().is_some() {
         return Err("terminal event does not bind actual observation".into());
     }
     if !report.events.windows(2).any(|pair| {
-        pair[0].phase == "resource" && pair[0].detail == observation.resource_class && pair[1].phase == "terminal"
+        pair[0].phase() == "resource" && pair[0].detail() == observation.resource_class && pair[1].phase() == "terminal"
     }) {
         return Err("actual terminal resource event absent".into());
     }
@@ -303,13 +296,13 @@ fn terminal_evidence(report: &Report, observation: &receipt::Observation) -> Res
 
 fn validate_schedule(segmented: &Report, uninterrupted: &Report) -> Result<(), String> {
     let yielded =
-        |report: &Report| report.events.iter().any(|event| event.phase == "yield" && event.detail == "out-of-fuel");
+        |report: &Report| report.events.iter().any(|event| event.phase() == "yield" && event.detail() == "out-of-fuel");
     let boundary = |report: &Report| {
-        !report.events.iter().any(|event| event.phase == "segment")
+        report.events.iter().all(|event| event.segment().is_none())
             && report
                 .events
                 .iter()
-                .any(|event| event.phase == "boundary" && event.detail == "no-instruction-execution")
+                .any(|event| event.phase() == "boundary" && event.detail() == "no-instruction-execution")
             && matches!(
                 &report.outcome,
                 Outcome::Failed(continuation::Failure::Denied(_) | continuation::Failure::Cancelled(_))

@@ -12,6 +12,8 @@ mod observerlease;
 mod observertests;
 mod observerwire;
 pub use observerlease::ObserverAuthorityLease;
+pub use observerlease::ObserverReadback;
+pub use observerlease::ObserverReadiness;
 pub use observerlease::ObserverWindowTick;
 pub use observerlease::admit_node_observation;
 pub use observerwire::decode_node_observer_credential;

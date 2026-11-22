@@ -26,10 +26,10 @@ fn configured_replay_smoke() {
     ];
     let value = super::replay_configuration(&root, &left, &right, &output).expect("actual NASA replay");
     let identity = crate::codec::canonical_hash(&value).unwrap();
-    let replay = crate::codec::simple_record_fields(&value, "molten-spacewasm-fixture-replay-status-v1", 5).unwrap();
+    let replay = crate::codec::simple_record_fields(&value, status::REPLAY_SCHEMA, 5).unwrap();
     for side in [0, 1] {
         let report = crate::codec::value_to_iovalue(&replay[side]);
-        let report = crate::codec::simple_record_fields(&report, "molten-spacewasm-fixture-status-v1", 25).unwrap();
+        let report = crate::codec::simple_record_fields(&report, status::EXECUTION_SCHEMA, 25).unwrap();
         assert_eq!(report[13].as_boolean(), Some(true), "actual fixture acceptance");
         assert_eq!(report[19].as_boolean(), Some(true), "actual post-terminal cleanup");
         let outcome = crate::codec::value_to_iovalue(&report[14]);

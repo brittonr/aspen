@@ -152,14 +152,21 @@ impl Engine {
         Ok(engine)
     }
 
-    fn event(&mut self, phase: &str, detail: &str) {
+    fn event(&mut self, phase: &'static str, detail: &str) {
+        self.record_event(receipt::EventKind::Lifecycle {
+            phase,
+            detail: detail.into(),
+        });
+    }
+
+    fn record_event(&mut self, kind: receipt::EventKind) {
         let usage = self.budget.usage();
         let linear_bytes = if self.store.modules().is_empty() {
             0
         } else {
             u64::from(self.store.get_memory(::spacewasm::ModuleRef(0)).size()) * 65536
         };
-        let resource = Some(receipt::Resource {
+        let resource = receipt::Resource {
             interpreter_bytes: usage.allocated as u64,
             interpreter_peak: usage.peak as u64,
             ir_bytes: usage.ir_allocated as u64,
@@ -171,13 +178,11 @@ impl Engine {
             },
             linear_bytes,
             instruction_bound: self.fuel,
-        });
+        };
         self.events.push(receipt::Event {
-            phase: phase.into(),
+            kind,
             binding: self.binding_ref.clone(),
             sequence: self.events.len() as u64,
-            fuel_granted: self.fuel,
-            detail: detail.into(),
             resource,
         });
     }
@@ -196,7 +201,7 @@ impl Engine {
         {
             return self.terminate(Some(continuation::Failure::Denied("stale continuation".into())));
         }
-        let result = self.segment();
+        let result = self.segment(context.logical_turn);
         match result {
             Ok(progress) => progress,
             Err(error) => self.terminate(Some(error)),
@@ -212,26 +217,25 @@ impl Engine {
 
 impl Engine {
     // r[impl molten.spacewasm_core.resources]
-    fn segment(&mut self) -> Result<continuation::Progress, continuation::Failure> {
+    fn segment(&mut self, logical_turn: u64) -> Result<continuation::Progress, continuation::Failure> {
         let limits = &self.plan.profile.limits;
-        let grant = limits.segment_fuel.min(limits.total_fuel.saturating_sub(self.fuel));
-        if grant == 0 {
-            return Err(continuation::Failure::TotalFuel);
-        }
+        let plan = continuation::SegmentPlan::new(logical_turn, limits.segment_fuel, limits.total_fuel, self.fuel)?;
         self.check_retention()?;
         let machine = self.machine.take().ok_or_else(|| continuation::Failure::Harness("missing state".into()))?;
         let mut state = machine.restore(&mut self.store);
-        let (result, consumed) = run_segment(&self.code, &mut state, &self.shared, grant as usize);
-        self.fuel += consumed as u64;
+        let (result, consumed) = run_segment(&self.code, &mut state, &self.shared, plan.grant());
         let value = state.result;
         self.machine = Some(machine::Machine::capture(state));
-        self.event("segment", match &result {
-            ::spacewasm::InterpreterResult::Finished => "finished",
-            ::spacewasm::InterpreterResult::OutOfFuel => "out-of-fuel",
-            ::spacewasm::InterpreterResult::Pause => "host-pause",
-            ::spacewasm::InterpreterResult::Trap(_) => "deterministic-trap",
-            ::spacewasm::InterpreterResult::ReaderError(_) => "harness-failure",
-        });
+        let end = match &result {
+            ::spacewasm::InterpreterResult::Finished => continuation::SegmentEnd::Finished,
+            ::spacewasm::InterpreterResult::OutOfFuel => continuation::SegmentEnd::OutOfFuel,
+            ::spacewasm::InterpreterResult::Pause => continuation::SegmentEnd::HostPause,
+            ::spacewasm::InterpreterResult::Trap(_) => continuation::SegmentEnd::Trap,
+            ::spacewasm::InterpreterResult::ReaderError(_) => continuation::SegmentEnd::HarnessFailure,
+        };
+        let observation = plan.observe(consumed, end)?;
+        self.fuel = observation.post_spent();
+        self.record_event(receipt::EventKind::Segment(observation));
         match result {
             ::spacewasm::InterpreterResult::OutOfFuel | ::spacewasm::InterpreterResult::Pause => {
                 let host_pause = result == ::spacewasm::InterpreterResult::Pause;
@@ -239,7 +243,7 @@ impl Engine {
                 self.check_retention()?;
                 Ok(continuation::Progress::Yield {
                     host_pause,
-                    continuation: self.binding.identity().map_err(continuation::Failure::Harness)?,
+                    continuation: self.binding_ref.clone(),
                 })
             }
             ::spacewasm::InterpreterResult::Finished => self.advance(value),
@@ -321,7 +325,7 @@ impl Engine {
         self.check_retention()?;
         Ok(continuation::Progress::Yield {
             host_pause: false,
-            continuation: self.binding.identity().map_err(continuation::Failure::Harness)?,
+            continuation: self.binding_ref.clone(),
         })
     }
 
@@ -334,11 +338,7 @@ impl Engine {
                 call.name.capacity() + call.request.capacity() + call.response.capacity() + call.authority.capacity()
             })
             .sum();
-        let event_bytes: usize = self
-            .events
-            .iter()
-            .map(|event| event.phase.capacity() + event.binding.capacity() + event.detail.capacity())
-            .sum();
+        let event_bytes: usize = self.events.iter().map(receipt::Event::retained_bytes).sum();
         let retained = self.budget.usage().allocated as u128
             + memory
             + (self.input.capacity() + self.output.capacity() + call_bytes + event_bytes) as u128
@@ -357,8 +357,8 @@ fn run_segment(
     code: &[::spacewasm::Box<::spacewasm::TextPage>],
     state: &mut ::spacewasm::InterpreterState<'_>,
     shared: &host::Shared,
-    grant: usize,
-) -> (::spacewasm::InterpreterResult, usize) {
+    grant: u64,
+) -> (::spacewasm::InterpreterResult, u64) {
     // The upstream runner exposes no consumed count. Single-instruction stepping
     // keeps the total-work law exact and pushes host results before admitted pause.
     for consumed in 1..=grant {

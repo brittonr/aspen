@@ -1,20 +1,41 @@
 //! Node startup observation. The only ambient inputs here are the host clocks and boot ID.
-use molten::node_runtime::ValidatedNodeSourceGate;
-use molten::node_state::DirectoryRoot;
+
+pub(super) struct StartupFence {
+    #[cfg(target_os = "linux")]
+    readiness: molten::fabric_observability::nodeadmission::ObserverReadiness,
+    #[cfg(target_os = "linux")]
+    clock: molten::fabric_time::LiveClockAdapter,
+}
+
+impl StartupFence {
+    #[cfg(target_os = "linux")]
+    pub(super) fn validate(&mut self) -> molten::error::Result<()> {
+        self.readiness
+            .validate(molten::world_witness::WallClock::unix_seconds(&mut self.clock)?, monotonic_ns()?)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(super) fn validate(&mut self) -> molten::error::Result<()> {
+        Err(unsupported())
+    }
+}
 
 #[cfg(target_os = "linux")]
-pub(super) fn at_start(root: &DirectoryRoot, gate: &ValidatedNodeSourceGate, path: &str) -> molten::error::Result<()> {
+pub(super) fn at_start(
+    root: &molten::node_state::DirectoryRoot,
+    gate: &molten::node_runtime::ValidatedNodeSourceGate,
+    path: &str,
+) -> molten::error::Result<Option<StartupFence>> {
     use std::io::Read;
     use std::io::Write;
-
-    use molten::fabric_observability::nodeadmission as observer;
 
     const MAX_SELECTION_BYTES: u64 = 16 * 1024;
     const BOOT_ID_BYTES: usize = 36;
 
     let path = molten::node_state::RelativePath::parse(path).map_err(|_| denied())?;
     let bytes = root.read(&path, MAX_SELECTION_BYTES).map_err(|_| denied())?;
-    let selection = observer::decode_node_observation_selection(&bytes).map_err(|_| denied())?;
+    let selection =
+        molten::fabric_observability::nodeadmission::decode_node_observation_selection(&bytes).map_err(|_| denied())?;
     let mut boot = [0; BOOT_ID_BYTES + 1];
     std::fs::File::open("/proc/sys/kernel/random/boot_id")
         .and_then(|mut file| file.read_exact(&mut boot))
@@ -23,17 +44,19 @@ pub(super) fn at_start(root: &DirectoryRoot, gate: &ValidatedNodeSourceGate, pat
     if boot[BOOT_ID_BYTES] != b'\n' || boot_id != selection.boot_id {
         return Err(denied());
     }
-    let unix_seconds =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| denied())?.as_secs();
-    let lease = observer::admit_node_observation(root, &selection, gate, unix_seconds)?;
+    let mut clock = molten::world_witness::live_clock()?;
+    let unix_seconds = molten::world_witness::WallClock::unix_seconds(&mut clock)?;
+    let lease =
+        molten::fabric_observability::nodeadmission::admit_node_observation(root, &selection, gate, unix_seconds)?;
     let monotonic_ns = monotonic_ns()?;
-    let observed = lease.poll_window(observer::ObserverWindowTick {
+    let readback = lease.poll_window(molten::fabric_observability::nodeadmission::ObserverWindowTick {
         boot_id,
         unix_seconds,
         monotonic_ns,
         deadline_ns: monotonic_ns,
         cancelled: false,
     })?;
+    let observed = readback.observation;
     let value = molten::preserves_rail::record("node-linux-observation-start-v1", vec![
         observed.status.value,
         observed.health.value,
@@ -43,7 +66,7 @@ pub(super) fn at_start(root: &DirectoryRoot, gate: &ValidatedNodeSourceGate, pat
     if observed.deny_required_readiness {
         return Err(molten::error::Failure::invalid_harness("required Linux observation unavailable at startup"));
     }
-    Ok(())
+    Ok(readback.readiness.map(|readiness| StartupFence { readiness, clock }))
 }
 
 #[cfg(target_os = "linux")]
@@ -60,6 +83,15 @@ fn denied() -> molten::error::Failure {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn at_start(_: &DirectoryRoot, _: &ValidatedNodeSourceGate, _: &str) -> molten::error::Result<()> {
-    Err(molten::error::Failure::invalid_harness("Linux observation unsupported on this platform"))
+pub(super) fn at_start(
+    _: &molten::node_state::DirectoryRoot,
+    _: &molten::node_runtime::ValidatedNodeSourceGate,
+    _: &str,
+) -> molten::error::Result<Option<StartupFence>> {
+    Err(unsupported())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn unsupported() -> molten::error::Failure {
+    molten::error::Failure::invalid_harness("Linux observation unsupported on this platform")
 }

@@ -113,25 +113,77 @@ impl Observation {
 
 #[derive(Clone, Debug)]
 pub struct Event {
-    pub phase: String,
+    pub(super) kind: EventKind,
     pub binding: String,
     pub sequence: u64,
-    pub fuel_granted: u64,
-    pub detail: String,
-    pub resource: Option<Resource>,
+    pub resource: Resource,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum EventKind {
+    Segment(super::continuation::SegmentObservation),
+    Lifecycle { phase: &'static str, detail: String },
 }
 
 impl Event {
+    pub fn phase(&self) -> &'static str {
+        match &self.kind {
+            EventKind::Segment(_) => "segment",
+            EventKind::Lifecycle { phase, .. } => phase,
+        }
+    }
+
+    pub fn detail(&self) -> &str {
+        match &self.kind {
+            EventKind::Segment(segment) => segment.detail(),
+            EventKind::Lifecycle { detail, .. } => detail,
+        }
+    }
+
+    pub fn segment(&self) -> Option<&super::continuation::SegmentObservation> {
+        match &self.kind {
+            EventKind::Segment(segment) => Some(segment),
+            EventKind::Lifecycle { .. } => None,
+        }
+    }
+
+    pub(super) fn retained_bytes(&self) -> usize {
+        self.binding.capacity()
+            + match &self.kind {
+                EventKind::Segment(_) => 0,
+                EventKind::Lifecycle { detail, .. } => detail.capacity(),
+            }
+    }
+
     pub fn value(&self) -> preserves::IOValue {
-        crate::codec::record("spacewasm-event-v1", vec![
-            crate::codec::string(&self.phase),
+        crate::codec::record("spacewasm-event-v2", vec![
+            crate::codec::string(self.phase()),
             crate::codec::string(&self.binding),
             crate::codec::u64_value(self.sequence),
-            crate::codec::u64_value(self.fuel_granted),
-            crate::codec::string(&self.detail),
-            crate::codec::sequence(self.resource.as_ref().map(|resource| vec![resource.value()]).unwrap_or_default()),
+            crate::codec::sequence(self.segment().map(|segment| vec![segment.value()]).unwrap_or_default()),
+            crate::codec::string(self.detail()),
+            self.resource.value(),
         ])
     }
+}
+
+pub(super) fn validate_events(events: &[Event], binding: &str) -> Result<(), String> {
+    let mut spent = 0;
+    for (index, event) in events.iter().enumerate() {
+        if event.binding != binding || event.sequence != index as u64 {
+            return Err("execution events lack exact binding or sequence".into());
+        }
+        if let Some(segment) = event.segment() {
+            if segment.prior_spent() != spent {
+                return Err("segment prior work does not match execution trace".into());
+            }
+            spent = segment.post_spent();
+        }
+        if event.resource.instruction_bound != spent {
+            return Err("resource work does not match executed segments".into());
+        }
+    }
+    Ok(())
 }
 
 pub fn replay(expected: &Observation, actual: &Observation) -> Result<String, String> {
@@ -160,6 +212,7 @@ pub struct Resource {
     pub ir_peak: u64,
     pub stack_bytes: u64,
     pub linear_bytes: u64,
+    /// Cumulative counted work, not a segment grant or profile ceiling.
     pub instruction_bound: u64,
 }
 
@@ -229,7 +282,100 @@ impl Output {
 
 #[cfg(test)]
 mod tests {
+    use super::super::continuation;
     use super::*;
+
+    fn event(binding: &str, sequence: u64, kind: EventKind, spent: u64) -> Event {
+        Event {
+            kind,
+            binding: binding.into(),
+            sequence,
+            resource: Resource {
+                interpreter_bytes: 0,
+                interpreter_peak: 0,
+                ir_bytes: 0,
+                ir_peak: 0,
+                stack_bytes: 0,
+                linear_bytes: 0,
+                instruction_bound: spent,
+            },
+        }
+    }
+
+    // r[verify molten.spacewasm_core.receipts]
+    #[test]
+    fn early_finish_receipt_distinguishes_grant_and_cumulative_work() {
+        let reference = crate::codec::content_ref_from_bytes(b"facts");
+        let binding = continuation::Binding {
+            actor: "actor".into(),
+            generation: 2,
+            artifact: reference.clone(),
+            profile: reference.clone(),
+            input: reference.clone(),
+            authority: reference.clone(),
+            resource: reference.clone(),
+            effects: reference,
+        };
+        let identity = binding.identity().unwrap();
+        let prior = continuation::SegmentPlan::new(7, 8, 24, 0)
+            .unwrap()
+            .observe(8, continuation::SegmentEnd::OutOfFuel)
+            .unwrap();
+        let finished = continuation::SegmentPlan::new(9, 8, 24, 8)
+            .unwrap()
+            .observe(2, continuation::SegmentEnd::Finished)
+            .unwrap();
+        let mut events = [
+            event(&identity, 0, EventKind::Segment(prior), 8),
+            event(
+                &identity,
+                1,
+                EventKind::Lifecycle {
+                    phase: "yield",
+                    detail: "out-of-fuel".into(),
+                },
+                8,
+            ),
+            event(&identity, 2, EventKind::Segment(finished), 10),
+        ];
+        assert!(validate_events(&events, &identity).is_ok());
+        let encoded = events[2].value();
+        let fields = crate::codec::simple_record_fields(&encoded, "spacewasm-event-v2", 6).unwrap();
+        assert_eq!(fields[1].as_string().as_deref(), Some(identity.as_str()));
+        assert_eq!(
+            crate::codec::value_to_iovalue(&fields[3]),
+            crate::codec::sequence(vec![crate::codec::record(
+                "spacewasm-segment-v1",
+                [9, 8, 24, 8, 8, 10].into_iter().map(crate::codec::u64_value).collect(),
+            )])
+        );
+        let encoded = events[1].value();
+        let fields = crate::codec::simple_record_fields(&encoded, "spacewasm-event-v2", 6).unwrap();
+        assert_eq!(crate::codec::value_to_iovalue(&fields[3]), crate::codec::sequence(Vec::new()));
+
+        let changed = continuation::Binding {
+            generation: 3,
+            ..binding
+        };
+        assert!(validate_events(&events, &changed.identity().unwrap()).is_err());
+        events[1].resource.instruction_bound += 1;
+        assert!(validate_events(&events, &identity).is_err());
+    }
+
+    // r[verify molten.spacewasm_core.resources]
+    #[test]
+    fn last_segment_uses_only_remaining_fuel() {
+        let plan = continuation::SegmentPlan::new(9, 8, 10, 8).unwrap();
+        assert_eq!(plan.grant(), 2);
+        let end = continuation::SegmentEnd::OutOfFuel;
+        let observed = plan.observe(2, end).unwrap();
+        assert_eq!(observed.prior_spent(), 8);
+        assert_eq!(observed.post_spent(), 10);
+        assert_eq!(continuation::SegmentPlan::new(10, 8, 10, 10), Err(continuation::Failure::TotalFuel));
+        for invalid in [0, 1, 3] {
+            assert!(matches!(plan.observe(invalid, end), Err(continuation::Failure::Proof(_))));
+        }
+    }
 
     fn observation() -> Observation {
         let reference = |bytes: &[u8]| crate::codec::content_ref_from_bytes(bytes);

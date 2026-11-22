@@ -45,7 +45,7 @@ fn serve_live(
             bound.serve().await.map(Some)
         }
     });
-    hosted.close();
+    drop(hosted);
     let Some(served) = served? else {
         // EOF closes this explicitly owned session, not a successful listener receipt.
         return Ok(());

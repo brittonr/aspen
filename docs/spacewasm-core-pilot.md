@@ -117,6 +117,10 @@ boundaries because the upstream runner does not expose consumed fuel; charging a
 whole granted slice after an early return would incorrectly exhaust the turn.
 This also pushes a hostcall's actual i64 result before admitted host pause, rather
 than mistaking NASA's raw pause-without-result behavior for a completed ABI call.
+Each executed segment records its logical turn, both fuel ceilings, actual
+grant, and counted work before and after the call. Lifecycle events have no
+segment grant. The v2 execution and replay status envelopes bind these v2
+events; readback does not reinterpret older cumulative work as a grant.
 Continuations retain owned stack/PC/memory/table state, not serialized pointers.
 Actor generation, artifact, profile, input, authority, resource, effects, and
 logical retention are fenced on every resume. Stale failures drop guest/code/stack

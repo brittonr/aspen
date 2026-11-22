@@ -74,3 +74,5 @@ Actual campaigns and imported execution evidence still require a measured cross-
 ## Local conformance verification
 
 The offline feature-enabled library run on base `4b06df45b` plus the local guard changes passed all 68 tests under `fabric_consistency::chaoscontrol::`. The combined run also selected an unrelated reliability checker regression which failed before its repair; the log BLAKE3 is `d388b4d57bebd3880bc8b89c4dd73d0da0eed5e3714f5c71c0dfcbd852b62315`. The pinned Cairn provider policy passed strict validation and the proposal, design and tasks gates. The measured multi-guest closure and no-fault/fault campaign and replay tasks are still open. The earlier one-VM collaboration workload does not discharge these tasks.
+
+The rehomed local Raft read-index diagnostic ran over three distinct loopback listeners. It completed all six steps and emitted a 1,656-byte packed trace (`blake3:3287a360151166e36f25abd92eb68404aa3de01533f03b23b36a84675094eeee`, log BLAKE3 `e830931277024bca3a0fd6dcdc90f98400edd071dc12363d2cdba86ef1fc0884`). This is a local trace control; it neither builds nor executes the required multi-guest cohort.

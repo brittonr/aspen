@@ -168,13 +168,13 @@ pub(crate) fn run_loop(input: super::command::base::RunLoop) -> molten::error::R
         receipt_out,
         heartbeat_out,
     } = input;
-    let hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
+    let mut hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
     hosted.publish_ready()?;
     let loop_run = molten::node_daemon::run_control_loop(&molten::node_daemon::ControlLoopInput {
         state_root: &state_root,
         max_requests,
     })?;
-    hosted.close();
+    drop(hosted);
     if let Some(path) = heartbeat_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&loop_run.heartbeat_receipt_value)?)?;
     }
@@ -227,7 +227,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             supervisor_policy_value.as_ref(),
         )
     } else {
-        let hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
+        let mut hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
         hosted.publish_ready()?;
         let served = molten::node_daemon::serve_control(&molten::node_daemon::ControlServeInput {
             state_root: &state_root,
@@ -236,7 +236,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             max_requests_per_tick,
             supervisor_policy_value: supervisor_policy_value.as_ref(),
         })?;
-        hosted.close();
+        drop(hosted);
         super::core::emit_named_receipt(
             receipt_out.as_ref(),
             "node control service run receipt",

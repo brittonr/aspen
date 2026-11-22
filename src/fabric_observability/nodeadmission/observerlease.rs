@@ -1,5 +1,7 @@
 #[path = "observerpoll.rs"]
 mod poll;
+pub use poll::ObserverReadback;
+pub use poll::ObserverReadiness;
 pub use poll::ObserverWindowTick;
 
 pub struct ObserverAuthorityLease {

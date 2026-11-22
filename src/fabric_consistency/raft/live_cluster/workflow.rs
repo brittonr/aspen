@@ -1,5 +1,7 @@
 use super::*;
 
+mod propagation;
+
 /// Elect the first node with the second node's vote, without handling the initial appends.
 pub(super) async fn elect_node_a(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
     let timer_ref = node_a.service.state().active_election_timer_ref.clone();
@@ -38,7 +40,7 @@ pub(super) async fn replicate_request(
     request_ref: &str,
 ) -> crate::error::Result<()> {
     replicate_until_commit(node_a, node_b, node_c, request_ref).await?;
-    replicate_commit_notice(node_a, node_b, node_c).await
+    propagation::notify_followers(node_a, node_b, node_c).await
 }
 
 /// Reach the leader's applied commit without notifying either follower of that commit.
@@ -281,26 +283,6 @@ pub(super) fn require_applied_transition(
             failed.diagnostic
         ))),
     }
-}
-
-async fn replicate_commit_notice(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
-    let session_b = node_b.session_ref.clone();
-    let session_c = node_c.session_ref.clone();
-    let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
-    let (heartbeat, commit_b, commit_c) = tokio::join!(heartbeat, receive_b, receive_c);
-    require_applied(heartbeat)?;
-    let commit_b = commit_b?;
-    let _commit_c = commit_c?;
-
-    let session_a = node_a.session_ref.clone();
-    let follower_commit = node_b.service.handle_event(commit_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
-    let (follower_commit, response) = tokio::join!(follower_commit, receive_a);
-    require_applied(follower_commit)?;
-    require_applied(node_a.service.handle_event(response?.event).await)?;
-    Ok(())
 }
 
 fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error::Result<()> {

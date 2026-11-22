@@ -5,6 +5,9 @@ use super::admission;
 use super::fixture;
 use super::profile;
 
+pub(super) const EXECUTION_SCHEMA: &str = "molten-spacewasm-fixture-status-v2";
+pub(super) const REPLAY_SCHEMA: &str = "molten-spacewasm-fixture-replay-status-v2";
+
 fn scenario(value: &fixture::Scenario) -> preserves::IOValue {
     let (tag, fields) = match value {
         fixture::Scenario::Standard => ("standard", Vec::new()),
@@ -51,7 +54,7 @@ pub fn value(report: &fixture::Report, diagnostic: Option<&str>) -> preserves::I
     let events = report.events.iter().map(|event| event.value()).collect();
     let blockers = report.blockers.iter().map(crate::codec::string).collect();
     let diagnostic = diagnostic.map(|value| vec![crate::codec::string(value)]).unwrap_or_default();
-    crate::codec::record("molten-spacewasm-fixture-status-v1", vec![
+    crate::codec::record(EXECUTION_SCHEMA, vec![
         crate::codec::string(profile::ID),
         crate::codec::string(profile::REVISION),
         crate::codec::string(&report.name),
@@ -107,7 +110,7 @@ pub fn denial_value(report: &fixture::DeniedReport, diagnostic: Option<&str>) ->
 }
 
 pub fn replay_value(replay: &fixture::Replay, diagnostic: Option<&str>) -> preserves::IOValue {
-    crate::codec::record("molten-spacewasm-fixture-replay-status-v1", vec![
+    crate::codec::record(REPLAY_SCHEMA, vec![
         value(&replay.segmented, diagnostic),
         value(&replay.uninterrupted, diagnostic),
         crate::codec::string(&replay.receipt),
@@ -195,8 +198,7 @@ fn validate(value: &preserves::IOValue, kind: Kind, profiles: &[&str]) -> Result
         if profiles.len() != 2 {
             return Err("replay requires both expected profiles".into());
         }
-        let fields = crate::codec::simple_record_fields(value, "molten-spacewasm-fixture-replay-status-v1", 5)
-            .map_err(|error| error.to_string())?;
+        let fields = crate::codec::simple_record_fields(value, REPLAY_SCHEMA, 5).map_err(|error| error.to_string())?;
         if fields[3].as_boolean() != Some(false)
             || fields[4].as_string().as_deref() != Some("experimental-not-release-evidence")
         {
@@ -214,7 +216,7 @@ fn validate(value: &preserves::IOValue, kind: Kind, profiles: &[&str]) -> Result
         return Err("one expected profile required".into());
     }
     let (label, arity, profile_index, passed_index, production_index) = match kind {
-        Kind::Execution => ("molten-spacewasm-fixture-status-v1", 25, 5, 13, 23),
+        Kind::Execution => (EXECUTION_SCHEMA, 25, 5, 13, 23),
         Kind::AdmissionDenial => ("molten-spacewasm-fixture-admission-status-v1", 15, 4, 10, 13),
         Kind::Replay => return Err("invalid nested replay".into()),
     };

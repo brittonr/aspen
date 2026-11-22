@@ -7,6 +7,7 @@ mod linuxobservation;
 
 pub(super) struct Session {
     host: Option<molten::node_service_host::installed::Owner>,
+    observer: Option<linuxobservation::StartupFence>,
 }
 
 impl Session {
@@ -16,16 +17,20 @@ impl Session {
     ) -> molten::error::Result<Self> {
         let root = molten::node_state::DirectoryRoot::open_existing(state_root)?;
         let gate = molten::node_daemon::admit_startup_source_gate_with_root(&root)?;
-        if let Some(selection) = linux_observation_selection {
-            linuxobservation::at_start(&root, &gate, selection)?;
-        }
+        let observer = linux_observation_selection
+            .map(|selection| linuxobservation::at_start(&root, &gate, selection))
+            .transpose()?
+            .flatten();
         let host = molten::node_service_host::installed::Owner::open_after_source_admission(&root, &gate)?;
-        Ok(Self { host })
+        Ok(Self { host, observer })
     }
 
     /// Publish only the current process's successfully authorized hosting owner.
     /// No persistent marker can be confused with a predecessor killed by a fault.
-    pub(super) fn publish_ready(&self) -> molten::error::Result<()> {
+    pub(super) fn publish_ready(&mut self) -> molten::error::Result<()> {
+        if let Some(observer) = &mut self.observer {
+            observer.validate()?;
+        }
         if let Some(host) = &self.host {
             println!("{}", molten::preserves_rail::to_text(host.ready())?);
             std::io::Write::flush(&mut std::io::stdout()).map_err(molten::error::Failure::from)?;
@@ -61,9 +66,11 @@ impl Session {
             Err(error) => control::error(request.command, request.tick, control::failure_detail(&error)),
         }
     }
+}
 
-    pub(super) fn close(self) {
-        if let Some(host) = self.host {
+impl Drop for Session {
+    fn drop(&mut self) {
+        if let Some(host) = self.host.take() {
             host.close();
         }
     }

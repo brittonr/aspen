@@ -123,7 +123,7 @@ const IDENTITIES: [&str; 15] = [
 // r[impl molten.testing.live_reliability_boundary]
 pub fn import(expected: &Expected, evidence: &Observed) -> Result<ExternalReceipt, Issue> {
     checks::validate_identity(expected, evidence)?;
-    checks::validate_checked(expected, evidence)?;
+    reportchecks::validate_checked(expected, evidence)?;
     crate::live_reliability::generator::validate_plan(&expected.admitted, &expected.plan).map_err(|_| Issue::Plan)?;
     let history = serde_json::from_value(evidence.history.clone()).map_err(|_| Issue::History)?;
     crate::live_reliability::history::validate(&expected.admitted, &expected.plan, &history)
@@ -138,10 +138,10 @@ pub fn import(expected: &Expected, evidence: &Observed) -> Result<ExternalReceip
     {
         return Err(Issue::History);
     }
-    checks::validate_faults(expected, evidence, events)?;
-    checks::validate_recovery(expected, evidence, events)?;
+    observationchecks::validate_faults(expected, evidence, events)?;
+    observationchecks::validate_recovery(expected, evidence, events)?;
     crate::live_reliability::evidenceproof::validate(&expected.endpoints, &expected.readiness, &evidence.readiness)?;
-    let verdict = checks::validate_report(expected, evidence)?;
+    let verdict = reportchecks::validate_report(expected, evidence)?;
     if !evidence.teardown || !events.last().is_some_and(|e| e["kind"] == "lifecycle" && e["phase"] == "teardown") {
         return Err(Issue::Teardown);
     }
@@ -190,6 +190,12 @@ pub fn persist(
 
 #[path = "evidence/checks.rs"]
 mod checks;
+
+#[path = "evidence/observationchecks.rs"]
+mod observationchecks;
+
+#[path = "evidence/reportchecks.rs"]
+mod reportchecks;
 
 #[cfg(test)]
 #[path = "evidencetests.rs"]

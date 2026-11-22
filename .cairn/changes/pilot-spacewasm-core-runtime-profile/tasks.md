@@ -2,7 +2,7 @@
 
 - [ ] [serial] Define the typed Nickel `spacewasm-core-mvp-pilot` profile, exact runtime/materialization/evidence cohort, module/ABI/resource limits, segment/yield policy, retention, promotion state, and non-claims. r[molten.spacewasm_core.profile] r[molten.spacewasm_core.materialization] r[molten.spacewasm_core.resources]
 - [ ] [depends:spacewasm-core-profile] Implement pure profile, bundle, Octet/Chaos evidence, module feature, import/export, ABI, authority, resource, and promotion admission with deterministic blockers. r[molten.spacewasm_core.functional_core] r[molten.spacewasm_core.admission]
-- [ ] [depends:spacewasm-core-profile] Define continuation, segment-plan, execution-observation, replay-comparison, and receipt DTOs with generation/artifact/profile/input/effect bindings. r[molten.spacewasm_core.resume] r[molten.spacewasm_core.receipts]
+- [x] [depends:spacewasm-core-profile] Define continuation, segment-plan, execution-observation, replay-comparison, and receipt DTOs with generation/artifact/profile/input/effect bindings. r[molten.spacewasm_core.resume] r[molten.spacewasm_core.receipts]
 - [ ] [depends:spacewasm-core-admission] Add a thin SpaceWasm shell that consumes a verified Mantle bundle, streams exact module bytes, links only declared `molten:hostcall` functions, and implements bounded `molten.wasm.abi.v1` Preserves memory transfer. r[molten.spacewasm_core.execution] r[molten.spacewasm_core.abi]
 - [ ] [depends:spacewasm-core-shell] Enforce separate interpreter/code/stack and guest-linear-memory/table/growth/instruction bounds with typed OOM, denial, trap, and harness outcomes. r[molten.spacewasm_core.resources]
 - [ ] [depends:spacewasm-core-shell] Add generation-fenced finish/trap/out-of-fuel/host-pause handling, bounded continuation retention, stale-resume denial, and explicit cleanup. r[molten.spacewasm_core.resume]
@@ -39,3 +39,7 @@ Pueue task 49 ran `cargo test --offline --locked -p molten --features spacewasm-
 ## Operator status control
 
 The feature-enabled `molten spacewasm show` read a canonical diagnostic admission-denial receipt (`blake3:bc29685ba897d573e68872115fac24132f6ebf73f97b1a137428c64ee21e4f7e`). The passing expected-denial fixture reported its pilot profile, no production evidence, and the promotion blocker. Reading those same bytes as an execution receipt denied. The smoke log BLAKE3 is `bc6158201044b7452cf2931f1329406c7034cfb5d7da4efac3c73d24f94bca98`. The pinned Nickel pilot profile exported with `production` and `release` false. This verifies readback, not an admitted Mantle execution, differential result, or promoted receipt.
+
+## Segment accounting control
+
+The engine records one `spacewasm-event-v2` segment row per real runner call, with the logical turn, segment/total ceilings, grant, and cumulative work before and after. It does not invent a grant for lifecycle rows or a segment for a pre-execution denial. The feature-enabled selection passed all 71 local tests, including early finish, truncated final grant, wrong binding or resource accounting, and normalized replay comparisons. The externally provisioned replay test remained ignored (log BLAKE3 `b0267f6eef7b83963deb4f3d87e34f85083948ff7bc86d23bc9211b819b65951`). This verifies the DTO and consumer accounting, not execution on the exact external fixture bundle.
