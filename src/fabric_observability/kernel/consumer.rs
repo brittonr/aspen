@@ -47,6 +47,7 @@ pub fn observe_linux_ebpf(input: EbpfServiceInput<'_>) -> crate::error::Result<E
         .now
         .checked_add(input.adapter.freshness_ticks)
         .ok_or_else(|| invalid("Linux freshness overflow"))?;
+    let has_selected_bytes = input.capability.as_ref().is_some_and(|capability| capability.content_ref.is_some());
     let result = read_selected(input.capability, input.profile, input.adapter, &input.control);
     let (artifacts, fact, dropped, accounting) = match result {
         Ok(readback) => {
@@ -57,6 +58,9 @@ pub fn observe_linux_ebpf(input: EbpfServiceInput<'_>) -> crate::error::Result<E
                 .end
                 .checked_add(input.adapter.freshness_ticks)
                 .ok_or_else(|| invalid("Linux freshness overflow"))?;
+            if has_selected_bytes {
+                context.evidence_refs.push(readback.wire_ref);
+            }
             bind_evidence(&mut context, input.adapter, readback.endpoint_ref)?;
             let artifacts =
                 canonical_ebpf_window(input.profile, input.adapter, &readback.window, &context, input.control.now)?;
@@ -91,6 +95,9 @@ fn read_selected(
     }
     if control.cancelled {
         return Err(EbpfLifecycleFact::Cancelled);
+    }
+    if control.now > control.deadline {
+        return Err(EbpfLifecycleFact::Timeout);
     }
     let capability = capability.ok_or(EbpfLifecycleFact::Unavailable)?;
     let selection = EbpfEndpointSelection {
@@ -131,7 +138,7 @@ fn bind_evidence(
     endpoint_ref: String,
 ) -> crate::error::Result<()> {
     let binding = &adapter.binding;
-    context.evidence_refs = vec![
+    context.evidence_refs.extend([
         canonical_ebpf_binding_ref(binding)?,
         binding.program.clone(),
         binding.object.clone(),
@@ -140,7 +147,7 @@ fn bind_evidence(
         binding.accounting.clone(),
         binding.adapter.clone(),
         endpoint_ref,
-    ];
+    ]);
     context.evidence_refs.sort();
     context.evidence_refs.dedup();
     Ok(())

@@ -56,6 +56,9 @@ pub(crate) struct Run {
 pub(crate) struct RunLoop {
     #[arg(long)]
     pub(crate) state_root: std::path::PathBuf,
+    /// Opt in to an independently signed observation selection inside state-root.
+    #[arg(long)]
+    pub(crate) linux_observation_selection: Option<String>,
     #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LOOP_REQUESTS)]
     pub(crate) max_requests: u64,
     #[arg(long)]
@@ -68,6 +71,9 @@ pub(crate) struct RunLoop {
 pub(crate) struct Serve {
     #[arg(long)]
     pub(crate) state_root: std::path::PathBuf,
+    /// Opt in to an independently signed observation selection inside state-root.
+    #[arg(long)]
+    pub(crate) linux_observation_selection: Option<String>,
     #[arg(long, default_value = molten::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
     pub(crate) topic: String,
     #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_SERVICE_TICKS)]

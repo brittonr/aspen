@@ -8,12 +8,17 @@ metadata:
   non_claim: structural-boundary-only-not-host-privilege-proof
 files:
   - src/fabric_observability/kernel/**/*.rs
+  - src/fabric_observability/nodeadmission.rs
+  - src/fabric_observability/nodeadmission/**/*.rs
+  - src/cli/ops/node/lifecycle/linuxobservation.rs
   - crates/molten-core/src/fabric_observability/ebpf/**/*.rs
   - examples/ebpf-observe.rs
 ignores:
   # These modules write synthetic endpoint inputs with test workspace capabilities.
   - src/fabric_observability/kernel/tests/receipt.rs
   - src/fabric_observability/kernel/tests/window.rs
+  - src/fabric_observability/nodeadmission/observertests.rs
+  - src/fabric_observability/nodeadmission/observerwindowtests.rs
 rule:
   any:
     - all:

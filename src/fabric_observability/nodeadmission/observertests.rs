@@ -7,14 +7,12 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let temporary = tempfile::tempdir().expect("authority root");
-    let root = crate::node_state::DirectoryRoot::open_existing(temporary.path()).expect("root");
     let reference = crate::preserves_rail::content_ref_from_bytes(b"selected artifact");
     let selection = super::NodeObservationSelection {
         source_validation_ref: reference.clone(),
         checked_profile_path: "checked/profile.json".into(),
         checked_profile_ref: reference.clone(),
-        endpoint_directory: "provider/window".into(),
+        endpoint_directory: "receipts/provider".into(),
         endpoint_leaf: "snapshot".into(),
         endpoint_content_ref: reference.clone(),
         epoch: 7,
@@ -22,6 +20,12 @@ fn fixture() -> Fixture {
         boot_id: "12345678-1234-1234-1234-123456789abc".into(),
         onix_receipt_ref: reference,
     };
+    fixture_for(selection)
+}
+
+fn fixture_for(selection: super::NodeObservationSelection) -> Fixture {
+    let temporary = tempfile::tempdir().expect("authority root");
+    let root = crate::node_state::DirectoryRoot::open_existing(temporary.path()).expect("root");
     let issuer = basalt::ucan::Ed25519InMemorySigner::from_seed_bytes([81; 32]);
     let holder = basalt::ucan::Ed25519InMemorySigner::from_seed_bytes([83; 32]);
     let audience = basalt::ucan::AudienceDid::from(basalt::ucan::TokenSigner::issuer(&holder).expect("holder"));
@@ -172,3 +176,7 @@ fn selection_rejects_escape_unknown_fields_and_native_wire_envelopes() {
         .is_err()
     );
 }
+
+#[cfg(target_os = "linux")]
+#[path = "observerwindowtests.rs"]
+mod windows;

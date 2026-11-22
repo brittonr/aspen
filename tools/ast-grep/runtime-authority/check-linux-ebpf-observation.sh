@@ -8,9 +8,12 @@ boundary=ebpf-observation-mutation-boundary
 extension=extension-bpf-mutation-handles
 loader=molten-bpf-loader-library
 example=examples/ebpf-observe.rs
+node=src/cli/ops/node/lifecycle/linuxobservation.rs
+admission=src/fabric_observability/nodeadmission.rs
+observer=src/fabric_observability/nodeadmission
 adapter_dirs=(src/fabric_observability/kernel crates/molten-core/src/fabric_observability/ebpf)
 extension_dirs=(src/system_extension crates/molten-core/src/system_extension)
-adapter_probes=("${adapter_dirs[@]/%//mod.rs}" "$example")
+adapter_probes=("${adapter_dirs[@]/%//mod.rs}" "$admission" "$observer/observerpoll.rs" "$node" "$example")
 extension_probes=("${extension_dirs[@]/%//mod.rs}")
 loader_probes=("${adapter_probes[@]}" "${extension_probes[@]}")
 
@@ -75,18 +78,23 @@ for rule in "$extension" "$loader"; do
   assert_report '. == []' "$report"
 done
 
-# Only the reviewed example's exact own-process path construction is allowed.
-# Do not exempt the entire example or Scope::open_existing on caller-supplied paths.
+# Allow only the example's own-status locator and the node's exact read of the
+# running boot ID. All endpoint and profile reads stay capability-relative.
 rule=$boundary
 status=0
-scan "$src" "$rule" "${adapter_dirs[@]}" "$example" || status=$?
-assert_report --argjson status "$status" --arg rule "$rule" --arg example "$example" '
+scan "$src" "$rule" "${adapter_dirs[@]}" "$admission" "$observer" "$node" "$example" || status=$?
+assert_report --argjson status "$status" --arg rule "$rule" --arg example "$example" --arg node "$node" '
   if $status == 0 then
     . == []
   elif $status == 1 then
-    length == 1 and all(.[];
-      .ruleId == $rule and .severity == "error" and .file == $example and .text == "\"/proc/{}\""
-      and (.lines | rtrimstr("\n")) == "    let own_process = std::path::PathBuf::from(format!(\"/proc/{}\", std::process::id()));"
+    length > 0 and all(.[];
+      .ruleId == $rule and .severity == "error" and (
+        (.file == $example and .text == "\"/proc/{}\""
+         and (.lines | rtrimstr("\n")) == "    let own_process = std::path::PathBuf::from(format!(\"/proc/{}\", std::process::id()));")
+        or (.file == $node and ( .text == "\"/proc/sys/kernel/random/boot_id\""
+                                or .text == "std::fs::File::open(\"/proc/sys/kernel/random/boot_id\")")
+            and (.lines | rtrimstr("\n")) == "    std::fs::File::open(\"/proc/sys/kernel/random/boot_id\")")
+      )
     )
   else false end
 ' "$report"

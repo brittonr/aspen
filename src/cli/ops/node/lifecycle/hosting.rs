@@ -2,15 +2,23 @@
 
 #[path = "control.rs"]
 pub(super) mod control;
+#[path = "linuxobservation.rs"]
+mod linuxobservation;
 
 pub(super) struct Session {
     host: Option<molten::node_service_host::installed::Owner>,
 }
 
 impl Session {
-    pub(super) fn open(state_root: &std::path::Path) -> molten::error::Result<Self> {
+    pub(super) fn open(
+        state_root: &std::path::Path,
+        linux_observation_selection: Option<&str>,
+    ) -> molten::error::Result<Self> {
         let root = molten::node_state::DirectoryRoot::open_existing(state_root)?;
         let gate = molten::node_daemon::admit_startup_source_gate_with_root(&root)?;
+        if let Some(selection) = linux_observation_selection {
+            linuxobservation::at_start(&root, &gate, selection)?;
+        }
         let host = molten::node_service_host::installed::Owner::open_after_source_admission(&root, &gate)?;
         Ok(Self { host })
     }

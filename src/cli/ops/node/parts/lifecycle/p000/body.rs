@@ -163,11 +163,12 @@ pub(crate) fn run(input: super::command::base::Run) -> molten::error::Result<()>
 pub(crate) fn run_loop(input: super::command::base::RunLoop) -> molten::error::Result<()> {
     let super::command::base::RunLoop {
         state_root,
+        linux_observation_selection,
         max_requests,
         receipt_out,
         heartbeat_out,
     } = input;
-    let hosted = hosting::Session::open(&state_root)?;
+    let hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
     hosted.publish_ready()?;
     let loop_run = molten::node_daemon::run_control_loop(&molten::node_daemon::ControlLoopInput {
         state_root: &state_root,
@@ -191,6 +192,7 @@ pub(crate) fn run_loop(input: super::command::base::RunLoop) -> molten::error::R
 pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result<()> {
     let super::command::base::Serve {
         state_root,
+        linux_observation_selection,
         topic,
         max_ticks,
         max_requests_per_tick,
@@ -209,6 +211,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         serve_live(
             super::command::base::Serve {
                 state_root,
+                linux_observation_selection,
                 topic,
                 max_ticks,
                 max_requests_per_tick,
@@ -224,7 +227,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             supervisor_policy_value.as_ref(),
         )
     } else {
-        let hosted = hosting::Session::open(&state_root)?;
+        let hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
         hosted.publish_ready()?;
         let served = molten::node_daemon::serve_control(&molten::node_daemon::ControlServeInput {
             state_root: &state_root,

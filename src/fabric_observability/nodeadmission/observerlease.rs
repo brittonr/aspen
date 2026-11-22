@@ -1,3 +1,7 @@
+#[path = "observerpoll.rs"]
+mod poll;
+pub use poll::ObserverWindowTick;
+
 pub struct ObserverAuthorityLease {
     root: crate::node_state::DirectoryRoot,
     selection: super::NodeObservationSelection,

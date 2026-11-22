@@ -6,6 +6,7 @@ fn serve_live(
 ) -> molten::error::Result<()> {
     let super::command::base::Serve {
         state_root,
+        linux_observation_selection,
         topic,
         max_requests_per_tick,
         live_max_events,
@@ -16,7 +17,7 @@ fn serve_live(
         service_host_control_stdio,
         ..
     } = input;
-    let mut hosted = hosting::Session::open(&state_root)?;
+    let mut hosted = hosting::Session::open(&state_root, linux_observation_selection.as_deref())?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
