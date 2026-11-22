@@ -90,3 +90,7 @@ The same exported consumer result records canonical sample, finite status-event,
 The guarded export is retained beneath `native-observation-vm-evidence/bpf-observation-evidence` in the locally rooted output `/nix/store/i43rdrfaj1c7in2j1ii5gsv4rcjpr7fd-vm-test-run-onixos-native-bpf-observation-vm-only`. Its guard checked 50 files (889,745 bytes) against bytes from 15 runtime secret files and found no match. The VM and virtual LAN tore down. Private console BLAKE3: `b9b7e5361d312b39013aad82d512e1cc88d1161211c2923966444be27a5ab1cf`.
 
 This is a passing producer/consumer and lifecycle result for one pinned disposable cohort. The OnixOS fix is on the local fixture branch; no independently supported host endpoint or installed Aspen node service was qualified. The provider dependency, full adapter conformance, node wiring and archive gate remain open.
+
+## Current OnixOS provider attempt
+
+The separately approved `mm362ynm3imcvsmbhm3wg6jwjwg9v075-vm-test-run-onixos-native-bpf-observation-vm-only.drv` (OnixOS `747c519132dc7d209a64dc57fa156919ce107037`) published and read back generation 1. The same all-six assertion denied the run because no nonzero `pressure` record was observed. Aspen did not consume this window, and the replacement, cancellation and guarded export were not reached. Driver teardown completed. Private console BLAKE3: `2eb68938031fea6ee4cd6abfc7a782cf33dcb05b6283cff5c2540894cc74ac81`. This neither supersedes the exact earlier pass nor qualifies the newer cohort.
