@@ -17,6 +17,26 @@ fn complete_valid_run_has_canonical_external_receipt_without_authority() {
     );
 }
 
+// r[verify molten.testing.live_reliability_evidence]
+#[test]
+fn receipt_storage_refuses_substituted_identity_and_preserves_canonical_bytes() {
+    let (expected, evidence) = support::fixture();
+    let receipt = super::import(&expected, &evidence).expect("admitted fixture receipt");
+    let workspace = crate::test_support::process_workspace("live-evidence-ledger").expect("owned workspace");
+    let root = crate::ledger::open_capability_ledger_root(workspace.as_ref()).expect("open test ledger");
+    let mut substituted = receipt.clone();
+    substituted.receipt_ref = support::reference("different-receipt");
+    assert!(super::persist(&root, &substituted).is_err());
+    assert!(crate::ledger::read_artifact_with_root(&root, &receipt.receipt_ref).is_err());
+    assert!(crate::ledger::read_artifact_with_root(&root, &substituted.receipt_ref).is_err());
+
+    let imported = super::persist(&root, &receipt).expect("persist admitted fixture");
+    assert_eq!(imported.artifact_ref, receipt.receipt_ref);
+    let recovered =
+        crate::ledger::read_artifact(workspace.as_ref(), &imported.artifact_ref).expect("reopen the receipt");
+    assert_eq!(recovered, receipt.value);
+}
+
 // r[verify molten.testing.live_reliability_validation]
 #[test]
 fn invalid_stale_or_lost_write_read_retains_failure_witness() {

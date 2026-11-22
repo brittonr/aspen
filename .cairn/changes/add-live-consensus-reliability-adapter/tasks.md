@@ -25,7 +25,7 @@ The [register profile and admission](../../../src/reliability/model/profile.rs) 
 - [ ] [serial] Invoke the pinned register checker over complete live histories and retain valid, invalid, and unknown reports. r[molten.consensus.live_linearizability]
 - [ ] [parallel] Add optional pinned reference-checker runs and block promotion on disagreement. r[molten.consensus.live_linearizability]
 - [x] [serial] Implement a pure fail-closed importer for producer, cohort, profile, generator, history, fault, recovery, checker, witness, teardown, and non-claim facts. r[molten.testing.live_reliability_evidence]
-- [ ] [serial] Add a thin shell that stores a canonical external live-reliability receipt without granting other evidence or authority roles. r[molten.testing.live_reliability_evidence]
+- [x] [serial] Add a thin shell that stores a canonical external live-reliability receipt without granting other evidence or authority roles. r[molten.testing.live_reliability_evidence]
 - [x] [parallel] Compare simulation, NixOS VM, ChaosControl KVM, and live profiles without merging their evidence classes. r[molten.testing.live_reliability_claim_boundary]
 
 ## Phase 5: Validation and closeout
@@ -60,6 +60,8 @@ Pueue task 63 selected the exact new regression and stopped at `Fault` before re
 Pueue task 66 passed all ten tests in `cargo test --locked -p molten --lib live_reliability::evidence::tests::`, including the revised three-endpoint recovery and imported partition controls. The same selection passed `cargo fmt --check` and `cargo clippy --locked -p molten --bin molten -- -D warnings` (log BLAKE3 `74c686ed5642cf0e98e81b57f21769086fff0466fce8c94e16c2032efe79c2ae`). This verifies fail-closed final-read requirements and pure admission with in-memory observations, not execution by an independent provider or a live history.
 
 The real `molten reliability generate` and `molten reliability import` commands then ran on the locked local binary (BLAKE3 `968c6e5d796511770037cf0df57a2c087cb2c919b2113ed9306170b56551996d`). An expected-input document omitting the selected `fault` field (`60ed1d37838672c18dd00bb3e2c3d8cdc69473f27c7506feb83db792c19d1a6f`) exited 1 with a missing-field error for `fault`. The ledger, receipt, and checker history all remained absent. This is a malformed-input CLI control, not an imported live campaign or a successful persistence result.
+
+Task 83 separately exercised the storage shell at its real capability ledger boundary. `cargo test --offline --locked -p molten --lib live_reliability::evidence::tests::receipt_storage_refuses_substituted_identity_and_preserves_canonical_bytes -- --exact` passed one test; a substituted identity left neither artifact reachable, then a canonical fixture receipt was persisted and re-opened unchanged. Formatting and denied-warning Clippy passed (combined log BLAKE3 `6141df861331ac74846f9052e670423808328660ca661b648633cd26bd43b5d2`). Task 82 stopped at formatting before running a test. This verifies local persistence of an admitted fixture, not an observed OnixOS deployment or provider history.
 
 ## Pinned checker contract and executed shell control
 
