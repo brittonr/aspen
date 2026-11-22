@@ -55,7 +55,7 @@ pub fn project_ebpf_window(
             descriptor_ref: mapping.descriptor.descriptor_ref.clone(),
             context: context.clone(),
             labels: Vec::new(),
-            value: i64::try_from(value).map_err(|_| EbpfIssue::Overflow)?,
+            value,
         };
         samples.push(
             super::validate_metric_sample(profile, &mapping.descriptor, &sample, now)
@@ -132,23 +132,23 @@ fn validate_window(adapter: &EbpfProfile, window: &EbpfWindow, now: u64) -> Resu
 
 // Source-local order is validated independently. Cross-stream permutation does
 // not change aggregates; timestamps never manufacture a causal total order.
+// r[impl linux_ebpf_observability.confidentiality]
 fn aggregate(
     adapter: &EbpfProfile,
     window: &EbpfWindow,
-) -> Result<std::collections::BTreeMap<EbpfSignal, u64>, EbpfIssue> {
+) -> Result<std::collections::BTreeMap<EbpfSignal, i64>, EbpfIssue> {
     let mut records: Vec<_> = window.records.iter().collect();
     records.sort_unstable_by_key(|record| (record.stream, record.sequence));
     let mut previous: Option<(u32, u64)> = None;
     let mut stream_count = 0;
-    let mut totals: std::collections::BTreeMap<EbpfSignal, u64> =
+    // Admission and projection share the canonical metric range.
+    let mut totals: std::collections::BTreeMap<EbpfSignal, i64> =
         adapter.mappings.iter().map(|mapping| (mapping.signal, 0)).collect();
     for record in records {
         if record.tick < window.start || record.tick >= window.end {
             return Err(EbpfIssue::Stale);
         }
-        if !adapter.mappings.iter().any(|mapping| mapping.signal == record.signal) {
-            return Err(EbpfIssue::Mapping);
-        }
+        let total = totals.get_mut(&record.signal).ok_or(EbpfIssue::Mapping)?;
         match previous {
             Some((stream, sequence)) if stream == record.stream => {
                 if sequence.checked_add(1) != Some(record.sequence) {
@@ -163,8 +163,7 @@ fn aggregate(
             }
         }
         previous = Some((record.stream, record.sequence));
-        let total = totals.entry(record.signal).or_default();
-        *total = total.checked_add(record.value).ok_or(EbpfIssue::Overflow)?;
+        *total = total.checked_add_unsigned(record.value).ok_or(EbpfIssue::Overflow)?;
     }
     Ok(totals)
 }
