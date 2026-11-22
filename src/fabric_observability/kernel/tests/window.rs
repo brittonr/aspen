@@ -280,3 +280,38 @@ fn unknown_schema_signals_and_private_fields_never_cross_the_window_decoder() {
     let decoded = decode_ebpf_window(&serde_json::to_vec(&changed).unwrap(), 8192).unwrap();
     assert_eq!(admit_ebpf_window(&adapter, &decoded, 1, 10), Err(EbpfIssue::Binding));
 }
+
+// r[verify linux_ebpf_observability.admission]
+// r[verify linux_ebpf_observability.failure]
+#[test]
+fn copied_endpoint_cannot_retry_after_same_cohort_byte_substitution() {
+    let (profile, adapter, window, _) = fixture();
+    let workspace = crate::test_support::process_workspace("ebpf-copied-window").expect("owned workspace");
+    let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
+    let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
+    let admitted = serde_json::to_vec(&window).unwrap();
+    let selected = crate::preserves_rail::content_ref_from_bytes(&admitted);
+    root.write(&leaf, &admitted).unwrap();
+    let open = || {
+        EbpfEndpointReader::open(&root, leaf.clone(), &profile, &adapter, EbpfEndpointSelection {
+            epoch: window.generation,
+            deadline: 15,
+            content_ref: Some(&selected),
+        })
+        .unwrap()
+    };
+    let mut reader = open();
+    let mut changed = window.clone();
+    changed.records[0].value += 1;
+    let replacement = serde_json::to_vec(&changed).unwrap();
+    let decoded = decode_ebpf_window(&replacement, adapter.max_bytes as u64).unwrap();
+    admit_ebpf_window(&adapter, &decoded, window.generation, 10).expect("otherwise valid same-cohort window");
+    root.write(&leaf, &replacement).unwrap();
+    assert!(matches!(reader.poll(10, false), Err(EbpfEndpointFailure::Admission(EbpfIssue::Binding))));
+
+    root.write(&leaf, &admitted).unwrap();
+    assert!(matches!(reader.poll(10, false), Err(EbpfEndpointFailure::Read(EbpfReadFailure::Closed))));
+    let readback = open().poll(10, false).expect("fresh capability over the exact bytes");
+    assert_eq!(readback.wire_ref, selected);
+    assert_eq!(readback.endpoint_ref, canonical_ebpf_window_ref(&window).unwrap());
+}
