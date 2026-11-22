@@ -38,6 +38,10 @@ observation remains a startup fact, not a gate or proof of current host health.
 
 This is a one-window startup path. It does not start a polling daemon or qualify a continuously supervised installed observer. The disposable VM evidence above was produced with the standalone consumer, not with this node entry point.
 
+The [NixOS module](nixos-service-module.md#options) can forward the same explicit
+selection for one bounded serve. It does not start or retry the selected mode
+automatically. Provision a fresh grant for each explicit restart.
+
 ## Privacy and debugging
 
 Command lines, payloads, packet contents, private paths, socket/peer identities, secrets and raw kernel pointers are outside normalized records. No raw event detail is enabled. Inspect typed denial classes rather than dumping raw untrusted endpoint bytes. Descriptor labels, samples, health and snapshots must still pass existing canonical bounds/redaction/scope rails. A read receipt does not authorize repair, BPF mutation or capability grants and cannot establish application correctness, cluster truth, confidentiality, complete telemetry or release/production readiness.

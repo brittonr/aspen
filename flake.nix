@@ -3470,24 +3470,25 @@
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             molten-module-eval =
               let
-                evaluateService =
+                configureService =
                   supplied:
-                  builtins.tryEval
-                    (nixpkgs.lib.nixosSystem {
-                      system = system;
-                      modules = [
-                        self.nixosModules.molten
-                        {
-                          boot.isContainer = true;
-                          services.molten = {
-                            enable = true;
-                            nodeId = "node:module-eval";
-                          }
-                          // supplied;
-                          system.stateVersion = "24.11";
+                  (nixpkgs.lib.nixosSystem {
+                    system = system;
+                    modules = [
+                      self.nixosModules.molten
+                      {
+                        boot.isContainer = true;
+                        services.molten = {
+                          enable = true;
+                          nodeId = "node:module-eval";
                         }
-                      ];
-                    }).config.system.build.toplevel.drvPath;
+                        // supplied;
+                        system.stateVersion = "24.11";
+                      }
+                    ];
+                  }).config;
+                evaluateService =
+                  supplied: builtins.tryEval (configureService supplied).system.build.toplevel.drvPath;
                 admitted = evaluateService {
                   package = moltenPkg;
                   sourceTrustFile = "/run/molten/source-gate-trust.json";
@@ -3496,10 +3497,24 @@
                   sourceTrustFile = "/run/molten/source-gate-trust.json";
                 };
                 missingTrust = evaluateService { package = moltenPkg; };
+                observerInput = {
+                  package = moltenPkg;
+                  sourceTrustFile = "/run/molten/source-gate-trust.json";
+                  linuxObservationSelection = "observer-selection.json";
+                };
+                observer = configureService observerInput;
+                observerUnit = observer.systemd.services.molten;
+                emptySelection = evaluateService (observerInput // { linuxObservationSelection = ""; });
               in
               assert admitted.success;
               assert !missingPackage.success;
               assert !missingTrust.success;
+              # r[verify linux_ebpf_observability.failure]
+              assert (builtins.tryEval observer.system.build.toplevel.drvPath).success;
+              assert !emptySelection.success;
+              assert observerUnit.wantedBy == [ ];
+              assert !observerUnit.restartIfChanged;
+              assert observerUnit.serviceConfig.Restart == "no";
               pkgs.runCommand "molten-module-eval" { } ''
                 touch "$out"
               '';

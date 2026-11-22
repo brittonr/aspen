@@ -35,6 +35,7 @@ result and inactive state, not just the presence of a shutdown receipt.
 | `services.molten.nodeId` | Node identity used only for the first `node init`. |
 | `services.molten.stateDir` | Absolute state directory. Defaults to `/var/lib/molten`. |
 | `services.molten.sourceTrustFile` | Operator-selected `source-gate-trust.json`. Required. The file is copied at start; it is not embedded in the Nix store. |
+| `services.molten.linuxObservationSelection` | Optional state-root-relative signed observer selection; switches to one bounded serve per explicit start. Defaults to unset. |
 | `services.molten.maxTicks` | Bounded ticks per service run. Defaults to 3600. |
 | `services.molten.maxRequestsPerTick` | Bounded requests per tick. Defaults to 16. |
 | `services.molten.restartSeconds` | Delay before restarting a failed bounded run. |
@@ -45,6 +46,14 @@ the default `/var/lib/molten` is created and owned through `StateDirectory`.
 The service sets `ProtectSystem=strict`, `ProtectHome=true`, `PrivateTmp=true`,
 `NoNewPrivileges=true`, and writes only the selected state directory. It does
 not open a firewall port or inherit the VM fixture's fixed peers.
+
+With `linuxObservationSelection` set, the unit is not wanted at boot and NixOS
+does not restart it on a configuration switch. Systemd does not retry a failed
+run, and a successful serve does not enter the normal loop. Provision a current
+boot-bound selection and a fresh independently signed reader grant before each
+explicit start or restart. The module only forwards the locator; node admission
+still checks trust, the exact window, and readiness. This does not provision,
+rotate, or collect observation windows.
 
 ## Example
 

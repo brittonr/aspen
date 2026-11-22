@@ -60,6 +60,8 @@ Linux eBPF can provide useful host-level facts that application instrumentation 
 
 **Rationale:** Reader cleanup and privileged program cleanup are different ownership domains.
 
+The public NixOS loopback module offers an opt-in, one-window launch. An operator or separately authorized provisioner selects one state-root-relative observer grant and starts one bounded `node serve`. The module does not attach this mode to the boot target, repeat the serve command, or automatically restart it on failure or a changed unit. Replacing or restarting the installed observer needs a fresh independently admitted grant for the current boot and generation. Without a selection, the existing bounded loop and restart policy are unchanged. This supplies no BPF lifecycle authority and does not implement continuous provider supervision.
+
 ### 10. Preserve evidence and health scope
 
 **Choice:** Canonical snapshots and adapter status link exact profile, endpoint, generation, cohort, scope, window, accounting, and supporting Onix receipts with domain-separated BLAKE3 refs. They remain local observation evidence and cannot grant capability, authorize repair, prove complete telemetry or application correctness, establish cluster readiness, or satisfy production/release claims.

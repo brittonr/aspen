@@ -2,6 +2,7 @@
 
 let
   cfg = config.services.molten;
+  observerSelected = cfg.linuxObservationSelection != null;
   state = cfg.stateDir;
   evidence = "${state}/evidence";
   startScript = pkgs.writeShellScript "molten-start" ''
@@ -20,17 +21,27 @@ let
       --state-root ${lib.escapeShellArg state} \
       --startup-out ${lib.escapeShellArg "${evidence}/startup.preserves"}
   '';
+  serveCommand = ''
+    ${lib.escapeShellArg cfg.package}/bin/molten node serve \
+      --state-root ${lib.escapeShellArg state} \
+      --max-ticks ${toString cfg.maxTicks} \
+      --max-requests-per-tick ${toString cfg.maxRequestsPerTick} \
+      --receipt-out ${lib.escapeShellArg "${evidence}/service.preserves"}${lib.optionalString observerSelected " --linux-observation-selection=${lib.escapeShellArg cfg.linuxObservationSelection}"}
+  '';
   loopScript = pkgs.writeShellScript "molten-bounded-loop" ''
     set -euo pipefail
     rm -f ${lib.escapeShellArg "${state}/stop"}
     trap 'touch ${lib.escapeShellArg "${state}/stop"}; exit 0' TERM INT
-    while [ ! -e ${lib.escapeShellArg "${state}/stop"} ]; do
-      ${lib.escapeShellArg cfg.package}/bin/molten node serve \
-        --state-root ${lib.escapeShellArg state} \
-        --max-ticks ${toString cfg.maxTicks} \
-        --max-requests-per-tick ${toString cfg.maxRequestsPerTick} \
-        --receipt-out ${lib.escapeShellArg "${evidence}/service.preserves"}
-    done
+    ${
+      if observerSelected then
+        serveCommand
+      else
+        ''
+          while [ ! -e ${lib.escapeShellArg "${state}/stop"} ]; do
+            ${serveCommand}
+          done
+        ''
+    }
   '';
   stopScript = pkgs.writeShellScript "molten-stop" ''
     set -euo pipefail
@@ -72,6 +83,18 @@ in
         Operator-selected `source-gate-trust.json`. The file is copied into the
         state root at service start. Do not place secret material here; the
         startup source binding is authenticated evidence, not authority.
+      '';
+    };
+
+    # r[impl linux_ebpf_observability.boundary]
+    linuxObservationSelection = lib.mkOption {
+      type = lib.types.nullOr lib.types.nonEmptyStr;
+      default = null;
+      example = "observer-selection.json";
+      description = ''
+        Select an independently signed observation relative to the state root.
+        This runs one bounded serve per explicit start. Each restart needs a
+        fresh grant; the unit is not automatically started or restarted.
       '';
     };
 
@@ -125,9 +148,10 @@ in
 
     systemd.services.molten = {
       description = "Molten node (bounded service loop)";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = lib.optional (!observerSelected) "multi-user.target";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
+      restartIfChanged = lib.mkIf observerSelected false;
       path = [ pkgs.coreutils ];
       serviceConfig = {
         Type = "simple";
@@ -138,7 +162,7 @@ in
         ExecStartPre = startScript;
         ExecStart = loopScript;
         ExecStop = stopScript;
-        Restart = "on-failure";
+        Restart = if observerSelected then "no" else "on-failure";
         RestartSec = cfg.restartSeconds;
         TimeoutStartSec = cfg.timeoutStartSeconds;
         TimeoutStopSec = 30;
