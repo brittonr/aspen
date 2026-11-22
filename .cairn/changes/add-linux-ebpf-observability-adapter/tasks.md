@@ -16,7 +16,7 @@
 
 ## Phase 3: Fabric integration and confidentiality
 
-- [ ] [serial] Project admitted windows into existing canonical metric samples, bounded events, adapter status, snapshots, health inputs, and evidence refs without backend-specific identities. r[linux_ebpf_observability.projection]
+- [x] [serial] Project admitted windows into existing canonical metric samples, bounded events, adapter status, snapshots, health inputs, and evidence refs without backend-specific identities. r[linux_ebpf_observability.projection]
 - [ ] [serial] Enforce existing descriptor, label, series, event, queue, snapshot, freshness, scope, and diagnostics bounds for every eBPF-derived observation. r[linux_ebpf_observability.confidentiality]
 - [x] [parallel] Add redaction and denial fixtures for command lines, payloads, packet contents, private paths, socket/peer identifiers, secret-like text, raw kernel identifiers, and unmapped fields. r[linux_ebpf_observability.confidentiality] r[linux_ebpf_observability.verification]
 - [x] [parallel] Add health/readiness assertions proving partial, stale, lost, or unavailable required windows cannot satisfy complete local readiness and local observations cannot satisfy cluster or release scope. r[linux_ebpf_observability.failure] r[linux_ebpf_observability.confidentiality]
@@ -84,6 +84,8 @@ The real executable `blake3:05fc85f43b1af84b838100449b60832147e07076f7c316cc3411
 | 3 | 4,969 | Cancelled, final close and owned-cgroup cleanup succeeded; no endpoint published. |
 
 All three captures recorded zero producer drops, consumer drops and pending records. Only generation 1 was accepted by the Aspen consumer, with six samples and snapshot `blake3:e58fb9a37ea05475c98a5f3352ba63cc834ca260a1f1fcfc540349c84ac3d1aa`. Its exact result bytes are `blake3:b5f040c91728f27178c8cef8a9e0535c4c2eaaca01abb5b330d0b588dc104b15`.
+
+The same exported consumer result records canonical sample, finite status-event, health, adapter status and outcome, and snapshot references at `local-component` scope. [`canonical_ebpf_window`](../../../src/fabric_observability/kernel/projection.rs) calls the existing metric and health constructors; the [consumer hook](../../../examples/ebpf-observe.rs) aggregates those samples and uses the normal bounded snapshot constructor with canonical evidence refs. The projection sources are unchanged from the measured consumer; only a test file changed. This verifies the projection task without qualifying installed-node wiring or changing authority.
 
 The guarded export is retained beneath `native-observation-vm-evidence/bpf-observation-evidence` in the locally rooted output `/nix/store/i43rdrfaj1c7in2j1ii5gsv4rcjpr7fd-vm-test-run-onixos-native-bpf-observation-vm-only`. Its guard checked 50 files (889,745 bytes) against bytes from 15 runtime secret files and found no match. The VM and virtual LAN tore down. Private console BLAKE3: `b9b7e5361d312b39013aad82d512e1cc88d1161211c2923966444be27a5ab1cf`.
 
