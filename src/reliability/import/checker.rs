@@ -1,5 +1,9 @@
 //! Effect shell for the immutable semantic-history-contract executable.
 
+#[cfg(target_os = "linux")]
+#[path = "checker/image.rs"]
+mod image;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Admitted {
@@ -50,7 +54,7 @@ pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, Strin
     {
         return Err("checker-admission".into());
     }
-    let executable = pinned_executable(checker)?;
+    let executable = image::pin(checker)?;
     let bytes = serde_json::to_vec(files.history).map_err(|e| e.to_string())?;
     if bytes.len() > checker.max_bytes {
         return Err("history-bound".into());
@@ -82,63 +86,6 @@ pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, Strin
         checker_ref: checker.checker_ref.clone(),
         report,
     })
-}
-
-#[cfg(target_os = "linux")]
-fn pinned_executable(checker: &Admitted) -> Result<std::fs::File, String> {
-    use std::os::fd::AsRawFd;
-
-    use rustix::fs::Access;
-    use rustix::fs::AtFlags;
-    use rustix::fs::MemfdFlags;
-    use rustix::fs::Mode;
-    use rustix::fs::SealFlags;
-
-    const MAX_EXECUTABLE_BYTES: u64 = 128 * 1024 * 1024;
-
-    let source = rustix::fs::open(
-        &checker.executable,
-        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::CLOEXEC | rustix::fs::OFlags::NONBLOCK,
-        Mode::empty(),
-    )
-    .map(std::fs::File::from)
-    .map_err(|e| e.to_string())?;
-    let metadata = source.metadata().map_err(|e| e.to_string())?;
-    if !metadata.is_file() {
-        return Err("checker-not-file".into());
-    }
-    if !(1..=MAX_EXECUTABLE_BYTES).contains(&metadata.len()) {
-        return Err("checker-executable-bound".into());
-    }
-    let source_fd_path = format!("/proc/self/fd/{}", source.as_raw_fd());
-    rustix::fs::accessat(rustix::fs::CWD, source_fd_path, Access::EXEC_OK, AtFlags::EACCESS)
-        .map_err(|e| format!("checker-executable-access:{e}"))?;
-
-    // An open file pins its inode, not its contents. Hash the sealed image that both child
-    // operations will execute, rather than measuring a file that can be rewritten in place.
-    let fd = rustix::fs::memfd_create(
-        "reliability-checker",
-        MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING | MemfdFlags::EXEC,
-    )
-    .map_err(|e| e.to_string())?;
-    let mut image = std::fs::File::from(fd);
-    let copied =
-        std::io::copy(&mut std::io::Read::take(source, metadata.len()), &mut image).map_err(|e| e.to_string())?;
-    if copied != metadata.len() {
-        return Err("checker-identity".into());
-    }
-    rustix::fs::fchmod(&image, Mode::RUSR | Mode::XUSR).map_err(|e| e.to_string())?;
-    rustix::fs::fcntl_add_seals(&image, SealFlags::WRITE | SealFlags::GROW | SealFlags::SHRINK | SealFlags::SEAL)
-        .map_err(|e| e.to_string())?;
-    let mut executable =
-        std::fs::File::open(format!("/proc/self/fd/{}", image.as_raw_fd())).map_err(|e| e.to_string())?;
-    drop(image);
-    let mut hasher = blake3::Hasher::new();
-    std::io::copy(&mut executable, &mut hasher).map_err(|e| e.to_string())?;
-    if format!("blake3:{}", hasher.finalize().to_hex()) != checker.executable_blake3 {
-        return Err("checker-identity".into());
-    }
-    Ok(executable)
 }
 
 #[cfg(not(target_os = "linux"))]
