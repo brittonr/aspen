@@ -36,9 +36,11 @@
 
 ## Blocker
 
-This package is blocked on completion of `model-consensus-fast-path-hazards`,
-`fabric-consistency-service-runtime`, and the required
-`fabric-whole-system-simulation` consistency profile. The base live Raft engine
-must be production-admitted before acceleration implementation begins. Do not
-substitute the in-process model, ambient sockets, fabricated quorum receipts,
-external TLA+ results, or external benchmarks for those prerequisites.
+The [hazard model](../../archive/2026-08-24-model-consensus-fast-path-hazards),
+[three-process base Raft validation](../../archive/2026-07-24-fabric-consistency-service-runtime/validation.md),
+and [whole-system simulation](../../archive/2026-08-01-fabric-whole-system-simulation/evidence/validation.md)
+are archived. The model and base simulation do not execute a live acceleration
+path. The base Raft start planner still returns `production_admitted: false`.
+This change remains blocked until an exact live base cohort has current
+production-policy and operator admission. Do not substitute an in-process model,
+fabricated quorum evidence, or external results for that cohort.

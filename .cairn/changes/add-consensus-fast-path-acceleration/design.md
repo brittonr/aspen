@@ -1,6 +1,6 @@
 ## Context
 
-Molten's accepted architecture supports pluggable algorithm and implementation profiles, canonical commands, normalized commit/read evidence, extension-owned pure state machines, client-session idempotency, engine epochs, fencing, and fail-closed production admission. The active live-consistency change is blocked because the admitted transport port cannot yet connect long-lived distinct replica processes. The separate `model-consensus-fast-path-hazards` package captures fast-path composition invariants without making live claims.
+Molten supports pluggable algorithm and implementation profiles, canonical commands, normalized commit/read evidence, extension-owned pure state machines, client-session idempotency, engine epochs, and fencing. The archived base service has a distinct-process Raft fixture with real transport and durable recovery. The separate fast-path hazard model covers bounded composition invariants without making live claims. Neither result admits the base service for production.
 
 Jetpack is a useful implementation and evaluation reference at pinned MIT-licensed commit `c03e318ec355b11edd42aac56c68d0765f88d1d2`. Its C++/WAF runtime is not a suitable Molten dependency, and its TLA+ and AWS results are not proof or benchmark evidence for Molten. This design therefore specifies an independently implemented optional acceleration profile after the base service exists.
 
@@ -82,4 +82,4 @@ Jetpack is a useful implementation and evaluation reference at pinned MIT-licens
 
 ## Blocker
 
-Do not implement or sync this change while its prerequisites are incomplete. The current transport shell cannot connect long-lived distinct replica processes, the live Raft service is not production-admitted, and the fast-path hazard model is not implemented. External Jetpack code, TLA+ checks, or benchmark results cannot discharge those blockers.
+Do not implement or sync this change while its prerequisites are incomplete. The model archive and distinct-process transport exist; the [live replica start plan](../../../src/fabric_consistency/raft/parts/admission/p000/body.rs) still sets `production_admitted: false`. No exact production-admitted base cohort has been selected with current operational evidence and operator approval. The existing whole-system simulation supplies reference service cores, not a run of this unimplemented acceleration core. External Jetpack code, TLA+ checks, and benchmark results cannot satisfy those gates.
