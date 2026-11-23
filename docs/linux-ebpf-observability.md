@@ -50,6 +50,11 @@ The test uses the recorded endpoint bindings and window ticks, compares sample a
 pure projection, and checks the original consumer's references for generation 1. This does not start a new
 collector, open a current provider endpoint, or qualify the installed-node lifecycle.
 
+On Linux, the same retained export also exercises the provisioner's read-only
+copy and the exact-byte check in the node reader:
+`cargo test -p molten --example ebpf-node-profile retained_handoff_keeps_exact_receipt_bytes -- --ignored`.
+This check uses the recorded tick, not current source or observer authority.
+
 The [NixOS module](nixos-service-module.md#options) can forward the same explicit
 selection for one bounded serve. It does not start or retry the selected mode
 automatically. Provision a fresh grant for each explicit restart.

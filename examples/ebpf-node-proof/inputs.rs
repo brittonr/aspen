@@ -150,4 +150,84 @@ mod tests {
         assert!(registry.existing_subdir(&molten::node_state::RelativePath::parse("observation")?)?.is_none());
         Ok(())
     }
+
+    // r[verify linux_ebpf_observability.admission]
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires MOLTEN_TEST_EBPF_REPLAY_ROOT containing guarded OnixOS fixture output"]
+    fn retained_handoff_keeps_exact_receipt_bytes() -> super::super::Result<()> {
+        let selected_root = std::env::var_os("MOLTEN_TEST_EBPF_REPLAY_ROOT").ok_or("select a guarded capture root")?;
+        let artifacts = molten::node_state::DirectoryRoot::open_existing(std::path::Path::new(&selected_root))?;
+        let read = |leaf, limit| artifacts.read(&molten::node_state::RelativePath::parse(leaf)?, limit);
+        let profile_bytes = read("runtime/generation-1/expected-profile.json", 65_536)?;
+        let window_bytes = read("runtime/generation-1/final-window.json", 4_194_304)?;
+        let binding_bytes = read("runtime/generation-1/expected-binding.json", 16_384)?;
+        let original: serde_json::Value = serde_json::from_slice(&read("molten-positive.json", 65_536)?)?;
+        let expected: molten::fabric_observability::EbpfBinding = serde_json::from_slice(&binding_bytes)?;
+        let export = molten::fabric_observability::decode_ebpf_profile(&profile_bytes)
+            .map_err(|_| "retained checked profile denied")?;
+        assert_eq!(export.binding, expected);
+        let profile = molten::fabric_observability::ebpf_observation_profile(&export).map_err(|_| "invalid profile")?;
+        let descriptors = molten::fabric_observability::ebpf_metric_descriptors(&export)
+            .map_err(|_| "invalid retained descriptor mapping")?;
+        let adapter = molten::fabric_observability::checked_ebpf_profile(export, &profile, &descriptors)
+            .map_err(|_| "invalid retained adapter")?;
+        let window = molten::fabric_observability::decode_ebpf_window(&window_bytes, adapter.max_bytes as u64)
+            .map_err(|_| "retained window denied")?;
+
+        let mut selection = selected("receipts/provider");
+        selection.epoch = 1;
+        selection.checked_profile_ref = molten::preserves_rail::content_ref_from_bytes(&profile_bytes);
+        selection.endpoint_content_ref = molten::preserves_rail::content_ref_from_bytes(&window_bytes);
+        let workspace = crate::test_support::Workspace::new("observer-retained-handoff")?;
+        let state = molten::node_state::DirectoryRoot::from_dir(workspace.state()?.dir().try_clone()?);
+        state.create_layout()?;
+        super::check_profile(&selection, &profile_bytes)?;
+        super::install(&state, &selection, &profile_bytes, &window_bytes)?;
+        let receipts = state.existing_namespace(molten::node_state::NamespaceKind::Receipts)?.unwrap();
+        let provider = receipts.existing_subdir(&molten::node_state::RelativePath::parse("provider")?)?.unwrap();
+        let observe = |reference: &str| {
+            molten::fabric_observability::observe_linux_ebpf(molten::fabric_observability::EbpfServiceInput {
+                profile: &profile,
+                adapter: &adapter,
+                capability: Some(molten::fabric_observability::EbpfReadCapability {
+                    root: &provider,
+                    leaf: molten::node_state::RelativePath::parse(&selection.endpoint_leaf)?,
+                    content_ref: Some(reference),
+                }),
+                control: molten::fabric_observability::EbpfServiceControl {
+                    epoch: selection.epoch,
+                    now: window.end,
+                    deadline: window.end,
+                    cancelled: false,
+                },
+                context: molten::fabric_observability::ObservationContext {
+                    source_id: "linux-ebpf".into(),
+                    source_ref: expected.adapter.clone(),
+                    profile_ref: profile.profile_ref.clone(),
+                    scope: molten::fabric_observability::ClaimScope::LocalComponent,
+                    generation: selection.epoch,
+                    observed_tick: window.end,
+                    valid_until_tick: window.end,
+                    resource_ref: expected.scope.clone(),
+                    evidence_refs: Vec::new(),
+                    non_claims: molten::fabric_observability::REQUIRED_OBSERVABILITY_NON_CLAIMS.to_vec(),
+                },
+            })
+        };
+        let accepted = observe(&selection.endpoint_content_ref)?;
+        assert_eq!(accepted.status.artifact.kind.as_str(), original["status"]);
+        assert_eq!(accepted.health.artifact.state.as_str(), original["health"]);
+        assert_eq!(accepted.samples.len(), original["sample_refs"].as_array().ok_or("missing original samples")?.len());
+        assert_eq!(serde_json::to_value(accepted.accounting)?, original["accounting"]);
+        assert!(!accepted.deny_required_readiness);
+
+        let replacement = read("runtime/generation-2/final-window.json", 4_194_304)?;
+        let other_reference = molten::preserves_rail::content_ref_from_bytes(&replacement);
+        let denied = observe(&other_reference)?;
+        assert!(denied.deny_required_readiness);
+        assert!(denied.samples.is_empty());
+        assert_eq!(denied.status.artifact.kind, molten::fabric_observability::AdapterOutcomeKind::Corrupt);
+        Ok(())
+    }
 }
