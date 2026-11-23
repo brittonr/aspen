@@ -185,6 +185,21 @@ acceptance writes create-new, synced `status.preserves`; no existing receipt is
 overwritten. Canonical status identity and independently pinned profile references
 are required by `status::readback`. Normal live actor execution still requires its
 real scheduler/current-resource resolver and admitted effect mechanism.
+
+Use `OperatorConfiguration` from [`config/spacewasm/contracts.ncl`](../config/spacewasm/contracts.ncl)
+to check a deployment-selected Nickel configuration before exporting it:
+`nickel export <operator.ncl> > <configuration.json>`. Apply the contract to the
+configuration record, including its complete `profile` and `trust`. The three
+verifiers (`mantle`, `octet`, `chaos`) each require a Nix-store path and a bare
+lowercase BLAKE3 digest. `bundle_identity`, `cohort_identity`, and `probe_blake3`
+also use bare lowercase digests; `octet_profile_identity` uses `b3:`. The
+contract checks authoring, not artifact contents or authority. The Rust command
+independently opens the supplied artifacts and checks the selected identities.
+
+`nix build --no-link .#checks.x86_64-linux.spacewasm-operator-profile` checks all
+six scenario shapes and the malformed-config denials. Its fixtures deliberately
+name unavailable artifacts; do not use their paths or digests as trust inputs.
+
 ### Concrete operator smoke command
 
 The opt-in smoke below runs actual independent NASA executions and canonical status
@@ -249,7 +264,3 @@ canonical output. Operator boundary regressions additionally cover resource iden
 across scheduling-only changes, cancellation/uncertainty scenario binding, malformed
 rejected-byte hex, and actual assertion commit-before-uncertainty versus trap-before-commit.
 The focused command is `cargo test spacewasm::`.
-
-No builds, tests, linters, or formatters were run for this slice, as explicitly
-required by the assignment. The commands and fixtures above are runnable
-validation instructions, not claimed successful execution evidence.

@@ -29,4 +29,56 @@ let ProfileContract = {
   release | P.contract (fun v => v == false),
   non_claims | P.contract (fun v => v == NonClaims),
 } in
-{ Profile = ProfileContract, Limits = LimitsContract, non_claims = NonClaims }
+let HexDigest = P.contract (fun value => std.is_string value
+  && std.string.is_match "^[0-9a-f]{64}$" value) in
+let OctetIdentity = P.contract (fun value => std.is_string value
+  && std.string.is_match "^b3:[0-9a-f]{64}$" value) in
+let Relative = P.contract (fun value => P.is_non_empty_string value
+  && std.array.all P.is_safe_relative_dir (std.string.split "/" value)) in
+let Verifier = {
+  path | P.contract (fun value => std.is_string value
+    && std.string.is_match "^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[A-Za-z0-9._+?=-]+(/[A-Za-z0-9._+?=-]+)*$" value
+    && !std.string.is_match "(^|/)\\.\\.?(/|$)" value),
+  blake3 | HexDigest,
+} in
+let Cohort = {
+  mantle | Verifier,
+  octet | Verifier,
+  chaos | Verifier,
+  bundle_identity | HexDigest,
+  octet_profile_identity | OctetIdentity,
+  cohort_identity | HexDigest,
+  probe_blake3 | HexDigest,
+} in
+let Scenario = std.contract.any_of [
+  P.contract (P.is_one_of ["Standard", "StaleGeneration", "HostPause"]),
+  { HostTrap | { reason | String } },
+  { HostUncertain | { reason | String } },
+  { Cancel | { reason | String, after_segments | P.contract (fun value =>
+      P.is_non_negative_integer value && value <= 9007199254740991) } },
+] in
+let host_scenario = fun value =>
+  if std.is_string value then value == "HostPause"
+  else std.is_record value && (std.record.has_field "HostTrap" value || std.record.has_field "HostUncertain" value) in
+# The operator supplies every identity. This is authoring, not evidence admission.
+# r[impl molten.spacewasm_core.profile]
+let OperatorContract = std.contract.Sequence [{
+  profile | ProfileContract,
+  trust | Cohort,
+  name | P.contract (P.is_one_of ["molten-abi-roundtrip", "molten-abi-hostcall",
+    "molten-abi-invalid-pointer", "molten-abi-invalid-output", "molten-abi-memory-limit",
+    "molten-abi-stack-limit", "molten-abi-trap", "molten-abi-out-of-fuel"]),
+  scenario | Scenario,
+  bundle | Relative,
+  octet | Relative,
+  module | Relative,
+  probe | Relative,
+  input | Relative,
+  chaos_report | Relative,
+}, P.contract (fun config => !host_scenario config.scenario || config.name == "molten-abi-hostcall")] in
+{
+  Profile = ProfileContract,
+  Limits = LimitsContract,
+  OperatorConfiguration = OperatorContract,
+  non_claims = NonClaims,
+}

@@ -53,3 +53,11 @@ The repaired engine admits another segment at the same turn through the original
 ## Full-ABI reference runner
 
 ChaosControl [`a2b85741`](https://github.com/brittonr/chaoscontrol/commit/a2b85741c341863798850fa3c82d19a22e4912b3) supplies the opt-in hostcall model and Wasmtime 49.0.5 reference runner. Its [producer evidence](https://github.com/brittonr/chaoscontrol/blob/a2b85741c341863798850fa3c82d19a22e4912b3/.cairn/changes/add-spacewasm-full-abi-differential-rail/tasks.md) records 49 library and 13 binary tests and explicitly limits them to synthetic reference-runner fixtures. The SpaceWasm runner, release-authority publication, exact-member scenarios, two-engine report and independently selected verifier inputs are still required. No Aspen admission, replay or promotion task is completed by this checkpoint.
+
+## Checked operator authoring
+
+[`OperatorConfiguration`](../../../config/spacewasm/contracts.ncl) checks one explicit pilot profile, three immutable verifier selections, published-identity fields, capability-relative artifact paths, and the fixture/scenario pairing. It does not supply or admit a publication pin.
+
+The offline `checks.x86_64-linux.spacewasm-operator-profile` derivation realized `bv2ksrjyk43npalhby6cqw8vwlgbf6wq-molten-spacewasm-operator-profile`. Six scenario shapes exported byte-identically with local Nickel (`44cb1bbec8aa2129a582deca627807a9caff7c8cc01f23067e276055cc4657ae`); ten controls denied missing cohort or probe pins, malformed verifier or Octet digests, ambient verifier paths, traversal, unknown fields, engine substitution, promotion, and a misbound host scenario (`7faabbb1aa7ddf62084fca12e5a3dd037f2e518b5a84418126c070a0f6d7bb46`).
+
+The retained feature-enabled `molten` binary (`50a09284a68645d49747347ab06475698b2ba6af718e8b556dd1da57db7f8a75`) parsed each export via `spacewasm run-fixture`, denied the unavailable bundle in each case, and denied an independently corrupted probe pin before opening the bundle. No status receipt or differential report was written (combined Nix and command log BLAKE3 `edcf94caa43c44de16f92efeb6f240c2b3b11ec57a7c741b4d215e8497297b1a`). The exact independently published cohort remains unselected. These checks establish the authoring and fail-closed CLI boundaries, not a positive external execution or replay.

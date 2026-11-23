@@ -1958,6 +1958,32 @@
                     printf '%s denied\n' "$name" >> "$out/denials.txt"
                   done
                 '';
+            spacewasmOperatorProfileCheck =
+              pkgs.runCommand "molten-spacewasm-operator-profile"
+                {
+                  nativeBuildInputs = [ nickelPackage ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  fixture="$src/config/spacewasm/fixtures/operator-authoring.ncl"
+                  mkdir -p "$out"
+                  nickel export "$fixture" --field accepted --color never > "$out/configurations.json"
+                  for name in missing_cohort missing_probe malformed_verifier_digest ambient_verifier \
+                    wrong_octet_identity traversal unexpected_field wrong_engine promote wrong_host_fixture
+                  do
+                    if nickel export "$fixture" --field "denied.$name" --color never > /dev/null 2> "$TMPDIR/negative.err"; then
+                      echo "negative SpaceWasm operator profile unexpectedly exported: $name" >&2
+                      exit 1
+                    fi
+                    case "$name" in
+                      missing_cohort) grep -F 'missing definition for `cohort_identity`' "$TMPDIR/negative.err" ;;
+                      missing_probe) grep -F 'missing definition for `probe_blake3`' "$TMPDIR/negative.err" ;;
+                      *) grep -F 'contract broken' "$TMPDIR/negative.err" ;;
+                    esac
+                    printf '%s denied\n' "$name" >> "$out/denials.txt"
+                  done
+                '';
             worldBenchmarkProfileCheck =
               pkgs.runCommand "molten-world-benchmark-profile"
                 {
@@ -3479,6 +3505,7 @@
             };
             fabric-observability-profile = fabricObservabilityProfileCheck;
             live-reliability-profiles = liveReliabilityProfilesCheck;
+            spacewasm-operator-profile = spacewasmOperatorProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
             world-faults-profile = worldFaultsProfileCheck;
