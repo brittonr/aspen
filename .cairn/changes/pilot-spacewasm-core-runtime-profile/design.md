@@ -62,12 +62,12 @@ Inspection, admission, instantiation, segment, yield/resume, hostcall, terminal,
 - No state serialization, migration, live upgrade, or cross-host resume claim.
 - No flight qualification, runtime correctness, sandbox-completeness, or release-readiness claim.
 
-## Current evidence-bearing blocker (2026-11-16)
+## Evidence-bearing prerequisites
 
 The source-side pilot and its bounded negative controls can be checked locally. Evidence-bearing execution still requires a complete, independently admitted producer cohort:
 
 - Mantle's `materialize-molten-spacewasm-abi` locally verified bundle `774331f6c2defe75e30c354b2b3080838cf56438bbd99268779fe4590f8c9f39` on 2026-10-30, but its immutable-revision/bundle publication task remains unchecked;
 - Octet archived the matching static `spacewasm-molten-abi-pilot` profile, but its fixture receipt is not a receipt for the exact selected Mantle members or an independently selected immutable verifier executable;
-- ChaosControl's archived/current differential is the older hostless `run()->()` profile on Wasmtime 41.0.3. It does not emit the required full-Molten-ABI `chaoscontrol.spacewasm-molten-abi-differential.v1` report on the consumer's 49.0.5 cohort.
+- ChaosControl [`a2b85741`](https://github.com/brittonr/chaoscontrol/commit/a2b85741c341863798850fa3c82d19a22e4912b3) implements the opt-in full-ABI hostcall model and Wasmtime 49.0.5 reference runner. Its synthetic fixtures do not run the SpaceWasm side or emit the required `chaoscontrol.spacewasm-molten-abi-differential.v1` report for the exact published members.
 
-The expected bundle/cohort/profile/probe identities and Nix-store verifier executable hashes must be selected through their actual publication/admission boundary, never copied from a candidate's self-consistent reports. Do not substitute hostless receipts, Wasmtime, local fixture grants or silent module lowering for the missing full-ABI cohort. Local checks do not close these evidence-bearing acceptance tasks.
+The expected bundle/cohort/profile/probe identities and Nix-store verifier executable hashes must be selected through their actual publication/admission boundary, never copied from a candidate's self-consistent reports. Do not substitute hostless receipts, the Wasmtime reference run alone, local fixture grants or silent module lowering for the missing two-engine report. Local checks do not close these evidence-bearing acceptance tasks.

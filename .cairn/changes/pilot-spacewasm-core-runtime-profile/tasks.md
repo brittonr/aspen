@@ -26,7 +26,7 @@ evidence-bearing acceptance:
 
 Pueue task 46 ran `cargo test --locked -p molten --features spacewasm-pilot --lib spacewasm::`: 31 passed, one independently provisioned case ignored. The pinned Nickel CLI also exported the checked authoring profile after the contract-export shadowing repair; `production` and `release` remained `false`. Neither check provides the missing independent publication, exact-verifier, or full-ABI differential evidence above.
 
-Current prerequisite readback still has no admitted bundle: Mantle revision `aa81952cce99ac7bb5e2bff95a97bcb4b785b8ca` leaves immutable publication and consumer execution unchecked, Octet revision `3ddd21ef671f206537d42ad2289467b530b96255` retains explicitly fixture-only static receipts, and the current ChaosControl differential still declares `chaoscontrol.spacewasm-mvp-differential-report.v1`. None supplies the missing full-ABI candidate input.
+The November 21 prerequisite readback found no admitted bundle: Mantle revision `aa81952cce99ac7bb5e2bff95a97bcb4b785b8ca` left immutable publication and consumer execution unchecked, Octet revision `3ddd21ef671f206537d42ad2289467b530b96255` retained fixture-only static receipts, and the checked ChaosControl differential still declared `chaoscontrol.spacewasm-mvp-differential-report.v1`.
 
 ## Checked profile ceilings
 
@@ -49,3 +49,7 @@ The engine records one `spacewasm-event-v2` segment row per real runner call, wi
 On `e682822a9e` plus the two local regressions, `retained_turn_rejects_clock_regression_and_expiry` failed with exit 101: the actual interpreter returned `Finished` on a regressed logical turn that was still within its creation-based retention interval, instead of `Denied("stale continuation")`. The failing selection's log BLAKE3 is `280e494c8739e61c2bbf688f8e58c925c647189f0fd7cf9280be498ea874fef8`. The hostless test uses a local fixture admission and cannot establish independently admitted Mantle, Octet or ChaosControl evidence.
 
 The repaired engine admits another segment at the same turn through the original retention limit. It rejects both regressed and expired resumes or cancellations before counting more work and releases guest resources and the local allocation guard. The actual-engine regression passed in the [ordered source run](../add-linux-ebpf-observability-adapter/tasks.md#fabric-queue-budget-control). This closes the continuation implementation task; external fixture admission, execution and replay remain open.
+
+## Full-ABI reference runner
+
+ChaosControl [`a2b85741`](https://github.com/brittonr/chaoscontrol/commit/a2b85741c341863798850fa3c82d19a22e4912b3) supplies the opt-in hostcall model and Wasmtime 49.0.5 reference runner. Its [producer evidence](https://github.com/brittonr/chaoscontrol/blob/a2b85741c341863798850fa3c82d19a22e4912b3/.cairn/changes/add-spacewasm-full-abi-differential-rail/tasks.md) records 49 library and 13 binary tests and explicitly limits them to synthetic reference-runner fixtures. The SpaceWasm runner, release-authority publication, exact-member scenarios, two-engine report and independently selected verifier inputs are still required. No Aspen admission, replay or promotion task is completed by this checkpoint.
