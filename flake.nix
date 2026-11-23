@@ -1936,6 +1936,28 @@
                   done
                   touch "$out"
                 '';
+            liveReliabilityProfilesCheck =
+              pkgs.runCommand "molten-live-reliability-profiles"
+                {
+                  nativeBuildInputs = [ nickelPackage ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  fixture="$src/config/live-reliability/fixtures/fault-authoring.ncl"
+                  mkdir -p "$out"
+                  nickel export "$fixture" --field accepted --color never > "$out/profiles.json"
+                  for name in restart_over_heal partition_over_heal restart_outside_cohort \
+                    partition_overlap partition_incomplete short_recovery unsupported supplied_effect
+                  do
+                    if nickel export "$fixture" --field "denied.$name" --color never > /dev/null 2> "$TMPDIR/negative.err"; then
+                      echo "negative live reliability profile unexpectedly exported: $name" >&2
+                      exit 1
+                    fi
+                    grep -F 'contract broken' "$TMPDIR/negative.err"
+                    printf '%s denied\n' "$name" >> "$out/denials.txt"
+                  done
+                '';
             worldBenchmarkProfileCheck =
               pkgs.runCommand "molten-world-benchmark-profile"
                 {
@@ -3456,6 +3478,7 @@
               inherit rustLibDir;
             };
             fabric-observability-profile = fabricObservabilityProfileCheck;
+            live-reliability-profiles = liveReliabilityProfilesCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
             world-faults-profile = worldFaultsProfileCheck;

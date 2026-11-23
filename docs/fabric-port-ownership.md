@@ -166,6 +166,15 @@ provider effect record against the selected policy and supply its exact content 
 does not infer the actual partition sides from a mechanism label. It verifies that both effect stages
 bind that reference, that apply-to-heal spans the declared disruption within the heal deadline, and
 that heal-to-recovery stays within the recovery deadline.
+
+For authoring, [`profile.ncl`](../config/live-reliability/profile.ncl) takes the measured product identities.
+Pass the resulting `endpoints` and explicit millisecond bounds to `no_fault`, `process_restart`, or
+`temporary_partition` in [`faults.ncl`](../config/live-reliability/faults.ncl). A restart also takes `{ endpoint, down_ms }`;
+a partition takes `{ left, right, duration_ms }`. Export the chosen value into `fault.profile`.
+The contract rejects a disruption longer than the heal deadline. It supplies neither an effect reference nor
+provider permission. The [authoring fixtures](../config/live-reliability/fixtures/fault-authoring.ncl) are synthetic;
+`nix build .#checks.x86_64-linux.live-reliability-profiles` checks their accepted exports and expected denials.
+
 The terminal history event must be a `teardown` lifecycle observation as well as a completed teardown fact.
 `molten reliability compare --profiles PROFILES.json --report REPORT.json` retains environment, adapter,
 fault mechanism, time source, checker, finite verdict, and non-claims for every profile without merging them.

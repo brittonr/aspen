@@ -1,6 +1,6 @@
 let Contracts = import "contracts.ncl" in
-// Product profile: embed this value inside an exact Onix deployment cohort.
-// Call with measured canonical product identities; there are no default artifact identities.
+# Embed this profile inside an exact Onix deployment cohort.
+# Call with measured canonical product identities; there are no default artifact identities.
 fun identities =>
 {
   schema = "molten.live-register-profile.v1",
