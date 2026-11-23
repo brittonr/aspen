@@ -71,11 +71,7 @@ pub fn observe_linux_ebpf(input: EbpfServiceInput<'_>) -> crate::error::Result<E
                 .checked_add(accounting.consumer_dropped)
                 .and_then(|count| count.checked_add(accounting.pending))
                 .ok_or_else(|| invalid("Linux loss overflow"))?;
-            let fact = if artifacts.complete {
-                EbpfLifecycleFact::Complete
-            } else {
-                EbpfLifecycleFact::Partial
-            };
+            let fact = EbpfLifecycleFact::from_validated_window(&readback.window, artifacts.complete);
             (Some(artifacts), fact, dropped, readback.window.accounting)
         }
         Err(fact) => (None, fact, 0, None),
@@ -162,12 +158,13 @@ fn compose(
 ) -> crate::error::Result<EbpfServiceObservation> {
     let (decision, dropped, accounting) = outcome;
     let adapter = reader_adapter_profile(profile, source, &context);
-    let issues = if accounting.is_none() {
-        vec![ObservabilityIssue::ObservationUnavailable(
+    let issues = match (decision.kind, accounting.is_some()) {
+        (AdapterOutcomeKind::Failed, _) => vec![ObservabilityIssue::AdapterFailure],
+        (AdapterOutcomeKind::Cancelled, true) => vec![ObservabilityIssue::Cancelled],
+        (_, false) => vec![ObservabilityIssue::ObservationUnavailable(
             "linux-ebpf-accounting".into(),
-        )]
-    } else {
-        Vec::new()
+        )],
+        (_, true) => Vec::new(),
     };
     let status = adapter_status(profile, &adapter, &ObservationAdapterStatus {
         schema: OBSERVATION_ADAPTER_STATUS_SCHEMA.into(),

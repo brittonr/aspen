@@ -25,6 +25,7 @@ fn partial_unavailable_cancelled_and_stale_required_sources_cannot_become_ready(
         (10, false, AdapterOutcomeKind::Partial),
         (10, true, AdapterOutcomeKind::Cancelled),
         (16, false, AdapterOutcomeKind::Stale),
+        (21, false, AdapterOutcomeKind::Timeout),
     ] {
         let observation = observe_linux_ebpf(EbpfServiceInput {
             profile: &profile,
@@ -150,7 +151,7 @@ fn oversized_sum_is_unavailable_before_metric_projection() {
 // r[verify linux_ebpf_observability.confidentiality]
 #[test]
 fn wire_allowance_must_fit_queue_budget() {
-    let (mut profile, mut adapter, window, _) = fixture();
+    let (mut profile, mut adapter, window, context) = fixture();
     let workspace = crate::test_support::process_workspace("ebpf-queue-budget").expect("owned workspace");
     let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
     let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
@@ -170,4 +171,61 @@ fn wire_allowance_must_fit_queue_budget() {
 
     profile.bounds.max_queued_bytes -= 1;
     assert!(matches!(open(&profile), Err(EbpfEndpointFailure::Admission(EbpfIssue::Bounds))));
+
+    adapter.max_bytes -= 1;
+    let pressure = observe_linux_ebpf(EbpfServiceInput {
+        profile: &profile,
+        adapter: &adapter,
+        capability: Some(EbpfReadCapability {
+            root: &root,
+            leaf,
+            content_ref: None,
+        }),
+        control: control(),
+        context,
+    })
+    .unwrap();
+    assert_eq!(pressure.status.artifact.kind, AdapterOutcomeKind::Backpressure);
+    assert!(pressure.deny_required_readiness);
+    assert!(pressure.samples.is_empty());
+}
+
+// r[verify linux_ebpf_observability.failure]
+#[test]
+fn terminal_window_status_distinguishes_failed_close_from_cancellation() {
+    let (profile, adapter, mut window, context) = fixture();
+    let workspace = crate::test_support::process_workspace("ebpf-terminal-window").expect("owned workspace");
+    let root = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace).unwrap();
+    let leaf = crate::node_state::RelativePath::parse("window.json").unwrap();
+    for (closed, cancelled, kind) in [
+        (true, false, AdapterOutcomeKind::Exported),
+        (false, false, AdapterOutcomeKind::Failed),
+        (true, true, AdapterOutcomeKind::Cancelled),
+        (false, true, AdapterOutcomeKind::Failed),
+    ] {
+        window.final_close_succeeded = closed;
+        window.cancelled = cancelled;
+        let bytes = serde_json::to_vec(&window).unwrap();
+        let reference = crate::preserves_rail::content_ref_from_bytes(&bytes);
+        root.write(&leaf, &bytes).unwrap();
+        let observed = observe_linux_ebpf(EbpfServiceInput {
+            profile: &profile,
+            adapter: &adapter,
+            capability: Some(EbpfReadCapability {
+                root: &root,
+                leaf: leaf.clone(),
+                content_ref: Some(&reference),
+            }),
+            control: control(),
+            context: context.clone(),
+        })
+        .unwrap();
+        assert_eq!(observed.status.artifact.kind, kind);
+        assert_eq!(observed.outcome.artifact.kind, kind);
+        assert_eq!(observed.accounting, window.accounting);
+        assert_eq!(observed.deny_required_readiness, kind != AdapterOutcomeKind::Exported);
+        if kind == AdapterOutcomeKind::Failed {
+            assert!(observed.status.artifact.issues.contains(&ObservabilityIssue::AdapterFailure));
+        }
+    }
 }

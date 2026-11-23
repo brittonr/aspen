@@ -234,3 +234,7 @@ fn unknown_schema_signals_and_private_fields_never_cross_the_window_decoder() {
 
 #[path = "endpoint.rs"]
 mod endpoint;
+
+#[cfg(target_os = "linux")]
+#[path = "replay.rs"]
+mod replay;

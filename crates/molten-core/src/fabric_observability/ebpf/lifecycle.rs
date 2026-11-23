@@ -15,7 +15,25 @@ pub enum EbpfLifecycleFact {
     Stale,
     Cancelled,
     Closed,
+    FinalCloseFailed,
     Unsupported,
+}
+
+impl EbpfLifecycleFact {
+    /// Classify a validated window without confusing a provider's final close with the read
+    /// capability.
+    // r[impl linux_ebpf_observability.failure]
+    pub fn from_validated_window(window: &super::EbpfWindow, complete: bool) -> Self {
+        if !window.final_close_succeeded {
+            Self::FinalCloseFailed
+        } else if window.cancelled {
+            Self::Cancelled
+        } else if complete {
+            Self::Complete
+        } else {
+            Self::Partial
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +58,7 @@ pub fn decide_ebpf_service(required: bool, fact: EbpfLifecycleFact) -> EbpfServi
         EbpfLifecycleFact::Malformed | EbpfLifecycleFact::Binding => AdapterOutcomeKind::Corrupt,
         EbpfLifecycleFact::Stale => AdapterOutcomeKind::Stale,
         EbpfLifecycleFact::Cancelled => AdapterOutcomeKind::Cancelled,
+        EbpfLifecycleFact::FinalCloseFailed => AdapterOutcomeKind::Failed,
         EbpfLifecycleFact::Unsupported => AdapterOutcomeKind::Unsupported,
     };
     let complete = fact == EbpfLifecycleFact::Complete;
@@ -74,6 +93,7 @@ mod tests {
             EbpfLifecycleFact::Stale,
             EbpfLifecycleFact::Cancelled,
             EbpfLifecycleFact::Closed,
+            EbpfLifecycleFact::FinalCloseFailed,
             EbpfLifecycleFact::Unsupported,
         ] {
             let decision = decide_ebpf_service(true, fact);

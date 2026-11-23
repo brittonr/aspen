@@ -13,6 +13,7 @@ The archived contract is `AgentReport.runtime`, serialized by OnixOS `cli/src/cm
 - `EbpfBinding`, `EbpfWindow` and related DTOs implement the closed `onixos.bpf-observation.window.v1` protocol now authored by OnixOS. `EbpfEndpointReader` validates the independently supplied checked profile before I/O, reads only one supplied bounded regular-file capability, consumes an immutable epoch once and closes on cancellation, timeout, malformed input or cohort drift. Pure admission enforces exact generation/schema/cohort/scope, finite mappings/records/bytes/streams, supplied freshness, duplicate/gapped source sequences, overflow and reconciled accounting.
 - Producer or consumer loss, missing counters, pending records, cancellation or failed final close cannot yield complete health. Zero-event admitted signals project zero counters, not fabricated events. Source-local sequence facts are checked independently of delivery (nested tracepoints can reserve records out of attempt order); cross-CPU order remains partial. Canonical packed Preserves evidence sorts by source/sequence and excludes framing/encoded byte count, so equivalent interleavings preserve canonical metric/health/status/event/snapshot identity. Raw capture-byte references stay separate from semantic identity.
 - `observe_linux_ebpf` composes existing canonical metrics, health, adapter status and one finite lifecycle event. It maps absent capability, permission, timeout, stale/mismatched source, bounds, malformed accounting and cancellation into typed unavailable/partial outcomes. A required incomplete source sets `deny_required_readiness`; an optional source does not authorize anything. No raw kernel event detail or labels are emitted. The finite status event contains only a typed adapter outcome.
+- A validated window that reports unsuccessful provider final close yields `failed` with an `adapter-failure` issue; successful close with cancellation yields `cancelled`. Both retain accounting and deny required readiness. Neither outcome describes the consumer's own read-capability closure or grants permission to clean provider state.
 - Endpoint admission checks each signal sum against the signed 64-bit metric range. An out-of-range sum produces a corrupt, unavailable observation without samples; it blocks readiness only when the source is required.
 - The reader rejects a window's configured wire-byte allowance if it exceeds the enclosing fabric queue budget, before opening the endpoint. Producer queue accounting remains separate.
 - `config/linux-ebpf/contracts.ncl` bounds mappings, nanosecond windows/freshness, queue/records/bytes/cardinality, raw-event detail, loss, required policy and canonical non-claims. Rust rejects unknown/duplicate behavior-affecting JSON fields and checks the same export. The VM publisher performs the actual pinned Nickel export before delivering expected-profile input. No fabricated production profile or source identity is installed.
@@ -37,6 +38,12 @@ clock. The node closes the hosting session if that recheck denies. An optional
 observation remains a startup fact, not a gate or proof of current host health.
 
 This is a one-window startup path. It does not start a polling daemon or qualify a continuously supervised installed observer. The disposable VM evidence above was produced with the standalone consumer, not with this node entry point.
+
+For offline conformance, set `MOLTEN_TEST_EBPF_REPLAY_ROOT` to the guarded retained capture directory and run
+`cargo test -p molten --lib retained_vm_epochs_match_recorded_projection -- --ignored --nocapture`.
+The test uses the recorded endpoint bindings and window ticks, compares sample and health references to the
+pure projection, and checks the original consumer's references for generation 1. This does not start a new
+collector, open a current provider endpoint, or qualify the installed-node lifecycle.
 
 The [NixOS module](nixos-service-module.md#options) can forward the same explicit
 selection for one bounded serve. It does not start or retry the selected mode
