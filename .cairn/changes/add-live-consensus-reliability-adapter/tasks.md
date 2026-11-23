@@ -16,7 +16,7 @@ The [register profile and admission](../../../src/reliability/model/profile.rs) 
 
 ## Phase 3: Live fault and recovery profiles
 
-- [ ] [depends:onixos-live-reliability-contract] [serial] Add no-fault, process-restart, temporary-partition, heal, recovery, and final-read profiles. r[molten.consensus.live_fault_profile]
+- [x] [depends:onixos-live-reliability-contract] [serial] Add no-fault, process-restart, temporary-partition, heal, recovery, and final-read profiles. r[molten.consensus.live_fault_profile]
 - [x] [serial] Require final public reads from every admitted endpoint after declared readiness and stable membership facts. r[molten.consensus.live_recovery]
 - [x] [parallel] Keep clock, durability, Byzantine, queue, lock, and transaction profiles explicitly unsupported. r[molten.consensus.live_fault_profile] r[molten.testing.live_reliability_claim_boundary]
 
@@ -102,3 +102,19 @@ The repaired CLI (`blake3:50a09284a68645d49747347ab06475698b2ba6af718e8b556dd1da
 Both Octet producers returned zero findings. The ordered run assembled 3,169 source inputs, passed `strict-ci` (`blake3:fb24889beb06ba56a2c206d1ff864fa016bc02d2a3259adf71c95f24fc35ff63`), emitted the remediation plan (`blake3:966edd6d8a135b7f5d048f4ad3f7fc8920b15fe7af878d10e5b53c21af980dda`), and passed all 66 `live_reliability::` library tests, including omission, aliasing and disagreement. Formatting, denied-warning Clippy and strict Cairn validation passed. Ordered log BLAKE3: `e200818f74bc86f6cc55f6a129225bd1b54ec28e5b0233d40ec857a242a8555a`.
 
 This completes the optional checker execution and disagreement gate in Aspen. It does not qualify a live history, an independently implemented reference checker, or a provider campaign.
+
+## Authored fault profiles
+
+On `63cebfb18a` plus the regression only, the exact `disruptive_duration_must_fit_heal_deadline` test exited 101. A restart requesting 11 ms with a 10 ms heal deadline returned `Ok(())`, although no reached run could satisfy that policy (log BLAKE3 `c8e01e12799477f359b4c8790580e1444dd941cf4262c44d3251f5b5ffb1b11c`).
+
+Nickel 1.17.0 first refused the existing register authoring source at its `//` comment. The repaired source exported the register and all three fault policies. The actual `molten reliability generate` accepted the exported register and generated all 32 planned operations (plan JSON BLAKE3 `7760fcff07bba25505e7fb44bafdfbab3d5ba02fb7ed50a501a28fae5e1e3f02`).
+
+The hermetic `checks.x86_64-linux.live-reliability-profiles` check realized `wq9x198l88ics6z7ykfcdgqk7cn1m3jg-molten-live-reliability-profiles`. Its exports match the local Nickel exports byte for byte (BLAKE3 `c3b24052910546c6544753d0db2eefc8748def477c8e7e3f82c0a752cb1b4932`). Eight negative fixtures denied: restart or partition beyond the heal limit, unknown restart endpoint, overlapping or incomplete partition, insufficient recovery window, unsupported fault, and a provider effect supplied inside the policy. Log BLAKE3: `7fa7430fdce7c16694c79deb73ab5d51fb5f68cfe722e136559cd295d6afa9f0`.
+
+The first ordered batch stopped at formatting (log BLAKE3 `92f068e9e3448d184ab51d90592eea377d0044cf0839081683dcb0537cd7449c`). The second reported 66 passing tests but omitted the new regression, so its explicit case-selection guard stopped before Clippy and Cairn (log BLAKE3 `f95583e2918b80d1a064d379ed01d8e7aea1426b270649dfd13bca36f3a1ccb8`). Neither batch completes verification of the change.
+
+A standalone Rust compilation of the exact fault module (source BLAKE3 `bc16d4b1c34cfc04eab555c76e790b0f41b1bd0f6365b46cacc2b5847543dcb6`) passed all three module tests. The same code deserialized and admitted all three profiles from the Nix output, then rejected both disruptive policies when the heal limit was reduced by 1 ms. Log BLAKE3: `57eca2a5d15cb89cd3bdf7b12eb7141af0cb0cc189ff756eba0d4d858590b939`. No test applied a provider fault.
+
+The ordered run on the unchanged fault source passed both zero-finding Octet producers, the 3,169-source corpus, `strict-ci` (`blake3:1c317812467bcb36f828e3cb3964896ad5a960412aba4efc5f71e8fc29c01b73`), and the remediation plan (`blake3:5a7d699cc0a043adcab1c56ae4a9173d26004e4f418b0d57d24af4e98846bdec`). All 67 `live_reliability::` tests passed, including the exact duration regression. Formatting, denied-warning Clippy and strict Cairn validation passed. Ordered log BLAKE3: `37842ba3f251fc8a5efc7c1b2aa626d8c87730fbcc9a9f47b4b2aabcbb799ace`.
+
+This verifies the authored profiles, Runtime admission and finite bounds. It does not qualify a signed OnixOS deployment, an applied disruption, or a complete live history.

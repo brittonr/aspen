@@ -61,19 +61,14 @@ pub fn admit(profile: &Profile, endpoints: &std::collections::BTreeSet<String>) 
             if !endpoints.contains(endpoint) {
                 return Err("unknown-fault-endpoint");
             }
-            if !(1..=120_000).contains(down_ms) {
-                return Err("invalid-fault-bound");
-            }
-            Ok(())
+            admit_disruption(*down_ms, profile.heal_deadline_ms)
         }
         Mechanism::TemporaryPartition {
             left,
             right,
             duration_ms,
         } => {
-            if !(1..=120_000).contains(duration_ms) {
-                return Err("invalid-fault-bound");
-            }
+            admit_disruption(*duration_ms, profile.heal_deadline_ms)?;
             let left_set: std::collections::BTreeSet<_> = left.iter().cloned().collect();
             let right_set: std::collections::BTreeSet<_> = right.iter().cloned().collect();
             if left_set.is_empty()
@@ -90,6 +85,16 @@ pub fn admit(profile: &Profile, endpoints: &std::collections::BTreeSet<String>) 
             Ok(())
         }
     }
+}
+
+fn admit_disruption(duration_ms: u64, heal_deadline_ms: u64) -> Result<(), &'static str> {
+    if duration_ms == 0 {
+        return Err("invalid-fault-bound");
+    }
+    if duration_ms > heal_deadline_ms {
+        return Err("fault-duration-exceeds-heal-deadline");
+    }
+    Ok(())
 }
 
 // r[verify molten.consensus.live_fault_profile]
@@ -120,6 +125,41 @@ fn partition_requires_exact_disjoint_complete_cohort() {
         duration_ms: 10,
     };
     assert_eq!(admit(&profile, &endpoints), Err("invalid-partition-sides"));
+}
+
+// r[verify molten.consensus.live_fault_profile]
+#[test]
+fn disruptive_duration_must_fit_heal_deadline() {
+    let endpoints = ["a", "b", "c"].map(String::from).into_iter().collect();
+    let mut profile = Profile {
+        fault: Mechanism::NoFault,
+        heal_deadline_ms: 10,
+        recovery_deadline_ms: 100,
+        stable_membership_ms: 10,
+        final_read_deadline_ms: 10,
+    };
+    assert_eq!(admit(&profile, &endpoints), Ok(()));
+    for duration_ms in [profile.heal_deadline_ms, profile.heal_deadline_ms + 1] {
+        let expected = if duration_ms <= profile.heal_deadline_ms {
+            Ok(())
+        } else {
+            Err("fault-duration-exceeds-heal-deadline")
+        };
+        for fault in [
+            Mechanism::ProcessRestart {
+                endpoint: "a".into(),
+                down_ms: duration_ms,
+            },
+            Mechanism::TemporaryPartition {
+                left: vec!["a".into()],
+                right: vec!["b".into(), "c".into()],
+                duration_ms,
+            },
+        ] {
+            profile.fault = fault;
+            assert_eq!(admit(&profile, &endpoints), expected, "{:?}", profile.fault);
+        }
+    }
 }
 
 // r[verify molten.testing.live_reliability_claim_boundary]
