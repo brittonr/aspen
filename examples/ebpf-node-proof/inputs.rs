@@ -56,28 +56,19 @@ pub(super) fn install(
     profile: &[u8],
     endpoint: &[u8],
 ) -> super::Result<()> {
-    // Both immutable copies live only under the already-owned Registry namespace.
-    let relative_profile = selection
-        .checked_profile_path
-        .strip_prefix("registry/")
-        .ok_or("checked profile must be root-relative under registry/")?;
-    let profile_path = molten::node_state::RelativePath::parse(relative_profile)?;
-    let directory = molten::node_state::RelativePath::parse(&selection.endpoint_directory)?;
-    let leaf = molten::node_state::RelativePath::parse(&selection.endpoint_leaf)?;
-    if leaf.as_path().components().count() != 1 {
-        return Err("endpoint must select one regular leaf".into());
+    let profile_path = molten::node_state::RelativePath::parse(&selection.checked_profile_path)?;
+    if !profile_path.as_path().strip_prefix("registry").is_ok_and(|path| !path.as_os_str().is_empty()) {
+        return Err("checked profile must be root-relative under registry/".into());
     }
+    let directory = molten::node_state::RelativePath::parse(&selection.endpoint_directory)?;
+    if !directory.as_path().strip_prefix("receipts").is_ok_and(|path| !path.as_os_str().is_empty()) {
+        return Err("endpoint directory must be root-relative under receipts/".into());
+    }
+    let endpoint_path = directory.join_segment(&selection.endpoint_leaf)?;
     root.existing_namespace(molten::node_state::NamespaceKind::Registry)?
         .ok_or("initialized Registry namespace unavailable")?;
-    let endpoint_directory =
-        molten::node_state::RelativePath::parse(&format!("registry/{}", directory.as_path().display()))?;
-    root.create_dir_all(&endpoint_directory)?;
-    let endpoint_path = molten::node_state::RelativePath::parse(&format!(
-        "registry/{}/{}",
-        selection.endpoint_directory, selection.endpoint_leaf
-    ))?;
-    let profile_path =
-        molten::node_state::RelativePath::parse(&format!("registry/{}", profile_path.as_path().display()))?;
+    root.existing_namespace(molten::node_state::NamespaceKind::Receipts)?
+        .ok_or("initialized Receipts namespace unavailable")?;
     copy_readonly(root, &profile_path, profile)?;
     copy_readonly(root, &endpoint_path, endpoint)
 }
@@ -106,4 +97,57 @@ pub(super) fn seed(path: &std::path::Path) -> super::Result<[u8; 32]> {
     let result = bytes.as_slice().try_into().map_err(|_| "operator seed must be exactly 32 raw bytes".into());
     bytes.fill(0);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    fn selected(directory: &str) -> molten::fabric_observability::nodeadmission::NodeObservationSelection {
+        let reference = molten::preserves_rail::content_ref_from_bytes(b"fixture provenance");
+        molten::fabric_observability::nodeadmission::NodeObservationSelection {
+            source_validation_ref: reference.clone(),
+            checked_profile_path: "registry/observation/profile.json".into(),
+            checked_profile_ref: molten::preserves_rail::content_ref_from_bytes(b"checked profile"),
+            endpoint_directory: directory.into(),
+            endpoint_leaf: "epoch.json".into(),
+            endpoint_content_ref: molten::preserves_rail::content_ref_from_bytes(b"exact endpoint bytes"),
+            epoch: 7,
+            authorization_tick: 1,
+            boot_id: "12345678-1234-1234-1234-123456789abc".into(),
+            onix_receipt_ref: reference,
+        }
+    }
+
+    // r[verify linux_ebpf_observability.boundary]
+    #[test]
+    fn copied_window_reopens_through_receipt_scope() -> super::super::Result<()> {
+        let workspace = crate::test_support::process_workspace("observer-provision-reopens")?;
+        let root = molten::node_state::DirectoryRoot::open_existing(workspace.as_ref())?;
+        root.create_layout()?;
+        let selection = selected("receipts/provider");
+        super::install(&root, &selection, b"checked profile", b"exact endpoint bytes")?;
+
+        let receipt_scope = root.existing_namespace(molten::node_state::NamespaceKind::Receipts)?.unwrap();
+        let provider = receipt_scope
+            .existing_subdir(&molten::node_state::RelativePath::parse("provider")?)?
+            .expect("signed receipt scope must contain the provisioned endpoint");
+        let leaf = molten::node_state::RelativePath::parse("epoch.json")?;
+        let read = provider.read(&leaf, 32)?;
+        assert_eq!(molten::preserves_rail::content_ref_from_bytes(&read), selection.endpoint_content_ref);
+        assert_eq!(provider.unix_mode(&leaf)?.map(|mode| mode & 0o7777), Some(0o444));
+        let profile = root.read(&molten::node_state::RelativePath::parse(&selection.checked_profile_path)?, 32)?;
+        assert_eq!(molten::preserves_rail::content_ref_from_bytes(&profile), selection.checked_profile_ref);
+        Ok(())
+    }
+
+    #[test]
+    fn foreign_window_scope_is_refused_before_writing() -> super::super::Result<()> {
+        let workspace = crate::test_support::Workspace::new("observer-provision-denies-scope")?;
+        let root = molten::node_state::DirectoryRoot::from_dir(workspace.state()?.dir().try_clone()?);
+        root.create_layout()?;
+        let selection = selected("registry/not-a-receipt-scope");
+        assert!(super::install(&root, &selection, b"checked profile", b"exact endpoint bytes").is_err());
+        let registry = root.existing_namespace(molten::node_state::NamespaceKind::Registry)?.unwrap();
+        assert!(registry.existing_subdir(&molten::node_state::RelativePath::parse("observation")?)?.is_none());
+        Ok(())
+    }
 }

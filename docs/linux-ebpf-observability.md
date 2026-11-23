@@ -32,6 +32,11 @@ The current fixture retains the packaged observation-source manifest separately 
 
 An operator can explicitly select one copied observation window during `molten node run-loop` or `molten node serve` with `--linux-observation-selection RELATIVE_PATH`. The path is relative to the selected node state root. Provision the signed `linux-observation-reader` grant, boot-bound selection, exact Nickel JSON export and read-only window under `receipts/` independently of node-source trust. The node checks source admission first, verifies the exact selection and consumes its holder nonce, then rechecks trust around the bounded read. It emits canonical `node-linux-observation-start-v1` status and health at local-component scope. No selection means no observation. An optional unavailable window can report status without denying node startup; an incomplete required window denies readiness. A new process needs a fresh selection and grant; the node does not discover or follow a replacement endpoint.
 
+The experimental `ebpf-node-profile provision` command copies the checked
+profile at its exact `registry/` path and the read-only window at its exact
+`receipts/<provider-directory>/<leaf>` path. The selection binds both locators.
+A window outside `receipts/` is rejected before either copy is written.
+
 Before publishing host readiness, a complete required window must still be fresh
 on the boot-monotonic clock and its authority must still be current on the wall
 clock. The node closes the hosting session if that recheck denies. An optional

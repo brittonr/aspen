@@ -13,6 +13,9 @@
 mod inputs;
 #[path = "ebpf-node-proof/operator.rs"]
 mod operator;
+#[cfg(test)]
+#[path = "../tests/src/test/support.rs"]
+mod test_support;
 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
