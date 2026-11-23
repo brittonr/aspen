@@ -3,6 +3,16 @@
 The optional `config/spacewasm/profile.ncl` authoring profile names
 `spacewasm-core-mvp-pilot`, NASA source revision
 `e24cf09355a90497148eb5029fdb8e3400bd63e3`, and `molten.wasm.abi.v1`.
+It also binds one fixed cohort: `wasm1` module features, the
+`mantle-spacewasm-reference-bundle-v1` materialization profile
+`nasa-spacewasm-e24cf093-reference-v1`, the Octet
+`octet-evidence-rail-receipt/v1` profile `spacewasm-molten-abi-pilot` with runtime
+cohort `b3:7c537eef…`, the
+`chaoscontrol.spacewasm-molten-abi-differential.v1` reference run on
+`wasmtime` `49.0.5`. The cohort is part of the canonical profile identity, so a
+receipt that names one profile cannot be replayed under another cohort, and the
+evidence checks read those identities from the profile rather than restating
+them.
 Loading defaults does not select the engine. An absent profile, Wasmtime request,
 or component request cannot fall back to this pilot.
 

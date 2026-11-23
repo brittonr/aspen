@@ -1,6 +1,16 @@
 pub const ID: &str = "spacewasm-core-mvp-pilot";
 pub const REVISION: &str = "e24cf09355a90497148eb5029fdb8e3400bd63e3";
 pub const ABI: &str = "molten.wasm.abi.v1";
+// The exact engine, materialization and evidence cohort the pilot evaluates.
+pub const MODULE_FEATURES: &str = "wasm1";
+pub const MATERIALIZATION_SCHEMA: &str = "mantle-spacewasm-reference-bundle-v1";
+pub const MATERIALIZATION_PROFILE: &str = "nasa-spacewasm-e24cf093-reference-v1";
+pub const OCTET_RECEIPT_SCHEMA: &str = "octet-evidence-rail-receipt/v1";
+pub const OCTET_PROFILE: &str = "spacewasm-molten-abi-pilot";
+pub const OCTET_RUNTIME_COHORT: &str = "b3:7c537eef7bff66d0a90508715de08de79c9aaac23352e1007a6d47e7fb4674a2";
+pub const CHAOS_DIFFERENTIAL_SCHEMA: &str = "chaoscontrol.spacewasm-molten-abi-differential.v1";
+pub const REFERENCE_ENGINE: &str = "wasmtime";
+pub const REFERENCE_ENGINE_VERSION: &str = "49.0.5";
 pub const NON_CLAIMS: &[&str] = &[
     "not-component-compatible",
     "not-portable-state",
@@ -56,10 +66,68 @@ impl Default for Limits {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Cohort {
+    pub module_features: String,
+    pub materialization_schema: String,
+    pub materialization_profile: String,
+    pub octet_receipt_schema: String,
+    pub octet_profile: String,
+    pub octet_runtime_cohort: String,
+    pub chaos_differential_schema: String,
+    pub reference_engine: String,
+    pub reference_engine_version: String,
+}
+
+impl Default for Cohort {
+    fn default() -> Self {
+        Self {
+            module_features: MODULE_FEATURES.into(),
+            materialization_schema: MATERIALIZATION_SCHEMA.into(),
+            materialization_profile: MATERIALIZATION_PROFILE.into(),
+            octet_receipt_schema: OCTET_RECEIPT_SCHEMA.into(),
+            octet_profile: OCTET_PROFILE.into(),
+            octet_runtime_cohort: OCTET_RUNTIME_COHORT.into(),
+            chaos_differential_schema: CHAOS_DIFFERENTIAL_SCHEMA.into(),
+            reference_engine: REFERENCE_ENGINE.into(),
+            reference_engine_version: REFERENCE_ENGINE_VERSION.into(),
+        }
+    }
+}
+
+impl Cohort {
+    fn fields(&self) -> [&str; 9] {
+        [
+            &self.module_features,
+            &self.materialization_schema,
+            &self.materialization_profile,
+            &self.octet_receipt_schema,
+            &self.octet_profile,
+            &self.octet_runtime_cohort,
+            &self.chaos_differential_schema,
+            &self.reference_engine,
+            &self.reference_engine_version,
+        ]
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        let expected = Cohort::default();
+        let (observed, expected) = (self.fields(), expected.fields());
+        for (index, (value, exact)) in observed.iter().zip(expected.iter()).enumerate() {
+            if value != exact {
+                return Err(format!("profile cohort entry {index} differs from the admitted cohort"));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Profile {
     pub name: String,
     pub source_revision: String,
     pub abi: String,
+    pub cohort: Cohort,
     pub limits: Limits,
     pub production: bool,
     pub release: bool,
@@ -72,6 +140,7 @@ impl Default for Profile {
             name: ID.into(),
             source_revision: REVISION.into(),
             abi: ABI.into(),
+            cohort: Cohort::default(),
             limits: Limits::default(),
             production: false,
             release: false,
@@ -85,6 +154,7 @@ impl Profile {
         if self.name != ID || self.source_revision != REVISION || self.abi != ABI {
             return Err("profile identity or source cohort mismatch".into());
         }
+        self.cohort.validate()?;
         if self.production
             || self.release
             || self.non_claims != NON_CLAIMS.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>()
@@ -143,6 +213,7 @@ impl Profile {
             crate::codec::string(&self.name),
             crate::codec::string(&self.source_revision),
             crate::codec::string(&self.abi),
+            crate::codec::sequence(self.cohort.fields().into_iter().map(crate::codec::string).collect()),
             crate::codec::sequence(bounds.into_iter().map(crate::codec::u64_value).collect()),
             crate::codec::bool_value(self.production),
             crate::codec::bool_value(self.release),
@@ -154,6 +225,32 @@ impl Profile {
 
 #[cfg(test)]
 mod tests {
+    // r[verify molten.spacewasm_core.profile]
+    #[test]
+    fn checked_profile_cohort_rejects_every_substitution() {
+        let base = super::Profile::default();
+        let base_ref = base.content_ref().expect("profile identity");
+        for field in [
+            "module_features",
+            "materialization_schema",
+            "materialization_profile",
+            "octet_receipt_schema",
+            "octet_profile",
+            "octet_runtime_cohort",
+            "chaos_differential_schema",
+            "reference_engine",
+            "reference_engine_version",
+        ] {
+            let mut drifted = base.clone();
+            let mut checked = serde_json::to_value(&drifted).expect("valid profile JSON");
+            let original = checked["cohort"][field].as_str().expect("declared cohort entry").to_string();
+            checked["cohort"][field] = serde_json::json!(format!("{original}-drift"));
+            drifted = serde_json::from_value(checked).expect("same-shape profile");
+            assert!(drifted.validate().is_err(), "{field} drift accepted");
+            assert_ne!(drifted.content_ref().expect("drifted identity"), base_ref, "{field} not in identity");
+        }
+    }
+
     // r[verify molten.spacewasm_core.resources]
     #[test]
     fn checked_profile_limits_reject_out_of_envelope_requests() {
