@@ -214,3 +214,11 @@ The first installed start succeeded: `molten node run` admitted the signed sourc
 The epoch-5 start after provisioning a fresh window and grant was then denied before serving: `node daemon restart denied: previous startup has no clean shutdown receipt`. The daemon keeps that guard deliberately; the denied second start left a startup receipt without a shutdown receipt, so the state root needs the installed stop path before another explicit start. The fixture had not run it. QEMU and the virtual LAN tore down. Private log BLAKE3: `4493220076a04102c7c648e8cdca1f98a57547260225e6a9a9f7c63963c7552e` (epoch-4 success at 1133–1148, spent-proof denial at 1169–1182, restart denial and teardown at 1262–1290).
 
 This is bounded installed startup, consume-once authority, and restart-guard evidence for one disposable guest. It does not complete the fresh-grant restart check, which now exercises the installed `ExecStop` path between the denial and the next start.
+
+## Third approved installed-service VM attempt
+
+One approved run of `ybdpcz2c4lqcy5s99ch50s5208ibnkra-vm-test-run-onixos-disposable-aspen-installed-observation` repeated the epoch-4 startup and spent-proof denial. After the successful bounded run deactivated the unit, systemd ran the installed `ExecStop` script, which recorded `shutdown=blake3:7e6f8d810881217eefd2e4cd048e5106cb4b67f8850259281a846f0874370a74` and control receipt `blake3:b711eabca2073ab49d97768255be01a83b4fbfa23faf550bac465484d60a5a67`. A normal completion therefore leaves a clean shutdown, while the denied start consumes it and leaves none.
+
+The fixture then read the `ExecStop` property to invoke that exact installed command. systemd 262 renders the structured property (`{ path=… ; argv[]=… }`) rather than a bare path, so the fixture's own parse assertion aborted before the recovery stop. QEMU and the virtual LAN tore down. Private log BLAKE3: `811ae5e94e8928c4f63d7930ea4d2bc0117767860019606b6f3025cf0a46bcdb` (epoch-4 startup and installed stop at 1126–1145, denial at 1161–1171, fixture failure and teardown at 1187–1205).
+
+The product behaviour under test is unchanged and coherent; only the fixture's property parse was wrong. It now extracts `argv[]` and asserts the clean-shutdown receipt is absent before the recovery stop and present after it.
