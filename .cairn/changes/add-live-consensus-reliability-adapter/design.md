@@ -76,6 +76,8 @@ Missing or conflicting final observations block a valid verdict. Internal state 
 
 A native `invalid` verdict preserves the witness as bounded failure evidence. `unknown`, incomplete history, missing recovery observations, or checker disagreement blocks promotion.
 
+Aspen rejects a reference selection that reuses the primary checker reference or measured executable bytes. The primary report and the optional reference report are retained in separate capability-rooted work directories. Distinct images are a necessary check, not proof of algorithmic independence; selecting the reviewed immutable reference cohort remains the operator's responsibility.
+
 **Rationale:** A pass cannot exceed the exact finite history and checker bounds.
 
 ### 10. Import external evidence without authority transfer

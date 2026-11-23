@@ -23,7 +23,7 @@ The [register profile and admission](../../../src/reliability/model/profile.rs) 
 ## Phase 4: Checker and evidence integration
 
 - [ ] [serial] Invoke the pinned register checker over complete live histories and retain valid, invalid, and unknown reports. r[molten.consensus.live_linearizability]
-- [ ] [parallel] Add optional pinned reference-checker runs and block promotion on disagreement. r[molten.consensus.live_linearizability]
+- [x] [parallel] Add optional pinned reference-checker runs and block promotion on disagreement. r[molten.consensus.live_linearizability]
 - [x] [serial] Implement a pure fail-closed importer for producer, cohort, profile, generator, history, fault, recovery, checker, witness, teardown, and non-claim facts. r[molten.testing.live_reliability_evidence]
 - [x] [serial] Add a thin shell that stores a canonical external live-reliability receipt without granting other evidence or authority roles. r[molten.testing.live_reliability_evidence]
 - [x] [parallel] Compare simulation, NixOS VM, ChaosControl KVM, and live profiles without merging their evidence classes. r[molten.testing.live_reliability_claim_boundary]
@@ -39,6 +39,8 @@ The [register profile and admission](../../../src/reliability/model/profile.rs) 
 The provider contracts are no longer missing specifications: ChaosControl's semantic-history contract is archived, and OnixOS retains archived `2026-08-30-add-live-black-box-reliability-rail` and `2026-08-30-onixos-molten-native-service` changes. Historical source, pure/VM controls and checked archive tasks do not establish current-producer admission or a live campaign.
 
 Live behavior still requires the exact current provider integration, independently provisioned signed-output/source trust and credentials, an admitted production-shaped coordination endpoint/native service cohort, actual disposable hosts, complete histories/fault observations, checker results and teardown evidence. The retained v0.1.0 service and an experimental three-node recipe cannot satisfy those requirements. Existing generator, history, importer and public-client source must be reconciled rather than replaced; no unchecked execution criterion is completed by this prerequisite correction.
+
+The documented `nix/live-reliability.nix` was not available from provider `onixcomputer/onix-modules` main at `f6668778464f713abc9d301c0ebedd0628bf79bb` (GitHub contents returned 404). The retained local history for that path points to superseded work `752387f0`, not a currently admitted provider package. Do not launch or qualify that historical integration in place of an exact signed cohort.
 
 ## Local verification (2026-11-21)
 
@@ -84,3 +86,19 @@ The checker now reuses one sealed, measured executable image for `check` and `va
 An offline locked build from ChaosControl `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` produced checker BLAKE3 `483b2caf9d2dc6edf060cf8ddb843a55d7642892a3f444bd99f3307d4ddcbb5c`; its `selftest` passed. The actual `molten reliability check` ran `check` and `validate` with that image over its synthetic valid, invalid and bound-exhaustion histories. The observed `valid`, `invalid` and `unknown` reports matched the producer fixtures byte for byte; a wrong executable digest denied before writing history or report. The CLI smoke log BLAKE3 is `bc6158201044b7452cf2931f1329406c7034cfb5d7da4efac3c73d24f94bca98`.
 
 The pinned Cairn provider policy passed proposal, design, tasks and strict validation. There was no installed OnixOS history, provider fault, or independently admitted reference executable. No live checker qualification, sync or archive is claimed.
+
+## Paired checker controls
+
+On `012aac0e9c` plus only `duplicate_checker_cannot_count_as_a_reference`, the feature-enabled library test exited 101: the importer accepted a cloned primary report and checker reference in the reference role (`None` instead of `Some(Checker)`). Baseline log BLAKE3: `3a1662a5f13be62ecd512bad0a9a045f1bd7d34912ae082dd908abada14cf392`.
+
+The pre-fix CLI also reached the checker under both roles when the reference selected the same executable under a different reference. The import ultimately denied the deliberately incomplete deployment binding (`evidence-denied:Identity`), but the file-operation trace showed the second run removing the primary `report.json` first. CLI and trace log BLAKE3: `98e220d0a7218b03531c9d381184b24fcbc20577f7ed4ed4fd14226a9085d9e8` and `7a398aba0ad4d7048898a6b443c16cb06b61eda50bbb5bbb368775c796debf01`.
+
+The independent-directory smoke selects two real builds of the same pinned `ec8aa799bad4735bf1028a092ca39feb08fb4bb7` checker source solely to exercise process and file isolation. Their measured image digests are `483b2caf9d2dc6edf060cf8ddb843a55d7642892a3f444bd99f3307d4ddcbb5c` and `9637f4cbc62f7078f0bdda2e7617a1ba2ac9e3a826703a5d39f96fc6b5a793c2`; the latter passed the producer's actual self-test (build log BLAKE3 `f89d49c324f1762bc59cb6848485d3eac9bb041d9f5f90ecc74f097ba3f72e09`). These are diagnostic builds, not independently implemented checkers or an admitted live cohort.
+
+The initial post-fix Octet pass stopped before tests on two workspace findings for an unqualified concrete report type; the library producer had zero findings (log BLAKE3 `fe81a5dd96cd4833411e4d8d13445c53da9bf9e15f85a127e6c93b6a7c6a3044`). The correction qualifies the report type at the CLI use site without changing behavior.
+
+The repaired CLI (`blake3:50a09284a68645d49747347ab06475698b2ba6af718e8b556dd1da57db7f8a75`) denied an aliased image before either checker wrote a report. It ran both distinct diagnostic images on the same history in separate work directories and retained both reports (each BLAKE3 `b271b99bf01abe7ace9e7d771c67edf777c73094b05fc0fcbe42435594f71707`). Reuse of the reserved reference directory denied without changing either report. The incomplete deployment binding still denied; no live receipt or ledger was created.
+
+Both Octet producers returned zero findings. The ordered run assembled 3,169 source inputs, passed `strict-ci` (`blake3:fb24889beb06ba56a2c206d1ff864fa016bc02d2a3259adf71c95f24fc35ff63`), emitted the remediation plan (`blake3:966edd6d8a135b7f5d048f4ad3f7fc8920b15fe7af878d10e5b53c21af980dda`), and passed all 66 `live_reliability::` library tests, including omission, aliasing and disagreement. Formatting, denied-warning Clippy and strict Cairn validation passed. Ordered log BLAKE3: `e200818f74bc86f6cc55f6a129225bd1b54ec28e5b0233d40ec857a242a8555a`.
+
+This completes the optional checker execution and disagreement gate in Aspen. It does not qualify a live history, an independently implemented reference checker, or a provider campaign.

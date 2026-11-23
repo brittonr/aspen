@@ -24,6 +24,7 @@ pub struct CheckedReport {
     pub(crate) history_ref: String,
     pub(crate) report_ref: String,
     pub(crate) checker_ref: String,
+    pub(crate) executable_blake3: String,
     pub(crate) report: serde_json::Value,
 }
 
@@ -40,6 +41,36 @@ impl CheckedReport {
     pub fn checker_ref(&self) -> &str {
         &self.checker_ref
     }
+}
+
+// r[impl molten.consensus.live_linearizability]
+pub fn run_pair(
+    primary: &Admitted,
+    reference: Option<&Admitted>,
+    files: &Files<'_>,
+) -> Result<(CheckedReport, Option<CheckedReport>), String> {
+    use cap_fs_ext::DirExt as _;
+
+    let Some(reference) = reference else {
+        return Ok((run(primary, files)?, None));
+    };
+    if !cfg!(target_os = "linux") {
+        return Err("checker-requires-linux-capability-paths".into());
+    }
+    if primary.checker_ref == reference.checker_ref || primary.executable_blake3 == reference.executable_blake3 {
+        return Err("reference-checker-not-independent".into());
+    }
+    // Reserve the second work directory before either execution can overwrite a report.
+    let leaf = "reference-checker";
+    files.root.create_dir(leaf).map_err(|error| format!("reference-checker-directory:{error}"))?;
+    let directory =
+        files.root.open_dir_nofollow(leaf).map_err(|error| format!("reference-checker-directory:{error}"))?;
+    let primary = run(primary, files)?;
+    let reference = run(reference, &Files {
+        root: &directory,
+        history: files.history,
+    })?;
+    Ok((primary, Some(reference)))
 }
 
 // r[impl molten.consensus.live_linearizability]
@@ -84,6 +115,7 @@ pub fn run(checker: &Admitted, files: &Files<'_>) -> Result<CheckedReport, Strin
         history_ref: canonical_ref(files.history)?,
         report_ref: canonical_ref(&report)?,
         checker_ref: checker.checker_ref.clone(),
+        executable_blake3: checker.executable_blake3.clone(),
         report,
     })
 }

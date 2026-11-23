@@ -91,6 +91,29 @@ fn selected_reference_checker_cannot_be_omitted() {
     assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Checker));
 }
 
+// r[verify molten.consensus.live_linearizability]
+#[test]
+fn duplicate_checker_cannot_count_as_a_reference() {
+    let (mut expected, mut evidence) = support::fixture();
+    evidence.identities.insert("reference-checker".into(), expected.checked.checker_ref.clone());
+    expected.identities = evidence.identities.clone();
+    evidence.reference_report = Some(evidence.report.clone());
+    expected.reference_checked = Some(expected.checked.clone());
+
+    assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Checker));
+
+    let distinct_ref = support::reference("selected reference checker");
+    evidence.identities.insert("reference-checker".into(), distinct_ref.clone());
+    expected.identities = evidence.identities.clone();
+    expected.reference_checked.as_mut().unwrap().checker_ref = distinct_ref;
+    assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Checker));
+
+    expected.reference_checked.as_mut().unwrap().executable_blake3 = support::reference("reference checker image");
+    assert_eq!(super::import(&expected, &evidence).expect("distinct checked reports").status, "bounded-valid");
+    expected.reference_checked.as_mut().unwrap().report_ref = support::reference("wrong report");
+    assert_eq!(super::import(&expected, &evidence).err(), Some(super::Issue::Checker));
+}
+
 #[test]
 fn unknown_bound_and_reference_disagreement_never_promote() {
     let (mut expected, mut evidence) = support::fixture();
@@ -105,6 +128,9 @@ fn unknown_bound_and_reference_disagreement_never_promote() {
     let mut reference_checked = support::checked(&evidence);
     reference_checked.report = evidence.reference_report.clone().expect("reference");
     reference_checked.checker_ref = evidence.identities["reference-checker"].clone();
+    reference_checked.executable_blake3 = support::reference("reference checker image");
+    reference_checked.report_ref =
+        crate::live_reliability::checker::canonical_ref(&reference_checked.report).expect("reference report ref");
     expected.reference_checked = Some(reference_checked);
     assert_eq!(super::import(&expected, &evidence).expect("disagreement retained").status, "checker-disagreement");
 }

@@ -72,7 +72,7 @@ pub fn run(command: Command) -> molten::error::Result<()> {
             authenticated::run(request, response, authority_root, client_key),
         Command::Generate { profile, plan, metadata } => generated(profile, plan, metadata),
         Command::Check { checker, history, work_root, report } => {
-            let checked = checked(&checker, &read(&history)?, &work_root)?;
+            let (checked, _) = checked(&checker, None, &read(&history)?, &work_root)?;
             write(&report, checked.report())
         },
         Command::Import { expected, evidence, checker, reference_checker, work_root, ledger, receipt } => {
@@ -126,12 +126,20 @@ mod authenticated;
 mod provisioning;
 mod verifying;
 
-fn checked(config: &std::path::Path, history: &serde_json::Value, work_root: &std::path::Path)
-    -> molten::error::Result<molten::live_reliability::checker::CheckedReport> {
+fn checked(
+    config: &std::path::Path,
+    reference: Option<&std::path::Path>,
+    history: &serde_json::Value,
+    work_root: &std::path::Path,
+) -> molten::error::Result<(
+    molten::live_reliability::checker::CheckedReport,
+    Option<molten::live_reliability::checker::CheckedReport>,
+)> {
     let checker = read(config)?;
+    let reference = reference.map(read).transpose()?;
     let root = cap_std::fs::Dir::open_ambient_dir(work_root, cap_std::ambient_authority())
         .map_err(molten::error::Failure::from)?;
-    molten::live_reliability::checker::run(&checker,
+    molten::live_reliability::checker::run_pair(&checker, reference.as_ref(),
         &molten::live_reliability::checker::Files { root: &root, history })
         .map_err(molten::error::Failure::invalid_harness)
 }

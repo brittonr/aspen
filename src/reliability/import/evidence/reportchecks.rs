@@ -18,8 +18,17 @@ pub(super) fn validate_checked(expected: &super::Expected, evidence: &super::Obs
         &expected.reference_checked,
     ) {
         (None, None, None) => {}
-        (Some(reference), Some(report), Some(checked))
-            if checked.history_ref == history_ref && checked.report == *report && reference == &checked.checker_ref => {
+        (Some(reference), Some(report), Some(checked)) => {
+            if reference != &checked.checker_ref
+                || checked.checker_ref == expected.checked.checker_ref
+                || checked.executable_blake3 == expected.checked.executable_blake3
+                || checked.history_ref != history_ref
+                || checked.report != *report
+                || checked.report_ref
+                    != crate::live_reliability::checker::canonical_ref(report).map_err(|_| super::Issue::Checker)?
+            {
+                return Err(super::Issue::Checker);
+            }
         }
         _ => return Err(super::Issue::Checker),
     }

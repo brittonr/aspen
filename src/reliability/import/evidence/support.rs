@@ -154,6 +154,7 @@ pub(super) fn checked(evidence: &super::super::Observed) -> crate::live_reliabil
         history_ref: crate::live_reliability::checker::canonical_ref(&evidence.history).expect("history ref"),
         report_ref: crate::live_reliability::checker::canonical_ref(&evidence.report).expect("report ref"),
         checker_ref: evidence.identities["checker"].clone(),
+        executable_blake3: reference("primary checker image"),
         report: evidence.report.clone(),
     }
 }

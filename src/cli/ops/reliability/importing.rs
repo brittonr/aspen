@@ -29,9 +29,8 @@ pub(super) fn run(paths: Paths) -> molten::error::Result<()> {
         .map_err(|issue| molten::error::Failure::invalid_harness(format!("profile-denied:{issue:?}")))?;
     molten::live_reliability::generator::validate_plan(&admitted, &input.plan)
         .map_err(|issue| molten::error::Failure::invalid_harness(format!("plan-denied:{issue:?}")))?;
-    let checked = super::checked(&paths.checker, &evidence.history, &paths.work_root)?;
-    let reference_checked = paths.reference_checker.as_ref().map(|checker|
-        super::checked(checker, &evidence.history, &paths.work_root)).transpose()?;
+    let (checked, reference_checked) = super::checked(
+        &paths.checker, paths.reference_checker.as_deref(), &evidence.history, &paths.work_root)?;
     let expected = molten::live_reliability::evidence::Expected {
         admitted, plan: input.plan, fault: input.fault, identities: input.identities, endpoints: input.endpoints,
         max_events: input.max_events, max_witness_bytes: input.max_witness_bytes,

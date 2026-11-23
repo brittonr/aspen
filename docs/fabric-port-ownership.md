@@ -143,6 +143,10 @@ through the admitted checker cohort. The dedicated work directory is opened once
 `molten reliability import --expected EXPECTED.json --evidence EVIDENCE.json --checker CHECKER.json
 --work-root EXISTING_DIR --ledger LEDGER --receipt RECEIPT.preserves` recomputes the report before import;
 an optional `--reference-checker CONFIG.json` must likewise execute to support a supplied reference report.
+The reference must name a different checker reference and measured executable digest. The primary run retains
+`report.json` in the work root; the reference run retains its report under a newly created `reference-checker/`
+subdirectory. Reusing an executable under another reference, or reusing that subdirectory, denies before either run.
+Distinct executable bytes are not a substitute for an independently reviewed checker cohort.
 The expected input contains the original product profile and operation plan, exact identity map/endpoints,
 independently selected `fault` inputs, and finite event, witness, and recovery bounds. A caller's
 unexecuted checker report is insufficient.
