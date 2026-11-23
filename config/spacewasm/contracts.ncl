@@ -18,10 +18,22 @@ let LimitsContract = {
   continuation_bytes | Bound 9007199254740991,
   retention_turns | Bound 9007199254740991,
 } in
+let CohortContract = {
+  module_features | Exact "wasm1",
+  materialization_schema | Exact "mantle-spacewasm-reference-bundle-v1",
+  materialization_profile | Exact "nasa-spacewasm-e24cf093-reference-v1",
+  octet_receipt_schema | Exact "octet-evidence-rail-receipt/v1",
+  octet_profile | Exact "spacewasm-molten-abi-pilot",
+  octet_runtime_cohort | Exact "b3:7c537eef7bff66d0a90508715de08de79c9aaac23352e1007a6d47e7fb4674a2",
+  chaos_differential_schema | Exact "chaoscontrol.spacewasm-molten-abi-differential.v1",
+  reference_engine | Exact "wasmtime",
+  reference_engine_version | Exact "49.0.5",
+} in
 let ProfileContract = {
   name | Exact "spacewasm-core-mvp-pilot",
   source_revision | Exact "e24cf09355a90497148eb5029fdb8e3400bd63e3",
   abi | Exact "molten.wasm.abi.v1",
+  cohort | CohortContract,
   limits | LimitsContract | P.contract (fun v => v.segment_fuel <= v.total_fuel
     && v.ir_bytes <= v.allocation_bytes && v.stack_bytes <= v.allocation_bytes
     && v.hostcall_bytes <= v.memory_pages * 65536),

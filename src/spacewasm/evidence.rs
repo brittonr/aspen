@@ -78,8 +78,8 @@ pub fn verify(trust: &Trust, sources: &Sources<'_>) -> Result<Verified, String> 
     let report_path = command_path(&report_file)?;
     run(&trust.mantle, &[std::ffi::OsStr::new("verify"), bundle_path.as_os_str()])?;
     let manifest = read_json(sources.root, &sources.bundle.join("manifest.json"))?;
-    equal(&manifest, "/schema", "mantle-spacewasm-reference-bundle-v1")?;
-    equal(&manifest, "/profile_id", "nasa-spacewasm-e24cf093-reference-v1")?;
+    equal(&manifest, "/schema", super::profile::MATERIALIZATION_SCHEMA)?;
+    equal(&manifest, "/profile_id", super::profile::MATERIALIZATION_PROFILE)?;
     equal(&manifest, "/bundle_identity_blake3", &trust.bundle_identity)?;
     equal(&manifest, "/cohort_identity_blake3", &trust.cohort_identity)?;
     let module = read_bounded(sources.root, sources.module, 65_536)?;
@@ -207,16 +207,13 @@ fn require_bundle_member(manifest: &serde_json::Value, digest: &str) -> Result<S
 
 fn verify_octet(report: &serde_json::Value, trust: &Trust, digest: &str) -> Result<(), String> {
     for (path, expected) in [
-        ("/schema", "octet-evidence-rail-receipt/v1"),
+        ("/schema", super::profile::OCTET_RECEIPT_SCHEMA),
         ("/status", "passed"),
         ("/rail", "wasm-artifact"),
-        ("/wasm_artifact/profile_id", "spacewasm-molten-abi-pilot"),
+        ("/wasm_artifact/profile_id", super::profile::OCTET_PROFILE),
         ("/wasm_artifact/profile_identity", trust.octet_profile_identity.as_str()),
         ("/wasm_artifact/target_runtime/source_revision", super::profile::REVISION),
-        (
-            "/wasm_artifact/target_runtime/cohort_identity",
-            "b3:7c537eef7bff66d0a90508715de08de79c9aaac23352e1007a6d47e7fb4674a2",
-        ),
+        ("/wasm_artifact/target_runtime/cohort_identity", super::profile::OCTET_RUNTIME_COHORT),
     ] {
         equal(report, path, expected)?;
     }
@@ -236,14 +233,14 @@ fn verify_octet(report: &serde_json::Value, trust: &Trust, digest: &str) -> Resu
 
 fn verify_chaos(report: &serde_json::Value, trust: &Trust, digest: &str, input_digest: &str) -> Result<(), String> {
     for (path, expected) in [
-        ("/schema", "chaoscontrol.spacewasm-molten-abi-differential.v1"),
+        ("/schema", super::profile::CHAOS_DIFFERENTIAL_SCHEMA),
         ("/evidence_class", "full-molten-abi-runtime-agreement"),
         ("/source_archive_blake3", "0db57636fb83a8c47f0c55601236cab648dd5edfdd2567cae0619aa74b8c4da3"),
-        ("/profile", "spacewasm-molten-abi-pilot"),
-        ("/wasm_feature_profile", "wasm1"),
+        ("/profile", super::profile::OCTET_PROFILE),
+        ("/wasm_feature_profile", super::profile::MODULE_FEATURES),
         ("/verdict", "match"),
         ("/spacewasm_revision", super::profile::REVISION),
-        ("/wasmtime_version", "49.0.5"),
+        ("/wasmtime_version", super::profile::REFERENCE_ENGINE_VERSION),
         ("/module_blake3", digest),
         ("/input_blake3", input_digest),
         ("/probe_blake3", trust.probe_blake3.as_str()),
