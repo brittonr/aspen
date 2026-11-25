@@ -1,0 +1,25 @@
+## Why
+
+Aspen's formal-verification, modularity, and governance investments have drifted away from its actual runtime code and created severe structural drag:
+
+1. **Formal verification disconnected from production consensus:** The entire TLA+ / TLA-ts / Dive / Quint / `quint-connect` CI stack (`verification/tla/ConsensusFastPath.tla`, `ConsensusFastPath.qnt`, `tests/fastpathquint.rs`) verifies `src/fabric_consistency/fastpath/`, a blocked future optimization never wired into `fabric_consistency::raft` or any live service. Even for that model, `ConsensusFastPath.tla` checks syntactic tautologies of centralized action guards and declares `CONSTANT Quorum` without referencing it. Meanwhile production Raft (`src/fabric_consistency/raft/`) has zero CI formal model checking (`RaftReadIndexWindow.tla` is unwired and assumes Leader Completeness in `Init`), and `checks.verified-node-replication-pilot` maintains a separate Verus/Octet toolchain to inspect an upstream crate it forbids Aspen from depending on.
+2. **Modularity theater and Goodhart's Law on file size:** 80.5% of non-test Rust (425,810 LOC) sits in the monolithic root `molten` crate, with 59.8% (254,555 LOC) mechanically diced into 1,230 300-line `parts/**/body.rs` shards via 1,348 `include!()` calls (65 out of numeric order) strictly to evade Octet's line and sibling-file limits—destroying real encapsulation while adding 67 `#[doc(hidden)]` module pseudonyms (`src/lib.rs`, `src/parts/lib/p000/body.rs`). `docs/modularity-boundaries.md:9` falsely claims `molten-core` is std-only (it pulls 10 external crates / 8 Git repos); its flagship boundary validators (`dependency.rs`, `planning.rs`, `policy.rs`, `preserves_profile.rs`) have zero production callers; `src/` contains 781 `std::fs::` calls and invokes live `nickel-lang`; and production Rust `include_str!`s generated JSON directly out of `docs/`.
+3. **Split governance toolchains and disclaimer culture:** `flake.lock` / `Cargo.toml` simultaneously carry 6 Cairn revisions (plus an unpinned `../cairn` hook and placeholder hashes in `cairn-policy/default.ncl:1259,1266`), 4 Octet revisions, 2 ChaosControl revisions, 2 major versions of Wasmtime (`49.0.5` + `33.0.0`), 50 Git deps across 24 repos (9 on `seed.radicle.garden`), stale tracked files (`cairn-policy/generated/cairn-policy.json.stale-bak`), and zombie legacy trees (`cairn/`, `openspec/`, `openraft/`, `crates/aspen-*`). Rather than fixing defects, 9 live bugs are memorialized as "source discrepancies" in `docs/technical/README.md:238-246`.
+
+## What Changes
+
+- Re-anchor formal verification to production Raft: rewrite `ConsensusFastPath.tla` with genuine distributed per-replica state and `Quorum` intersection (or quarantine its CI rail under the blocked fast-path package), build and wire a production Raft TLA+/Quint model covering elections, replication, log truncation, and `ReadIndex` without assuming Leader Completeness in `Init`, and remove `verified-node-replication-pilot` overhead from default CI.
+- Replace mechanical 300-line `parts/**/body.rs` `include!()` sharding and triple-aliased `compat_module!` pseudonyms with real bounded submodules/workspace crates extracted from the root `molten` crate; wire or remove dead boundary planners in `crates/molten-core/src/{dependency,planning,policy,preserves_profile}.rs`; move `include_str!`d runtime JSON exports out of `docs/` into `config/`; and reconcile `docs/modularity-boundaries.md` with actual crate dependencies and `std::fs::`/Nickel boundaries.
+- Consolidate governance pins to a single reviewed Cairn pin (removing placeholder policy hashes and unpinned `../cairn` drift), a single Octet pin, a single ChaosControl pin, and a single Wasmtime cohort (or isolate legacy `component-rpc` cleanly); remove tracked stale backups (`cairn-policy.json.stale-bak`) and document/clean legacy directories.
+- Establish a policy rule that discovered implementation-vs-spec discrepancies MUST be filed as tracked Cairn defect changes rather than left solely as companion-doc disclaimers.
+
+## Impact
+
+- **Files**: `verification/tla/`, `nix/consensus-fastpath-*.nix`, `nix/verified-node-replication-pilot.nix`, `flake.nix`, `flake.lock`, `Cargo.toml`, `cairn-policy/`, `src/lib.rs`, `src/parts/lib/p000/body.rs`, `crates/molten-core/src/{dependency,planning,policy,preserves_profile}.rs`, `src/wasm/`, `docs/modularity-boundaries.md`, and `docs/technical/README.md`.
+- **Verification**: Real production Raft model check in CI, cleaner crate/module encapsulation, unified toolchain lock check, and zero tracked `.stale-bak` or `docs/` `include_str!` references.
+- **Non-claims**: Formal model checking and architectural cleanup strengthen design soundness and maintainability; they do not by themselves prove live cross-host fault tolerance or grant release authority.
+
+## Out of Scope
+
+- Fixing the individual live Raft runtime bugs (tracked in `repair-live-raft-liveness-safety-and-transport-auth`).
+- Fixing the individual authority, promotion, merge, proof, and audit bugs listed in `docs/technical/README.md` (tracked in their dedicated domain changes).

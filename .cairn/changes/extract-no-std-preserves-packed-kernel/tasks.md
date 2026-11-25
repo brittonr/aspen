@@ -1,0 +1,7 @@
+# Tasks
+
+- [ ] [serial] Create workspace crate `crates/molten-preserves-core` (`#![no_std]` + `extern crate alloc`, `blake3` with `default-features = false`) and move `src/preserves/packed/bounds.rs` into it. r[molten.runtime_spine.no_std_preserves_packed_kernel] r[molten.project.molten_preserves_core_no_std_gate]
+- [ ] [serial] Implement `PackedValue`, strict bounded canonical binary encoder/decoder (`0x80..0xB7`), canonical set/dictionary byte ordering, lowercase-only `ContentRef`, unique `<some>`/`<none>` optional-ref encoding, and domain-separated BLAKE3 identity hashing. r[molten.runtime_spine.no_std_preserves_packed_kernel]
+- [ ] [serial] Implement `Embedded`-aware bounded structural traversal primitives in `molten-preserves-core` and wire `src/preserves/parts/rail/p008/body.rs` through them. r[molten.runtime_spine.no_std_preserves_packed_kernel]
+- [ ] [serial] Refactor `src/preserves/` into a thin `std` bridge between `molten-preserves-core` and `preserves::IOValue`/text syntax, adding Hegel differential property tests proving byte-for-byte packed equivalence and negative non-canonical/overflow/Embedded-bypass tests. r[molten.runtime_spine.no_std_preserves_packed_kernel]
+- [ ] [serial] Wire `crates/molten-preserves-core` into `Cargo.toml`, workspace Octet, `flake.nix` (`no_std` compile gate + tests), and `build-plan.json`, then run Clippy, Octet, Nix checks, and strict Cairn validation. r[molten.project.molten_preserves_core_no_std_gate]

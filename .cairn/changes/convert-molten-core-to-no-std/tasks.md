@@ -1,0 +1,7 @@
+# Tasks
+
+- [ ] [serial] Replace all `std::` imports across `crates/molten-core/src/` (including `std::net` in `fabric_transport/receive.rs` and `std::hint` in `release_dependency/explanation/comparison.rs`) with `core::` and `alloc::` equivalents. r[molten.project.molten_core_no_std]
+- [ ] [serial] Update `crates/molten-core/Cargo.toml` and `src/lib.rs` to enable `#![cfg_attr(not(feature = "std"), no_std)]` with `extern crate alloc`, set `default-features = false` on `blake3` and `serde`, and isolate `basalt` (`world_branch_authority`) and `kamacite-core` (`live_binding`) behind the `std` feature. r[molten.project.molten_core_no_std]
+- [ ] [serial] Wire a hermetic `no_std` compile gate (`--no-default-features` and `--no-default-features --features executable-extents`) for `molten-core` into `flake.nix` and regenerate `build-plan.json` if dependencies/features change. r[molten.testing.molten_core_no_std_ci_gate]
+- [ ] [parallel] Add a negative compile-fail / CI check confirming that introducing `std::fs` or `std::time` into a `no_std` `molten-core` module fails closed. r[molten.project.molten_core_no_std] r[molten.testing.molten_core_no_std_ci_gate]
+- [ ] [serial] Update `docs/modularity-boundaries.md` and `AGENTS.md` to document exact `no_std` vs `std`-gated `molten-core` scope, then run focused tests, Clippy, Octet, Nix checks, and strict Cairn validation. r[molten.project.molten_core_no_std] r[molten.testing.molten_core_no_std_ci_gate]
