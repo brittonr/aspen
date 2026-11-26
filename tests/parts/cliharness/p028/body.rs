@@ -79,8 +79,11 @@ struct CliOctetProfilePayload<'a> {
 }
 
 fn current_octet_hashes() -> CliResult<(String, String)> {
-    let cargo_check_args = ["--all-targets"];
-    let scope_args = ["-p", "molten", "-p", "molten-node-host"];
+    let manifest: toml::Table = std::fs::read_to_string(manifest_dir().join("Cargo.toml"))?.parse()?;
+    let cargo_check_args = workspace_octet_strings(&manifest, "cargo_check_args");
+    let cargo_check_args: Vec<&str> = cargo_check_args.iter().map(String::as_str).collect();
+    let scope_args = workspace_octet_strings(&manifest, "default_scope");
+    let scope_args: Vec<&str> = scope_args.iter().map(String::as_str).collect();
     let files = [
         CliOctetFileHashEntry {
             hash: file_hash(&manifest_dir().join("Cargo.toml")),
@@ -105,6 +108,17 @@ fn current_octet_hashes() -> CliResult<(String, String)> {
     })?;
     let profile_hash = b3_full_hash(&profile_payload);
     Ok((config_hash, profile_hash))
+}
+
+/// Reads a string array from `[workspace.metadata.octet]`, as the gate does, so the fixture hashes
+/// follow scope changes instead of pinning the scope.
+fn workspace_octet_strings(manifest: &toml::Table, key: &str) -> Vec<String> {
+    let octet = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("metadata"))
+        .and_then(|metadata| metadata.get("octet"));
+    let values = octet.and_then(|octet| octet.get(key)).and_then(toml::Value::as_array);
+    values.map_or_else(Vec::new, |values| values.iter().filter_map(toml::Value::as_str).map(str::to_string).collect())
 }
 
 fn file_hash(path: &std::path::Path) -> Option<String> {
