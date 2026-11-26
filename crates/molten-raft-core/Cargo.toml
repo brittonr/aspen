@@ -1,0 +1,17 @@
+[package]
+name = "molten-raft-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "no_std replicated Raft state machine, transitions, and effect plans for Aspen"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+molten-core = { path = "../molten-core", default-features = false }
+
+[dev-dependencies]
+blake3 = { version = "1", default-features = false }
+hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }

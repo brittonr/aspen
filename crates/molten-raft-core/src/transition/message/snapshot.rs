@@ -1,0 +1,121 @@
+use super::*;
+
+pub(super) struct InstallInput {
+    pub from: String,
+    pub term: u64,
+    pub leader_id: String,
+    pub snapshot: ReplicaSnapshot,
+}
+
+pub(super) struct ResponseInput {
+    pub from: String,
+    pub term: u64,
+    pub follower_id: String,
+    pub snapshot_index: u64,
+    pub is_accepted: bool,
+}
+
+pub(super) fn handle_install(transition: &mut MessagePlan<'_>, input: InstallInput) -> crate::denial::Result<()> {
+    if input.leader_id != input.from {
+        return Err(crate::denial::ReplicaError::Denied("Raft snapshot leader does not match its sender"));
+    }
+    if input.term < transition.next.current_term {
+        transition
+            .effects
+            .push(response(&transition.next, input.from, input.snapshot.last_included_index, false));
+        return Ok(());
+    }
+    validate_binding(&transition.next, &input.snapshot, transition.identity)?;
+    if input.snapshot.last_included_term > transition.next.current_term {
+        return Err(crate::denial::ReplicaError::Denied("Raft installed snapshot term exceeds the leader term"));
+    }
+    if transition.next.role == ReplicaRole::Leader && input.leader_id != transition.next.node_id {
+        return Err(crate::denial::ReplicaError::Denied("Raft snapshot observed two leaders in one term"));
+    }
+    let snapshot_index = input.snapshot.last_included_index;
+    transition.next.role = ReplicaRole::Follower;
+    transition.next.leader_id = Some(input.leader_id);
+    transition.next.pending_reads.clear();
+    if snapshot_index > transition.next.commit_index {
+        install(transition, input.snapshot)?;
+    }
+    transition.effects.push(response(&transition.next, input.from, snapshot_index, true));
+    let timer_effect = support::arm_election_timer(&mut transition.next, transition.identity)?;
+    transition.effects.push(timer_effect);
+    Ok(())
+}
+
+fn validate_binding(
+    state: &ReplicaState,
+    snapshot: &ReplicaSnapshot,
+    identity: &dyn crate::identity::ReplicaIdentity,
+) -> crate::denial::Result<()> {
+    if snapshot.group_binding_ref != state.profile.group_binding_ref
+        || snapshot.membership_ref != state.membership.membership_ref
+        || snapshot.config_epoch != state.membership.config_epoch
+        || snapshot.fencing_epoch != state.profile.fencing_epoch
+        || snapshot.snapshot_ref != support::snapshot_ref(snapshot, identity)?
+    {
+        return Err(crate::denial::ReplicaError::Denied("Raft installed snapshot binding or identity mismatch"));
+    }
+    Ok(())
+}
+
+fn install(transition: &mut MessagePlan<'_>, snapshot: ReplicaSnapshot) -> crate::denial::Result<()> {
+    if snapshot.last_included_index == INITIAL_COMMIT_INDEX || snapshot.last_included_term == INITIAL_TERM {
+        return Err(crate::denial::ReplicaError::Denied("Raft installed snapshot boundary must be positive"));
+    }
+    let has_matching_boundary =
+        support::term_at(&transition.next, snapshot.last_included_index) == Some(snapshot.last_included_term);
+    transition
+        .next
+        .log
+        .retain(|entry| has_matching_boundary && entry.index > snapshot.last_included_index);
+    transition.next.commit_index = snapshot.last_included_index;
+    transition.next.last_applied = snapshot.last_included_index;
+    transition.next.completed_requests.clone_from(&snapshot.completed_requests);
+    transition.next.snapshot = Some(snapshot.clone());
+    transition.effects.push(ReplicaEffect::PersistSnapshot {
+        snapshot: snapshot.clone(),
+        is_suffix_retained: has_matching_boundary,
+    });
+    transition.effects.push(ReplicaEffect::RestoreApplicationSnapshot { snapshot });
+    Ok(())
+}
+
+fn response(state: &ReplicaState, to: String, snapshot_index: u64, is_accepted: bool) -> ReplicaEffect {
+    support::send_effect(state, to, Message::SnapshotResponse {
+        term: state.current_term,
+        follower_id: state.node_id.clone(),
+        snapshot_index,
+        accepted: is_accepted,
+        config_epoch: state.membership.config_epoch,
+        fencing_epoch: state.profile.fencing_epoch,
+    })
+}
+
+pub(super) fn handle_response(transition: &mut MessagePlan<'_>, input: ResponseInput) -> crate::denial::Result<()> {
+    if input.term < transition.next.current_term || transition.next.role != ReplicaRole::Leader || !input.is_accepted {
+        return Ok(());
+    }
+    if input.follower_id != input.from {
+        return Err(crate::denial::ReplicaError::Denied("Raft snapshot response follower does not match its sender"));
+    }
+    let local_snapshot_index = transition
+        .next
+        .snapshot
+        .as_ref()
+        .map_or(INITIAL_COMMIT_INDEX, |snapshot| snapshot.last_included_index);
+    let matched = transition.next.match_index.get(&input.follower_id).copied().unwrap_or(INITIAL_COMMIT_INDEX);
+    if input.snapshot_index != local_snapshot_index || input.snapshot_index < matched {
+        return Ok(());
+    }
+    let next_index = input
+        .snapshot_index
+        .checked_add(NEXT_LOG_INDEX_STEP)
+        .ok_or(crate::denial::ReplicaError::Overflow("Raft snapshot response index overflow"))?;
+    transition.next.match_index.insert(input.follower_id.clone(), input.snapshot_index);
+    transition.next.next_index.insert(input.follower_id.clone(), next_index);
+    transition.effects.push(support::append_effect_for(&transition.next, input.follower_id)?);
+    Ok(())
+}

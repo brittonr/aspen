@@ -6,7 +6,7 @@ pub(super) async fn notify_followers(
 ) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
-    let heartbeat = node_a.service.handle_event(crate::fabric_consistency::raft::model::ReplicaEvent::HeartbeatTimeout);
+    let heartbeat = node_a.service.handle_event(crate::fabric_consistency::raft::ReplicaEvent::HeartbeatTimeout);
     let receive_b = crate::fabric_consistency::raft::iroh::receive_replica_event(
         &mut node_b.listener,
         &session_b,

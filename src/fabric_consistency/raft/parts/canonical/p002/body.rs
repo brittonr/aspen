@@ -3,10 +3,6 @@ pub(crate) fn entry_identity_ref(entry: &ReplicatedEntry) -> crate::error::Resul
 }
 
 /// Identifies the stable recovery corpus, independently of retry and rejoin state.
-pub(crate) fn recovery_observation_ref(state: &ReplicaState) -> crate::error::Result<String> {
-    recovery_corpus_ref(state.current_term, state.commit_index, &state.log, state.snapshot.as_ref())
-}
-
 pub(crate) fn recovery_corpus_ref(
     term: u64,
     commit_index: u64,
@@ -108,65 +104,4 @@ fn parse_recovery_message(
         }));
     }
     Ok(None)
-}
-
-fn validate_recovery_envelope(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
-    let message = &envelope.message;
-    let (round_ref, from_index) = match message {
-        Message::RecoveryQuery { round_ref, from_index, .. }
-        | Message::RecoveryReport { round_ref, from_index, .. } => (round_ref, *from_index),
-        _ => return Ok(()),
-    };
-    crate::preserves_rail::validate_content_ref(round_ref)?;
-    if from_index == 0 {
-        return Err(crate::error::Failure::invalid_harness("Raft recovery start index must be positive"));
-    }
-    if matches!(message, Message::RecoveryQuery { term: 0, is_barrier: true, .. }) {
-        return Err(crate::error::Failure::invalid_harness("Raft recovery barrier term must be positive"));
-    }
-    let Message::RecoveryReport {
-        term, observation_ref, last_log_index, commit_index, entries, snapshot, config_epoch, fencing_epoch, ..
-    } = message else {
-        return Ok(());
-    };
-    crate::preserves_rail::validate_content_ref(observation_ref)?;
-    if commit_index > last_log_index || entries.len() > MAX_REPLICA_MESSAGE_ENTRIES {
-        return Err(crate::error::Failure::invalid_harness("Raft recovery commit or page bound is invalid"));
-    }
-    let boundary = if let Some(snapshot) = snapshot {
-        validate_wire_snapshot(snapshot)?;
-        if snapshot.group_binding_ref != envelope.group_binding_ref
-            || snapshot.config_epoch != *config_epoch
-            || snapshot.fencing_epoch != *fencing_epoch
-            || snapshot.last_included_term > *term
-            || snapshot.last_included_index > *commit_index
-        {
-            return Err(crate::error::Failure::invalid_harness("Raft recovery snapshot binding, epochs, or boundary is invalid"));
-        }
-        snapshot.last_included_index
-    } else {
-        0
-    };
-    if last_log_index.saturating_sub(boundary) > MAX_REPLICA_LOG_ENTRIES as u64 {
-        return Err(crate::error::Failure::invalid_harness("Raft recovery log exceeds the bound"));
-    }
-    let start = from_index.max(boundary.checked_add(1).ok_or_else(|| {
-        crate::error::Failure::invalid_harness("Raft recovery snapshot boundary overflow")
-    })?);
-    let remaining = if start > *last_log_index { 0 } else { last_log_index - start + 1 };
-    let expected_len = usize::try_from(remaining)
-        .map_err(|_| crate::error::Failure::invalid_harness("Raft recovery page span exceeds usize"))?
-        .min(MAX_REPLICA_MESSAGE_ENTRIES);
-    if entries.len() != expected_len {
-        return Err(crate::error::Failure::invalid_harness("Raft recovery page is incomplete or exceeds the reported tail"));
-    }
-    for (offset, entry) in entries.iter().enumerate() {
-        if entry.index != start + offset as u64 || entry.term == 0 || entry.term > *term {
-            return Err(crate::error::Failure::invalid_harness("Raft recovery page is non-contiguous or uses an invalid term"));
-        }
-        for reference in [&entry.request_ref, &entry.command_ref, &entry.command_schema_ref] {
-            crate::preserves_rail::validate_content_ref(reference)?;
-        }
-    }
-    Ok(())
 }

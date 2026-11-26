@@ -15,7 +15,6 @@ const READ_PROBE_ARITY: usize = 6;
 const READ_ACKNOWLEDGEMENT_ARITY: usize = 5;
 const INSTALL_SNAPSHOT_ARITY: usize = 5;
 const SNAPSHOT_RESPONSE_ARITY: usize = 6;
-const MAX_WIRE_IDENTIFIER_BYTES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaMessage {
@@ -26,7 +25,7 @@ pub struct ReplicaMessage {
 
 // r[impl molten.fabric_consistency.live_raft]
 pub fn replica_message(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<ReplicaMessage> {
-    validate_envelope_shape(envelope)?;
+    validate_wire_envelope(envelope)?;
     let value = crate::preserves_rail::record("raft-message-envelope-v1", vec![
         crate::preserves_rail::string(RAFT_MESSAGE_ENVELOPE_SCHEMA),
         crate::preserves_rail::string(&envelope.group_binding_ref),
@@ -59,7 +58,7 @@ pub fn parse_replica_message(bytes: &[u8]) -> crate::error::Result<ReplicaMessag
         to: required_string(&fields[4], "Raft message recipient")?,
         message: parse_message(&fields[5])?,
     };
-    validate_envelope_shape(&envelope)?;
+    validate_wire_envelope(&envelope)?;
     Ok(envelope)
 }
 
