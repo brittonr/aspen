@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use kamacite_core::PreservesLimits;
 use kamacite_core::PreservesSchema;

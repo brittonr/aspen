@@ -23,11 +23,9 @@ The last condition is coverage, not equality: the implementation does not requir
 
 These are supplied-reference checks. The validator does not traverse the snapshot bytes to independently derive every held authority edge. The architecture describes the intended boundary as preventing claims outside the held/admitted graph; the executable local check establishes containment relative to the admitted collection supplied to it. Deriving that collection correctly remains an integration obligation, not something a canonical hash proves.
 
-## A narrowly scoped source discrepancy
+## Receipt labels name the evaluated predicate
 
-There is a concrete wording mismatch inside the receipt implementation. The [snapshot evaluator](../../../src/runtime/predicates/parts/mod/p003/body.rs) emits the check label `readable-assertions-subset-claimed`, but the [validator](../../../src/runtime/predicates/parts/mod/p004/body.rs) tests readable assertions against **admitted**, not **claimed**, references. The governing [architecture](../../architecture.md#vatobject-layer-goblins-inspired) states the broader held/admitted boundary; it does not resolve this internal label mismatch.
-
-This article documents the observed predicate relation without declaring either wording a corrected contract. In particular, a receipt carrying that label should not be cited as proof that readable references are contained in the claimed set. The discrepancy is left for separate implementation/specification review; neither source is changed here.
+The [snapshot evaluator](../../../src/runtime/predicates/parts/mod/p003/body.rs) emits one check label per relation the [validator](../../../src/runtime/predicates/parts/mod/p004/body.rs) evaluates, so the readable-assertions check is labelled `readable-assertions-subset-admitted`: readable assertions are compared with the **admitted** references, not the claimed ones. Receipts with that label use the `molten.trellis-runtime.snapshot-authority.v2` predicate. Earlier `v1` receipts labelled the same check `readable-assertions-subset-claimed`; they keep their canonical identity, and [`parse_snapshot_authority_check`](../../../src/runtime/predicates/parts/mod/p012/body.rs) reads that label only in a `v1` receipt and only as an alias of the admitted-set check. Neither label is evidence that readable references are contained in the claimed set.
 
 ## Worked example: safe redaction, unsafe resurrection
 
@@ -55,4 +53,5 @@ For actual recovery, the [survival matrix](../../addressable-actor-runtime.md#su
 - [Snapshot fixture representation](../../../src/runtime/vat/parts/mod/p001/body.rs)
 - [Snapshot-authority validator](../../../src/runtime/predicates/parts/mod/p004/body.rs)
 - [Snapshot receipt labels](../../../src/runtime/predicates/parts/mod/p003/body.rs)
+- [Snapshot receipt check parsing](../../../src/runtime/predicates/parts/mod/p012/body.rs)
 - [Schema-rename restore fixture](../../../src/runtime/vat/parts/mod/p002/body.rs)

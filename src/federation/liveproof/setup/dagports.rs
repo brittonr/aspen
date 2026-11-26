@@ -64,6 +64,25 @@ impl crate::dag_sync::DagResourcePort for Resources<'_> {
             admitted: true,
         })
     }
+    /// The reservation stays admitted only while the persisted reservation leaf still hashes to it.
+    fn confirm(
+        &mut self,
+        plan: &molten_core::dag_sync::DagSyncPlan,
+        reservation_ref: &str,
+    ) -> crate::error::Result<crate::dag_sync::DagResourceObservation> {
+        let leaf = crate::node_state::RelativePath::parse("reservation.preserves")?;
+        let is_held = if self.scope.try_exists(&leaf)? {
+            let bytes = self.scope.read(&leaf, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
+            crate::preserves_rail::content_ref_from_bytes(&bytes) == reservation_ref
+        } else {
+            false
+        };
+        Ok(crate::dag_sync::DagResourceObservation {
+            reservation_ref: reservation_ref.to_string(),
+            plan_ref: plan.plan_ref.clone(),
+            admitted: is_held,
+        })
+    }
 }
 pub struct Progress<'a> {
     pub scope: &'a crate::node_state::Scope,

@@ -2,15 +2,47 @@ use std::io::Write;
 
 use cap_fs_ext::OpenOptionsFollowExt;
 
-/// Separates a stage name from its destination leaf: `.{leaf}.stage-{process}-{sequence}`.
-const STAGE_INFIX: &str = ".stage-";
+#[path = "publication/exclusion.rs"]
+pub(super) mod exclusion;
+
+pub use exclusion::LeafLock;
+
+/// Prefix of every publication artifact: `.stage.{leaf byte length}.{leaf}.{kind}`. The decimal
+/// length fixes where the leaf ends, so no artifact of one leaf can match another leaf's prefix.
+const ARTIFACT_PREFIX: &str = ".stage.";
+/// Kind prefix of a payload stage: `stage-{process}-{sequence}`.
+const STAGE_KIND: &str = "stage-";
+/// Kind of the lock every publication of a leaf holds while it settles.
+const PUBLICATION_LOCK_KIND: &str = "lock";
+/// Kind of the lock a read-modify-write update of a leaf holds across its read and publication.
+pub(crate) const UPDATE_LOCK_KIND: &str = "update-lock";
+/// Infix of the earlier `.{leaf}.stage-…` stage names; scans still skip interrupted legacy stages.
+const LEGACY_STAGE_INFIX: &str = ".stage-";
+#[cfg(unix)]
+const LEAF_LOCK_MODE: u32 = 0o600;
+/// Attempts to lock a lock file that a settling holder unlinks concurrently before giving up.
+const LEAF_LOCK_ATTEMPTS: usize = 64;
 
 static STAGE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Whether a directory entry is a stage of an in-progress or interrupted publication; scans skip
-/// it.
+/// Whether a directory entry is a stage or lock of an in-progress or interrupted publication;
+/// scans skip it.
 pub(crate) fn is_stage(name: &str) -> bool {
-    name.starts_with('.') && name.contains(STAGE_INFIX)
+    name.starts_with(ARTIFACT_PREFIX) || (name.starts_with('.') && name.contains(LEGACY_STAGE_INFIX))
+}
+
+/// Whether `name` uses the reserved publication-artifact prefix; such names are never admitted as
+/// application leaves, so internal stages and locks cannot collide with application data.
+pub(crate) fn is_reserved_artifact_name(name: &str) -> bool {
+    name.starts_with(ARTIFACT_PREFIX)
+}
+
+fn artifact_prefix(leaf_name: &str) -> String {
+    format!("{ARTIFACT_PREFIX}{}.{leaf_name}.", leaf_name.len())
+}
+
+fn artifact_name(leaf_name: &str, kind: &str) -> String {
+    format!("{}{kind}", artifact_prefix(leaf_name))
 }
 
 // r[impl molten.audit_f03.recover_publication]
@@ -58,6 +90,12 @@ pub(crate) fn publish_regular_file(
     let leaf_name = leaf
         .to_str()
         .ok_or_else(|| super::invalid(format!("node state publication leaf {} is not UTF-8", path.display())))?;
+    // Every publication of this leaf, in any process, holds the leaf's lock until it settles, so a
+    // stage present while the lock is held here belongs to an interrupted writer, never a live one.
+    if is_reserved_artifact_name(leaf_name) {
+        return Err(super::invalid(format!("node state publication leaf {leaf_name} uses a reserved name")));
+    }
+    let _publication = exclusion::lock_leaf(&parent, leaf_name, PUBLICATION_LOCK_KIND)?;
     match parent.symlink_metadata(leaf) {
         Ok(_) if replacement == Replacement::NoReplace => {
             return Err(super::invalid(format!("node state publication {} already exists", path.display())));
@@ -71,10 +109,13 @@ pub(crate) fn publish_regular_file(
         Err(error) => return Err(crate::error::Failure::from(error)),
     }
     remove_stale_stages(&parent, leaf_name)?;
-    let stage = format!(
-        ".{leaf_name}{STAGE_INFIX}{}-{}",
-        std::process::id(),
-        STAGE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    let stage = artifact_name(
+        leaf_name,
+        &format!(
+            "{STAGE_KIND}{}-{}",
+            std::process::id(),
+            STAGE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ),
     );
     if let Err(error) = write_stage(&parent, &stage, bytes, unix_mode) {
         return Err(discard_stage(&parent, &stage, error));
@@ -129,16 +170,20 @@ fn discard_stage(parent: &cap_std::fs::Dir, stage: &str, error: crate::error::Fa
 }
 
 /// Removes stages that an interrupted publication of the same leaf left behind; they are never
-/// read.
+/// read. Callers hold the leaf's publication lock, so no live writer owns any of these stages, and
+/// the length-delimited prefix never matches another leaf's stages or any lock. Only names of the
+/// exact form this module creates (`…stage-{process}-{sequence}`, both decimal) are removed; any
+/// other file under the reserved prefix, however it got there, is left untouched.
 fn remove_stale_stages(parent: &cap_std::fs::Dir, leaf_name: &str) -> crate::error::Result<()> {
-    let prefix = format!(".{leaf_name}{STAGE_INFIX}");
+    let prefix = artifact_name(leaf_name, STAGE_KIND);
     for entry in parent.read_dir(".").map_err(crate::error::Failure::from)? {
         let entry = entry.map_err(crate::error::Failure::from)?;
         let name = entry.file_name();
         let Some(name) = name.to_str() else {
             continue;
         };
-        if name.starts_with(&prefix) && entry.file_type().map_err(crate::error::Failure::from)?.is_file() {
+        let is_well_formed_stage = name.strip_prefix(&prefix).is_some_and(is_stage_suffix);
+        if is_well_formed_stage && entry.file_type().map_err(crate::error::Failure::from)?.is_file() {
             match parent.remove_file(name) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -147,6 +192,14 @@ fn remove_stale_stages(parent: &cap_std::fs::Dir, leaf_name: &str) -> crate::err
         }
     }
     Ok(())
+}
+
+/// Whether `suffix` is exactly `{process}-{sequence}` with nonempty decimal parts.
+fn is_stage_suffix(suffix: &str) -> bool {
+    let is_decimal = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    suffix
+        .split_once('-')
+        .is_some_and(|(process, sequence)| is_decimal(process) && is_decimal(sequence))
 }
 
 // Directory capabilities may hold O_PATH descriptors, which cannot be synchronized.
@@ -159,98 +212,5 @@ fn sync_directory(parent: &cap_std::fs::Dir) -> crate::error::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SECRET_MODE: u32 = 0o600;
-
-    fn tempdir() -> cap_tempfile::TempDir {
-        cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("temporary directory")
-    }
-
-    fn mode(dir: &cap_std::fs::Dir, leaf: &str) -> u32 {
-        use cap_std::fs::PermissionsExt;
-        dir.metadata(leaf).expect("metadata").permissions().mode() & 0o777
-    }
-
-    fn stages(dir: &cap_std::fs::Dir) -> Vec<String> {
-        dir.entries()
-            .expect("entries")
-            .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
-            .filter(|name| name.contains(STAGE_INFIX))
-            .collect()
-    }
-
-    // r[verify molten.crypto_identity.atomic_key_publication]
-    #[test]
-    fn no_replace_creates_once_and_never_overwrites() {
-        let dir = tempdir();
-        let path = std::path::Path::new("keys/transport.key");
-        publish_regular_file(&dir, path, b"first", Some(SECRET_MODE), Replacement::NoReplace).expect("first key");
-        let keys = dir.open_dir("keys").expect("key directory");
-        assert_eq!(keys.read("transport.key").expect("key bytes"), b"first");
-        assert_eq!(mode(&keys, "transport.key"), SECRET_MODE);
-
-        let second = publish_regular_file(&dir, path, b"second", Some(SECRET_MODE), Replacement::NoReplace);
-        assert!(second.is_err(), "an existing key must not be replaced");
-        assert_eq!(keys.read("transport.key").expect("key bytes"), b"first");
-        assert!(stages(&keys).is_empty());
-    }
-
-    // r[verify molten.crypto_identity.atomic_key_publication]
-    #[test]
-    fn replacement_swaps_whole_content_and_restricts_a_loose_existing_file() {
-        let dir = tempdir();
-        dir.write("transport.key", b"old generation").expect("existing key");
-        {
-            use cap_std::fs::PermissionsExt;
-            dir.set_permissions("transport.key", cap_std::fs::Permissions::from_mode(0o644))
-                .expect("loose mode");
-        }
-        let path = std::path::Path::new("transport.key");
-        publish_regular_file(&dir, path, b"new", Some(SECRET_MODE), Replacement::Replace).expect("rotation");
-        assert_eq!(dir.read("transport.key").expect("key bytes"), b"new");
-        assert_eq!(mode(&dir, "transport.key"), SECRET_MODE);
-        assert!(stages(&dir).is_empty());
-    }
-
-    // r[verify molten.crypto_identity.atomic_key_publication]
-    #[test]
-    fn interrupted_stages_are_removed_and_never_become_the_key() {
-        let dir = tempdir();
-        dir.write(format!(".transport.key{STAGE_INFIX}1-0"), b"half written").expect("stale stage");
-        dir.write(format!(".other.key{STAGE_INFIX}1-0"), b"other leaf").expect("other stage");
-        let path = std::path::Path::new("transport.key");
-        publish_regular_file(&dir, path, b"whole", Some(SECRET_MODE), Replacement::NoReplace).expect("publication");
-        assert_eq!(dir.read("transport.key").expect("key bytes"), b"whole");
-        assert_eq!(stages(&dir), vec![format!(".other.key{STAGE_INFIX}1-0")]);
-    }
-
-    // r[verify molten.crypto_identity.atomic_key_publication]
-    #[cfg(unix)]
-    #[test]
-    fn a_symlinked_or_non_regular_destination_is_refused() {
-        let dir = tempdir();
-        dir.create_dir("elsewhere").expect("directory leaf");
-        let refused = publish_regular_file(
-            &dir,
-            std::path::Path::new("elsewhere"),
-            b"key",
-            Some(SECRET_MODE),
-            Replacement::Replace,
-        );
-        assert!(refused.is_err(), "a directory leaf must not be replaced");
-
-        cap_fs_ext::DirExt::symlink(&*dir, "target.key", "linked.key").expect("symlink leaf");
-        let through_link = publish_regular_file(
-            &dir,
-            std::path::Path::new("linked.key"),
-            b"key",
-            Some(SECRET_MODE),
-            Replacement::Replace,
-        );
-        assert!(through_link.is_err(), "a symlink leaf must not be followed or replaced");
-        assert!(dir.symlink_metadata("target.key").is_err(), "nothing is written through the link");
-        assert!(stages(&dir).is_empty());
-    }
-}
+#[path = "publication/tests.rs"]
+mod tests;

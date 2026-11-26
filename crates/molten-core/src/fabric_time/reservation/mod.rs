@@ -5,7 +5,7 @@
 //! there is no client-visible read-then-write window. A rejected command
 //! preserves state.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use crate::fabric_time::valid_time_id;
 
@@ -265,12 +265,34 @@ fn select_worker(state: &ReservationState_, requirements: ResourceRequirements) 
         .position(|worker| worker.units >= requirements.units && worker.bytes >= requirements.bytes)
 }
 
+/// Pool bounds hold and the pool's reserved and allocated quantities reconcile
+/// exactly with the reservations still holding capacity (`Committed` or `Stale`).
 pub(super) fn capacity_invariant_holds(state: &ReservationState_) -> bool {
     let pool = state.pool;
-    pool.reserved_units <= pool.total_units
+    let bounded = pool.reserved_units <= pool.total_units
         && pool.reserved_bytes <= pool.total_bytes
         && pool.allocated_units <= pool.reserved_units
-        && pool.allocated_bytes <= pool.reserved_bytes
+        && pool.allocated_bytes <= pool.reserved_bytes;
+    bounded
+        && held_capacity(state).is_some_and(|held| {
+            held.units == pool.reserved_units
+                && held.bytes == pool.reserved_bytes
+                && held.units == pool.allocated_units
+                && held.bytes == pool.allocated_bytes
+        })
+}
+
+/// Sum of the requirements behind reservations that still hold capacity.
+fn held_capacity(state: &ReservationState_) -> Option<ResourceRequirements> {
+    state.reservations.iter().filter(|record| record.state != ReservationState::Released).try_fold(
+        ResourceRequirements::new(0, 0),
+        |held, record| {
+            Some(ResourceRequirements::new(
+                held.units.checked_add(record.requirements.units)?,
+                held.bytes.checked_add(record.requirements.bytes)?,
+            ))
+        },
+    )
 }
 
 fn rejected(next: ReservationState_, issue: ReservationIssue) -> ReservationTransition {

@@ -15,6 +15,8 @@ pub use attestation::sign_probe;
 pub use attestation::verify_peer_probe;
 pub use attestation::verify_probe;
 pub use client::SignedInvocation;
+pub use client::consume_nonce;
+pub use client::require_write_fence;
 pub use client::sign_request;
 pub use client::verify_request;
 pub use issuance::Grant;

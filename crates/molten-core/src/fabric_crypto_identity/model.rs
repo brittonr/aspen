@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 pub const CRYPTO_ADAPTER_PROFILE_SCHEMA: &str = "molten.crypto-identity.adapter-profile.v1";
 pub const OPAQUE_KEY_HANDLE_SCHEMA: &str = "molten.crypto-identity.opaque-key-handle.v1";
@@ -7,6 +7,8 @@ pub const CRYPTO_OPERATION_SCHEMA: &str = "molten.crypto-identity.operation.v1";
 pub const CRYPTO_OUTCOME_SCHEMA: &str = "molten.crypto-identity.outcome.v1";
 pub const CRYPTO_ROTATION_SCHEMA: &str = "molten.crypto-identity.rotation.v1";
 pub const CRYPTO_STATUS_SCHEMA: &str = "molten.crypto-identity.status.v1";
+/// Public key status that also binds the opaque handle reference of the resolved key generation.
+pub const CRYPTO_STATUS_HANDLE_SCHEMA: &str = "molten.crypto-identity.status.v2";
 
 pub const MAX_CRYPTO_TEXT_BYTES: usize = 256;
 pub const MAX_CRYPTO_COLLECTION_ITEMS: usize = 256;
@@ -155,7 +157,14 @@ impl KeyCurrentness {
         }
     }
 
+    /// Only the current generation may sign; an overlapping key is verification-only.
+    // r[impl molten.crypto_identity.overlap_verification_only]
     pub const fn permits_signing(self) -> bool {
+        matches!(self, Self::Current)
+    }
+
+    /// The current generation and a verification-only overlap key may verify signatures.
+    pub const fn permits_verification(self) -> bool {
         matches!(self, Self::Current | Self::Overlap)
     }
 }
@@ -308,6 +317,8 @@ pub struct AdapterDiagnosticInput {
     pub permission_status: AdapterPermissionStatus,
     pub backend_class: KeyBackendClass,
     pub public_key_ref: Option<String>,
+    /// Opaque handle reference of the resolved key; a content ref, never key material.
+    pub handle_ref: Option<String>,
     pub receipt_refs: Vec<String>,
     pub backend_locator: Option<String>,
     pub raw_error: Option<String>,
@@ -324,6 +335,7 @@ pub struct RedactedAdapterStatus {
     pub permission_status: AdapterPermissionStatus,
     pub backend_class: KeyBackendClass,
     pub public_key_ref: Option<String>,
+    pub handle_ref: Option<String>,
     pub receipt_refs: Vec<String>,
     pub has_redacted_backend_locator: bool,
     pub has_redacted_error: bool,

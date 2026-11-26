@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::*;
 use crate::world_head::WorldBranchClass;
@@ -70,21 +70,34 @@ pub fn plan_world_promotion(request: &WorldPromotionRequest) -> Result<WorldProm
     })
 }
 
+/// Decides one promotion transaction against the facts the store read inside its write
+/// transaction (`live`) and the verified grant and material facts the shell observed.
+///
+/// The grant must authorize exactly `Promote` of this plan's candidate head at the predecessor
+/// generation, be admitted, unexpired and unconsumed, and match the plan's branch, authority and
+/// policy.
+// r[impl molten.world_commit.promotion_authority_action_and_canonical_binding]
+// r[impl molten.world_commit.promotion_atomic_dispatch_and_readback]
 pub fn validate_promotion_transaction(
     plan: &WorldPromotionPlan,
     facts: &WorldPromotionTransactionFacts,
+    live: &WorldPromotionLiveFacts,
 ) -> Result<(), Vec<WorldPromotionIssue>> {
     let mut issues = Vec::with_capacity(MAX_WORLD_PROMOTION_DIAGNOSTICS);
-    if facts.observed_head.as_ref() != Some(&plan.before) {
+    if live.head.as_ref() != Some(&plan.before) {
         issues.push(WorldPromotionIssue::AuthorityGenerationMismatch);
     }
-    if facts.authority_ref != plan.authority_ref || !facts.authority_admitted {
+    let expected = WorldPromotionGrantTarget::Promote {
+        candidate_head: plan.after.head.clone(),
+    };
+    super::operator::push_grant_issues(&facts.grant, &expected, live, facts.observed_unix_seconds, &mut issues);
+    if facts.grant.branch_id != plan.before.branch_id || facts.grant.authority_ref != plan.authority_ref {
         issues.push(WorldPromotionIssue::AuthorityDenied);
     }
-    if facts.authority_generation != plan.before.generation {
+    if facts.grant.generation != plan.before.generation {
         issues.push(WorldPromotionIssue::AuthorityGenerationMismatch);
     }
-    if facts.policy_ref != plan.after.policy_ref {
+    if facts.grant.policy_ref != plan.after.policy_ref {
         issues.push(WorldPromotionIssue::AuthorityPolicyMismatch);
     }
     if !facts.intent_closure_complete {

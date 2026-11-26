@@ -5,8 +5,8 @@
 
 mod transition;
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 pub use transition::*;
 
@@ -618,7 +618,14 @@ fn validate_member(member: &MembershipMember, issues: &mut Vec<MembershipIssue>)
     validate_ref("member-eligibility-ref", &member.eligibility_ref, issues);
 }
 
+/// Reduce failure observations to one per subject without depending on input order.
+///
+/// Raw ticks are compared only between observations whose detector profiles share one
+/// `time_basis_ref`: within a basis the latest observation wins, ties broken by class precedence
+/// and then detector profile ref. Ticks from distinct bases are never compared; across bases the
+/// most severe class wins, ties broken by the smallest time basis ref.
 // r[impl molten.fabric_membership.failure_detector]
+// r[impl molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
 pub fn reduce_failure_observations(
     view: &AdmittedMembershipView,
     profiles: &[FailureDetectorProfile],
@@ -628,26 +635,46 @@ pub fn reduce_failure_observations(
     let mut issues = Vec::new();
     let profile_map = validate_detector_profiles(profiles, &mut issues);
     let member_ids = view.view.members.iter().map(|member| member.node_id.as_str()).collect::<BTreeSet<_>>();
-    let mut reduced: BTreeMap<String, ReducedFailureObservation> = BTreeMap::new();
+    let mut per_basis: BTreeMap<(&str, &str), &FailureObservation> = BTreeMap::new();
     for observation in observations {
         validate_observation(observation, &profile_map, &member_ids, now_ticks, &mut issues);
-        let candidate = ReducedFailureObservation {
-            subject_node_id: observation.subject_node_id.clone(),
-            class: observation.class,
-            observed_at_ticks: observation.observed_at_ticks,
-            detector_profile_ref: observation.detector_profile_ref.clone(),
+        let Some(profile) = profile_map.get(observation.detector_profile_ref.as_str()) else {
+            continue;
         };
-        match reduced.get(&observation.subject_node_id) {
-            Some(current)
-                if current.observed_at_ticks > candidate.observed_at_ticks
-                    || (current.observed_at_ticks == candidate.observed_at_ticks
-                        && current.class.precedence() >= candidate.class.precedence()) => {}
+        let key = (observation.subject_node_id.as_str(), profile.time_basis_ref.as_str());
+        match per_basis.get(&key) {
+            Some(current) if same_basis_rank(current) >= same_basis_rank(observation) => {}
             _ => {
-                reduced.insert(observation.subject_node_id.clone(), candidate);
+                per_basis.insert(key, observation);
+            }
+        }
+    }
+    let mut reduced: BTreeMap<String, ReducedFailureObservation> = BTreeMap::new();
+    // `per_basis` iterates by (subject, time basis), so equal-severity ties keep the smallest basis.
+    for ((subject, _), observation) in per_basis {
+        match reduced.get(subject) {
+            Some(current) if current.class.precedence() >= observation.class.precedence() => {}
+            _ => {
+                reduced.insert(subject.to_string(), ReducedFailureObservation {
+                    subject_node_id: observation.subject_node_id.clone(),
+                    class: observation.class,
+                    observed_at_ticks: observation.observed_at_ticks,
+                    detector_profile_ref: observation.detector_profile_ref.clone(),
+                });
             }
         }
     }
     if issues.is_empty() { Ok(reduced) } else { Err(issues) }
+}
+
+/// Total order of observations sharing one subject and time basis; the reduced fields are all
+/// part of the key, so equal ranks reduce to identical output.
+fn same_basis_rank(observation: &FailureObservation) -> (u64, u8, &str) {
+    (
+        observation.observed_at_ticks,
+        observation.class.precedence(),
+        observation.detector_profile_ref.as_str(),
+    )
 }
 
 fn validate_detector_profiles<'a>(
@@ -762,15 +789,45 @@ fn plan_placement_with(
     }
 
     let candidates = eligible_candidates(admitted, request, &observations, &residual);
-    let mut search = PlacementSearch::new(admitted, request, &candidates, &mut residual);
-    let found = match order {
-        SearchOrder::Sets => !search.lacks_anti_affinity_values() && search.select(0, 0)?,
-        #[cfg(test)]
-        SearchOrder::Orderings => search.select_permutation(0)?,
-    };
-    if !found {
-        let partial_selection = search.selected.iter().map(|candidate| candidate.node_id.clone()).collect();
+    // Degraded candidates are a fallback only: each pass admits at most `degraded_budget` degraded
+    // replicas, starting with none, so the first plan found uses the fewest degraded nodes. A pass
+    // whose budget cannot supply enough distinct anti-affinity values is skipped without search,
+    // and a non-final pass that exhausts its step bound falls through, so the fallback is always
+    // reached; only the final, unrestricted pass reports `SearchLimitExceeded`.
+    let degraded_candidates = candidates.iter().filter(|candidate| candidate.degraded).count();
+    let degraded_limit = u32::try_from(degraded_candidates).unwrap_or(u32::MAX).min(request.requirements.replica_count);
+    let mut selection = None;
+    let mut partial_selection = Vec::new();
+    for degraded_budget in 0..=degraded_limit {
+        let final_pass = degraded_budget == degraded_limit;
+        // A pass stopped by its step bound may leave partial deductions; each pass starts clean.
+        let pass_start = residual.clone();
+        let mut search = PlacementSearch::new(admitted, request, &candidates, &mut residual, degraded_budget);
+        let searched = match order {
+            SearchOrder::Sets => {
+                if search.lacks_anti_affinity_values() {
+                    Ok(false)
+                } else {
+                    search.select(0, 0)
+                }
+            }
+            #[cfg(test)]
+            SearchOrder::Orderings => search.select_permutation(0),
+        };
+        let found = match searched {
+            Ok(found) => found,
+            Err(issues) if !final_pass && issues == [MembershipIssue::SearchLimitExceeded] => false,
+            Err(issues) => return Err(issues),
+        };
+        if found {
+            selection = Some((search.selected, search.selected_degraded > 0));
+            break;
+        }
+        partial_selection = search.selected.iter().map(|candidate| candidate.node_id.clone()).collect();
         drop(search);
+        residual = pass_start;
+    }
+    let Some((selected, degraded)) = selection else {
         let constraints = explain_unsatisfied(admitted, request, &observations, &residual, &candidates);
         return Ok(PlacementOutcome::Unsatisfied(UnsatisfiedPlacement {
             view_id: admitted.view.view_id.clone(),
@@ -778,10 +835,9 @@ fn plan_placement_with(
             constraints,
             partial_selection,
         }));
-    }
+    };
 
-    let roles = search
-        .selected
+    let roles = selected
         .iter()
         .enumerate()
         .map(|(ordinal, candidate)| PlannedRole {
@@ -793,8 +849,6 @@ fn plan_placement_with(
             reasons: candidate.reasons.clone(),
         })
         .collect();
-    let degraded = search.degraded;
-    drop(search);
     Ok(PlacementOutcome::Planned(PlacementPlan {
         schema: PLACEMENT_PLAN_SCHEMA.to_string(),
         view_id: admitted.view.view_id.clone(),
@@ -829,6 +883,8 @@ struct PlacementCandidate {
     node_id: String,
     descriptor_ref: String,
     preference_score: u64,
+    /// A `Suspected` or `Unavailable` failure observation was accepted for this node.
+    degraded: bool,
     reasons: Vec<String>,
 }
 
@@ -991,13 +1047,15 @@ fn eligible_candidates(
             node_id: member.node_id.clone(),
             descriptor_ref: member.descriptor_ref.clone(),
             preference_score,
+            degraded: failure_avoided,
             reasons,
         });
     }
+    // Healthy nodes rank strictly ahead of degraded ones regardless of preference score.
     candidates.sort_by(|left, right| {
-        right
-            .preference_score
-            .cmp(&left.preference_score)
+        left.degraded
+            .cmp(&right.degraded)
+            .then_with(|| right.preference_score.cmp(&left.preference_score))
             .then_with(|| tie_rank.get(left.node_id.as_str()).cmp(&tie_rank.get(right.node_id.as_str())))
             .then_with(|| left.node_id.cmp(&right.node_id))
     });
@@ -1013,7 +1071,9 @@ struct PlacementSearch<'a> {
     occupied_nodes: BTreeSet<String>,
     anti_values: BTreeMap<String, BTreeSet<String>>,
     search_steps: u64,
-    degraded: bool,
+    /// Maximum degraded replicas this pass may select.
+    degraded_budget: u32,
+    selected_degraded: u32,
 }
 
 impl<'a> PlacementSearch<'a> {
@@ -1022,6 +1082,7 @@ impl<'a> PlacementSearch<'a> {
         request: &'a PlacementRequest,
         candidates: &'a [PlacementCandidate],
         residual: &'a mut BTreeMap<String, ResourceAmount>,
+        degraded_budget: u32,
     ) -> Self {
         let mut occupied_nodes = BTreeSet::new();
         let mut anti_values: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -1048,7 +1109,8 @@ impl<'a> PlacementSearch<'a> {
             occupied_nodes,
             anti_values,
             search_steps: 0,
-            degraded: false,
+            degraded_budget,
+            selected_degraded: 0,
         }
     }
 
@@ -1073,16 +1135,13 @@ impl<'a> PlacementSearch<'a> {
                 .expect("candidate capacity checked before selection");
             let inserted_anti = self.insert_anti_values(candidate);
             *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = next_capacity;
-            let candidate_degraded =
-                candidate.reasons.iter().any(|reason| reason == "degraded-failure-observation-accepted");
-            let prior_degraded = self.degraded;
-            self.degraded |= candidate_degraded;
+            self.selected_degraded += u32::from(candidate.degraded);
             self.selected.push(candidate.clone());
             if self.select(ordinal.saturating_add(1), index)? {
                 return Ok(true);
             }
             self.selected.pop();
-            self.degraded = prior_degraded;
+            self.selected_degraded -= u32::from(candidate.degraded);
             *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = prior_capacity;
             self.remove_anti_values(inserted_anti);
         }
@@ -1111,16 +1170,13 @@ impl<'a> PlacementSearch<'a> {
                 .expect("candidate capacity checked before selection");
             let inserted_anti = self.insert_anti_values(candidate);
             *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = next_capacity;
-            let candidate_degraded =
-                candidate.reasons.iter().any(|reason| reason == "degraded-failure-observation-accepted");
-            let prior_degraded = self.degraded;
-            self.degraded |= candidate_degraded;
+            self.selected_degraded += u32::from(candidate.degraded);
             self.selected.push(candidate.clone());
             if self.select_permutation(ordinal.saturating_add(1))? {
                 return Ok(true);
             }
             self.selected.pop();
-            self.degraded = prior_degraded;
+            self.selected_degraded -= u32::from(candidate.degraded);
             *self.residual.get_mut(&candidate.node_id).expect("candidate node exists") = prior_capacity;
             self.remove_anti_values(inserted_anti);
         }
@@ -1128,21 +1184,31 @@ impl<'a> PlacementSearch<'a> {
     }
 
     /// Every new replica needs, for each anti-affinity key, a value that no other selected replica
-    /// and no active assignment of this role holds (`can_select` also requires the label).
-    /// Fewer such values among the candidates than requested replicas therefore makes the
-    /// request unsatisfiable.
+    /// and no active assignment of this role holds (`can_select` also requires the label). Healthy
+    /// candidates supply their distinct values; degraded candidates add at most `degraded_budget`
+    /// further values. Fewer such values than requested replicas makes this pass unsatisfiable.
     fn lacks_anti_affinity_values(&self) -> bool {
         let replicas = usize::try_from(self.request.requirements.replica_count).unwrap_or(usize::MAX);
+        let budget = usize::try_from(self.degraded_budget).unwrap_or(usize::MAX);
         self.request.requirements.anti_affinity_label_keys.iter().any(|key| {
             let held = self.anti_values.get(key);
-            let available: BTreeSet<&str> = self
-                .candidates
-                .iter()
-                .filter_map(|candidate| self.admitted.descriptors.get(&candidate.node_id)?.label(key))
-                .map(|label| label.value.as_str())
-                .filter(|value| !held.is_some_and(|held| held.contains(*value)))
-                .collect();
-            available.len() < replicas
+            let mut healthy: BTreeSet<&str> = BTreeSet::new();
+            let mut degraded: BTreeSet<&str> = BTreeSet::new();
+            for candidate in self.candidates {
+                let Some(label) = self.admitted.descriptors.get(&candidate.node_id).and_then(|d| d.label(key)) else {
+                    continue;
+                };
+                if held.is_some_and(|held| held.contains(&label.value)) {
+                    continue;
+                }
+                if candidate.degraded {
+                    degraded.insert(label.value.as_str());
+                } else {
+                    healthy.insert(label.value.as_str());
+                }
+            }
+            let degraded_only = degraded.difference(&healthy).count();
+            healthy.len().saturating_add(degraded_only.min(budget)) < replicas
         })
     }
 
@@ -1154,6 +1220,9 @@ impl<'a> PlacementSearch<'a> {
             return false;
         }
         if !self.residual[&candidate.node_id].fits(self.request.requirements.per_replica) {
+            return false;
+        }
+        if candidate.degraded && self.selected_degraded >= self.degraded_budget {
             return false;
         }
         let descriptor = &self.admitted.descriptors[&candidate.node_id];

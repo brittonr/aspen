@@ -2,8 +2,8 @@
 
 pub mod closure;
 
-use std::string;
-use std::vec;
+use alloc::string;
+use alloc::vec;
 
 pub const SCHEMA: &str = "molten-node-source-binding-v1";
 pub const PRODUCER_PROFILE: &str = "molten-nix-source-binding-v1";

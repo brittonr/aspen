@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 pub const WORLD_COMMIT_SCHEMA: &str = "molten.world-commit.v1";
 pub const WORLD_COMMIT_CAPTURE_RECEIPT_SCHEMA: &str = "molten.world-commit.capture-receipt.v1";

@@ -81,7 +81,65 @@ fn validate_listener_input(input: &ListenerInput) -> crate::error::Result<()> {
             "cross-process listener capability admission is not fully active",
         ));
     }
+    validate_admitted_peers(&input.admitted_peers)
+}
+
+/// Admitted peers are a bounded table of distinct canonical `iroh:<EndpointId>` identities. An empty
+/// table refuses every connection until `Listener::admit_peer` adds one.
+fn validate_admitted_peers(peers: &std::collections::BTreeMap<String, AdmittedPeer>) -> crate::error::Result<()> {
+    if peers.len() > MAX_LISTENER_ADMITTED_PEERS {
+        return Err(crate::error::Failure::invalid_harness(
+            "cross-process listener admitted peer table exceeds its static bound",
+        ));
+    }
+    let mut identities = std::collections::BTreeSet::new();
+    for (peer_id, peer) in peers {
+        if peer_id.is_empty() || peer_id.len() > MAX_ADMITTED_PEER_ID_BYTES {
+            return Err(crate::error::Failure::invalid_harness("cross-process admitted peer id is empty or oversized"));
+        }
+        crate::preserves_rail::validate_content_ref(&peer.peer_context_ref)?;
+        let is_canonical = peer
+            .public_endpoint_identity
+            .strip_prefix("iroh:")
+            .and_then(|id| id.parse::<iroh::EndpointId>().ok())
+            .is_some_and(|id| format!("iroh:{id}") == peer.public_endpoint_identity);
+        if !is_canonical {
+            return Err(crate::error::Failure::invalid_harness(
+                "cross-process admitted peer identity is not a canonical Iroh endpoint identity",
+            ));
+        }
+        if !identities.insert(peer.public_endpoint_identity.as_str()) {
+            return Err(crate::error::Failure::invalid_harness(
+                "cross-process admitted peers must have distinct endpoint identities",
+            ));
+        }
+    }
     Ok(())
+}
+
+const MAX_ADMITTED_PEER_ID_BYTES: usize = 256;
+
+fn rejected(kind: ConnectionRejectionKind, failure: crate::error::Failure) -> ListenerPoll {
+    ListenerPoll::Rejected(ConnectionRejection { kind, failure })
+}
+
+impl AdmittedPeer {
+    /// Admit the peer behind a remote endpoint descriptor, for peers that dial with their listener
+    /// key, under this listener's own `local_peer_context_ref`. The remote descriptor's expected
+    /// context names what *that* listener requires of its peers, so it is never copied here.
+    pub fn for_endpoint(endpoint: &Endpoint, local_peer_context_ref: &str) -> Self {
+        Self {
+            public_endpoint_identity: endpoint.descriptor.public_endpoint_identity.clone(),
+            peer_context_ref: local_peer_context_ref.to_string(),
+        }
+    }
+}
+
+impl EndpointCapability {
+    /// The public endpoint identity (`iroh:<EndpointId>`) this capability authenticates as.
+    pub fn public_endpoint_identity(&self) -> String {
+        format!("iroh:{}", self.secret_key.public())
+    }
 }
 
 fn validate_client_input(input: &ClientInput, payload: &[u8]) -> crate::error::Result<()> {

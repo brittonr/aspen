@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainArtifactInput<'a> {
@@ -56,7 +56,8 @@ fn valid_blake3_ref(value: &str) -> bool {
     let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
         return false;
     };
-    value.len() == BLAKE3_REF_CHAR_COUNT && hex.chars().all(|character| character.is_ascii_hexdigit())
+    value.len() == BLAKE3_REF_CHAR_COUNT
+        && hex.chars().all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase())
 }
 
 impl fmt::Display for CodecIssue {
@@ -137,5 +138,18 @@ mod tests {
         missing_domain.domain = "";
 
         assert_eq!(validate_domain_artifact(&missing_domain), Err(CodecIssue::EmptyDomain));
+    }
+
+    #[test]
+    fn domain_codec_facade_rejects_uppercase_digest_hex() {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        const UPPERCASE_REF: &str = "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let mut uppercase = valid_input();
+        uppercase.artifact_ref = UPPERCASE_REF;
+        assert_eq!(
+            validate_domain_artifact(&uppercase),
+            Err(CodecIssue::MalformedArtifactRef(UPPERCASE_REF.to_string()))
+        );
+        assert!(valid_blake3_ref(VALID_REF));
     }
 }

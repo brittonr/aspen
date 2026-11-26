@@ -1,9 +1,9 @@
 //! Deterministic compute offers and reservation decisions. Effects, clocks and storage belong to
 //! the caller.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::VecDeque;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
+use alloc::collections::VecDeque;
 
 use crate::fabric_membership::LabelAuthority;
 

@@ -7,5 +7,6 @@
 
 mod cohort;
 mod helpers;
+mod plan;
 
 pub use cohort::*;

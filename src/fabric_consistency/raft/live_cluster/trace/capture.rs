@@ -80,14 +80,14 @@ async fn run_turns(
 
     let outcome = b
         .service
-        .handle_event(super::super::model::ReplicaEvent::Read {
+        .handle_event(super::super::ReplicaEvent::Read {
             request_ref: retry_request.clone(),
             mode: crate::fabric_consistency::ReadMode::Linearizable,
         })
         .await;
     let retry = super::workflow::require_applied_transition(outcome).expect("trace retry read turn");
     let (retried_index, retry_outcome) =
-        observations::observed_read(b, &retry, &retry_request, super::super::model::ReadDisposition::Retryable);
+        observations::observed_read(b, &retry, &retry_request, super::super::ReadDisposition::Retryable);
     let retry_boundary = LeaderBoundary::observe(&retry.next);
     assert_eq!(retry_boundary, checkpoint);
     assert_eq!(retried_index, retry_boundary.last_applied);
@@ -104,7 +104,7 @@ async fn run_turns(
         observations::observed_outcome(b, &applied, super::super::executor::ReplicaEffectKind::ProposalOutcome);
     assert_eq!(covered.kind, super::super::control::ReplicaObservationKind::Proposal {
         request_ref: earlier_request,
-        disposition: super::super::model::ProposalDisposition::Committed,
+        disposition: super::super::ProposalDisposition::Committed,
         committed_index: Some(earlier_index),
     });
     let (new_index, proposal) = observations::observed_proposal(b, &applied, &new_request);
@@ -188,7 +188,7 @@ async fn complete_quorum_read(
     let outcome = leader.service.handle_event(received.event).await;
     let applied = super::workflow::require_applied_transition(outcome).expect("trace handle A ACK on B");
     let (read_index, read_outcome) =
-        observations::observed_read(leader, &applied, request_ref, super::super::model::ReadDisposition::Current);
+        observations::observed_read(leader, &applied, request_ref, super::super::ReadDisposition::Current);
     let completed = LeaderBoundary::observe(&applied.next);
     assert_eq!(completed, *committed);
     assert!(applied.next.pending_reads.is_empty(), "B left the completed read pending");
@@ -212,12 +212,12 @@ struct LeaderBoundary {
 }
 
 impl LeaderBoundary {
-    fn observe(state: &super::super::model::ReplicaState) -> Self {
-        assert_eq!(state.role, super::super::model::ReplicaRole::Leader);
+    fn observe(state: &super::super::ReplicaState) -> Self {
+        assert_eq!(state.role, super::super::ReplicaRole::Leader);
         assert!(state.snapshot.is_none(), "the fixed trace does not compact its log");
         let last = state.log.last().expect("missing leader log tip in trace");
-        let commit_term = if state.commit_index == super::super::model::INITIAL_COMMIT_INDEX {
-            super::super::model::INITIAL_TERM // Raft's term at the empty prefix.
+        let commit_term = if state.commit_index == super::super::INITIAL_COMMIT_INDEX {
+            super::super::INITIAL_TERM // Raft's term at the empty prefix.
         } else {
             state
                 .log

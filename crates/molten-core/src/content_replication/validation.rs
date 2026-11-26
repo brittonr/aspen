@@ -3,8 +3,8 @@
     reason = "validation uses ordered sets to bound and stabilize diagnostics"
 )]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::*;
 

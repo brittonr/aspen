@@ -1,3 +1,5 @@
+#[path = "tests/auth.rs"]
+mod auth;
 #[path = "tests/budget.rs"]
 mod budget;
 #[path = "tests/malformed.rs"]
@@ -75,7 +77,10 @@ async fn idle_ingress_keeps_its_delivery_budget_and_accepts_a_later_frame() {
     .expect("election");
     let envelope = super::tests::sent_envelope_to(&election, NODE_B);
     let listener = crate::fabric_transport::cross_process::tests::listener().await;
-    let input = crate::fabric_transport::cross_process::tests::client_input(listener.handoff().clone());
+    let input = crate::fabric_transport::cross_process::tests::client_input_for(
+        listener.handoff().clone(),
+        super::tests::NODE_A,
+    );
     let mut pump = ReplicaIngressPump::spawn(listener, ReplicaIngressConfig {
         session_ref: input.session_ref.clone(),
         accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
@@ -123,7 +128,7 @@ async fn canonical_envelope_crosses_admitted_listener() {
 
     let mut listener = crate::fabric_transport::cross_process::tests::listener().await;
     let endpoint = listener.handoff().clone();
-    let input = crate::fabric_transport::cross_process::tests::client_input(endpoint);
+    let input = crate::fabric_transport::cross_process::tests::client_input_for(endpoint, super::tests::NODE_A);
     let session_ref = input.session_ref.clone();
     let mut peers = std::collections::BTreeMap::new();
     peers.insert(NODE_B.to_string(), input);
@@ -266,7 +271,7 @@ async fn spent_ingress_budget_pauses_polling_until_its_window_refills() {
 #[tokio::test(start_paused = true)]
 async fn undecodable_frame_is_dropped_and_counted_and_ingress_continues() {
     let frames = vec![
-        Ok(Err(crate::error::Failure::invalid_harness("undecodable payload"))),
+        Ok(Err(RejectedReplicaFrame::Connection(crate::error::Failure::invalid_harness("undecodable payload")))),
         Ok(Ok(Some(scripted_event("after-malformed")))),
     ];
     let (mut pump, _polls) = scripted_pump(frames, INGRESS_TEST_DELIVERY_LIMIT);

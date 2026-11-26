@@ -17,26 +17,24 @@ fn export_binds_exact_toolchain_wit_and_determinism() {
 }
 
 #[test]
-fn rejects_stale_partial_or_authority_bearing_cohort() {
-    // r[verify molten.wasm_component.profile]
-    // r[verify molten.wasm_component.authority]
-    let profile = supported().expect("supported profile");
-    let mut stale = profile.clone();
-    stale.toolchain.wasmtime = "44.0.0".to_string();
-    assert!(validate_runtime(&stale).is_err());
-
-    let mut partial = profile.clone();
-    partial.determinism.fuel_interruption = false;
-    assert!(validate_runtime(&partial).is_err());
-
-    let mut unsupported = profile.clone();
-    unsupported.features.tail_call = true;
-    assert!(validate_runtime(&unsupported).is_err());
-
-    let mut ambient = profile;
-    ambient.allowed_imports = vec!["wasi:filesystem/types@0.2.6".to_string()];
-    ambient.allowed_wasi_interfaces = ambient.allowed_imports.clone();
-    assert!(validate_runtime(&ambient).is_err());
+fn embedded_config_exports_decode_into_admitted_cohorts() {
+    // r[verify molten.wasm.no_std_wasm_policy_kernel]
+    let time_sliced = time_sliced().expect("embedded time-sliced profile");
+    assert_eq!(time_sliced.profile_id, TIME_SLICED_PROFILE_ID);
+    assert!(time_sliced.slicing.is_some());
+    let hosted = hosted().expect("embedded effect profile");
+    assert_eq!(hosted.profile_id, HOST_PROFILE_ID);
+    assert_eq!(hosted.allowed_imports, vec![HOST_REQUEST_IMPORT.to_string()]);
+    let malformed = super::super::profile::decode("{\"schema_id\":", "component profile export is invalid")
+        .expect_err("malformed export");
+    assert_eq!(malformed.canonical_class(), DenialClass::ProfileDenial.as_str());
+    let stale = super::super::profile::decode(
+        &include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/config/wasm-component-runtime/generated/profile.json"))
+            .replace("49.0.5", "44.0.0"),
+        "component profile export is invalid",
+    )
+    .expect_err("stale embedded toolchain");
+    assert!(stale.blockers.iter().any(|blocker| blocker.contains("wasmtime")));
 }
 
 #[test]

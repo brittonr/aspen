@@ -5,7 +5,7 @@
 //! `[valence-integrity, octet-cutover]`, archive observations
 //! `[octet-cutover, valence-integrity]`.
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::ExplanationRule;
 use crate::release_dependency::DependencyPlane;

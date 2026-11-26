@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
 
 use super::ClosureIssue;
 use super::ClosureReport;
@@ -15,7 +14,8 @@ use super::WorldCommitRef;
 use super::root_for_kind;
 
 const TERMINAL_RESTORE_STEP_COUNT: usize = 2;
-const WALK_EVENT_FACTOR: usize = 2;
+
+mod graph;
 
 // r[impl molten.world_commit.restore]
 pub fn validate_closure(request: &ClosureRequest) -> ClosureReport {
@@ -33,7 +33,8 @@ pub fn validate_closure(request: &ClosureRequest) -> ClosureReport {
     let core = match super::validate_and_normalize_core(&request.core, &request.bounds) {
         Ok(core) => core,
         Err(core_issues) => {
-            issues.push(ClosureIssue::InvalidCore(format!("{core_issues:?}")));
+            // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+            issues.extend(core_issues.into_iter().map(ClosureIssue::InvalidCore));
             request.core.clone()
         }
     };
@@ -114,7 +115,7 @@ pub fn plan_restore(
 fn validate_closure_bound(request: &ClosureRequest, issues: &mut Vec<ClosureIssue>) -> bool {
     let bound_issues = super::validate_bounds(&request.bounds);
     if !bound_issues.is_empty() {
-        issues.push(ClosureIssue::InvalidCore(format!("{bound_issues:?}")));
+        issues.extend(bound_issues.into_iter().map(ClosureIssue::InvalidCore));
         return false;
     }
     let direct_objects = request.roots.len().saturating_add(request.parent_graph.len());
@@ -130,7 +131,7 @@ fn validate_closure_bound(request: &ClosureRequest, issues: &mut Vec<ClosureIssu
         .parent_graph
         .iter()
         .map(|observation| observation.parents.len())
-        .chain(std::iter::once(request.core.parents.len()))
+        .chain(core::iter::once(request.core.parents.len()))
         .max()
         .unwrap_or(0);
     if actual_parent_max > request.bounds.max_parents {
@@ -219,37 +220,14 @@ fn validate_parent_graph(request: &ClosureRequest, core: &WorldCommitCore, issue
             }
         }
     }
-    if let Some(cycle) = first_cycle(&request.commit_ref, &graph) {
+    // Every supplied observation must belong to the subject's ancestry, and cycle detection
+    // starts from every node so a detached `X -> Y -> X` component cannot hide from the walk.
+    for unreachable in graph::unreachable_observations(&request.commit_ref, &graph) {
+        issues.push(ClosureIssue::UnreachableParentObservation(unreachable.as_str().to_string()));
+    }
+    if let Some(cycle) = graph::first_cycle(&request.commit_ref, &graph) {
         issues.push(ClosureIssue::ParentCycle(cycle.as_str().to_string()));
     }
-}
-
-fn first_cycle(root: &WorldCommitRef, graph: &BTreeMap<WorldCommitRef, Vec<WorldCommitRef>>) -> Option<WorldCommitRef> {
-    let capacity = graph.len().saturating_mul(WALK_EVENT_FACTOR);
-    let mut stack = Vec::with_capacity(capacity);
-    let mut visiting = BTreeSet::new();
-    let mut visited = BTreeSet::new();
-    stack.push((root.clone(), false));
-    while let Some((node, is_exit)) = stack.pop() {
-        if is_exit {
-            visiting.remove(&node);
-            visited.insert(node);
-            continue;
-        }
-        if visited.contains(&node) {
-            continue;
-        }
-        if !visiting.insert(node.clone()) {
-            return Some(node);
-        }
-        stack.push((node.clone(), true));
-        if let Some(parents) = graph.get(&node) {
-            for parent in parents.iter().rev() {
-                stack.push((parent.clone(), false));
-            }
-        }
-    }
-    None
 }
 
 fn push_root_step(

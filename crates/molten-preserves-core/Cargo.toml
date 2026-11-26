@@ -1,0 +1,16 @@
+[package]
+name = "molten-preserves-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "no_std canonical packed Preserves encoding, BLAKE3 identity, and bounded traversal for Aspen"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blake3 = { version = "1", default-features = false }
+
+[dev-dependencies]
+hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }

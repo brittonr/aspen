@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 pub const TRELLIS_PROOF_REFERENCE_REVISION: &str = "0bf65150d4c75da5887d5cc53392c3da6b94b9d2";
 

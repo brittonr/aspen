@@ -10,6 +10,7 @@ const SIGNATURE_DOMAIN_RECORD: &str = "fabric-crypto-signature-domain-v1";
 const SIGNATURE_OUTCOME_RECORD: &str = "fabric-crypto-signature-outcome-v1";
 const VERIFICATION_OUTCOME_RECORD: &str = "fabric-crypto-verification-outcome-v1";
 const CRYPTO_STATUS_RECORD: &str = "fabric-crypto-status-v1";
+const CRYPTO_STATUS_HANDLE_RECORD: &str = "fabric-crypto-status-v2";
 const FABRIC_CRYPTO_PORT_COUNT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -7,7 +7,8 @@ metadata:
   surface: node-state-adapters
   non_claim: structural-node-state-containment-only
 files:
-  - src/node/parts/daemon/p*/body.rs
+  - src/node/daemon.rs
+  - src/node/daemon/**/*.rs
   - src/node/ingress/*.rs
   - src/node/parts/identity/p001/body.rs
   - src/node/parts/identity/p004/body.rs
@@ -20,10 +21,7 @@ files:
 ignores:
   - "**/tests/**"
   - src/node/ingress/tests.rs
-  - src/node/parts/daemon/p000/body.rs
-  - src/node/parts/daemon/p039/body.rs
-  - src/node/parts/daemon/p036/body.rs
-  - src/node/parts/daemon/p057/body.rs
+  - src/node/daemon/state/ambient.rs
 rule:
   any:
     - pattern: std::fs::read($PATH)

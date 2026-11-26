@@ -45,6 +45,7 @@ pub fn parse_revocation(value: &IoValue) -> Result<Revocation> {
     })
 }
 
+// r[impl molten.authority.independent_currentness_and_revocation_bounds]
 pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) -> Result<AuthorityGrantCurrentness> {
     validate_non_empty(input.requested_principal_ref, "authority requested principal ref")?;
     validate_non_empty(input.requested_capability, "authority requested capability")?;
@@ -61,38 +62,27 @@ pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) ->
     if context_refs.subject != request_refs.principal {
         diagnostics.push("principal-mismatch".to_string());
     }
-    if !input.context.capabilities.iter().any(|capability| {
-        capability_allows_current_action(
-            capability,
-            input.requested_capability,
-            input.requested_operation,
-            input.requested_scope,
-        )
-    }) {
-        diagnostics.push("capability-denied".to_string());
-    }
     if input.grant_epoch < input.minimum_epoch {
         diagnostics.push("stale-epoch".to_string());
     }
     if input.grant_epoch > input.current_epoch {
         diagnostics.push("not-yet-current-epoch".to_string());
     }
-    if input.context.not_before.is_some_and(|not_before| input.logical_time < not_before) {
-        diagnostics.push("not-yet-valid".to_string());
-    }
-    if input.context.expires_at.is_some_and(|expires_at| input.logical_time >= expires_at) {
-        diagnostics.push("expired".to_string());
-    }
-    if !context_refs.keys.is_empty() && !context_refs.keys.iter().any(|key| request_refs.current_keys.contains(key)) {
+    // A context must name its signing keys, and every one of them must be current: one current key
+    // never vouches for a stale sibling.
+    if context_refs.keys.is_empty() {
+        diagnostics.push("no-signing-keys".to_string());
+    } else if context_refs.keys.iter().any(|key| !request_refs.current_keys.contains(key)) {
         diagnostics.push("key-not-current".to_string());
     }
-    if input
-        .revocations
-        .iter()
-        .any(|revocation| revocation_hits_context(revocation, input.context, input.logical_time))
-    {
-        diagnostics.push("revoked".to_string());
-    }
+    diagnostics.extend(scope_diagnostics(ScopeCheck {
+        context: input.context,
+        requested_capability: input.requested_capability,
+        requested_operation: input.requested_operation,
+        requested_scope: input.requested_scope,
+        logical_time: input.logical_time,
+        revocations: input.revocations,
+    }));
     let decision = if diagnostics.is_empty() { "pass" } else { "fail" };
     Ok(AuthorityGrantCurrentness {
         decision: decision.to_string(),
@@ -100,65 +90,83 @@ pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) ->
     })
 }
 
-pub fn admit_authority(
+/// Admits a context against caller-supplied, context-independent facts: the expected principal,
+/// minimum grant epoch and current key set never come from the context being judged.
+// r[impl molten.authority.independent_currentness_and_revocation_bounds]
+pub fn admit_authority(input: AuthorityAdmissionInput<'_>) -> Result<Admission> {
+    let context = parse_context(input.context_value)?;
+    let revocations = parse_revocations(input.revocation_values)?;
+    let currentness = authority_grant_currentness(AuthorityGrantCurrentnessInput {
+        context: &context,
+        requested_principal_ref: input.expected_principal_ref,
+        requested_capability: input.requested_capability,
+        requested_operation: input.requested_capability,
+        requested_scope: input.requested_scope,
+        logical_time: input.logical_time,
+        grant_epoch: context.not_before.unwrap_or(AUTHORITY_DEFAULT_GRANT_EPOCH),
+        minimum_epoch: input.minimum_epoch,
+        current_epoch: input.logical_time,
+        current_key_refs: input.current_key_refs,
+        revocations: &revocations,
+    })?;
+    admission_with_receipt(AdmissionReceiptInput {
+        operation: "admission",
+        decision: currentness.decision,
+        context: &context,
+        capability: input.requested_capability,
+        scope: input.requested_scope,
+        logical_time: input.logical_time,
+        diagnostics: &currentness.diagnostics,
+    })
+}
+
+/// Capability-scope admission for callers with no independent principal or key source (job DAG
+/// admission). It checks capability, scope, attenuation, validity window and revocation only. Its
+/// receipt always records `principal-and-key-currentness-not-claimed`, so a pass is never evidence of
+/// caller identity or key currentness.
+// r[impl molten.authority.independent_currentness_and_revocation_bounds]
+pub fn admit_capability_scope(
     context_value: &IoValue,
     requested_capability: &str,
     requested_scope: &str,
     logical_time: u64,
     revocation_values: &[IoValue],
 ) -> Result<Admission> {
+    validate_non_empty(requested_capability, "authority requested capability")?;
+    validate_non_empty(requested_scope, "authority requested scope")?;
     let context = parse_context(context_value)?;
-    let revocations = revocation_values
-        .iter()
-        .map(parse_revocation)
-        .collect::<Result<Vec<_>>>()?;
-    let currentness = authority_grant_currentness(AuthorityGrantCurrentnessInput {
+    let revocations = parse_revocations(revocation_values)?;
+    let mut diagnostics = Vec::with_capacity(AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY);
+    diagnostics.extend(scope_diagnostics(ScopeCheck {
         context: &context,
-        requested_principal_ref: &context.subject_ref,
         requested_capability,
         requested_operation: requested_capability,
         requested_scope,
         logical_time,
-        grant_epoch: context.not_before.unwrap_or(AUTHORITY_DEFAULT_GRANT_EPOCH),
-        minimum_epoch: AUTHORITY_DEFAULT_GRANT_EPOCH,
-        current_epoch: logical_time,
-        current_key_refs: &context.key_refs,
         revocations: &revocations,
-    })?;
-    let diagnostics = currentness.diagnostics.iter().map(String::as_str).collect::<Vec<_>>();
-    let receipt_value = receipt_value(ReceiptValueInput {
-        operation: "admission",
-        decision: &currentness.decision,
-        context_ref: Some(&context.context_ref),
+    }));
+    let decision = if diagnostics.is_empty() { "pass" } else { "fail" };
+    diagnostics.push(CAPABILITY_SCOPE_NON_CLAIM.to_string());
+    admission_with_receipt(AdmissionReceiptInput {
+        operation: "capability-scope-admission",
+        decision: decision.to_string(),
+        context: &context,
         capability: requested_capability,
         scope: requested_scope,
         logical_time,
         diagnostics: &diagnostics,
-    });
-    Ok(Admission {
-        decision: currentness.decision.clone(),
-        receipt: Receipt {
-            receipt_ref: canonical_hash(&receipt_value)?,
-            operation: "admission".to_string(),
-            decision: currentness.decision,
-            context_ref: Some(context.context_ref),
-            value: receipt_value,
-        },
     })
 }
 
-pub fn gatekeeper_resolve_live_ref(
-    context_value: &IoValue,
-    scope: &str,
-    requested_capability: &str,
-    logical_time: u64,
-    revocation_values: &[IoValue],
-) -> Result<LiveRef> {
-    let admission = admit_authority(context_value, requested_capability, scope, logical_time, revocation_values)?;
+// r[impl molten.authority.independent_currentness_and_revocation_bounds]
+pub fn gatekeeper_resolve_live_ref(input: AuthorityAdmissionInput<'_>) -> Result<LiveRef> {
+    let admission = admit_authority(input)?;
     if admission.decision != "pass" {
         return Err(MoltenError::invalid_harness("gatekeeper resolution denied by authority context"));
     }
-    let context = parse_context(context_value)?;
+    let context = parse_context(input.context_value)?;
+    let scope = input.requested_scope;
+    let requested_capability = input.requested_capability;
     let expires_at = context.expires_at;
     let evidence_refs = vec![admission.receipt.receipt_ref];
     let value = record("authority-live-ref-v1", vec![
@@ -186,15 +194,24 @@ pub fn gatekeeper_resolve_live_ref(
     })
 }
 
+/// Removes assertions bound to the revoked authority object once the revocation is effective. Only
+/// `authority-context` and `live-ref` targets name the authority recorded in an
+/// `authority-bound-assertion`; other target kinds never match by reference coincidence.
+// r[impl molten.authority.independent_currentness_and_revocation_bounds]
 pub fn cleanup_for_revocation(
     assertions: &[RuntimeAssertion],
     revocation_value: &IoValue,
     logical_time: u64,
 ) -> Result<(Vec<RuntimeAssertion>, Receipt)> {
     let revocation = parse_revocation(revocation_value)?;
+    let is_effective = revocation.effective_at <= logical_time;
+    let is_assertion_bound_kind = matches!(revocation.target_kind.as_str(), "authority-context" | "live-ref");
     let remaining = assertions
         .iter()
         .filter(|assertion| {
+            if !is_effective || !is_assertion_bound_kind {
+                return true;
+            }
             let value = assertion.value.as_iovalue();
             let Some(record) = value.collect_simple_record("authority-bound-assertion", Some(2)) else {
                 return true;
@@ -207,11 +224,17 @@ pub fn cleanup_for_revocation(
         .cloned()
         .collect::<Vec<_>>();
     let removed = assertions.len().saturating_sub(remaining.len());
-    let diagnostic = format!("cleanup-removed:{removed}");
-    let diagnostics = [diagnostic.as_str()];
+    let removed_diagnostic = format!("cleanup-removed:{removed}");
+    let mut diagnostics = vec![removed_diagnostic.as_str()];
+    let decision = if is_effective { "pass" } else { "fail" };
+    if !is_effective {
+        diagnostics.push("revocation-not-yet-effective");
+    } else if !is_assertion_bound_kind {
+        diagnostics.push("target-kind-not-assertion-bound");
+    }
     let receipt_value = receipt_value(ReceiptValueInput {
         operation: "cleanup",
-        decision: "pass",
+        decision,
         context_ref: Some(&revocation.target_ref),
         capability: "cleanup",
         scope: &revocation.target_kind,
@@ -221,63 +244,8 @@ pub fn cleanup_for_revocation(
     Ok((remaining, Receipt {
         receipt_ref: canonical_hash(&receipt_value)?,
         operation: "cleanup".to_string(),
-        decision: "pass".to_string(),
+        decision: decision.to_string(),
         context_ref: Some(revocation.target_ref),
         value: receipt_value,
     }))
-}
-
-pub fn replay_verify_receipt(receipt: &Receipt, context_value: &IoValue) -> Result<()> {
-    let context = parse_context(context_value)?;
-    if receipt.context_ref.as_deref() != Some(context.context_ref.as_str()) {
-        return Err(MoltenError::invalid_harness("replay authority receipt does not bind recorded context"));
-    }
-    Ok(())
-}
-
-pub fn receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
-    record("authority-receipt-v1", vec![
-        string(crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("authority-context", vec![optional_ref_value(input.context_ref)]),
-        record("request", vec![
-            record("capability", vec![string(input.capability)]),
-            record("scope", vec![string(input.scope)]),
-            record("logical-time", vec![u64_value(input.logical_time)]),
-        ]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("authority-context-recorded"), string("pass")]),
-            record("check", vec![string("revocation-checked"), string("pass")]),
-            record("check", vec![string("expiry-checked"), string("pass")]),
-            record("check", vec![string("replay-does-not-mint-authority"), string("pass")]),
-        ])]),
-    ])
-}
-
-fn capability_value(capability: &Capability) -> IoValue {
-    record("capability", vec![
-        record("name", vec![string(&capability.capability)]),
-        record("scope", vec![string(&capability.scope)]),
-        record("attenuation", vec![string(&capability.attenuation)]),
-    ])
-}
-
-fn parse_capability(value: &IoValue) -> Result<Capability> {
-    let fields = value
-        .collect_simple_record("capability", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected authority capability"))?;
-    let capability = Capability {
-        capability: record_string(&fields[0], "name")?,
-        scope: record_string(&fields[1], "scope")?,
-        attenuation: record_string(&fields[2], "attenuation")?,
-    };
-    validate_capability(&capability)?;
-    Ok(capability)
-}
-
-fn parse_capability_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Capability>> {
-    let values = field_sequence(value, label)?;
-    values.iter().map(|value| parse_capability(&value_to_iovalue(value))).collect()
 }

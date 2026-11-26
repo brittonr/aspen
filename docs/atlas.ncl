@@ -195,7 +195,7 @@
       message = "canonical profile-scoped execution observations, never ambient authority",
       payload = {
         type = "ObservedReadback",
-        fields = [ "subject", "binding_ref", "validation_ref", "receipt_refs" ],
+        fields = [ "subjects", "binding_ref", "validation_ref", "receipt_refs" ],
         source = "src/capability_qualification/model.rs",
       },
       chapter = "evidence",

@@ -183,7 +183,7 @@ fn retained_count(policy: Policy, active_count: u32) -> u32 {
 }
 
 fn validate_unique_order(keys: &[String]) -> Result<(), Issue> {
-    let mut unique = std::collections::BTreeSet::new();
+    let mut unique = alloc::collections::BTreeSet::new();
     for key in keys {
         if !unique.insert(key) {
             return Err(Issue::DuplicateEvictionKey);

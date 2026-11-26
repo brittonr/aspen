@@ -32,6 +32,7 @@ impl FabricEffectPort for InvalidEffectPort {
     }
 }
 
+// r[verify molten.system_extension.independent_authority_and_output_gate]
 // r[verify molten.system_extension.native_host.effect_completion_value.rejected]
 #[test]
 fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_values_without_retry() -> TestResult<()> {
@@ -58,10 +59,12 @@ fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_val
         assert!(service.route_effects(&callback_receipt, &mut effects).is_err());
         assert_eq!(effects.routed, 1);
         assert_eq!(service.host().executor().observations().len(), callback_observations);
-        let instance = service.instance().or_fail("terminal invalid effect instance")?;
-        assert!(instance.completed_operations.iter().any(|operation| {
+        let instance = service.instance().or_fail("invalid effect instance")?;
+        assert!(!instance.completed_operations.iter().any(|operation| operation.kind == NativeOperationKind::Effect));
+        assert!(instance.unresolved.iter().any(|operation| {
             operation.kind == NativeOperationKind::Effect
-                && operation.state == NativeOperationState::Terminal
+                && operation.state == NativeOperationState::Unknown
+                && operation.terminal_ref.is_none()
                 && !operation.is_retry_permitted
         }));
     }

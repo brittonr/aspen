@@ -1,5 +1,6 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
+use super::WorldHeadBound;
 use super::WorldHeadIssue;
 use super::WorldHeadPlanRequest;
 use super::WorldHeadPurpose;
@@ -23,22 +24,22 @@ pub(super) fn validate_request(request: &WorldHeadPlanRequest) -> Vec<WorldHeadI
 fn validate_bounds(request: &WorldHeadPlanRequest) -> Vec<WorldHeadIssue> {
     let mut issues = Vec::with_capacity(FIXED_ISSUE_CAPACITY);
     if request.bounds.max_history_nodes == 0 {
-        issues.push(WorldHeadIssue::InvalidBounds("max_history_nodes"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxHistoryNodes));
     }
     if request.bounds.max_parents_per_commit == 0 {
-        issues.push(WorldHeadIssue::InvalidBounds("max_parents_per_commit"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxParentsPerCommit));
     }
     if request.bounds.max_signers == 0 {
-        issues.push(WorldHeadIssue::InvalidBounds("max_signers"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxSigners));
     }
     if request.bounds.max_conflicts == 0 {
-        issues.push(WorldHeadIssue::InvalidBounds("max_conflicts"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxConflicts));
     }
     if request.policy.signature_threshold == 0 || request.policy.signature_threshold > request.bounds.max_signers {
-        issues.push(WorldHeadIssue::InvalidBounds("signature_threshold"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::SignatureThreshold));
     }
     if request.policy.max_conflicts == 0 || request.policy.max_conflicts > request.bounds.max_conflicts {
-        issues.push(WorldHeadIssue::InvalidBounds("max_conflicts"));
+        issues.push(WorldHeadIssue::InvalidBounds(WorldHeadBound::PolicyMaxConflicts));
     }
     issues
 }
@@ -151,7 +152,7 @@ fn validate_authentication(request: &WorldHeadPlanRequest) -> Vec<WorldHeadIssue
             issues.push(WorldHeadIssue::AuthenticationDenied);
             is_signer_admitted = false;
         }
-        if !request.policy.allowed_signer_roles.contains(&signer.role) {
+        if !signer.role.is_some_and(|role| request.policy.allowed_signer_roles.contains(&role)) {
             issues.push(WorldHeadIssue::UnknownSignerRole);
             is_signer_admitted = false;
         }

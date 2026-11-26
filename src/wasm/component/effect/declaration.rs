@@ -36,7 +36,7 @@ struct Operation {
 pub fn host_world() -> super::super::model::Result<super::super::imports::surface::DeclaredWorld> {
     let source = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/docs/wasm-component-runtime/generated/effect-contract.json"
+        "/config/wasm-component-runtime/generated/effect-contract.json"
     ));
     let contract: Contract = serde_json::from_str(source).map_err(|error| super::invalid(error.to_string()))?;
     validate(&contract)?;

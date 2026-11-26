@@ -89,8 +89,8 @@ fn validate_binding(adapter: &EbpfProfile, window: &EbpfWindow) -> Result<(), Eb
     if adapter.mappings.is_empty() || adapter.mappings.len() > 6 {
         return Err(EbpfIssue::Mapping);
     }
-    let signals: std::collections::BTreeSet<_> = adapter.mappings.iter().map(|mapping| mapping.signal).collect();
-    let descriptors: std::collections::BTreeSet<_> =
+    let signals: alloc::collections::BTreeSet<_> = adapter.mappings.iter().map(|mapping| mapping.signal).collect();
+    let descriptors: alloc::collections::BTreeSet<_> =
         adapter.mappings.iter().map(|mapping| &mapping.descriptor.descriptor_ref).collect();
     if signals.len() != adapter.mappings.len()
         || descriptors.len() != adapter.mappings.len()
@@ -136,13 +136,13 @@ fn validate_window(adapter: &EbpfProfile, window: &EbpfWindow, now: u64) -> Resu
 fn aggregate(
     adapter: &EbpfProfile,
     window: &EbpfWindow,
-) -> Result<std::collections::BTreeMap<EbpfSignal, i64>, EbpfIssue> {
+) -> Result<alloc::collections::BTreeMap<EbpfSignal, i64>, EbpfIssue> {
     let mut records: Vec<_> = window.records.iter().collect();
     records.sort_unstable_by_key(|record| (record.stream, record.sequence));
     let mut previous: Option<(u32, u64)> = None;
     let mut stream_count = 0;
     // Admission and projection share the canonical metric range.
-    let mut totals: std::collections::BTreeMap<EbpfSignal, i64> =
+    let mut totals: alloc::collections::BTreeMap<EbpfSignal, i64> =
         adapter.mappings.iter().map(|mapping| (mapping.signal, 0)).collect();
     for record in records {
         if record.tick < window.start || record.tick >= window.end {

@@ -2,11 +2,12 @@ use super::*;
 use crate::fabric::valid_blake3_ref;
 use crate::fabric::valid_fabric_token;
 
+/// Rotation overlap is verification-only: an overlapping old key can verify signatures it made
+/// before the rotation boundary but can never sign again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RotationOverlapPolicy {
     None,
     VerifyOnly,
-    SignAndVerify,
 }
 
 impl RotationOverlapPolicy {
@@ -14,7 +15,6 @@ impl RotationOverlapPolicy {
         match self {
             Self::None => "none",
             Self::VerifyOnly => "verify-only",
-            Self::SignAndVerify => "sign-and-verify",
         }
     }
 }
@@ -127,9 +127,10 @@ pub fn plan_key_rotation(
     if !issues.is_empty() {
         return Err(issues);
     }
+    // r[impl molten.crypto_identity.overlap_verification_only]
     let old_key_next_currentness = match request.overlap {
         RotationOverlapPolicy::None => KeyCurrentness::Revoked,
-        RotationOverlapPolicy::VerifyOnly | RotationOverlapPolicy::SignAndVerify => KeyCurrentness::Overlap,
+        RotationOverlapPolicy::VerifyOnly => KeyCurrentness::Overlap,
     };
     Ok(KeyRotationPlan {
         request: request.clone(),

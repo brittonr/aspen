@@ -68,6 +68,7 @@ impl Transport {
         {
             return Err(crate::error::Failure::invalid_harness("protocol registration is not actively admitted"));
         }
+        let endpoints = self.peer_endpoints()?;
         let listener = crate::fabric_transport::Listener::bind(crate::fabric_transport::ListenerInput {
             profile: profile.clone(),
             protocol: protocol.clone(),
@@ -80,6 +81,7 @@ impl Transport {
             validity: self.validity.clone().into_cohort()?,
             admission,
             observed_tick: self.observed_tick,
+            admitted_peers: admitted_peers(&endpoints, &self.peer_context_ref),
         })
         .await?;
         if listener.handoff().descriptor_ref != self.local_descriptor_ref {
@@ -90,16 +92,12 @@ impl Transport {
         if listener.state().phase != crate::fabric_transport::CrossProcessListenerPhase::Ready {
             return Err(crate::error::Failure::invalid_harness("bound transport listener is not ready"));
         }
-        let peers = self
-            .peers
-            .iter()
-            .map(|(node, peer)| {
-                if peer.endpoint.len() > 65_536 {
-                    return Err(crate::error::Failure::invalid_harness("peer endpoint frame bound"));
-                }
-                let value = crate::preserves_rail::parse_canonical_bytes(&peer.endpoint)?;
-                let endpoint = crate::fabric_transport::cross_process::parse_endpoint(&value)?;
-                Ok((node.clone(), crate::fabric_transport::ClientInput {
+        // `peer_endpoints` preserves the configured peer order, so each endpoint pairs with its peer.
+        let peers = endpoints
+            .into_iter()
+            .zip(self.peers.values())
+            .map(|((node, endpoint), peer)| {
+                Ok((node, crate::fabric_transport::ClientInput {
                     profile: profile.clone(),
                     protocol: protocol.clone(),
                     capability: capability.clone(),
@@ -122,6 +120,29 @@ impl Transport {
             port: transport,
             registration,
         })
+    }
+
+    /// The configured voters a listener for this transport admits, keyed by node id.
+    pub fn admitted_peers(
+        &self,
+    ) -> crate::error::Result<std::collections::BTreeMap<String, crate::fabric_transport::AdmittedPeer>> {
+        Ok(admitted_peers(&self.peer_endpoints()?, &self.peer_context_ref))
+    }
+
+    /// Each configured peer's signed endpoint descriptor, bounded before parsing.
+    pub fn peer_endpoints(
+        &self,
+    ) -> crate::error::Result<std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>> {
+        self.peers
+            .iter()
+            .map(|(node, peer)| {
+                if peer.endpoint.len() > 65_536 {
+                    return Err(crate::error::Failure::invalid_harness("peer endpoint frame bound"));
+                }
+                let value = crate::preserves_rail::parse_canonical_bytes(&peer.endpoint)?;
+                Ok((node.clone(), crate::fabric_transport::cross_process::parse_endpoint(&value)?))
+            })
+            .collect()
     }
 
     fn capability(
@@ -147,4 +168,19 @@ impl Transport {
         }
         crate::fabric_transport::EndpointCapability::from_secret_bytes(bytes, self.capability_ref.clone())
     }
+}
+
+/// Peers dial with their listener transport key, so each configured voter is admitted under the
+/// identity of its own signed endpoint descriptor, keyed by its node id, and under this node's own
+/// listener peer context (each node's recipe may name a distinct context).
+fn admitted_peers(
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
+    local_peer_context_ref: &str,
+) -> std::collections::BTreeMap<String, crate::fabric_transport::AdmittedPeer> {
+    endpoints
+        .iter()
+        .map(|(node, endpoint)| {
+            (node.clone(), crate::fabric_transport::AdmittedPeer::for_endpoint(endpoint, local_peer_context_ref))
+        })
+        .collect()
 }

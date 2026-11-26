@@ -29,7 +29,8 @@ pub const FABRIC_TIME_PROFILE_SCHEMA: &str = "molten.fabric-time.profile.v1";
 pub const FABRIC_TIME_OBSERVATION_SCHEMA: &str = "molten.fabric-time.observation.v1";
 pub const FABRIC_TIMER_EVENT_SCHEMA: &str = "molten.fabric-time.timer-event.v1";
 pub const FABRIC_SCHEDULER_EVENT_SCHEMA: &str = "molten.fabric-time.scheduler-event.v2";
-pub const FABRIC_ENTROPY_EVENT_SCHEMA: &str = "molten.fabric-time.entropy-event.v1";
+/// Entropy events carry the stream's capability reference; v1 entropy evidence did not.
+pub const FABRIC_ENTROPY_EVENT_SCHEMA: &str = "molten.fabric-time.entropy-event.v2";
 pub const FABRIC_DEADLINE_LEASE_SCHEMA: &str = "molten.fabric-time.deadline-lease.v1";
 pub const FABRIC_TIME_RUN_REPORT_SCHEMA: &str = "molten.fabric-time.run-report.v1";
 
@@ -87,10 +88,10 @@ pub(crate) fn valid_time_ref(value: &str) -> bool {
         return false;
     };
     const BLAKE3_HEX_BYTES: usize = 64;
-    hex.len() == BLAKE3_HEX_BYTES && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    hex.len() == BLAKE3_HEX_BYTES && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 pub(crate) fn has_duplicates<T: Ord>(values: &[T]) -> bool {
-    let mut ordered = std::collections::BTreeSet::new();
+    let mut ordered = alloc::collections::BTreeSet::new();
     values.iter().any(|value| !ordered.insert(value))
 }

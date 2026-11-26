@@ -82,8 +82,16 @@ FEATURE_DISPOSITIONS = ("ignored-inventory", "environment-blocked")
 OCTET_INDEX_LINE = re.compile(
     r"^\s*F\d+\s+(?P<lint>[a-z_]+)\s+(?P<crate>[A-Za-z0-9_-]+)\s+(?P<file>\S+?):(?P<line>\d+)\s*$"
 )
-# Members whose Octet debt is pinned at zero: any finding in them fails regardless of the baseline.
-OCTET_ZERO_CRATES = {"molten", "molten-node-host", "molten_node_host"}
+# Members whose Octet debt is pinned at zero: every package in `[workspace.metadata.octet] default_scope`,
+# which the strict source gate checks with plain `cargo octet check`. Any finding in them fails regardless
+# of the baseline. Octet names library targets with underscores, so both spellings are pinned.
+def octet_zero_crates(root: Path) -> set[str]:
+    manifest = tomllib.loads((root / "Cargo.toml").read_text())
+    scope = manifest.get("workspace", {}).get("metadata", {}).get("octet", {}).get("default_scope", [])
+    packages = {value for flag, value in zip(scope, scope[1:]) if flag in ("-p", "--package")}
+    return packages | {package.replace("-", "_") for package in packages}
+
+
 BASELINE_SCHEMA = "molten-octet-workspace-baseline-v3"
 ANCHOR_CONTEXT = 2
 ANCHOR_DESCRIPTION = (
@@ -617,7 +625,7 @@ def octet_check(root: Path, artifacts: Path, baseline: Path, scope: list[str], c
     elif not problems and total != indexed:
         diagnostics.append(f"octet-baseline-total-mismatch:{total}!={indexed}")
     for key in sorted(expected):
-        if key[0] in OCTET_ZERO_CRATES:
+        if key[0] in octet_zero_crates(root):
             diagnostics.append(f"octet-baseline-admits-zero-debt-crate:{':'.join(key)}")
     for key in sorted(set(counts) | set(expected)):
         actual, recorded = counts.get(key, 0), expected.get(key, 0)
@@ -631,8 +639,9 @@ def octet_check(root: Path, artifacts: Path, baseline: Path, scope: list[str], c
 def octet_write(root: Path, artifacts: Path, baseline: Path, scope: list[str]) -> list[str]:
     counts, indexed, diagnostics = octet_identities(root, artifacts / "summary.txt")
     diagnostics += octet_status(artifacts, indexed, scope)
+    zero_crates = octet_zero_crates(root)
     diagnostics += [
-        f"octet-zero-debt-crate-has-findings:{key[0]}:{key[1]}:{key[2]}" for key in counts if key[0] in OCTET_ZERO_CRATES
+        f"octet-zero-debt-crate-has-findings:{key[0]}:{key[1]}:{key[2]}" for key in counts if key[0] in zero_crates
     ]
     if diagnostics:
         return diagnostics

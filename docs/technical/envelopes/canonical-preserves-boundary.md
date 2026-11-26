@@ -31,6 +31,14 @@ Now consider a different attack: an envelope is changed and freshly encoded cano
 
 The existing [strict-decode tests](../../../src/preserves/parts/rail/tests/m000/p000/body.rs) cover canonical acceptance, annotated input, trailing bytes, truncation, and tampering against an expected reference. They are source evidence for those cases, not a claim that this documentation change executed them.
 
+## One logical value, one representation
+
+Canonical bytes only give one identity per logical value when the projection itself admits one shape. The rail therefore decodes an `Option<ContentRef>` only as `<none>` or `<some "blake3:...">`; a bare `"blake3:..."` string is rejected rather than read as a second encoding of `Some` (see [`optional_content_ref`](../../../src/preserves/parts/rail/p003/body.rs) and the `OptionalRefRecord` boundary check). Digest validators across `molten-core` and the actor ports accept lowercase hex only, matching `ContentRef::parse`, so an uppercase spelling of the same digest is a malformed reference rather than an alias.
+
+Identity and receipt material is always an explicit Preserves projection. Foreign DTOs, such as the ChaosControl descriptor and the VM Cohort plan, are projected field by field into records (`chaoscontrol.rs`, `vm/helpers.rs`): every struct is destructured without `..` and every enum is matched without a wildcard, so an upstream field or variant change fails to compile instead of silently changing or escaping an identity, and every collection is an ordered sequence in its declared order. Neither JSON nor generic serde output is identity material. Issue lists in receipts carry closed kebab-case codes (`CaptureIssue::code`, `ClosureIssue::code`, `WorldHeadIssue::code`, with bounds named by the closed `WorldHeadBound` set) rather than Rust `Debug` text or Rust field names, so a derive or field rename cannot silently change a receipt reference.
+
+Structural scans for ambient job tokens, sensitive markers, and content references descend into `Embedded` (`#:...`) payloads exactly as into records and sequences. Strict decoding accepts canonical embedded values, so a scan that skipped them would let a wrapped `<secret>` or `<host-path>` evade denial.
+
 ## Reviewing boundary changes
 
 For an encoder change, identify the exact Preserves projection before looking at Rust derives. Inspect field order, record labels, optional-value representations, and any sequence construction. Do not assume that application-level set semantics imply that an emitted sequence is order-insensitive.

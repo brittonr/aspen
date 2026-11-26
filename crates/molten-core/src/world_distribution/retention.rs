@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use artifact_binding_core::ArtifactAttribution;
 use artifact_binding_core::GenerationAttribution;

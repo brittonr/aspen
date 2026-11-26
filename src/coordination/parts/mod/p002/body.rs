@@ -1,9 +1,9 @@
 
 pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<CoordinationStateSnapshot> {
-    let fields = simple_record(value, "coordination-state-snapshot-v1", 11)?;
+    let fields = simple_record(value, "coordination-state-snapshot-v2", 12)?;
     require_schema(&fields[0], COORDINATION_STATE_SNAPSHOT_SCHEMA, "coordination state schema")?;
-    let retention_refs = record_ref_sequence(&fields[9], "retention")?;
-    require_check(&parse_checks(&fields[10])?, "deterministic-state-order", "coordination state")?;
+    let retention_refs = record_ref_sequence(&fields[10], "retention")?;
+    require_check(&parse_checks(&fields[11])?, "deterministic-state-order", "coordination state")?;
     Ok(CoordinationStateSnapshot {
         state_ref: canonical_hash(value)?,
         retention_refs,
@@ -12,22 +12,23 @@ pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<Coordination
 }
 
 // r[impl molten.coordination.read_consistency_modes]
-/// v2: `committed-state-bound` passes for `local-committed` assertions; v1 passed it for `linearizable`
-/// assertions the in-process runtime could not back with a read index.
+/// v3 binds the control-plane receipt (Raft commit receipt or registry read receipt) instead of the
+/// coordination receipt, so the coordination receipt can list this assertion's exact ref; v2 receipts
+/// listed a discarded placeholder assertion. `committed-state-bound` passes for `local-committed` assertions.
 pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IoValue> {
     validate_service(input.service)?;
     validate_key(input.key)?;
     validate_read_consistency_mode(input.read_consistency_mode)?;
     validate_ref(input.state_ref, "coordination assertion state ref")?;
-    validate_ref(input.receipt_ref, "coordination assertion receipt ref")?;
-    Ok(record("coordination-status-assertion-v2", vec![
+    validate_ref(input.control_plane_receipt_ref, "coordination assertion control-plane receipt ref")?;
+    Ok(record("coordination-status-assertion-v3", vec![
         string(COORDINATION_STATUS_ASSERTION_SCHEMA),
         record("service", vec![string(input.service)]),
         record("key", vec![string(input.key)]),
         record("read-consistency", vec![string(input.read_consistency_mode)]),
         record("fact", vec![input.fact.clone()]),
         record("state", vec![string(input.state_ref)]),
-        record("receipt", vec![string(input.receipt_ref)]),
+        record("control-plane-receipt", vec![string(input.control_plane_receipt_ref)]),
         checks_value(&[
             ("dataspace-observation-only", "pass"),
             ("read-consistency-declared", "pass"),
@@ -37,13 +38,13 @@ pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> R
 }
 
 pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<CoordinationStatusAssertion> {
-    let fields = simple_record(value, "coordination-status-assertion-v2", 8)?;
+    let fields = simple_record(value, "coordination-status-assertion-v3", 8)?;
     require_schema(&fields[0], COORDINATION_STATUS_ASSERTION_SCHEMA, "coordination assertion schema")?;
     let service = record_string(&fields[1], "service")?;
     let key = record_string(&fields[2], "key")?;
     let read_consistency_mode = record_string(&fields[3], "read-consistency")?;
     let state_ref = record_ref(&fields[5], "state")?;
-    let receipt_ref = record_ref(&fields[6], "receipt")?;
+    let control_plane_receipt_ref = record_ref(&fields[6], "control-plane-receipt")?;
     validate_read_consistency_mode(&read_consistency_mode)?;
     require_check(&parse_checks(&fields[7])?, "dataspace-observation-only", "coordination assertion")?;
     Ok(CoordinationStatusAssertion {
@@ -52,7 +53,7 @@ pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<Coordinati
         key,
         read_consistency_mode,
         state_ref,
-        receipt_ref,
+        control_plane_receipt_ref,
         value: value.clone(),
     })
 }
@@ -203,63 +204,5 @@ fn parse_coordination_transition(value: &Value<IoValue>) -> Result<ParsedReceipt
         output_refs,
         control_plane_intent_ref,
         prior_receipt_ref,
-    })
-}
-
-pub fn new_coordination_runtime(manifest_value: &IoValue) -> Result<CoordinationRuntime> {
-    let manifest = parse_coordination_service_manifest(manifest_value)?;
-    let raft_manifest = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
-    let raft = crate::raft_control_plane::new_control_registry_model_runtime(&raft_manifest)?;
-    Ok(CoordinationRuntime {
-        manifest,
-        raft,
-        state: CoordinationState {
-            next_fencing_token: 1,
-            ..CoordinationState::default()
-        },
-        applied_operations: OrderedMap::new(),
-        receipts: Vec::new(),
-        assertions: Vec::new(),
-        tokens: Vec::new(),
-        next_sequence: 1,
-    })
-}
-
-pub fn apply_coordination_request(
-    runtime: &mut CoordinationRuntime,
-    request_value: &IoValue,
-) -> Result<CoordinationApplyResult> {
-    let request = parse_coordination_request(request_value)?;
-    let current_snapshot = snapshot_from_state(&runtime.state)?;
-    if let Some(existing) = runtime.applied_operations.get(&request.operation_id_ref).cloned() {
-        return replay_or_conflicting_duplicate(runtime, request, current_snapshot, existing);
-    }
-    let mut diagnostics = Vec::new();
-    collect_admission_diagnostics(runtime, &request, &mut diagnostics)?;
-    if diagnostics.is_empty() {
-        if request.operation == OP_READ {
-            return apply_coordination_read(runtime, request);
-        }
-        let transition = primitive_transition(runtime, &request)?;
-        if transition.decision == "pass" {
-            return commit_prepared_mutation(runtime, request, current_snapshot, transition);
-        }
-        return deny_transition_result(runtime, request, current_snapshot, transition, &["semantic-state-transition", "fail"]);
-    }
-    deny_result(runtime, request, current_snapshot, diagnostics, &["admission-gate", "fail"])
-}
-
-pub fn coordination_fixture_manifest_value() -> Result<IoValue> {
-    let group_ref = canonical_hash(&crate::raft_control_plane::control_registry_fixture_manifest_value()?)?;
-    coordination_service_manifest_value(&CoordinationServiceManifestInput {
-        service_id: DEFAULT_COORDINATION_SERVICE_ID.to_string(),
-        services: supported_services(),
-        control_group_ref: group_ref,
-        queue_capacity: DEFAULT_COORDINATION_QUEUE_CAPACITY,
-        semaphore_capacity: DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
-        rate_limit: DEFAULT_COORDINATION_RATE_LIMIT,
-        barrier_parties: DEFAULT_COORDINATION_BARRIER_PARTIES,
-        policy_refs: vec![fixture_ref("coordination-policy")],
-        resource_refs: vec![fixture_ref("coordination-resource")],
     })
 }

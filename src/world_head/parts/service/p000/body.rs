@@ -30,6 +30,8 @@ use super::WorldHeadMutationOutcome;
 use super::WorldHeadPortError;
 use super::WorldHeadReconciliationPort;
 use super::WorldHeadSignatureCarrier;
+use super::WorldHeadSignerAuthorityPort;
+use super::WorldHeadVerifiedSigner;
 use super::WorldHeadSigningPort;
 use super::WorldHeadStatePort;
 use super::WorldHeadTransitionReceiptInput;
@@ -38,11 +40,11 @@ use super::canonical_world_head_conflict;
 use super::canonical_world_head_transition_receipt;
 use super::world_head_artifact_statement;
 use super::world_head_authentication_scope;
+use super::world_head_signer_role;
 use crate::error::Failure;
 use crate::error::Result;
 
 const STATEMENT_SET_IDENTITY_DOMAIN: &str = "molten.world-head.statement-set.v1";
-const DECISION_ADMITTED: &str = "admitted";
 const DECISION_DENIED: &str = "denied";
 const DECISION_CONFLICT: &str = "conflict";
 
@@ -108,10 +110,16 @@ pub fn sign_world_head_claim<S: WorldHeadSigningPort>(
     Ok((canonical, signature, statement_ref))
 }
 
-pub fn evaluate_world_head_authentication(
+/// Verifies detached carriers and derives every signer's role and authority.
+///
+/// A signer's role comes from the trusted policy key that its signed statement names, and its
+/// authority comes from `signer_authority`; neither is taken from the unsigned carrier.
+// r[impl molten.world_commit.world_head_truthful_receipts_and_verified_signers]
+pub fn evaluate_world_head_authentication<P: WorldHeadSignerAuthorityPort + ?Sized>(
     claim: &CanonicalWorldHeadClaim,
     policy: &AuthenticationPolicy,
     carriers: &[WorldHeadSignatureCarrier],
+    signer_authority: &mut P,
 ) -> Result<WorldHeadAuthenticationResult> {
     let scope = world_head_authentication_scope(claim)?;
     let statements = carriers
@@ -139,8 +147,18 @@ pub fn evaluate_world_head_authentication(
     let signers = statements
         .iter()
         .zip(carriers)
-        .map(|((statement, _), carrier)| signer_observation(policy, statement, carrier))
-        .collect::<Vec<_>>();
+        .map(|((statement, _), carrier)| {
+            signer_observation(
+                SignerObservationInput {
+                    policy,
+                    claim: &claim.claim,
+                    statement,
+                    carrier,
+                },
+                &mut *signer_authority,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
     let statement_ref = statement_set_ref(&statements)?;
     let decision_ref = WorldHeadAuthenticationDecisionRef::new(format!("blake3:{}", decision.decision_blake3))
         .map_err(|error| Failure::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
@@ -171,8 +189,12 @@ where
 {
     let canonical = canonical_world_head_claim(&request.claim)?;
     let current = store.read_head(&request.claim.branch_id).map_err(port_error)?;
-    let authentication =
-        evaluate_world_head_authentication(&canonical, &request.authentication_policy, &request.signatures)?;
+    let authentication = evaluate_world_head_authentication(
+        &canonical,
+        &request.authentication_policy,
+        &request.signatures,
+        authority,
+    )?;
     let authority_observation = authority
         .observe_authority(&request.claim.branch_id, &request.claim.policy_ref, request.claim.expected_generation)
         .map_err(port_error)?;
@@ -191,87 +213,40 @@ where
     let WorldHeadDecision::Admitted(plan) = decision else {
         return denied_execution(decision, &canonical, &authentication, authority_observation.authority_ref.as_str());
     };
-    let admitted_receipt = transition_receipt(TransitionReceiptInput {
-        decision: DECISION_ADMITTED,
-        plan: Some(&plan),
+    let receipt_context = OutcomeReceiptContext {
+        plan: &plan,
         claim: &canonical,
         authentication: &authentication,
         authority_ref: authority_observation.authority_ref.as_str(),
-        issues: &[],
-    })?;
-    let fresh_authentication_policy = &request.authentication_policy;
-    let fresh_signatures = &request.signatures;
-    let fresh_canonical = &canonical;
-    let mutation = store
-        .apply_transition(&plan, &admitted_receipt, |observed| {
-            if observed != plan.before.as_ref() {
-                return Err(WorldHeadPortError::new("fresh-head-mismatch", "head changed inside mutation boundary"));
-            }
-            let fresh_authentication =
-                evaluate_world_head_authentication(fresh_canonical, fresh_authentication_policy, fresh_signatures)
-                    .map_err(|error| WorldHeadPortError::new("fresh-authentication", error.to_string()))?;
-            let fresh_authority = authority.observe_authority(
-                &plan.after.branch_id,
-                &plan.after.policy_ref,
-                plan.before.as_ref().map_or(0, |state| state.generation),
-            )?;
-            Ok(WorldHeadFreshAdmission {
-                authentication_passed: fresh_authentication.observation.passed,
-                authority: fresh_authority,
-            })
-        })
-        .map_err(port_error)?;
-    let status = match mutation {
-        WorldHeadMutationOutcome::Applied => WorldHeadExecutionStatus::Applied,
-        WorldHeadMutationOutcome::AlreadyApplied => WorldHeadExecutionStatus::AlreadyApplied,
-        WorldHeadMutationOutcome::Stale => WorldHeadExecutionStatus::Stale,
-        WorldHeadMutationOutcome::Uncertain => {
-            store.record_uncertain_transition(&plan, &admitted_receipt).map_err(port_error)?;
-            WorldHeadExecutionStatus::Uncertain
-        }
     };
+    // The store persists this receipt only inside the transaction that commits the successor
+    // head, so a durable `applied` receipt is never written for a stale or failed mutation.
+    // r[impl molten.world_commit.world_head_truthful_receipts_and_verified_signers]
+    let applied_receipt = receipt_context.receipt(WorldHeadExecutionStatus::Applied, &[])?;
+    let fresh_input = FreshAdmissionInput {
+        plan: &plan,
+        plan_request: &plan_request,
+        canonical: &canonical,
+        authentication_policy: &request.authentication_policy,
+        signatures: &request.signatures,
+    };
+    let mutation = store
+        .apply_transition(&plan, &applied_receipt, |observed| fresh_admission(&fresh_input, &mut *authority, observed))
+        .map_err(port_error)?;
+    // The returned receipt reflects the observed CAS outcome, never the pre-mutation admission.
+    let (status, issues) = mutation_status(mutation);
+    let receipt = if status == WorldHeadExecutionStatus::Applied {
+        applied_receipt
+    } else {
+        receipt_context.receipt(status, &issues)?
+    };
+    if status == WorldHeadExecutionStatus::Uncertain {
+        store.record_uncertain_transition(&plan, &receipt).map_err(port_error)?;
+    }
     Ok(WorldHeadExecutionResult {
         status,
         plan: Some(plan),
-        issues: Vec::new(),
-        receipt: admitted_receipt,
-    })
-}
-
-fn denied_execution(
-    decision: WorldHeadDecision,
-    canonical: &CanonicalWorldHeadClaim,
-    authentication: &WorldHeadAuthenticationResult,
-    authority_ref: &str,
-) -> Result<WorldHeadExecutionResult> {
-    let issues = decision_issues(decision);
-    let receipt = transition_receipt(TransitionReceiptInput {
-        decision: DECISION_DENIED,
-        plan: None,
-        claim: canonical,
-        authentication,
-        authority_ref,
-        issues: &issues,
-    })?;
-    Ok(WorldHeadExecutionResult {
-        status: WorldHeadExecutionStatus::Denied,
-        plan: None,
         issues,
         receipt,
     })
-}
-
-pub fn record_world_head_conflict<S: WorldHeadConflictPort>(
-    store: &mut S,
-    plans: &[WorldHeadTransitionPlan],
-    maximum: u32,
-) -> Result<Option<(WorldHeadConflictSet, CanonicalWorldHeadConflict)>> {
-    let conflict = classify_world_head_conflict(plans, maximum)
-        .map_err(|issues| Failure::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
-    let Some(conflict) = conflict else {
-        return Ok(None);
-    };
-    let canonical = canonical_world_head_conflict(&conflict)?;
-    store.record_conflict(&conflict, &canonical).map_err(port_error)?;
-    Ok(Some((conflict, canonical)))
 }

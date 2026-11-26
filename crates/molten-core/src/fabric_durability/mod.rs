@@ -9,7 +9,7 @@ pub mod ownership;
 mod storagefault;
 mod transition;
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 pub use storagefault::*;
 pub use transition::*;

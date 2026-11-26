@@ -137,3 +137,97 @@ fn valid_ref(value: &str) -> bool {
 fn invalid(message: impl Into<String>) -> crate::fabric::FabricPortError {
     crate::fabric::FabricPortError::malformed(message)
 }
+
+fn validate_transition(
+    current: &crate::fabric_membership::RoleAssignment,
+    transition: &crate::fabric_membership::AssignmentTransition,
+) -> crate::fabric::FabricPortResult<()> {
+    let next = &transition.next;
+    let transition_ref = next.transition_refs.last().ok_or_else(|| invalid("transition lacks command reference"))?;
+    let command = crate::fabric_membership::AssignmentCommand {
+        kind: transition.kind,
+        assignment_id: next.assignment_id.clone(),
+        service_generation: next.service_generation,
+        assignment_epoch: next.assignment_epoch,
+        fencing_token: next.fencing_token,
+        transition_ref: transition_ref.clone(),
+        uncertain_old_owner: next.uncertain_old_owner && !current.uncertain_old_owner,
+    };
+    let expected = crate::fabric_membership::apply_assignment_command(current, &command)
+        .map_err(|issues| invalid(format!("invalid assignment transition: {issues:?}")))?;
+    if &expected != transition {
+        return Err(invalid("transition differs from pure assignment command"));
+    }
+    Ok(())
+}
+
+fn intent_reference(
+    current: &crate::fabric_membership::RoleAssignment,
+    transition: &crate::fabric_membership::AssignmentTransition,
+) -> crate::fabric::FabricPortResult<String> {
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("fabric-assignment-owner-intent-v1", vec![
+        assignment_value(current),
+        crate::preserves_rail::string(transition.kind.as_str()),
+        assignment_value(&transition.next),
+    ]))
+    .map_err(crate::fabric::FabricPortError::from)
+}
+
+pub(super) fn encode_record(state: &AssignmentRecord) -> crate::fabric::FabricPortResult<Vec<u8>> {
+    encode_state(
+        &state.assignment,
+        state.pending.as_ref().map(|(transition, reference)| (transition, reference.as_str())),
+    )
+}
+
+fn encode_state(
+    assignment: &crate::fabric_membership::RoleAssignment,
+    pending: Option<(&crate::fabric_membership::AssignmentTransition, &str)>,
+) -> crate::fabric::FabricPortResult<Vec<u8>> {
+    let pending = pending.map(|(transition, intent_ref)| {
+        crate::preserves_rail::record("pending-assignment-intent-v1", vec![
+            crate::preserves_rail::string(transition.kind.as_str()),
+            assignment_value(&transition.next),
+            crate::preserves_rail::string(intent_ref),
+        ])
+    });
+    let value = crate::preserves_rail::record("fabric-assignment-owner-state-v1", vec![
+        assignment_value(assignment),
+        crate::preserves_rail::sequence(pending.into_iter().collect()),
+    ]);
+    let bytes = crate::preserves_rail::canonical_bytes(&value).map_err(crate::fabric::FabricPortError::from)?;
+    if bytes.len() > MAX_RECORD_BYTES {
+        return Err(invalid("assignment record exceeds 4 MiB bound"));
+    }
+    Ok(bytes)
+}
+
+pub(super) fn decode_record(bytes: &[u8]) -> crate::fabric::FabricPortResult<AssignmentRecord> {
+    if bytes.len() > MAX_RECORD_BYTES {
+        return Err(invalid("assignment record exceeds 4 MiB bound"));
+    }
+    let value = crate::preserves_rail::parse_canonical_bytes(bytes).map_err(crate::fabric::FabricPortError::from)?;
+    let values = fields(&value, "fabric-assignment-owner-state-v1", 2)?;
+    let assignment = decode_assignment(&values[0])?;
+    let pending = items(&values[1], 1)?;
+    let pending = pending
+        .first()
+        .map(|value| {
+            let fields = fields(value, "pending-assignment-intent-v1", 3)?;
+            let kind = command_kind(&text(&fields[0])?)?;
+            let next = decode_assignment(&fields[1])?;
+            let transition = crate::fabric_membership::AssignmentTransition {
+                previous_state: assignment.state,
+                next,
+                kind,
+            };
+            validate_transition(&assignment, &transition)?;
+            let intent_ref = text(&fields[2])?;
+            if intent_reference(&assignment, &transition)? != intent_ref {
+                return Err(invalid("stored pending intent identity mismatch"));
+            }
+            Ok((transition, intent_ref))
+        })
+        .transpose()?;
+    Ok(AssignmentRecord { assignment, pending })
+}

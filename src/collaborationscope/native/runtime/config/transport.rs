@@ -126,6 +126,7 @@ async fn listener(
         validity: transport.validity.clone().into_cohort()?,
         admission: transport.admission.clone().into_state()?,
         observed_tick: transport.observed_tick,
+        admitted_peers: transport.admitted_peers()?,
     })
     .await?;
     if listener.handoff().descriptor_ref != transport.local_descriptor_ref

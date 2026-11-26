@@ -20,7 +20,7 @@ Owner: `AuthorityGrantCurrentnessInput` in [authority declarations](../../../src
 | `current_key_refs` | Current key set intersected with nonempty context keys | Source of the current key view |
 | `revocations` | Supplied records considered for effective target matches | Complete applicable facts for the reviewed boundary |
 
-The result has `decision` and `diagnostics`; currentness uses `pass` or `fail`. A reference parsing error is a `Result` error rather than this ordinary diagnostic result. The wrapper `admit_authority` does not accept all these facts independently, so its signature must not be described as equivalent evidence of caller identity or key rotation.
+The result has `decision` and `diagnostics`; currentness uses `pass` or `fail`. A reference parsing error is a `Result` error rather than this ordinary diagnostic result. The wrapper `admit_authority` accepts the principal, minimum epoch, and current keys from its caller rather than the context, but it still cannot authenticate that caller; `admit_capability_scope` accepts none of them and records that non-claim in its receipt.
 
 ## Token and proofset inputs
 
@@ -75,6 +75,6 @@ Suppose a context and token both record expiry `8`. The currentness helper denie
 - [Effect manifest contract](../../effect-manifest-profiles.md)
 - [Authority input declarations](../../../src/authority/parts/mod/p000/body.rs)
 - [Capability input declarations](../../../src/capability/parts/tokens/p000/body.rs)
-- [Policy material producer and parser](../../../src/harness/parts/schema/p019/body.rs)
-- [Capability gate producer and parser](../../../src/harness/parts/schema/p020/body.rs)
+- [Policy material producer and parser](../../../src/harness/schema/gates/covenant.rs)
+- [Capability gate producer and parser](../../../src/harness/schema/grants/grants.rs)
 - [Effect request admission](../../../src/effects/parts/mod/p002/body.rs)

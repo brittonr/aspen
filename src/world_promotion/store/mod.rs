@@ -20,6 +20,9 @@ pub(super) const ATTEMPTS_TABLE: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("world_release_attempts_v1");
 pub(super) const PROMOTION_IDENTITIES_TABLE: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("world_promotion_identities_v1");
+/// Single-use grant nonces, each mapped to the canonical grant record that consumed it.
+pub(super) const CONSUMED_GRANTS_TABLE: redb::TableDefinition<&str, &[u8]> =
+    redb::TableDefinition::new("world_promotion_consumed_grants_v1");
 
 pub struct LocalWorldPromotionStore {
     pub(super) heads: LocalWorldHeadStore,
@@ -55,6 +58,7 @@ fn initialize_tables(database: &redb::Database) -> Result<()> {
         write.open_table(RESERVATIONS_TABLE).map_err(store_error)?;
         write.open_table(ATTEMPTS_TABLE).map_err(store_error)?;
         write.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
+        write.open_table(CONSUMED_GRANTS_TABLE).map_err(store_error)?;
     }
     write.commit().map_err(store_error)
 }

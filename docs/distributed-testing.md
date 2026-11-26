@@ -95,6 +95,42 @@ whole-runtime-correctness, production-readiness, or performance evidence.
 
 The local multiprocess harness model has a pure planner that validates node identities, state-root handles, transport handles, command-plan refs, expected receipt refs, and cleanup policy. The shell may spawn processes and collect artifacts, but the plan denies state-root collisions, transport collisions, stale tickets, missing receipts, child timeouts, orphaned children, or missing cleanup before accepting local pass evidence. `local-multiprocess-executable-run-v1` binds the shell observations to the pure plan and local run receipt. Local multiprocess receipts are local integration evidence only; they do not replace NixOS VM, WAN/live, authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness evidence.
 
+## Native capability qualification producers
+
+`molten evidence qualify --source-root <root> --scenario <id> --out <file>` runs one fixed scenario of a reviewed
+capability in `config/capability-report/capabilities.json` and writes a `capability-runtime-execution-v1` receipt.
+The receipt binds the exact subject (source, build, dependency closure, compiled features, execution profile, adapter,
+platform, environment), the current signed-source validation, the fixed scenario plan and the runtime artifact. Source
+admission runs before any execution; without an independently admitted signed output nothing executes.
+
+Each product scenario is bound to exactly one requirement, one family and one coverage kind, and drives the actual
+runtime path:
+
+| Capability | Environment / profile | Runtime path |
+| --- | --- | --- |
+| `durable-state-recovery` | same-process / `native-host-redb-v1` | Redb durable-state adapter: append and checkpoint, close and reopen, admitted recovery and content-verified restore; mismatched snapshot identity, corrupted payload (quarantine on reopen) and stale generation deny |
+| `effect-uncertainty` | distinct-process / `native-process` | live bounded-execution adapter running a `/bin/sh` child that first creates a start marker in its workspace, then exits without reading its input: the started effect has no definitive completion (unknown, reconciliation required, never published); crossed resolution and spawn failure start no child and stay definite pre-start outcomes. **Partial** for `native_effect_uncertainty`: the capability-rooted service host, driven by a producer-owned runtime port around that child effect (not the native supervisor), reports the typed uncertain outcome and keeps delivered durable work `unknown` across host reopen, never readmitting, redelivering or repeating it |
+| `cross-process-transport` | distinct-process / `iroh-cross-process-v1` | a listener peer process hands off its canonical endpoint descriptor; the producer imports it against an independently derived listener identity and exchanges one bounded Iroh frame; tampered descriptor refs, an unexpected identity and a stale generation deny before dial; a listener that reads the submitted frame (payload ref equal to the client's frame ref) and withholds the acknowledgement leaves it undelivered without automatic retry, while an accept timeout is reported as a distinct no-frame outcome |
+| `world-replay-promotion-restore` | same-process / `runtime-spine-committed-turn-v1` | world replay, logical restore and branch activation under current admission, with stale or revoked facts denied before execution or activation |
+| `control-plane-failover` | distinct-process / `live-raft-static-v1` | three replica peer processes over the live Raft transport: commit survives crash and durable restart, a stale leader is fenced, and observed quorum evidence validates while forged quorum evidence is denied |
+
+Distinct-process peers are the same admitted executable started as `molten evidence qualify-peer --role <role>
+--run-directory <dir>`; a peer emits no evidence and the producer kills and reaps it on every exit path. Each product
+run reduces what it observed to a deterministic `capability-product-observation-v1` record: named invariant checks
+(all must hold) plus the canonical receipts the runtime emitted. Scratch paths, ports, process ids, wall-clock time,
+error text and elected leader identities never enter it, so the admitted binary's independent re-execution
+(`--scenario readback`) reproduces the same bytes; `tools/capability-report.rs` accepts a passing receipt only when it
+equals that re-execution, so edited observations, flipped checks, relabelled scenarios, swapped plans or widened
+environments fail closed. A runtime error is retained as a canonical failure and never promoted.
+
+`tests/evidence-matrix.ncl` binds each scenario row to the canonical refs of its plan and of its subject-independent
+runtime artifact; `capability_qualification` tests re-execute every scenario and require those exact refs.
+`scripts/qualify-capability-report.py` qualifies each capability under its own subject. This is one-host evidence.
+These families stay **unqualified** (no producer): `post-effect-uncertainty-same-process`, every `*-nixos-vm` and
+`*-cross-host` family, and `cross-host-transport`. Nothing here establishes NixOS VM, cross-host, production or
+release qualification. Each scenario's unit test runs it once and must reproduce its checked-in matrix ref; world
+and control-plane scenario tests carry a reviewed nextest budget (`.config/nextest.toml`).
+
 ## Outside-in fault track
 
 r[impl molten.outside_in.observation] The outside-in tier (`tests/outside_in/`, nextest profile `outside-in`) runs ordinary node processes through public entry points over the real Iroh transport and a real local Redb store. The receiver is a node state root driven by `molten node init`, `run`, `live-peer-admit`, and `serve --live-iroh`. The client is a separate `molten node control-ingress-live-send` process. The scenario reads histories through `molten node control-history`. The live control path's Redb store is the receiver's delivery idempotency store, `control/idempotency/delivery-idempotency.redb`.
@@ -129,31 +165,31 @@ A denial identifies the invariant that failed before side effects, such as missi
 
 ## CI workspace scope
 
-r[impl molten.testing.ci_workspace_member_coverage] The workspace has four members: `molten`, `molten-core`, `molten-node-host`, and `molten-release-policy`. This is exactly what each CI rail covers:
+r[impl molten.testing.ci_workspace_member_coverage] The workspace members are `molten`, `molten-core`, `molten-node-host`, `molten-release-policy`, and the extracted no_std kernel crates (`molten-composition-core`, `molten-fastpath-core`, `molten-preserves-core`, `molten-raft-core`, `molten-reliability-model-core`, `molten-runtime-admission-core`, `molten-wasm-policy-core`). This is exactly what each CI rail covers:
 
 | Rail | What runs | Fails closed when |
 | --- | --- | --- |
-| `cargo nextest run --profile ci` / `--profile deterministic` | every test of all four members (`deterministic` also excludes names matching `live`, `vm`, `dogfood`, `soak`, `exploratory`) | not applicable: this is a local command |
+| `cargo nextest run --profile ci` / `--profile deterministic` | every test of every member (`deterministic` also excludes names matching `live`, `vm`, `dogfood`, `soak`, `exploratory`); `--profile no-std-kernels` selects only the kernel crates | not applicable: this is a local command |
 | `checks.nextest-config` | profile readback | the `ci` or `deterministic` filter omits a workspace member (a planted drop of `molten-core` must deny) |
-| `checks.nextest` | `--profile ci` over the unit2nix test binaries of all four members, plus the canonical CI run receipt | any test fails or any member executed no test |
+| `checks.nextest` | `--profile ci` over the unit2nix test binaries of every member (kernels under their default feature set; `checks.<kernel>-no-std` gates their no_std builds), plus the canonical CI run receipt | any test fails or any member executed no test |
 | `checks.molten-core`, `checks.molten-node-host`, `checks.molten-release-policy` | the same runner over one member | any test of that member fails; for `molten-core`, also when a `#[hegel::test]` in the crate did not execute and pass, or none exist |
-| `checks.octet-workspace` | the pinned Octet cohort with `-p` for all four members, compared finding by finding with the baseline | a finding identity is new (even when it replaces a repaired finding of the same lint in the same file), a recorded identity disappeared without a baseline update, the baseline has duplicate rows or a `total` that disagrees with its rows or the run, or `molten`/`molten-node-host` gain any finding |
+| `checks.octet-workspace` | the pinned Octet cohort with `-p` for every member (read from the workspace manifests), compared finding by finding with the baseline | a finding identity is new (even when it replaces a repaired finding of the same lint in the same file), a recorded identity disappeared without a baseline update, the baseline has duplicate rows or a `total` that disagrees with its rows or the run, or a package in `[workspace.metadata.octet] default_scope` gains any finding |
 | `checks.cairn-validate-strict` | the pinned `cairn-validator` input with its packaged policy export, `--strict` | any validation issue (a planted malformed change must deny) |
 | `checks.feature-matrix` | `cargo check --all-targets` per optional feature over the vendored lock; under the union of self-contained features, every test of every `molten` test target (library, binaries, integration tests) that does not exist under default features; and the DoltLite oracle test | a feature fails to compile, a gated test fails, a feature-gated target executes no test without a reviewed entry in `config/testing/feature-gated-targets.toml`, an integration target gated by `required-features` or a crate-level `#![cfg(feature = ...)]` is not built, or `[features]` and the matrix list disagree |
 | `checks.ci-coverage-audit` | the `#[ignore]` inventory and Hegel-property presence | an ignored test is unlisted, has no reason, uses a category its disposition does not allow, or names a rail whose own definition does not select it (text elsewhere in the flake does not count) |
 
 The named semantic profiles (`fast-core`, `harness`, `cli`, `distributed-simulation`, `outside-in`, `vm-platform`, `dogfood-soak`) stay partitions of `package(molten)`.
 
-Plain `cargo octet check` still uses `[workspace.metadata.octet] default_scope = molten + molten-node-host`, because the strict source gate and the startup binding deny any `warning-only` run and `molten-core`/`molten-release-policy` still carry reviewed debt. `checks.octet-workspace` gates that debt through `config/testing/octet-workspace-baseline.json`. Each baseline row is one finding identity: crate, file, lint, and an `anchor` with its `count`. The anchor is the first 16 hex digits of the SHA-256 of the finding's whitespace-normalized line together with its two nearest non-blank lines above and below, then `#` and that window's ordinal among identical windows in the file. An identity survives unrelated line shifts, but a new violation cannot hide behind a repaired one, even on an identical line elsewhere in the file. To shrink it after a repair, rebuild the findings and rewrite the baseline, then review the diff:
+Plain `cargo octet check` uses `[workspace.metadata.octet] default_scope` (`molten`, `molten-node-host`, and the no_std kernels), because the strict source gate and the startup binding deny any `warning-only` run; `molten-core` and `molten-release-policy` stay outside it while they carry reviewed debt. `checks.octet-workspace` gates that debt through `config/testing/octet-workspace-baseline.json` and pins every `default_scope` package at zero. Each baseline row is one finding identity: crate, file, lint, and an `anchor` with its `count`. The anchor is the first 16 hex digits of the SHA-256 of the finding's whitespace-normalized line together with its two nearest non-blank lines above and below, then `#` and that window's ordinal among identical windows in the file. An identity survives unrelated line shifts, but a new violation cannot hide behind a repaired one, even on an identical line elsewhere in the file. To shrink it after a repair, rebuild the findings and rewrite the baseline, then review the diff:
 
 ```sh
 nix build .#octet-workspace-findings
 python3 scripts/ci-coverage.py octet-baseline write --artifacts result/workspace \
-  --scope molten,molten-core,molten-node-host,molten-release-policy
+  --scope "$(cargo metadata --no-deps --format-version 1 | jq -r '[.packages[].name] | join(",")')"
 git diff --stat config/testing/octet-workspace-baseline.json
 ```
 
-When the baseline is empty, `default_scope` takes all four members and the baseline goes away.
+When the baseline is empty, `default_scope` takes every member and the baseline goes away.
 
 Ignored tests are listed in `config/testing/ignored-tests.toml`. Same-host prerequisites run on rails: `checks.tpm2-sealed-identity` (swtpm), `checks.job-captured-nickel` (pinned Nickel and `prlimit`), `checks.feature-matrix` (DoltLite), and the `object-storage-live` workflow (a disposable S3 endpoint). A Nix rail's own flake binding (with the Nix files it imports) must hold the selector and run `scripts/ci-coverage.py ignored-rail-evidence --rail nix:<rail>`, which fails the rail unless its libtest output shows every inventory test assigned to it passed. A workflow rail must pass the selector to a `cargo test ... --ignored` command. Signed-source, owner-approved-evidence, NVMe, eBPF-capture, and external-cohort tests are recorded as environment-blocked. Diagnostics and role entrypoints are reviewed exclusions.
 

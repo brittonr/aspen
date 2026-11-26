@@ -78,7 +78,7 @@ summary{cursor:pointer;font-weight:600}table{border-collapse:collapse;width:100%
 <li><code>qualification</code> — Capability qualification: Read-only, exact-build artifact validation; incomplete or simulation evidence cannot qualify live durability or cross-host behavior. (<code>tools/capability-report.rs</code>)</li>
 </ul>
 <h3>Messages</h3><ul>
-<li class="edge" tabindex="0"><code>runtime</code> → <code>qualification</code>: canonical profile-scoped execution observations, never ambient authority<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ObservedReadback</code>: <code>subject</code>, <code>binding_ref</code>, <code>validation_ref</code>, <code>receipt_refs</code> — <code>src/capability_qualification/model.rs</code></div></li>
+<li class="edge" tabindex="0"><code>runtime</code> → <code>qualification</code>: canonical profile-scoped execution observations, never ambient authority<button type="button" class="pin" aria-pressed="false">pin</button><div class="payload" role="note"><strong>Payload</strong> <code>ObservedReadback</code>: <code>subjects</code>, <code>binding_ref</code>, <code>validation_ref</code>, <code>receipt_refs</code> — <code>src/capability_qualification/model.rs</code></div></li>
 </ul>
 <h3>Questions</h3><ul>
 <li><strong>open</strong> Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. <a href="capability-qualification-report.md">ref</a></li>

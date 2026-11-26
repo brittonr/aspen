@@ -51,9 +51,8 @@ impl<'a> Sealed<'a> {
 
     /// Resolution exposes only a public key and a purpose/generation-scoped handle.
     pub fn resolve(&self) -> Result<(KeyHandle, String), Tpm2IdentityFailure> {
-        let (generation, secret) = self.unseal()?;
-        let public = secret.public();
-        Ok((self.handle(generation, public.as_bytes())?, public.to_string()))
+        let (handle, secret) = self.unseal()?;
+        Ok((handle, secret.public().to_string()))
     }
 
     /// Pass directly to Iroh in memory. No file adapter or replacement generation is consulted.
@@ -64,8 +63,7 @@ impl<'a> Sealed<'a> {
         {
             return Err(Tpm2IdentityFailure::HandleMismatch);
         }
-        let (generation, secret) = self.unseal()?;
-        let actual = self.handle(generation, secret.public().as_bytes())?;
+        let (actual, secret) = self.unseal()?;
         if &actual.handle != expected {
             return Err(Tpm2IdentityFailure::HandleMismatch);
         }
@@ -84,9 +82,10 @@ impl<'a> Sealed<'a> {
         Ok(CompletedProductionRotation { handle, outcome })
     }
 
-    fn unseal(&self) -> Result<(u64, iroh::SecretKey), Tpm2IdentityFailure> {
-        super::file_adapter::require_not_revoked(self.namespace, KeyPurpose::TransportEndpoint)
-            .map_err(|_| Tpm2IdentityFailure::HandleMismatch)?;
+    /// Unseals once and checks revocation against this exact TPM2 handle: revoking an earlier
+    /// capability-file key of the same purpose does not deny the rotated sealed key.
+    // r[impl molten.authority.crypto_adapter_exact_verification_and_scoped_revocation]
+    fn unseal(&self) -> Result<(KeyHandle, iroh::SecretKey), Tpm2IdentityFailure> {
         self.require_object()?;
         let mut bytes = self.run_tool(
             vec![
@@ -103,7 +102,18 @@ impl<'a> Sealed<'a> {
         bytes.fill(0);
         // Detect concurrent persistent-handle replacement before releasing material.
         self.require_object()?;
-        decoded
+        let (generation, secret) = decoded?;
+        let handle = self.handle(generation, secret.public().as_bytes())?;
+        self.require_handle_not_revoked(&handle.handle)?;
+        Ok((handle, secret))
+    }
+
+    fn require_handle_not_revoked(&self, handle: &OpaqueKeyHandle) -> Result<(), Tpm2IdentityFailure> {
+        super::file_adapter::require_key_not_revoked(
+            self.namespace,
+            super::file_adapter::KeyRevocationSubject::of(handle),
+        )
+        .map_err(|_| Tpm2IdentityFailure::HandleMismatch)
     }
 
     fn require_object(&self) -> Result<(), Tpm2IdentityFailure> {

@@ -60,7 +60,13 @@ class Fixture(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
-        write(self.root, "Cargo.toml", '[workspace]\nmembers = [".", "crates/molten-core"]\n[package]\nname = "molten"\n')
+        write(
+            self.root,
+            "Cargo.toml",
+            '[workspace]\nmembers = [".", "crates/molten-core"]\n'
+            '[workspace.metadata.octet]\ndefault_scope = ["-p", "molten"]\n'
+            '[package]\nname = "molten"\n',
+        )
         write(self.root, "crates/molten-core/Cargo.toml", '[package]\nname = "molten-core"\n')
         (self.root / "flake.nix").write_text(FLAKE)
 

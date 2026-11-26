@@ -118,8 +118,19 @@
             let should_commit = (index % GENERATED_TRACE_OUTCOME_PERIOD == 0) != is_invert_outcomes;
 
             if should_commit {
-                let expected = expected_turn_snapshot(&before, &turn, TurnOutcome::Committed);
-                assert_eq!(expected, committed_turn_snapshot(&before, &turn));
+                // A staged rollback (here: retracting a value the owner never
+                // asserted) must come back as a rolled-back outcome, never a commit.
+                let is_staged_rollback =
+                    turn.events.iter().any(|event| matches!(event, RuntimeEvent::TurnRolledBack { .. }));
+                let outcome = if is_staged_rollback {
+                    TurnOutcome::RolledBack
+                } else {
+                    TurnOutcome::Committed
+                };
+                let expected = expected_turn_snapshot(&before, &turn, outcome);
+                if !is_staged_rollback {
+                    assert_eq!(expected, committed_turn_snapshot(&before, &turn));
+                }
                 let (events, receipt) = state
                     .commit_turn_with_predicate_receipt(turn.clone())
                     .expect("generated commit receipt");
@@ -130,12 +141,16 @@
                 assert_eq!(receipt.receipt_ref, replay_receipt.receipt_ref);
                 assert_eq!(state.snapshot(), expected);
                 assert_eq!(state.snapshot(), replay.snapshot());
+                assert_eq!(
+                    events.iter().any(|event| matches!(event, RuntimeEvent::TurnCommitted { .. })),
+                    !is_staged_rollback
+                );
                 assert_turn_receipt_binds_transition(
                     &receipt,
                     &before,
                     &turn,
                     &expected,
-                    TurnOutcome::Committed,
+                    outcome,
                     PredicateDecision::Pass,
                 );
             } else {

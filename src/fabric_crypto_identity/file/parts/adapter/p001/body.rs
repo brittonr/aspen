@@ -40,29 +40,56 @@ impl<'a> IrohEd25519<'a> {
         policy_ref: &str,
         permit_first_boot_generation: bool,
     ) -> crate::error::Result<ResolvedProductionKey> {
+        Ok(self.current_key(purpose, policy_ref, permit_first_boot_generation)?.resolved)
+    }
+
+    /// Observes the key leaf once and returns its verified, unrevoked handle together with the key
+    /// material read from that same opened file, so a concurrent rotation or revocation can never
+    /// pair one generation's handle with another generation's secret.
+    // r[impl molten.authority.crypto_adapter_exact_verification_and_scoped_revocation]
+    fn current_key(
+        &self,
+        purpose: KeyPurpose,
+        policy_ref: &str,
+        permit_first_boot_generation: bool,
+    ) -> crate::error::Result<CurrentKey> {
         require_blake3_ref("key resolution policy", policy_ref)?;
-        require_not_revoked(self.namespace, purpose)?;
         let path = key_path(purpose)?;
-        match self.namespace.observe_file(&path)? {
-            crate::node_state::FileObservation::Missing => {
-                if !permit_first_boot_generation {
-                    return Err(crate::error::Failure::invalid_harness(
-                        "required production key is unavailable and replacement generation is disabled",
-                    ));
-                }
-                self.generate_first_key(purpose, policy_ref, &path)
+        let Some(observed) = self.observe_record(&path)? else {
+            // A revoked purpose never silently mints a replacement; rotation is the only successor path.
+            if !read_key_revocations(self.namespace, purpose)?.is_empty() {
+                return Err(revoked_key_error(purpose));
             }
-            crate::node_state::FileObservation::NonRegular(kind) => {
-                Err(crate::error::Failure::invalid_harness(format!(
-                    "production key leaf must be a regular file, got {kind:?}"
-                )))
+            if !permit_first_boot_generation {
+                return Err(crate::error::Failure::invalid_harness(
+                    "required production key is unavailable and replacement generation is disabled",
+                ));
             }
+            return self.generate_first_key(purpose, policy_ref, &path);
+        };
+        require_restricted_permission(observed.permission_status)?;
+        let resolved = self.resolved_key(purpose, &observed.record, false, observed.permission_status)?;
+        require_key_not_revoked(self.namespace, KeyRevocationSubject::of(&resolved.handle.handle))?;
+        Ok(CurrentKey {
+            resolved,
+            record: observed.record,
+        })
+    }
+
+    /// Reads the key leaf through one opened handle; mode and bytes come from that handle.
+    fn observe_record(&self, path: &crate::node_state::RelativePath) -> crate::error::Result<Option<ObservedKeyRecord>> {
+        match self.namespace.observe_file(path)? {
+            crate::node_state::FileObservation::Missing => Ok(None),
+            crate::node_state::FileObservation::NonRegular(kind) => Err(crate::error::Failure::invalid_harness(
+                format!("production key leaf must be a regular file, got {kind:?}"),
+            )),
             crate::node_state::FileObservation::Regular(file) => {
                 let permission_status = permission_status(&file);
-                require_restricted_permission(permission_status)?;
                 let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
-                let record = decode_key_record(&bytes)?;
-                self.resolved_key(purpose, &record, false, permission_status)
+                Ok(Some(ObservedKeyRecord {
+                    record: decode_key_record(&bytes)?,
+                    permission_status,
+                }))
             }
         }
     }
@@ -72,7 +99,7 @@ impl<'a> IrohEd25519<'a> {
         purpose: KeyPurpose,
         policy_ref: &str,
         path: &crate::node_state::RelativePath,
-    ) -> crate::error::Result<ResolvedProductionKey> {
+    ) -> crate::error::Result<CurrentKey> {
         let entropy_profile_ref = self.profile.profile.entropy_profile_ref.clone().ok_or_else(|| {
             crate::error::Failure::invalid_harness("production crypto profile has no entropy profile")
         })?;
@@ -95,7 +122,8 @@ impl<'a> IrohEd25519<'a> {
         };
         let encoded = encode_key_record(&record);
         self.namespace.write_new_restricted(path, &encoded, OWNER_ONLY_SECRET_FILE_MODE)?;
-        self.resolved_key(purpose, &record, true, KeyPermissionStatus::Restricted)
+        let resolved = self.resolved_key(purpose, &record, true, KeyPermissionStatus::Restricted)?;
+        Ok(CurrentKey { resolved, record })
     }
 
     fn resolved_key(
@@ -140,14 +168,14 @@ impl<'a> IrohEd25519<'a> {
         policy_ref: &str,
     ) -> crate::error::Result<SignatureOutcome> {
         require_canonical_domain(&self.profile, domain)?;
-        let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
+        let current = self.current_key(requested_handle.purpose, policy_ref, false)?;
         let request = SignRequest {
             operation_id: format!("sign-{}", requested_handle.purpose.as_str()),
             profile_ref: self.profile.profile.profile_ref.clone(),
             handle: requested_handle.clone(),
             domain: domain.domain.clone(),
-            current_generation: current.handle.handle.generation,
-            current_handle_ref: current.handle.handle.handle_ref.clone(),
+            current_generation: current.resolved.handle.handle.generation,
+            current_handle_ref: current.resolved.handle.handle.handle_ref.clone(),
             policy_ref: policy_ref.to_string(),
         };
         let plan = plan_sign(&self.profile.profile, &request)
@@ -157,8 +185,10 @@ impl<'a> IrohEd25519<'a> {
                 "signature domain ref does not match canonical value",
             ));
         }
-        let record = self.load_current_record(requested_handle.purpose)?;
-        let signature = record.secret_key.sign(&domain.bytes).to_bytes().to_vec();
+        #[cfg(test)]
+        seam::fire("sign-after-observe", self);
+        // The secret comes from the same observation that produced the handle the plan admitted.
+        let signature = current.record.secret_key.sign(&domain.bytes).to_bytes().to_vec();
         signature_outcome(&self.profile, &plan, domain, signature)
     }
 
@@ -170,8 +200,8 @@ impl<'a> IrohEd25519<'a> {
         policy_ref: &str,
     ) -> crate::error::Result<ExactArtifactAuthSignature> {
         require_blake3_ref("artifact-auth signing policy", policy_ref)?;
-        let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
-        require_current_handle(requested_handle, &current.handle.handle)?;
+        let current = self.current_key(requested_handle.purpose, policy_ref, false)?;
+        require_current_handle(requested_handle, &current.resolved.handle.handle)?;
         if statement.scope.profile_id != self.profile.profile.profile_id {
             return Err(crate::error::Failure::invalid_harness(
                 "artifact-auth statement profile does not match the key profile",
@@ -182,8 +212,7 @@ impl<'a> IrohEd25519<'a> {
                 "artifact-auth statement purpose does not match the key purpose",
             ));
         }
-        let record = self.load_current_record(requested_handle.purpose)?;
-        let public_key = record.secret_key.public();
+        let public_key = current.record.secret_key.public();
         let key_identity = artifact_auth_ed25519::public_key_identity(public_key.as_bytes());
         if statement.key_identity != key_identity {
             return Err(crate::error::Failure::invalid_harness(
@@ -193,7 +222,7 @@ impl<'a> IrohEd25519<'a> {
         let statement_bytes = artifact_auth_core::canonical_statement_bytes(statement).map_err(|_| {
             crate::error::Failure::invalid_harness("artifact-auth statement is not canonicalizable")
         })?;
-        let signature_bytes = record.secret_key.sign(&statement_bytes).to_bytes().to_vec();
+        let signature_bytes = current.record.secret_key.sign(&statement_bytes).to_bytes().to_vec();
         debug_assert_eq!(public_key.as_bytes().len(), artifact_auth_ed25519::ED25519_PUBLIC_KEY_BYTES);
         debug_assert_eq!(signature_bytes.len(), artifact_auth_ed25519::ED25519_SIGNATURE_BYTES);
         Ok(ExactArtifactAuthSignature {
@@ -203,6 +232,11 @@ impl<'a> IrohEd25519<'a> {
     }
 
     // r[impl molten.crypto_identity.canonical_signature_binding]
+    // r[impl molten.authority.crypto_adapter_exact_verification_and_scoped_revocation]
+    /// The observed signature metadata is evaluated exactly as supplied: a `signer_public_ref` that
+    /// differs from the expected domain is a typed denial, never rewritten to the verifying key. A
+    /// signature checked under a key other than the domain's declared signer is not cryptographic
+    /// evidence for that signer.
     pub fn verify(
         &self,
         public_key: &str,
@@ -222,13 +256,11 @@ impl<'a> IrohEd25519<'a> {
             .map_err(|_| crate::error::Failure::invalid_harness("verification public key is malformed"))?;
         let public_key_ref = crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes());
         let parsed_signature = iroh::Signature::try_from(signature.signature.as_slice()).ok();
-        let is_crypto_passed = parsed_signature
-            .as_ref()
-            .is_some_and(|parsed| public_key.verify(&expected_domain.bytes, parsed).is_ok());
-        let mut observed = signature.metadata.clone();
-        if observed.signer_public_ref != public_key_ref {
-            observed.signer_public_ref = public_key_ref;
-        }
+        let is_crypto_passed = public_key_ref == expected_domain.domain.signer_public_ref
+            && parsed_signature
+                .as_ref()
+                .is_some_and(|parsed| public_key.verify(&expected_domain.bytes, parsed).is_ok());
+        let observed = signature.metadata.clone();
         let request = VerificationRequest {
             operation_id: format!("verify-{}", expected_domain.domain.purpose.as_str()),
             profile_ref: self.profile.profile.profile_ref.clone(),
@@ -240,31 +272,5 @@ impl<'a> IrohEd25519<'a> {
             policy_ref: policy_ref.to_string(),
         };
         verification_outcome(evaluate_verification(&self.profile.profile, &request))
-    }
-
-    // r[impl molten.crypto_identity.rotation_revocation]
-    pub fn revoke(
-        &self,
-        handle: &OpaqueKeyHandle,
-        revocation_evidence_ref: &str,
-        policy_ref: &str,
-    ) -> crate::error::Result<StatusReadback> {
-        require_blake3_ref("revocation evidence", revocation_evidence_ref)?;
-        require_blake3_ref("revocation policy", policy_ref)?;
-        let current = self.resolve_or_generate(handle.purpose, policy_ref, false)?;
-        require_current_handle(handle, &current.handle.handle)?;
-        let marker = crate::preserves_rail::record("fabric-crypto-key-revocation-v1", vec![
-            crate::preserves_rail::string(&handle.handle_ref),
-            crate::preserves_rail::string(&handle.public_key_ref),
-            crate::preserves_rail::u64_value(handle.generation),
-            crate::preserves_rail::string(revocation_evidence_ref),
-            crate::preserves_rail::string(policy_ref),
-        ]);
-        self.namespace.write_restricted(
-            &revocation_path(handle.purpose)?,
-            &crate::preserves_rail::canonical_bytes(&marker)?,
-            OWNER_ONLY_SECRET_FILE_MODE,
-        )?;
-        self.status_from_record(handle.purpose, KeyCurrentness::Revoked, vec![revocation_evidence_ref.to_string()])
     }
 }

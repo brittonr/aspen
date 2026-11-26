@@ -38,9 +38,11 @@
             }
             other => panic!("unexpected transition kind {other}"),
         }
+        let emitted_refs = result.assertions.iter().map(|assertion| assertion.assertion_ref.clone()).collect::<Vec<_>>();
+        assert_eq!(result.receipt.dataspace_assertion_refs, emitted_refs);
         for assertion in &result.assertions {
             assert_eq!(assertion.state_ref, result.state_snapshot.state_ref);
-            assert_eq!(assertion.receipt_ref, result.receipt.receipt_ref);
+            assert_eq!(Some(&assertion.control_plane_receipt_ref), result.receipt.control_plane_intent_ref.as_ref());
             crate::preserves_rail::validate_content_ref(&assertion.assertion_ref).expect("assertion ref");
         }
         crate::preserves_rail::validate_content_ref(&result.receipt.receipt_ref).expect("receipt ref");
@@ -98,7 +100,7 @@
     #[test]
     fn ledger_catalog_and_mcp_classify_coordination_artifacts() {
         let manifest = coordination_fixture_manifest_value().expect("manifest");
-        let mut runtime = new_coordination_runtime(&manifest).expect("runtime");
+        let mut runtime = new_coordination_simulation_runtime(&manifest, CoordinationClock::fixture(0)).expect("runtime");
         let result = apply_coordination_request(
             &mut runtime,
             &request(SERVICE_LOCK, OP_ACQUIRE, "resource:classify", "session", 1, None),

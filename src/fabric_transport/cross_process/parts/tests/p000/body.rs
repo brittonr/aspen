@@ -155,42 +155,6 @@ fn expected(endpoint: &Endpoint) -> ExpectedEndpointBinding {
     }
 }
 
-pub(crate) async fn listener() -> Listener {
-    listener_with_secret(LISTENER_SECRET_BYTE).await
-}
-
-pub(crate) async fn listener_with_secret(secret_byte: u8) -> Listener {
-    Listener::bind(ListenerInput {
-        profile: profile(),
-        protocol: protocol(),
-        capability: capability(secret_byte, LISTENER_CAPABILITY_REF),
-        bind_addr: bind_addr(),
-        listener_identity_ref: LISTENER_REF.to_string(),
-        expected_peer_context_ref: PEER_CONTEXT_REF.to_string(),
-        locator_cohort_ref: LOCATOR_COHORT_REF.to_string(),
-        disclosure: disclosure(),
-        validity: validity(),
-        admission: EndpointAdmissionState::fully_active(),
-        observed_tick: OBSERVED_TICK,
-    })
-    .await
-    .expect("cross-process listener")
-}
-
-pub(crate) fn client_input(endpoint: Endpoint) -> ClientInput {
-    ClientInput {
-        profile: profile(),
-        protocol: protocol(),
-        capability: capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF),
-        bind_addr: bind_addr(),
-        expected: expected(&endpoint),
-        endpoint,
-        admission: EndpointAdmissionState::fully_active(),
-        session_ref: SESSION_REF.to_string(),
-        request_ref: REQUEST_REF.to_string(),
-    }
-}
-
 fn effect_binding(profile: &Profile) -> crate::fabric::CanonicalPortBinding {
     let descriptor = fabric_transport_port_descriptor(profile);
     crate::fabric::resolve_canonical_port_binding(

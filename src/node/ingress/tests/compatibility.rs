@@ -19,7 +19,8 @@ fn legacy_dedup_with_exact_inbox_repairs_observation_without_fabricated_intent()
     let case = Case::new("ingress_legacy_inbox");
     let reservation = case.dedup();
     case.write_inbox();
-    let before = case.read(&control_inbox_path(&case.envelope.request.request_ref).expect("inbox path"));
+    let before = case
+        .read(&super::super::super::paths::control_inbox_path(&case.envelope.request.request_ref).expect("inbox path"));
     let delivered = case.deliver();
     assert!(!delivered.has_enqueued);
     assert_eq!(
@@ -27,7 +28,12 @@ fn legacy_dedup_with_exact_inbox_repairs_observation_without_fabricated_intent()
         "pass"
     );
     assert_eq!(case.queue().phase, "publication-observed");
-    assert_eq!(case.read(&control_inbox_path(&case.envelope.request.request_ref).expect("inbox path")), before);
+    assert_eq!(
+        case.read(
+            &super::super::super::paths::control_inbox_path(&case.envelope.request.request_ref).expect("inbox path")
+        ),
+        before
+    );
     let root = case.reopen();
     let delivery = root.delivery_store().expect("delivery store");
     let mut store = crate::delivery_idempotency::PublicationStore::open(&delivery).expect("journal");
@@ -66,7 +72,9 @@ fn legacy_dedup_with_exact_result_suppresses_reenqueue_without_intent() {
     case.deliver();
     let dispatched = case.dispatch().expect("actual legacy dispatch");
     case.reopen()
-        .remove_regular_file(&queue_receipt_path(&case.envelope.request.request_ref).expect("queue path"))
+        .remove_regular_file(
+            &super::super::super::paths::queue_receipt_path(&case.envelope.request.request_ref).expect("queue path"),
+        )
         .expect("controlled original receipt loss");
     let before = case.facts();
     let delivered = case.deliver();
@@ -74,8 +82,11 @@ fn legacy_dedup_with_exact_result_suppresses_reenqueue_without_intent() {
     assert_eq!(receipt.decision, "pass");
     assert_eq!(receipt.phase, "completed-dispatch");
     assert!(!delivered.has_enqueued);
-    let value = read_ledger_artifact(&case.reopen(), delivered.queue_receipt_ref.as_deref().expect("observation ref"))
-        .expect("dispatch observation artifact");
+    let value = super::super::super::storage::read_ledger_artifact(
+        &case.reopen(),
+        delivered.queue_receipt_ref.as_deref().expect("observation ref"),
+    )
+    .expect("dispatch observation artifact");
     assert_eq!(
         parse_control_queue_receipt(&value).expect("queue observation").location_ref,
         dispatched.control_receipt_ref

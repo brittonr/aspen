@@ -160,6 +160,10 @@ impl DagResourcePort for DagResources {
             admitted: true,
         })
     }
+
+    fn confirm(&mut self, plan: &DagSyncPlan, _reservation_ref: &str) -> Result<DagResourceObservation> {
+        self.reserve(plan)
+    }
 }
 
 struct Progress {
@@ -238,7 +242,7 @@ impl WorldClaimAuthenticationPort for ClaimAuthentication {
             policy_matches: true,
             signers: vec![WorldHeadSignerObservation {
                 key_identity_ref: reference("claim-key"),
-                role: WorldHeadSignerRole::Maintainer,
+                role: Some(WorldHeadSignerRole::Maintainer),
                 authenticated: true,
                 current: true,
                 revoked: false,

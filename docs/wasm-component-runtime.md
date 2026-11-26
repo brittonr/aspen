@@ -9,7 +9,7 @@ The normative profile is authored in
 validated by typed contracts in
 [`wasm-component-runtime/contracts.ncl`](wasm-component-runtime/contracts.ncl),
 and exported deterministically to
-[`wasm-component-runtime/generated/profile.json`](wasm-component-runtime/generated/profile.json).
+[`config/wasm-component-runtime/generated/profile.json`](../config/wasm-component-runtime/generated/profile.json).
 The profile pins the Wasmtime, Component Model, WIT, `wit-bindgen`, WIT package,
 world, and WIT-source cohorts together. Partial and stale cohort combinations
 are invalid.
@@ -192,7 +192,7 @@ operated-consumer evidence. No higher-budget diagnostic grants product admission
 `molten.wasm.component.effects.v1`, not an admitted execution profile.
 [`effect-contract.ncl`](wasm-component-runtime/effect-contract.ncl) is the positive
 export of the exact [`effect-contracts.ncl`](wasm-component-runtime/effect-contracts.ncl)
-contract; [`generated/effect-contract.json`](wasm-component-runtime/generated/effect-contract.json)
+contract; [`generated/effect-contract.json`](../config/wasm-component-runtime/generated/effect-contract.json)
 is its deterministic projection. `execution_admitted=false` is mandatory.
 The existing import-free production profiles/WIT and defaults are unchanged. Defining or decoding this contract does
 not install a linker, host adapter, actor or system extension.
@@ -258,7 +258,7 @@ From the repository root, regenerate the projection and repeat the combined
 positive export/readback, exact WIT-hash and negative-fixture rail:
 
 ```sh
-nix develop -c nickel export docs/wasm-component-runtime/effect-contract.ncl --format json --output docs/wasm-component-runtime/generated/effect-contract.json
+nix develop -c nickel export docs/wasm-component-runtime/effect-contract.ncl --format json --output config/wasm-component-runtime/generated/effect-contract.json
 nix build .#checks.x86_64-linux.wasm-component-profile
 ```
 
@@ -285,7 +285,7 @@ The policy fixture is authored in `wasm-component-runtime/host-policy.ncl`; its
 generated JSON is checked by the existing component-profile Nix rail:
 
 ```sh
-nix develop -c nickel export docs/wasm-component-runtime/host-policy.ncl --format json --output docs/wasm-component-runtime/generated/host-policy.json
+nix develop -c nickel export docs/wasm-component-runtime/host-policy.ncl --format json --output config/wasm-component-runtime/generated/host-policy.json
 nix develop -c cargo test --locked -p molten --lib -- wasm_component::effect::host
 ```
 

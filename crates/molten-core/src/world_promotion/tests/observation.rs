@@ -128,3 +128,33 @@ fn observation_commit_rejects_failed_outcome() {
         Err(issues) if issues.contains(&WorldPromotionIssue::ObservationNotAcknowledged)
     ));
 }
+
+// r[verify molten.world_promotion.non_claims]
+#[test]
+fn terminal_acknowledgment_and_abandonment_do_not_claim_exactly_once() {
+    let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");
+    let mut reservation = plan.reservations[0].clone();
+    reservation.state = WorldReleaseState::Committed;
+    let attempt_ref = expected_attempt_ref(&reservation).expect("attempt ref");
+    let dispatch = plan_world_dispatch(&plan, &reservation, &dispatch_facts(), &attempt_ref).expect("dispatch plan");
+    let observed = classify_attempt_observation(
+        &dispatch,
+        WorldAttemptObservation::Succeeded(
+            WorldReleaseObservationRef::new(reference("success")).expect("observation ref"),
+        ),
+    );
+    let acknowledged = acknowledge_attempt(&observed).expect("acknowledged attempt");
+    assert!(acknowledged.external_completion_proven);
+
+    let uncertain = classify_attempt_observation(&dispatch, WorldAttemptObservation::Unknown);
+    // The reservation is still committed: abandonment requires the reservation to be uncertain too.
+    assert!(abandon_uncertain_attempt(&plan, &reservation, &uncertain, true).is_err());
+    reservation.state = WorldReleaseState::Uncertain;
+    let abandoned =
+        abandon_uncertain_attempt(&plan, &reservation, &uncertain, true).expect("abandoned unknown attempt");
+    assert_eq!(abandoned.attempt.state, WorldReleaseState::Abandoned);
+    assert_eq!(abandoned.reservation.state, WorldReleaseState::Abandoned);
+    assert_eq!(abandoned.reservation.reservation_ref, reservation.reservation_ref);
+    assert!(!abandoned.attempt.external_completion_proven);
+    assert!(plan.non_claims.iter().any(|claim| claim.contains("exactly-once")));
+}

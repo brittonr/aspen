@@ -200,3 +200,48 @@ fn an_unknown_reordered_misbound_or_skipped_demand_fails_the_replay() {
         assert!(error.to_string().contains(expected), "{expected}: {error}");
     }
 }
+
+// r[verify molten.world_commit.replay_sealed_observation_and_full_comparison]
+#[test]
+fn a_denied_demand_is_not_consumed_and_fails_the_step_even_when_ignored() {
+    let fixture = fixture(WorldReplayProfileKind::Logical);
+    let first = fixture.request.trace.steps[0].position;
+    let faithful = faithful_demands(&fixture.request.boundary);
+    let bound = faithful.get(&first).expect("first step")[0].clone();
+    let mut misbound = bound.clone();
+    misbound.request_ref = digest("another-request");
+
+    let mut observations =
+        SealedReplayObservations::new(&fixture.request.boundary, &fixture.request.trace).expect("sealed");
+    let error = observations.observe(&misbound).expect_err("misbound demand denied");
+    assert!(error.to_string().contains("another request"), "{error}");
+    assert_eq!(observations.demand_violations(), 1);
+    let served = observations.observe(&bound).expect("the denied slot stays pending for its true request");
+    assert_eq!(served.slot.request_ref, bound.request_ref);
+    let error = observations.finish_step(first).expect_err("the recorded violation fails the step");
+    assert!(error.to_string().contains("denied observation demand"), "{error}");
+
+    let mut faithful_observations =
+        SealedReplayObservations::new(&fixture.request.boundary, &fixture.request.trace).expect("sealed");
+    faithful_observations.observe(&bound).expect("faithful demand");
+    faithful_observations.finish_step(first).expect("a faithful step finishes");
+    assert_eq!(faithful_observations.demand_violations(), 0);
+}
+
+// r[verify molten.world_commit.replay_sealed_observation_and_full_comparison]
+#[test]
+fn a_transition_that_swallows_a_misbound_demand_error_fails_the_replay() {
+    let fixture = fixture(WorldReplayProfileKind::Logical);
+    let second = fixture.request.trace.steps[1].position;
+    let mut misbound = faithful_demands(&fixture.request.boundary);
+    misbound.get_mut(&second).expect("second step")[1].request_ref = digest("another-request");
+    let mut transitions = Transitions::demanding(misbound);
+    transitions.ignore_denials = true;
+    let error = run_with_transitions(&fixture, &mut transitions).expect_err("the swallowed denial still fails");
+    assert!(error.to_string().contains("denied observation demand"), "{error}");
+
+    let mut faithful = Transitions::for_fixture(&fixture);
+    faithful.ignore_denials = true;
+    let outcome = run_with_transitions(&fixture, &mut faithful).expect("faithful replay");
+    assert_eq!(outcome.receipt.decision, WorldReplayReceiptDecision::Replayed);
+}

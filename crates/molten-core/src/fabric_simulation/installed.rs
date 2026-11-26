@@ -1,5 +1,5 @@
 //! Generic installed-consumer admission; no reference-product exception and no callbacks.
-use std::collections;
+use alloc::collections;
 
 use super::*;
 

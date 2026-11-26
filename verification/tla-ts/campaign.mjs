@@ -33,10 +33,28 @@ export function parseTlc(text, exitCode) {
   };
 }
 
+// Each mutant removes one protocol guard (missing promise) or shrinks a quorum
+// below the intersection bound; each must break order agreement. The
+// four-replica instance is where recovery-quorum intersection is load-bearing
+// (its superquorum is smaller than the replica set).
+export const MODEL_RUNS = Object.freeze([
+  { label: "baseline", config: "ConsensusFastPath.cfg", violation: null,
+    bounds: { replicas: 3, commands: 2, views: 3 } },
+  { label: "missing-promise", config: "ConsensusFastPathMissingPromise.cfg", violation: "CommittedOrderAgreement",
+    bounds: { replicas: 3, commands: 2, views: 3 } },
+  { label: "insufficient-quorum", config: "ConsensusFastPathInsufficientQuorum.cfg", violation: "CommittedOrderAgreement",
+    bounds: { replicas: 3, commands: 2, views: 3 } },
+  { label: "four-replica", config: "ConsensusFastPathFourReplica.cfg", violation: null,
+    bounds: { replicas: 4, commands: 2, views: 2 } },
+  { label: "four-replica-small-recovery-quorum", config: "ConsensusFastPathFourReplicaSmallQuorum.cfg",
+    violation: "CommittedOrderAgreement", bounds: { replicas: 4, commands: 2, views: 2 } },
+]);
+
 // r[impl molten.consensus.fast_path_model.fault_corpus]
 // r[impl molten.consensus.fast_path_model.validation]
 // r[impl molten.consensus.fast_path_model.dive_parity]
-export function validatePair(tlc, ts, dive, mutant = false) {
+export function validatePair(tlc, ts, dive, violation = null) {
+  const mutant = violation !== null;
   const expected = mutant ? "invariant-violation" : "success";
   for (const result of [tlc, ts, dive]) {
     requireThat(result.status === expected, `${result.tool}: expected ${expected}, got ${result.status}`);
@@ -49,7 +67,7 @@ export function validatePair(tlc, ts, dive, mutant = false) {
     requireThat(!result.failure, `${result.tool}: checker evaluation failure`);
     if (!mutant) requireThat(result.queuedStates === 0, `${result.tool}: search incomplete`);
     if (mutant) {
-      requireThat(result.violation?.name === "NoMissingPromise", `${result.tool}: wrong mutant violation`);
+      requireThat(result.violation?.name === violation, `${result.tool}: wrong mutant violation`);
       requireThat((result.violation.traceLength ?? result.violation.trace?.length ?? 0) > 1,
         `${result.tool}: missing causal counterexample`);
     }
@@ -106,7 +124,7 @@ export function runCampaign(outputDirectory, extractedRoot, diveArchive, diveExe
     claimScope: "Agreement with TLC is not proof of Aspen's Rust implementation.",
     status: "failed",
     authoritativeChecker: "tlc",
-    bounds: { replicas: 3, commands: 2, views: 3 },
+    bounds: Object.fromEntries(MODEL_RUNS.map((run) => [run.label, run.bounds])),
     perCheckerLimitMs: CHECKER_TIMEOUT_MS,
     campaignLimitMs: CAMPAIGN_TIMEOUT_MS,
     runs: [],
@@ -147,15 +165,17 @@ export function runCampaign(outputDirectory, extractedRoot, diveArchive, diveExe
     };
     requireCheckerCapture(probe.result, "dive-version", probe.elapsedMs, probe.timeout);
     report.diveVersion = parseDiveVersion(probe.result.stdout.toString("utf8"), probe.result.status);
-    for (const name of ["ConsensusFastPath.tla", "ConsensusFastPath.cfg", "ConsensusFastPathMissingPromise.cfg"]) {
+    for (const name of ["ConsensusFastPath.tla", ...MODEL_RUNS.map((run) => run.config)]) {
       copyFileSync(join(modelDirectory, name), join(output, name));
       retained.push(name);
     }
     const model = join(output, "ConsensusFastPath.tla");
-    for (const [label, config] of [["baseline", "ConsensusFastPath.cfg"], ["missing-promise", "ConsensusFastPathMissingPromise.cfg"]]) {
+    report.baselines = {};
+    report.mutants = {};
+    for (const { label, config, violation } of MODEL_RUNS) {
       const summaries = [];
       const configPath = join(output, config);
-      const mutant = label === "missing-promise";
+      const mutant = violation !== null;
       for (const tool of ["tlc", "tla-ts", "dive"]) {
         const stem = `${label}-${tool}`;
         const [executable, args] = tool === "tlc"
@@ -186,7 +206,9 @@ export function runCampaign(outputDirectory, extractedRoot, diveArchive, diveExe
         retain(`${stem}.json`, `${JSON.stringify(summary, null, 2)}\n`);
         save();
       }
-      report[mutant ? "mutant" : "baseline"] = validatePair(...summaries, mutant);
+      const verdict = validatePair(...summaries, violation);
+      if (mutant) report.mutants[label] = { violation, ...verdict };
+      else report.baselines[label] = verdict;
     }
   } catch (error) {
     failure = error;
@@ -197,7 +219,7 @@ export function runCampaign(outputDirectory, extractedRoot, diveArchive, diveExe
     if (failure) report.retentionError = error.message;
     else failure = error;
   }
-  if (!failure && remaining() < 0) failure = new Error("campaign exceeded agreed 720 second bound");
+  if (!failure && remaining() < 0) failure = new Error(`campaign exceeded agreed ${CAMPAIGN_TIMEOUT_MS / 1000} second bound`);
   if (failure) report.error = `${failure.name}: ${failure.message}`;
   else report.status = "passed";
   save();

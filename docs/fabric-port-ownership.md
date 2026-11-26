@@ -18,8 +18,10 @@ Adapters contain host mechanisms only.
 | Family | Capability | Owner | Inputs | Outputs | Typed failures | Effects | Composition root |
 |---|---|---|---|---|---|---|---|
 | Membership | Snapshot observation | `fabric_membership/ports.rs` | Source profile and provider state | `MembershipProviderSnapshot` | unavailable or malformed observation | Reads a static, managed, or scripted provider | Membership bootstrap and simulation setup |
-| Membership | Assignment persistence | `fabric_membership/ports.rs` | Current assignment and pure transition | Intent and commit refs | storage failure or uncertain outcome | Persists intent before role effects, then commits | Membership shell setup |
-| Membership | Role lifecycle | `fabric_membership/ports.rs` | Admitted assignment | Role-effect ref | definite or uncertain role failure | Activates, drains, replaces, releases, fails, or quarantines a role | System-extension lifecycle setup |
+| Membership | Assignment persistence | `fabric_membership/ports.rs` | Current assignment and pure transition; recovery request with lifecycle, quarantine-authority and fencing ports | Intent, commit, and reconcile refs; pending-intent and quarantine-reconciliation observations | storage failure or uncertain outcome | Persists intent before role effects, then commits; aborts or confirms a pending intent only on lifecycle-port evidence bound to that exact intent, otherwise quarantines it under an authorization bound to the exact request while preserving uncertainty; migrates legacy quarantined records under authorization; installs a successor over a quarantined slot only against its persisted reconciliation record and an observed fence of the node-derived strength | Membership shell setup |
+| Membership | Role lifecycle | `fabric_membership/ports.rs` | Admitted assignment; recorded intent | Role-effect ref; intent-bound `NotExecuted`/`Executed`/`Unknown` observation | definite or uncertain role failure | Activates, drains, replaces, releases, fails, or quarantines a role; reports what it observed for one exact intent | System-extension lifecycle setup |
+| Membership | Fencing authority observation | `fabric_membership/ports.rs` | Proposed successor assignment | Observed fencing profile, enforced epoch and token | unavailable or malformed observation | Reads the fence the authority currently enforces | Membership shell setup |
+| Membership | Quarantine authority | `fabric_membership/ports.rs` | Exact assignment, committed assignment ref and reconciliation basis | Authorization echoing the request | unavailable capability or denial | Decides whether an uncertain or legacy quarantined role slot may be reconciled | Membership shell setup |
 | Time | Clock observation and wait | `fabric_time/ports.rs` | Admitted profile and target tick | Explicit tick observation | unavailable, malformed, or timeout | Reads a live clock or advances a virtual clock | Runtime and simulation time setup |
 | Time | Cryptographic entropy | `fabric_time/ports.rs` | Bounded output buffer | Filled secret buffer | unavailable capability | Reads the operating-system entropy source | Runtime entropy setup |
 | Transport | Command execution | `fabric_transport/ports.rs` | Pure admitted transport command | Canonical transition | transport failure or uncertain outcome | Runs deterministic or Iroh transport mechanisms | Registered transport effect-port setup |
@@ -93,8 +95,14 @@ The grant signs exact membership, seven port/profile bindings, namespace, timer 
 configuration, generation, client public key and shared client scope, plus a distinct purpose-bound probe public key.
 Protected policy/grant/currentness is revalidated before resource effects. Server probe keys are not controller client keys.
 Controller authority roots contain the independently pinned operator public key and signed policy/grant;
-they need not contain server probe secrets. Client invocation signatures bind the unchanged request, scope, and nonce;
-the host consumes nonce replay markers durably before effects. Forwarding retains the original signed request.
+they need not contain server probe secrets. Client invocation signatures (`live-client-invocation-v2`) bind the
+unchanged request, scope, nonce and `fence_term`; every admitting host consumes the nonce replay marker durably
+before effects. Forwarding retains the original signed request. A signed write executes only on the leader of its
+`fence_term`, so a replay in that term meets the leader's marker and a replay after failover meets a later term;
+the in-repo adapter signs writes with the term an unchallenged probe reports. A `Teardown` stops only the host its
+signed endpoint names. A quarantined replica fail-stops the host after an uncertain answer. Non-claims: the unsigned
+probe term is advisory (a wrong term only gets the write denied before any effect), and replay protection depends on
+durable nonce storage on each term's leader; losing that node-state directory loses its markers.
 
 For the named three-node experimental configuration recipe, run
 `molten reliability experimental-config --input RECIPE.json --out COHORT.json`.

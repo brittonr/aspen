@@ -2,8 +2,16 @@ pub struct ReadbackSource {
     pub(super) binding_ref: String,
     pub(super) validation_ref: String,
     pub(super) binding: crate::core_api::startup_binding::Binding,
-    pub(super) observed_subject: super::Subject,
+    pub(super) observed_subjects: std::collections::BTreeMap<String, super::Subject>,
     pub(super) observed_receipts: std::collections::BTreeMap<String, String>,
+}
+
+impl ReadbackSource {
+    pub(super) fn subject_for(&self, scenario: super::Scenario) -> crate::error::Result<&super::Subject> {
+        self.observed_subjects
+            .get(scenario.definition().capability.id)
+            .ok_or_else(|| super::invalid("admitted executable reported no subject for the scenario capability"))
+    }
 }
 
 pub(super) struct Current {
@@ -22,11 +30,16 @@ pub fn readback(
     let validated = crate::node_daemon::verify_selected_node_output_with_root(root)?;
     let (binding, output) = selected(root, &validated.binding_ref)?;
     let observed = describe(&output, root_path)?;
+    let is_capability_set_exact = observed.subjects.len() == super::CAPABILITIES.len()
+        && super::CAPABILITIES.iter().all(|capability| observed.subjects.contains_key(capability.id));
     if observed.binding_ref != validated.binding_ref
         || observed.validation_ref != validated.expected_startup_validation_ref
-        || observed.subject.source_ref != binding.source_ref
-        || observed.subject.build_ref != binding.executable_ref
-        || observed.subject.dependency_closure_ref != binding.dependencies_ref
+        || !is_capability_set_exact
+        || observed.subjects.values().any(|subject| {
+            subject.source_ref != binding.source_ref
+                || subject.build_ref != binding.executable_ref
+                || subject.dependency_closure_ref != binding.dependencies_ref
+        })
     {
         return Err(super::invalid("admitted executable readback differs from selected source/build/closure"));
     }
@@ -34,7 +47,7 @@ pub fn readback(
         binding_ref: observed.binding_ref,
         validation_ref: observed.validation_ref,
         binding,
-        observed_subject: observed.subject,
+        observed_subjects: observed.subjects,
         observed_receipts: observed.receipt_refs,
     })
 }
@@ -42,13 +55,13 @@ pub fn readback(
 pub(super) fn current(root: &crate::node_state::DirectoryRoot) -> crate::error::Result<Current> {
     let validated = crate::node_daemon::gate_validation_with_root(root)?;
     let (binding, _) = selected(root, &validated.binding_ref)?;
-    let observed_subject = super::model::subject(&binding)?;
+    let observed_subjects = super::model::subjects(&binding)?;
     Ok(Current {
         source: ReadbackSource {
             binding_ref: validated.binding_ref,
             validation_ref: validated.validation_ref,
             binding,
-            observed_subject,
+            observed_subjects,
             observed_receipts: std::collections::BTreeMap::new(),
         },
         validation_value: validated.validation_value,
@@ -99,7 +112,7 @@ fn describe(
             input: bounded_exec::Input::Null,
         },
         limits: bounded_exec::ExecutionLimits {
-            timeout_ms: 600_000,
+            timeout_ms: 1_800_000,
             stdin_max_bytes: 1,
             stdout_max_bytes: 65_536,
             stderr_max_bytes: 65_536,

@@ -14,14 +14,50 @@ fn require_role(owner: Option<&str>, assignment: &crate::fabric_membership::Role
     Ok(())
 }
 
-fn admit_initialization(predecessor: Option<&crate::fabric_membership::CurrentAssignment>, assignment: &crate::fabric_membership::RoleAssignment) -> crate::fabric::FabricPortResult<()> {
-    if let Some(predecessor) = predecessor {
-        let issues = crate::fabric_membership::validate_assignment_successor(&predecessor.assignment, &predecessor.assignment_ref, assignment);
-        if !issues.is_empty() {
-            return Err(crate::fabric::FabricPortError::storage(format!("assignment successor denied: {issues:?}")));
+/// A quarantine succession request together with the fence observed from the fencing authority.
+struct QuarantineAdmission<'a> {
+    clearance: &'a crate::fabric_membership::QuarantineClearance,
+    fence: crate::fabric_membership::FenceObservation,
+}
+
+/// Observes, from the fencing authority, the fence enforced for the proposed successor.
+fn observe_successor_fence(
+    proposal: &crate::fabric_membership::AssignmentProposal,
+    fencing: &mut dyn crate::fabric_membership::FencingAuthorityPort,
+) -> crate::fabric::FabricPortResult<crate::fabric_membership::FenceObservation> {
+    let successor = crate::fabric_membership::propose_assignment(proposal)
+        .map_err(|issues| crate::fabric::FabricPortError::malformed(format!("invalid proposal: {issues:?}")))?;
+    fencing.observe_fence(&successor)
+}
+
+fn admit_initialization(
+    predecessor: Option<&crate::fabric_membership::CurrentAssignment>,
+    assignment: &crate::fabric_membership::RoleAssignment,
+    quarantine: Option<QuarantineAdmission<'_>>,
+    reconciliation: Option<&crate::fabric_membership::QuarantineReconciliation>,
+) -> crate::fabric::FabricPortResult<()> {
+    let issues = match (predecessor, quarantine) {
+        (Some(predecessor), None) => crate::fabric_membership::validate_assignment_successor(&predecessor.assignment, &predecessor.assignment_ref, assignment),
+        (Some(predecessor), Some(quarantine)) => crate::fabric_membership::validate_quarantined_successor(
+            &predecessor.assignment,
+            &predecessor.assignment_ref,
+            assignment,
+            quarantine.clearance,
+            reconciliation,
+            &quarantine.fence,
+        ),
+        (None, Some(_)) => {
+            return Err(crate::fabric::FabricPortError::storage("quarantine successor requires a quarantined role-slot owner"));
         }
-    } else if assignment.predecessor_assignment_ref.is_some() || assignment.predecessor_epoch.is_some() {
-        return Err(crate::fabric::FabricPortError::storage("initial role assignment cannot name an absent predecessor"));
+        (None, None) => {
+            if assignment.predecessor_assignment_ref.is_some() || assignment.predecessor_epoch.is_some() {
+                return Err(crate::fabric::FabricPortError::storage("initial role assignment cannot name an absent predecessor"));
+            }
+            Vec::new()
+        }
+    };
+    if !issues.is_empty() {
+        return Err(crate::fabric::FabricPortError::storage(format!("assignment successor denied: {issues:?}")));
     }
     Ok(())
 }

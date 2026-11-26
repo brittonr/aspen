@@ -13,7 +13,7 @@ pub struct PeerRecovery {
     pub commit_index: u64,
     /// The complete committed-or-held log, keyed by index. Every index after
     /// the snapshot through the held tail is present; compacted entries are absent.
-    pub entries: std::collections::BTreeMap<u64, EntryIdentity>,
+    pub entries: alloc::collections::BTreeMap<u64, EntryIdentity>,
     pub snapshot: Option<SnapshotFact>,
     /// True only after every page of one stable peer observation was received.
     pub is_complete: bool,
@@ -24,12 +24,12 @@ pub struct PeerRecovery {
 pub struct ReconcileInput {
     pub participant_id: String,
     /// The admitted voters of the current membership, the participant included.
-    pub voters: std::collections::BTreeSet<String>,
+    pub voters: alloc::collections::BTreeSet<String>,
     pub current_term: u64,
     pub local_commit_index: u64,
     /// The indices the participant verifies and what its storage holds there.
     /// Absent committed indices above the snapshot are checked as missing too.
-    pub local_entries: std::collections::BTreeMap<u64, LocalEntry>,
+    pub local_entries: alloc::collections::BTreeMap<u64, LocalEntry>,
     pub local_hard_state: LocalHardState,
     pub local_snapshot: Option<SnapshotFact>,
     pub peers: Vec<PeerRecovery>,
@@ -53,7 +53,7 @@ pub struct Reconciliation {
     pub admission: RepairAdmission,
 }
 
-fn quorum(voters: &std::collections::BTreeSet<String>) -> usize {
+fn quorum(voters: &alloc::collections::BTreeSet<String>) -> usize {
     voters.len() / 2 + 1
 }
 

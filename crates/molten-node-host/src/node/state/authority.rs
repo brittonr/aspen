@@ -1,59 +1,9 @@
-const NODE_STATE_NAMESPACE_COUNT: usize = 14;
+use cap_fs_ext::DirExt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum NamespaceKind {
-    Identity,
-    Secrets,
-    Ledger,
-    ControlInbox,
-    ControlOutbox,
-    ControlIngress,
-    ControlIdempotency,
-    ControlService,
-    Services,
-    Receipts,
-    Registry,
-    Chunks,
-    Storage,
-    Ingress,
-}
+#[path = "authority/layout.rs"]
+mod layout;
 
-impl NamespaceKind {
-    pub const ALL: [Self; NODE_STATE_NAMESPACE_COUNT] = [
-        Self::Identity,
-        Self::Secrets,
-        Self::Ledger,
-        Self::ControlInbox,
-        Self::ControlOutbox,
-        Self::ControlIngress,
-        Self::ControlIdempotency,
-        Self::ControlService,
-        Self::Services,
-        Self::Receipts,
-        Self::Registry,
-        Self::Chunks,
-        Self::Storage,
-        Self::Ingress,
-    ];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Identity | Self::Secrets => "identity",
-            Self::Ledger => "ledger",
-            Self::ControlInbox => "control/inbox",
-            Self::ControlOutbox => "control/outbox",
-            Self::ControlIngress => "control/iroh-ingress",
-            Self::ControlIdempotency => "control/idempotency",
-            Self::ControlService => "control/service",
-            Self::Services => "services",
-            Self::Receipts => "receipts",
-            Self::Registry => "registry",
-            Self::Chunks => "chunks",
-            Self::Storage => "storage",
-            Self::Ingress => "control/iroh-ingress",
-        }
-    }
-}
+pub use layout::NamespaceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -128,12 +78,29 @@ impl DirectoryRoot {
         Self::open_existing(path)
     }
 
+    /// Opens the root's final component without following a symlink, so the directory validated is
+    /// the directory used; a root swapped for a symlink after any earlier check is refused.
+    // r[impl molten.runtime_spine.admission_and_capability_hardening]
     pub fn open_existing(path: &std::path::Path) -> crate::error::Result<Self> {
         super::filesystem::validate_bootstrap_path(path)?;
-        let metadata = std::fs::symlink_metadata(path).map_err(crate::error::Failure::from)?;
-        super::filesystem::validate_bootstrap_metadata(&metadata)?;
-        let dir = cap_std::fs::Dir::open_ambient_dir(path, cap_std::ambient_authority())
+        let leaf = path.file_name().ok_or_else(|| super::invalid("node state root must name a directory leaf"))?;
+        let parent_path = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let parent = cap_std::fs::Dir::open_ambient_dir(parent_path, cap_std::ambient_authority())
             .map_err(crate::error::Failure::from)?;
+        // Seam immediately before the open: the earlier implementation re-checked metadata here and
+        // then opened with symlink following, so a swap at this point redirected it.
+        #[cfg(test)]
+        open_seam::after_bootstrap_check();
+        let dir = parent.open_dir_nofollow(leaf).map_err(|error| match parent.symlink_metadata(leaf) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                super::invalid("node state root must not be a symlink")
+            }
+            Ok(metadata) if !metadata.is_dir() => super::invalid("node state root must be a directory"),
+            _ => crate::error::Failure::from(error),
+        })?;
         Ok(Self::from_dir(dir))
     }
 
@@ -291,3 +258,29 @@ impl DirectoryRoot {
         self.inner.dir.try_clone().map_err(crate::error::Failure::from)
     }
 }
+
+/// Test-only hook between `open`'s metadata check and the root open, so a regression can swap the
+/// root for a symlink at exactly that boundary.
+#[cfg(test)]
+mod open_seam {
+    type Hook = Box<dyn FnMut()>;
+
+    thread_local! {
+        static AFTER_CHECK: std::cell::RefCell<Option<Hook>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn set_after_bootstrap_check(hook: impl FnMut() + 'static) {
+        AFTER_CHECK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+    }
+
+    pub(super) fn after_bootstrap_check() {
+        let hook = AFTER_CHECK.with(|slot| slot.borrow_mut().take());
+        if let Some(mut hook) = hook {
+            hook();
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+#[path = "authority/tests.rs"]
+mod open_existing_tests;

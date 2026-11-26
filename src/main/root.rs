@@ -66,6 +66,9 @@ pub(crate) fn run() -> molten::error::Result<()> {
                 scenario,
                 out,
             } => crate::cli_qualification::run(source_root, scenario, out),
+            command::Evidence::QualifyPeer { role, run_directory } => {
+                crate::cli_qualification::run_peer(role, run_directory)
+            }
         },
         Some(command::Top::Node { command }) => crate::cli_node::run(command),
         Some(command::Top::AddressableActor { command }) => molten::addressable_actor::command::run(command),

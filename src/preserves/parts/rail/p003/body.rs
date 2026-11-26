@@ -27,11 +27,11 @@ pub fn canonical_hash(value: &IoValue) -> Result<String> {
 }
 
 pub fn content_ref_from_bytes(bytes: &[u8]) -> String {
-    content_ref_from_blake3_hash(blake3::hash(bytes))
+    molten_preserves_core::identity::ContentRef::of_bytes(bytes).into_string()
 }
 
 pub fn content_ref_from_blake3_hash(hash: blake3::Hash) -> String {
-    format!("{BLAKE3_REF_PREFIX}{}", hash.to_hex())
+    molten_preserves_core::identity::ContentRef::from_hash(hash).into_string()
 }
 
 pub fn canonical_content_ref(value: &IoValue) -> Result<ContentRef> {
@@ -279,12 +279,20 @@ pub fn required_content_ref_string(value: &Value<IoValue>, field: &str) -> Resul
     Ok(required_content_ref(value, field)?.into_string())
 }
 
+/// Decodes the single canonical `Option<ContentRef>` encoding: `<none>` or `<some "blake3:...">`. A bare string is a
+/// second encoding of `Some` and is rejected so one logical value has one canonical identity.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 pub fn optional_content_ref(value: &Value<IoValue>, field: &str) -> Result<Option<ContentRef>> {
-    if value.collect_simple_record("none", Some(0)).is_some() {
-        return Ok(None);
-    }
-    if let Some(some) = value.collect_simple_record("some", Some(1)) {
-        return required_content_ref(&some[0], field).map(Some);
-    }
-    required_content_ref(value, field).map(Some)
+    identity_bridge::decode_optional_ref(&value_to_iovalue(value)).map_err(|issue| match issue {
+        identity_bridge::OptionalRefIssue::Shape => {
+            MoltenError::invalid_harness(format!("{field} must be <none> or <some \"blake3:...\">"))
+        }
+        identity_bridge::OptionalRefIssue::NotString => {
+            MoltenError::invalid_harness(format!("expected string for {field}"))
+        }
+        identity_bridge::OptionalRefIssue::InvalidRef(error) => {
+            MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
+        }
+        identity_bridge::OptionalRefIssue::Conversion(error) => error,
+    })
 }

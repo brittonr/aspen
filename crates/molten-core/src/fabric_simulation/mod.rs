@@ -1,5 +1,6 @@
 mod adapters;
 mod admission;
+mod framing;
 mod installed;
 mod live_differential;
 mod protocol;

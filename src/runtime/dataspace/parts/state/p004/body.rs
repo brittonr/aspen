@@ -35,6 +35,16 @@ impl ServiceDemandKind {
             _ => None,
         }
     }
+
+    /// The explicit precedence of one demand form over another for the same
+    /// demander and service. Force-run outranks dependency-gated regardless
+    /// of the order in which the records are read or how their names sort.
+    const fn precedence(self) -> u8 {
+        match self {
+            Self::DependencyGated => 0,
+            Self::ForceRun => 1,
+        }
+    }
 }
 
 /// One demand assertion: the service, the demand form, the demanding scope,
@@ -125,16 +135,24 @@ impl ServiceDemandSet {
                 continue;
             }
             match ServiceDemandAssertion::from_value(value) {
+                // r[impl molten.runtime_spine.dataspace_determinism_and_rollback_integrity]
                 Ok(demand) => {
-                    let is_live = !demands.iter().any(|existing| {
+                    let existing = demands.iter_mut().find(|existing| {
                         existing.demander_ref == demand.demander_ref && existing.service_ref == demand.service_ref
                     });
-                    if is_live {
-                        if demands.len() >= MAX_SERVICE_DEMAND_RECORDS {
-                            diagnostics.push("the live service demand set exceeds its bound".to_string());
-                            break;
+                    match existing {
+                        Some(existing) => {
+                            if demand.kind.precedence() > existing.kind.precedence() {
+                                *existing = demand;
+                            }
                         }
-                        demands.push(demand);
+                        None => {
+                            if demands.len() >= MAX_SERVICE_DEMAND_RECORDS {
+                                diagnostics.push("the live service demand set exceeds its bound".to_string());
+                                break;
+                            }
+                            demands.push(demand);
+                        }
                     }
                 }
                 Err(error) => diagnostics.push(error.to_string()),

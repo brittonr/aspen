@@ -52,6 +52,7 @@ fn finish_denial_transition(runtime: &mut CoordinationRuntime, input: DenialTran
         raft_commit_ref: None,
         raft_read_receipt: None,
         evidence_values,
+        time_sample: None,
     };
     runtime.receipts.push(receipt);
     if record_operation {
@@ -79,7 +80,8 @@ fn replay_or_conflicting_duplicate(
         decision: "deny".to_string(),
         before_state: runtime.state.clone(),
         after_state: runtime.state.clone(),
-        token: None,
+        token_claim: None,
+        time_sample: None,
         status_fact: status_fact_for(&runtime.state, &runtime.manifest, &request.service, &request.key)?,
         output_facts: vec![existing.receipt.value.clone()],
         diagnostics: vec![diagnostic],
@@ -152,6 +154,7 @@ fn duplicate_replay_result(
         raft_commit_ref: None,
         raft_read_receipt: None,
         evidence_values,
+        time_sample: None,
     };
     runtime.receipts.push(receipt);
     Ok(result)
@@ -173,20 +176,31 @@ fn duplicate_output_refs(existing: &CoordinationApplyResult) -> Result<Vec<Strin
 }
 
 // r[impl molten.coordination_state_machine_proof.primitive_transition_cores]
-fn primitive_transition(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PrimitiveTransitionResult> {
-    match prepare_mutation(runtime, request) {
-        Ok(prepared) => Ok(PrimitiveTransitionResult {
-            kind: TRANSITION_KIND_ADVANCE.to_string(),
-            decision: "pass".to_string(),
-            before_state: runtime.state.clone(),
-            after_state: prepared.state,
-            token: prepared.token,
-            status_fact: prepared.status_fact.clone(),
-            output_facts: vec![prepared.status_fact],
-            diagnostics: Vec::new(),
-            checks: prepared.checks,
-            shell_intents: vec![SHELL_INTENT_COMMIT.to_string(), SHELL_INTENT_ASSERT_STATUS.to_string()],
-        }),
+/// Pure transition core: evaluates `request` at the shell's clock `sample`, which must come from the
+/// committed time basis and may not regress. A passing transition records the sample as committed time.
+fn primitive_transition(
+    runtime: &CoordinationRuntime,
+    request: &CoordinationRequest,
+    sample: &CoordinationTimeSample,
+) -> Result<PrimitiveTransitionResult> {
+    let prepared = admit_time_sample(&runtime.state, sample).and_then(|now| prepare_mutation(runtime, request, now));
+    match prepared {
+        Ok(mut prepared) => {
+            prepared.state.time_ticks = sample.ticks;
+            Ok(PrimitiveTransitionResult {
+                kind: TRANSITION_KIND_ADVANCE.to_string(),
+                decision: "pass".to_string(),
+                before_state: runtime.state.clone(),
+                after_state: prepared.state,
+                token_claim: prepared.token_claim,
+                time_sample: Some(sample.clone()),
+                status_fact: prepared.status_fact.clone(),
+                output_facts: vec![prepared.status_fact],
+                diagnostics: Vec::new(),
+                checks: prepared.checks,
+                shell_intents: vec![SHELL_INTENT_COMMIT.to_string(), SHELL_INTENT_ASSERT_STATUS.to_string()],
+            })
+        }
         Err(error) => primitive_denial_transition(runtime, request, vec![error.to_string()]),
     }
 }
@@ -202,7 +216,8 @@ fn primitive_denial_transition(
         decision: "deny".to_string(),
         before_state: runtime.state.clone(),
         after_state: runtime.state.clone(),
-        token: None,
+        token_claim: None,
+        time_sample: None,
         status_fact: status_fact.clone(),
         output_facts: vec![status_fact],
         diagnostics,
@@ -211,16 +226,18 @@ fn primitive_denial_transition(
     })
 }
 
-fn prepare_mutation(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
+fn prepare_mutation(runtime: &CoordinationRuntime, request: &CoordinationRequest, now: u64) -> Result<PreparedMutation> {
     match (request.service.as_str(), request.operation.as_str()) {
-        (SERVICE_LOCK, OP_ACQUIRE) => prepare_lock_acquire(runtime, request),
+        (SERVICE_LOCK, OP_ACQUIRE) => prepare_lock_acquire(runtime, request, now),
         (SERVICE_LOCK, OP_RELEASE) => prepare_lock_release(runtime, request),
+        (SERVICE_LOCK | SERVICE_ELECTION, OP_EXPIRE) => prepare_lease_expiry(runtime, request, now),
         (SERVICE_QUEUE, OP_ENQUEUE) => prepare_queue_enqueue(runtime, request),
         (SERVICE_QUEUE, OP_DEQUEUE) => prepare_queue_dequeue(runtime, request),
         (SERVICE_SEMAPHORE, OP_ACQUIRE) => prepare_semaphore_acquire(runtime, request),
         (SERVICE_SEMAPHORE, OP_RELEASE) => prepare_semaphore_release(runtime, request),
         (SERVICE_RATE_LIMIT, OP_ACQUIRE) => prepare_rate_acquire(runtime, request),
-        (SERVICE_ELECTION, OP_ELECT) => prepare_election(runtime, request),
+        (SERVICE_ELECTION, OP_ELECT) => prepare_election(runtime, request, now),
+        (SERVICE_ELECTION, OP_RESIGN) => prepare_election_resign(runtime, request),
         (SERVICE_BARRIER, OP_ARRIVE) => prepare_barrier(runtime, request),
         (SERVICE_REGISTRY, OP_REGISTER) => prepare_registry_register(runtime, request),
         (SERVICE_REGISTRY, OP_UNREGISTER) => prepare_registry_unregister(runtime, request),

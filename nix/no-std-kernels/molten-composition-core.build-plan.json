@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "roots": [
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0"
+  ],
+  "workspaceMembers": {
+    "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0"
+  },
+  "cargoLockHash": "4bd88b4eafe8b44124ffe8172d3631ca060290d9055469685c3633d9220120ea",
+  "inputsHash": "116015fe88a0121bfe3117b1253952fa0af5ee83f77ec2a62c7672452830bcc9",
+  "crates": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0": {
+      "crateName": "molten-composition-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-composition-core"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "no_std service recovery composition vocabulary and property evaluation for Aspen",
+      "license": "AGPL-3.0-or-later"
+    }
+  }
+}

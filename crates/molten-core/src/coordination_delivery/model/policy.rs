@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use serde::Deserialize;
 use serde::Serialize;

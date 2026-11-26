@@ -136,6 +136,7 @@ pub fn evaluate_actormap_transaction(state: &RuntimeActormapTransactionState) ->
     Ok(ActormapTransactionResult { is_allowed, receipt })
 }
 
+// r[impl molten.runtime_spine.snapshot_receipt_check_label]
 pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Result<SnapshotAuthorityResult> {
     let diagnostics = validate_snapshot_authority(state);
     let is_allowed = diagnostics.is_empty();
@@ -149,13 +150,7 @@ pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Res
         crate::preserves_rail::record("authority-ref", vec![crate::preserves_rail::string(&authority_ref)]),
         state.to_value(),
     ]);
-    let checks = vec![
-        "snapshot-ref-canonical".to_string(),
-        "snapshot-authority-refs-canonical".to_string(),
-        "claimed-authority-subset-admitted".to_string(),
-        "readable-assertions-subset-claimed".to_string(),
-        "requested-assertions-readable-or-redacted".to_string(),
-    ];
+    let checks = SnapshotAuthorityCheck::ALL.iter().map(|check| check.label().to_string()).collect();
     let mut state_refs = Vec::with_capacity(2);
     state_refs.push(authority_ref);
     if crate::preserves_rail::validate_content_ref(&state.snapshot_ref).is_ok() {

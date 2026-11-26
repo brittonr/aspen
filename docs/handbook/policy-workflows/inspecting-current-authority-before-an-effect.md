@@ -15,7 +15,8 @@ The [nominal reference contract](../../nominal-authority-references.md) distingu
 Find the caller, not just a convenient function with “admit” in its name. These are different paths:
 
 - `authority_grant_currentness` accepts explicit principal, operation, time, epochs, keys, and revocations.
-- `admit_authority` wraps currentness with facts partly taken from the context itself.
+- `admit_authority` wraps currentness with a caller-supplied expected principal, minimum epoch, and current key set.
+- `admit_capability_scope` checks capability, scope, validity, and revocation only and records that it claims no principal or key currentness.
 - `admit_capability` evaluates a token proofset against a request using separate matching rules.
 - `AdmissionPolicy::decide_with_capabilities` combines local harness grants and policy deny rules.
 - Effect manifest/profile admission checks effect declarations and supplied context references; it is not itself an external currentness service.
@@ -36,7 +37,7 @@ The [currentness implementation](../../../src/authority/parts/mod/p001/body.rs) 
 
 Ask who supplied each fact and whether it is appropriate for this invocation. The helper does not discover new revocations, read a wall clock, or contact a key service. Its deterministic answer is only as current as the supplied facts.
 
-Inspect wrapper use carefully: `admit_authority` supplies the context subject as principal, uses context keys as current keys, sets minimum epoch to zero, and uses logical time as current epoch. This is a source-observed limitation of that entry point, not evidence that every caller independently authenticates identity or observes rotation.
+Inspect wrapper use carefully: `admit_authority` takes the expected principal, minimum epoch, and current key set from its caller's `AuthorityAdmissionInput` and uses logical time as current epoch; a context without keys, or with any key outside the supplied set, fails. The wrapper cannot authenticate the caller, so trace where each caller obtains those facts. `admit_capability_scope` (used by job DAG admission) makes no principal or key claim at all; its receipts say so with `principal-and-key-currentness-not-claimed`.
 
 ## 4. Check policy and resources without substituting receipts
 

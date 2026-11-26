@@ -194,56 +194,6 @@ fn authority_snapshot(assignment: &RoleAssignment) -> AssignmentAuthoritySnapsho
     }
 }
 
-#[derive(Debug, Default)]
-struct RecordingLifecycle {
-    calls: Vec<String>,
-    fail_activate: bool,
-    malformed_activate_ref: bool,
-}
-
-impl RecordingLifecycle {
-    fn effect(&mut self, kind: &str, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.calls.push(format!("{kind}:{}", assignment.assignment_id));
-        Ok(test_ref(&format!("role-effect-{}", self.calls.len())))
-    }
-}
-
-impl ExtensionRoleLifecyclePort for RecordingLifecycle {
-    fn activate(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        if self.fail_activate {
-            return Err(RoleEffectFailure {
-                message: "injected activation uncertainty".to_string(),
-                effect_may_have_happened: true,
-            });
-        }
-        if self.malformed_activate_ref {
-            self.calls.push(format!("activate:{}", assignment.assignment_id));
-            return Ok("malformed-effect-ref".to_string());
-        }
-        self.effect("activate", assignment)
-    }
-
-    fn begin_drain(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.effect("drain", assignment)
-    }
-
-    fn begin_replacement(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.effect("replace", assignment)
-    }
-
-    fn release(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.effect("release", assignment)
-    }
-
-    fn fail(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.effect("fail", assignment)
-    }
-
-    fn quarantine(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        self.effect("quarantine", assignment)
-    }
-}
-
 // r[verify molten.fabric_membership.live_sim_parity]
 // r[verify molten.fabric_membership.evidence]
 // r[verify molten.fabric_membership.final_validation]

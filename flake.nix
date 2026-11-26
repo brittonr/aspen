@@ -797,9 +797,16 @@
         # package overrides; buildRustCrate does not read Cargo profiles.
         moltenOwnedCrates = [
           "molten"
+          "molten-composition-core"
           "molten-core"
+          "molten-fastpath-core"
           "molten-node-host"
+          "molten-preserves-core"
           "molten-release-policy"
+          "molten-raft-core"
+          "molten-reliability-model-core"
+          "molten-runtime-admission-core"
+          "molten-wasm-policy-core"
         ];
         overflowCheckedCrate = attrs: {
           extraRustcOpts = (attrs.extraRustcOpts or [ ]) ++ [
@@ -859,6 +866,64 @@
           enableKache = false;
           resolvedJson = ./release-policy-build-plan.json;
         };
+        # r[impl molten.testing.molten_core_no_std_ci_gate]
+        # molten-core's no_std profile resolves its own unit graph, so dependency features come from
+        # exactly `--no-default-features --features executable-extents` and are never unified with the
+        # std consumers in build-plan.json. Regenerate with
+        #   unit2nix -p molten-core --no-default-features --features executable-extents \
+        #     -o molten-core-no-std-build-plan.json
+        moltenCoreNoStdPlanPath = ./molten-core-no-std-build-plan.json;
+        moltenCoreNoStdPlan = builtins.fromJSON (builtins.readFile moltenCoreNoStdPlanPath);
+        moltenCoreNoStdPlanAdmitted =
+          let
+            crates = moltenCoreNoStdPlan.crates;
+            root = crates.${moltenCoreNoStdPlan.workspaceMembers."molten-core"};
+            # Proc macros and their own dependencies run on the host; the rest is linked into molten-core.
+            normalDependencyIds =
+              packageId:
+              builtins.map (dep: dep.packageId) (
+                builtins.filter (dep: !(crates.${dep.packageId}.procMacro or false)) (
+                  crates.${packageId}.dependencies or [ ]
+                )
+              );
+            closeOver =
+              packageIds:
+              let
+                next = pkgs.lib.unique (packageIds ++ builtins.concatMap normalDependencyIds packageIds);
+              in
+              if builtins.length next == builtins.length packageIds then packageIds else closeOver next;
+            linkedCrates = builtins.map (packageId: crates.${packageId}) (closeOver moltenCoreNoStdPlan.roots);
+            stdEnabledCrates = builtins.filter (crate: builtins.elem "std" crate.features) linkedCrates;
+            dependencyNames = builtins.map (dep: dep.externCrateName) root.dependencies;
+          in
+          pkgs.lib.assertMsg (
+            moltenCoreNoStdPlan.roots == [ moltenCoreNoStdPlan.workspaceMembers."molten-core" ]
+            && root.features == [ "executable-extents" ]
+            && !(builtins.elem "basalt" dependencyNames)
+            && !(builtins.elem "kamacite_core" dependencyNames)
+            && stdEnabledCrates == [ ]
+          ) "molten-core no_std plan must resolve --no-default-features --features executable-extents with no std feature in its linked closure";
+        moltenCoreNoStdWs = mkUnit2nixWorkspace {
+          enableKache = false;
+          resolvedJson = moltenCoreNoStdPlanPath;
+        };
+        moltenCoreNoStdExtents = moltenCoreNoStdWs.workspaceMembers."molten-core".build;
+        # `--no-default-features` alone: the same no_std unit graph without the executable-extents cfg.
+        moltenCoreNoStdBareWith =
+          crateArgs:
+          (moltenCoreNoStdExtents.override (_old: { features = [ ]; } // crateArgs)).overrideAttrs (_old: {
+            CARGO_CFG_FEATURE = "";
+          });
+        moltenCoreNoStdBare = moltenCoreNoStdBareWith { };
+        # Inject one ambient-std import into a no_std module; the gate must reject it at compile time.
+        moltenCoreNoStdProbe =
+          probe:
+          pkgs.testers.testBuildFailure (moltenCoreNoStdBareWith {
+            postPatch = ''
+              test -f src/codec.rs
+              printf '\n#[allow(unused_imports)]\n%s\n' ${pkgs.lib.escapeShellArg probe} >> src/codec.rs
+            '';
+          });
         samplePgo =
           if system == "x86_64-linux" then
             import ./nix/sample-pgo-experiment.nix {
@@ -873,6 +938,8 @@
           inherit pkgs rustToolchain releasePolicyPkg;
         };
         fastpathQuint = import ./nix/consensus-fastpath-quint.nix { inherit pkgs; };
+        # The guard mutant patches `crates/molten-fastpath-core/src/quorate.rs`; the mutated workspace
+        # rebuilds that path dependency, so the `fastpathquint` tests link the mutated admission guard.
         fastpathMutantWs = mkUnit2nixWorkspace {
           src = fastpathQuint.mutateSource sourceForConfigChecks;
         };
@@ -944,6 +1011,298 @@
           };
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
+        # r[impl molten.project.tier1_no_std_kernel_crates]
+        # Each extracted no_std kernel resolves its own unit graph (`unit2nix -p <crate>`), so its
+        # dependency features (serde, blake3) are never unified with the std consumers in
+        # build-plan.json. Regenerate with `scripts/no-std-kernel-plans.sh`, which also records the
+        # BLAKE3 of every resolution input (workspace manifest and lock, `.cargo/config.toml`,
+        # `rust-toolchain.toml`, and the manifests of the kernel's path-dependency closure).
+        noStdKernels = {
+          "molten-composition-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/judgment.rs";
+            sourceProbeModule = "src/vocabulary.rs";
+          };
+          "molten-fastpath-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/quorate.rs";
+            sourceProbeModule = "src/succession.rs";
+          };
+          # r[impl molten.project.molten_preserves_core_no_std_gate]
+          "molten-preserves-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+            ];
+            compileProbeModule = "src/writer.rs";
+            sourceProbeModule = "src/identity.rs";
+          };
+          "molten-raft-core" = {
+            # molten-core (no default features) supplies the pure recovery reconciliation core.
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "artifact-auth-core"
+              "artifact-binding-core"
+              "blake3"
+              "cfg-if"
+              "choregraph-history"
+              "constant_time_eq"
+              "content-identity-core"
+              "cpufeatures"
+              "molten-core"
+              "schema-identity-core"
+              "schema-migration-core"
+              "serde"
+              "serde_core"
+              "transactional-reconciliation-core"
+            ];
+            compileProbeModule = "src/transition.rs";
+            sourceProbeModule = "src/transition/wire.rs";
+          };
+          "molten-reliability-model-core" = {
+            linkedAllowlist = [
+              "serde"
+              "serde_core"
+            ];
+            compileProbeModule = "src/generator.rs";
+            sourceProbeModule = "src/fault.rs";
+          };
+          "molten-runtime-admission-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/ingress.rs";
+            sourceProbeModule = "src/lib.rs";
+          };
+          "molten-wasm-policy-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+              "serde"
+              "serde_core"
+            ];
+            compileProbeModule = "src/refs.rs";
+            sourceProbeModule = "src/component/model.rs";
+          };
+        };
+        noStdKernelPlanPath = name: ./nix/no-std-kernels + "/${name}.build-plan.json";
+        noStdKernelPlan = name: builtins.fromJSON (builtins.readFile (noStdKernelPlanPath name));
+        noStdKernelManifest = name: builtins.fromTOML (builtins.readFile (./crates + "/${name}/Cargo.toml"));
+        # Crates linked into the kernel library: the normal-dependency closure, without proc macros.
+        noStdKernelLinkedCrates =
+          name:
+          let
+            plan = noStdKernelPlan name;
+            crates = plan.crates;
+            rootId = plan.workspaceMembers.${name};
+            normalDependencyIds =
+              packageId:
+              builtins.map (dep: dep.packageId) (
+                builtins.filter (dep: !(crates.${dep.packageId}.procMacro or false)) (
+                  crates.${packageId}.dependencies or [ ]
+                )
+              );
+            closeOver =
+              packageIds:
+              let
+                next = pkgs.lib.unique (packageIds ++ builtins.concatMap normalDependencyIds packageIds);
+              in
+              if builtins.length next == builtins.length packageIds then packageIds else closeOver next;
+          in
+          builtins.map (packageId: crates.${packageId}) (builtins.filter (id: id != rootId) (closeOver [ rootId ]));
+        # Every linked crate is on the kernel's reviewed allowlist and none enables a `std` feature.
+        # A std-only dependency (tokio, redb, iroh, preserves) is rejected by name even when it has
+        # no feature called `std`.
+        noStdKernelLinkedAdmitted =
+          name: linkedCrates:
+          builtins.all (crate: builtins.elem crate.crateName noStdKernels.${name}.linkedAllowlist) linkedCrates
+          && builtins.filter (crate: builtins.elem "std" crate.features) linkedCrates == [ ];
+        # The plan agrees with the manifest it claims to resolve: the root carries the manifest's
+        # default feature set, and every manifest dependency resolves with the manifest's
+        # default-features choice and requested features.
+        noStdKernelPlanMatches =
+          name: manifest:
+          let
+            plan = noStdKernelPlan name;
+            crates = plan.crates;
+            rootId = plan.workspaceMembers.${name};
+            root = crates.${rootId};
+            resolvedDependencies = builtins.listToAttrs (
+              builtins.map (dep: {
+                name = crates.${dep.packageId}.crateName;
+                value = crates.${dep.packageId};
+              }) root.dependencies
+            );
+            manifestDependencies = manifest.dependencies or { };
+            dependencyMatches =
+              dependencyName: spec:
+              let
+                resolved = resolvedDependencies.${dependencyName} or null;
+                attrs = if builtins.isAttrs spec then spec else { };
+              in
+              resolved != null
+              && (attrs.default-features or true) == builtins.elem "default" resolved.features
+              && builtins.all (feature: builtins.elem feature resolved.features) (attrs.features or [ ]);
+          in
+          plan.roots == [ rootId ]
+          && pkgs.lib.sort builtins.lessThan root.features
+            == pkgs.lib.sort builtins.lessThan (manifest.features.default or [ ])
+          && builtins.attrNames resolvedDependencies == builtins.attrNames manifestDependencies
+          && builtins.all (dependencyName: dependencyMatches dependencyName manifestDependencies.${dependencyName}) (
+            builtins.attrNames manifestDependencies
+          );
+        # A manifest feature flip the checked-in plan no longer describes.
+        noStdKernelFlippedManifest =
+          manifest:
+          if (manifest.dependencies or { }) != { } then
+            manifest
+            // {
+              dependencies = builtins.mapAttrs (
+                _: spec: (if builtins.isAttrs spec then spec else { version = spec; }) // { default-features = true; }
+              ) manifest.dependencies;
+            }
+          else
+            manifest
+            // {
+              features = {
+                default = [ "std" ];
+                std = [ ];
+              };
+            };
+        # Inputs the plan was resolved from: the fixed resolution configuration plus the manifest of
+        # every local package the plan contains (the kernel's path-dependency closure).
+        noStdKernelExpectedInputs =
+          name:
+          pkgs.lib.sort builtins.lessThan (
+            pkgs.lib.unique (
+              [
+                "Cargo.toml"
+                "Cargo.lock"
+                ".cargo/config.toml"
+                "rust-toolchain.toml"
+              ]
+              ++ builtins.map (crate: "${crate.source.path}/Cargo.toml") (
+                builtins.filter (crate: (crate.source.type or null) == "local") (
+                  builtins.attrValues (noStdKernelPlan name).crates
+                )
+              )
+            )
+          );
+        noStdKernelRecordedInputs =
+          name:
+          pkgs.lib.sort builtins.lessThan (
+            builtins.map (line: pkgs.lib.last (pkgs.lib.splitString "  " line)) (
+              builtins.filter (line: line != "") (
+                pkgs.lib.splitString "\n" (builtins.readFile (./nix/no-std-kernels + "/${name}.inputs.b3"))
+              )
+            )
+          );
+        noStdKernelPlanAdmitted =
+          name:
+          let
+            manifest = noStdKernelManifest name;
+            linkedCrates = noStdKernelLinkedCrates name;
+            recorded = noStdKernelRecordedInputs name;
+            expected = noStdKernelExpectedInputs name;
+            std-only = {
+              crateName = "tokio";
+              features = [ "rt" ];
+            };
+          in
+          pkgs.lib.assertMsg (noStdKernelPlanMatches name manifest)
+            "${name}: nix/no-std-kernels/${name}.build-plan.json does not match crates/${name}/Cargo.toml; run scripts/no-std-kernel-plans.sh"
+          && pkgs.lib.assertMsg (!(noStdKernelPlanMatches name (noStdKernelFlippedManifest manifest)))
+            "${name}: the plan/manifest agreement check accepted a flipped manifest feature"
+          && pkgs.lib.assertMsg (noStdKernelLinkedAdmitted name linkedCrates)
+            "${name}: the plan links a crate outside the reviewed no_std allowlist or enables `std`"
+          && pkgs.lib.assertMsg (!(noStdKernelLinkedAdmitted name (linkedCrates ++ [ std-only ])))
+            "${name}: the linked-crate allowlist admitted a std-only dependency without a `std` feature"
+          && pkgs.lib.assertMsg (recorded == expected)
+            "${name}: nix/no-std-kernels/${name}.inputs.b3 does not record exactly the plan's resolution inputs"
+          && pkgs.lib.assertMsg (recorded != [ ] && pkgs.lib.init recorded != expected)
+            "${name}: the recorded-input comparison accepted an input list missing one entry";
+        noStdKernelLibrary =
+          name:
+          (mkUnit2nixWorkspace {
+            enableKache = false;
+            resolvedJson = noStdKernelPlanPath name;
+          }).workspaceMembers.${name}.build;
+        # Inject one ambient-std import into a production module; the no_std build must reject it.
+        noStdKernelCompileProbe =
+          name: probe:
+          pkgs.testers.testBuildFailure (
+            (noStdKernelLibrary name).override (_old: {
+              postPatch = ''
+                test -f ${noStdKernels.${name}.compileProbeModule}
+                printf '\n#[allow(unused_imports)]\n%s\n' ${pkgs.lib.escapeShellArg probe} \
+                  >> ${noStdKernels.${name}.compileProbeModule}
+              '';
+            })
+          );
+        noStdKernelCheck =
+          name:
+          assert noStdKernelPlanAdmitted name;
+          pkgs.runCommand "${name}-no-std"
+            {
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.python3
+              ];
+              src = sourceForConfigChecks;
+              library = (noStdKernelLibrary name).lib;
+              # Builds and runs the crate's lib unit and Hegel property tests; a failing test fails here.
+              tests = ws.test.check.${name};
+              fsProbe = noStdKernelCompileProbe name "use std::fs::read;";
+              timeProbe = noStdKernelCompileProbe name "use std::time::SystemTime;";
+              envProbe = noStdKernelCompileProbe name "use std::env::var;";
+            }
+            ''
+              set -euo pipefail
+              crate=${name}
+              lib_name=lib$(printf '%s' "$crate" | tr - _)
+              # Positive: the no_std library compiled from its own plan, and the unit tests ran and passed.
+              if ! ls "$library"/lib/"$lib_name"-*.rlib >/dev/null 2>&1; then
+                echo "missing no_std $crate rlib in $library" >&2
+                exit 1
+              fi
+              test -e "$tests"
+              # Negative: every injected ambient-std import fails compilation in the probed module.
+              for probe in "$fsProbe" "$timeProbe" "$envProbe"; do
+                test "$(cat "$probe/testBuildFailure.exit")" != 0
+                if ! grep -F 'unresolved module or unlinked crate `std`' "$probe/testBuildFailure.log" >/dev/null \
+                  || ! grep -F ${noStdKernels.${name}.compileProbeModule} "$probe/testBuildFailure.log" >/dev/null; then
+                  echo "no_std probe failed for a reason other than the injected std import: $probe" >&2
+                  cat "$probe/testBuildFailure.log" >&2
+                  exit 1
+                fi
+              done
+              cd "$src"
+              # The plan was resolved from the current bytes of every recorded resolution input; the
+              # recorded list itself is checked against the plan's closure at evaluation time.
+              b3sum --check --quiet "nix/no-std-kernels/$crate.inputs.b3"
+              # Production sources never link std explicitly; probe a module other than the compile probe.
+              python3 scripts/check-no-std-sources.py "crates/$crate"
+              for injected in 'extern crate std;' 'pub fn leak() -> ::std::time::Instant { ::std::time::Instant::now() }'; do
+                rm -rf "$TMPDIR/source-probe"
+                mkdir -p "$TMPDIR/source-probe"
+                cp -r "crates/$crate" "$TMPDIR/source-probe/"
+                chmod -R u+w "$TMPDIR/source-probe"
+                printf '\n%s\n' "$injected" >> "$TMPDIR/source-probe/$crate/${noStdKernels.${name}.sourceProbeModule}"
+                if python3 scripts/check-no-std-sources.py "$TMPDIR/source-probe/$crate" 2> "$TMPDIR/source-probe.log"; then
+                  echo "explicit std in ${noStdKernels.${name}.sourceProbeModule} was not rejected" >&2
+                  exit 1
+                fi
+                grep -F ${noStdKernels.${name}.sourceProbeModule} "$TMPDIR/source-probe.log" >/dev/null
+              done
+              touch "$out"
+            '';
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
         # Test support is explicit here and removed by workspaceCrateOverrides from non-test builds.
         moltenTestBinaries =
@@ -956,9 +1315,11 @@
             });
         # r[impl molten.testing.ci_workspace_member_coverage]
         # Every workspace member's test binaries; each per-member graph adds only that member's dev-deps.
+        # The no_std kernel crates run here under their default (std) feature set, like molten-core;
+        # their no_std builds are gated separately by `checks.<kernel>-no-std`.
         memberTestBinaries =
           workspace: name: (workspace.test.workspaceMembers.${name}.build).override { buildTests = true; };
-        workspaceTestBinarySets = {
+        workspaceTestBinarySets = pkgs.lib.genAttrs (builtins.attrNames noStdKernels) (memberTestBinaries ws) // {
           molten = moltenTestBinaries;
           molten-core = memberTestBinaries ws "molten-core";
           molten-node-host = memberTestBinaries ws "molten-node-host";
@@ -1011,6 +1372,11 @@
               gateCompiler = startupGateCompiler;
             };
         };
+        # Package names of every workspace member, read from the manifests so a new member joins the
+        # workspace Octet run and its scope check without a second list to maintain.
+        workspacePackageNames = map (
+          member: (builtins.fromTOML (builtins.readFile (./. + "/${member}/Cargo.toml"))).package.name
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.members;
         # r[impl molten.evidence_gates.ci_octet_and_cairn_hermetic]
         # The startup gate's pinned Octet cohort, run over every workspace member. The strict startup gate
         # keeps `[workspace.metadata.octet] default_scope`; `checks.octet-workspace` compares this run with
@@ -1024,13 +1390,14 @@
           name = "molten-workspace-octet-findings";
           runs = ''
             export CARGO_TARGET_DIR="$NIX_BUILD_TOP/workspace-target"
-            cargo octet check -p molten -p molten-core -p molten-node-host -p molten-release-policy \
+            cargo octet check ${pkgs.lib.concatMapStringsSep " " (package: "-p ${package}") workspacePackageNames} \
               --artifact-dir "$out/workspace"
             cmp Cargo.lock ${sourceForConfigChecks}/Cargo.lock
             printf '\n%s\n' 'pub fn planted_octet_violation(value: Option<u8>) -> u8 { value.unwrap() }' \
               >> crates/molten-core/src/codec.rs
             cargo octet check -p molten-core --artifact-dir "$out/planted"
             mkdir -p "$out/planted-source/crates"
+            cp Cargo.toml "$out/planted-source/Cargo.toml"
             cp -R crates/molten-core "$out/planted-source/crates/molten-core"
           '';
         };
@@ -1190,6 +1557,7 @@
           cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
             "$out/vendor/vm-cohort-core/src/"
           cp ${./src/world_snapshot/chaoscontrol.rs} "$out/src/chaoscontrol.rs"
+          cp -R ${./src/world_snapshot/chaoscontrol} "$out/src/chaoscontrol"
           cp -R ${./src/world_snapshot/vm} "$out/src/vm"
         '';
         worldBenchmarkOctetWorkspace = pkgs.runCommand "molten-world-benchmark-octet-workspace" { } ''
@@ -1531,7 +1899,8 @@
                     > "$TMPDIR/negative.json"
                   ast-grep scan --rule "$rule" --json=compact \
                     src/artifacts/parts/mod \
-                    src/chunk/parts/store \
+                    src/chunk/store.rs \
+                    src/chunk/store \
                     src/retention/parts/mod \
                     src/remote/parts/dataspace \
                     src/iroh/parts/exchange \
@@ -1563,16 +1932,17 @@
                     src/test/parts/support/p002/body.rs \
                     src/main/tests/ops/helpers.rs \
                     src/local_store/tests.rs \
-                    src/chunk/parts/store/tests/m000/p002/body.rs \
+                    src/chunk/store/tests/mod.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
                     src/retention/parts/mod/tests/m000/p009/body.rs \
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \
                     src/iroh/parts/exchange/tests/m000/p001/body.rs \
                     src/evidence/parts/chain/tests/m000/p003/body.rs \
-                    src/node/parts/daemon/tests/m000/p000/body.rs \
-                    src/node/parts/daemon/tests/m000/p015/body.rs \
-                    src/node/parts/daemon/tests/m000/p010/body.rs \
-                    src/node/parts/daemon/tests/m000/p022/body.rs \
+                    src/node/daemon/tests/lifecycle/startup.rs \
+                    src/node/daemon/tests/lifecycle/mailbox.rs \
+                    src/node/daemon/tests/lifecycle/looping.rs \
+                    src/node/daemon/tests/services/loopbacks.rs \
+                    src/node/daemon/tests/services/supervisors.rs \
                     tests/parts/cliharness/p000/body.rs \
                     tests/parts/cliharness/p013/body.rs \
                     > "$TMPDIR/converted.json"
@@ -1645,7 +2015,8 @@
                     tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs \
                     > "$TMPDIR/reacquisition-negative.json"
                   ast-grep scan --rule "$ambient_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon.rs \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
@@ -1655,7 +2026,7 @@
                     src/job/parts/dag/p033/body.rs \
                     > "$TMPDIR/ambient-converted.json"
                   ast-grep scan --rule "$reacquisition_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
@@ -1710,29 +2081,29 @@
                   set -euo pipefail
                   cd "$src"
                   profile=docs/wasm-component-runtime/profile.ncl
-                  generated=docs/wasm-component-runtime/generated/profile.json
+                  generated=config/wasm-component-runtime/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
                   time_sliced_profile=docs/wasm-component-runtime/time-sliced-profile.ncl
-                  time_sliced_generated=docs/wasm-component-runtime/generated/time-sliced-profile.json
+                  time_sliced_generated=config/wasm-component-runtime/generated/time-sliced-profile.json
                   nickel export "$time_sliced_profile" --format json > "$TMPDIR/time-sliced-profile.json"
                   diff -u "$time_sliced_generated" "$TMPDIR/time-sliced-profile.json"
                   effect_profile=docs/wasm-component-runtime/effect-profile.ncl
-                  effect_profile_generated=docs/wasm-component-runtime/generated/effect-profile.json
+                  effect_profile_generated=config/wasm-component-runtime/generated/effect-profile.json
                   nickel export "$effect_profile" --format json > "$TMPDIR/effect-profile.json"
                   diff -u "$effect_profile_generated" "$TMPDIR/effect-profile.json"
                   nickel export --stdin-format json --format json < "$TMPDIR/effect-profile.json" \
                     > "$TMPDIR/effect-profile-readback.json"
                   diff -u "$effect_profile_generated" "$TMPDIR/effect-profile-readback.json"
                   effect_contract=docs/wasm-component-runtime/effect-contract.ncl
-                  effect_generated=docs/wasm-component-runtime/generated/effect-contract.json
+                  effect_generated=config/wasm-component-runtime/generated/effect-contract.json
                   nickel export "$effect_contract" --format json > "$TMPDIR/effect-contract.json"
                   diff -u "$effect_generated" "$TMPDIR/effect-contract.json"
                   nickel export --stdin-format json --format json < "$TMPDIR/effect-contract.json" \
                     > "$TMPDIR/effect-contract-readback.json"
                   diff -u "$effect_generated" "$TMPDIR/effect-contract-readback.json"
                   host_policy=docs/wasm-component-runtime/host-policy.ncl
-                  host_policy_generated=docs/wasm-component-runtime/generated/host-policy.json
+                  host_policy_generated=config/wasm-component-runtime/generated/host-policy.json
                   nickel export "$host_policy" --format json > "$TMPDIR/host-policy.json"
                   diff -u "$host_policy_generated" "$TMPDIR/host-policy.json"
                   expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
@@ -1777,7 +2148,7 @@
                   set -euo pipefail
                   cd "$src"
                   profile=docs/wasm-component-performance/profile.ncl
-                  generated=docs/wasm-component-performance/generated/profile.json
+                  generated=config/wasm-component-performance/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
                   grep -q 'c18bbe75803a6a610f7ff3b15549c927c6e02667' "$generated"
@@ -2732,12 +3103,52 @@
                   runtime_spine_preserves_boundary_repairs=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.ncl
                   runtime_spine_preserves_boundary_repairs_generated=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json
                   expected_runtime_spine_preserves_boundary_candidate_count=9
+                  # r[verify molten.testing.traceability_code_backed_coverage]
+                  coverage_corrections=evidence/tracey/2026-11-26-code-backed-coverage-corrections.ncl
+                  coverage_corrections_generated=evidence/tracey/2026-11-26-code-backed-coverage-corrections.json
+                  expected_withdrawn_repair_count=11
 
                   # r[verify molten.project.inherited_tracey_debt.active_delta_validation]
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
                   rustc --edition=2024 "$guard_source" -o "$TMPDIR/guard"
-                  "$TMPDIR/guard" --root . --baseline "$baseline"
+                  "$TMPDIR/guard" --root . --baseline "$baseline" | tee "$TMPDIR/guard.out"
+                  for field in requirements referenced covered uncovered dangling uncompiled_marker_files; do
+                    expected="$(jq -r ".$field" "$generated")"
+                    if ! grep -Fxq "$field=$expected" "$TMPDIR/guard.out"; then
+                      echo "guard $field output differs from $generated ($expected)" >&2
+                      exit 1
+                    fi
+                  done
+
+                  nickel typecheck "$coverage_corrections"
+                  nickel export "$coverage_corrections" --format json > "$TMPDIR/coverage-corrections.json"
+                  diff -u "$coverage_corrections_generated" "$TMPDIR/coverage-corrections.json"
+                  withdrawn_count="$(jq '.withdrawn_repairs | length' "$coverage_corrections_generated")"
+                  test "$withdrawn_count" -eq "$expected_withdrawn_repair_count"
+                  jq -r '.withdrawn_repairs[] | [.manifest, .requirement_id] | @tsv' "$coverage_corrections_generated" \
+                    | while IFS="$(printf '\t')" read -r manifest requirement_id
+                  do
+                    jq -e --arg id "$requirement_id" '.repairs | any(.requirement_id == $id)' "$manifest" > /dev/null
+                    if ! grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "withdrawn repair left inherited debt: $requirement_id" >&2
+                      exit 1
+                    fi
+                  done
+                  jq -r '.superseded_verifications[] | [.requirement_id, .verification_path] | @tsv' \
+                    "$coverage_corrections_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id verification_path
+                  do
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
+                  jq -r '.returned_to_debt[].requirement_id' "$coverage_corrections_generated" \
+                    | while IFS= read -r requirement_id
+                  do
+                    if ! grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "requirement returned to debt is missing from the baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                  done
 
                   rustc --edition=2024 --test "$classifier_source" -o "$TMPDIR/classifier-tests"
                   "$TMPDIR/classifier-tests"
@@ -2860,6 +3271,10 @@
                     "$runtime_spine_content_refs_repairs_generated" \
                     | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
                   do
+                    if jq -e --arg id "$requirement_id" '.withdrawn_repairs | any(.requirement_id == $id)' \
+                      "$coverage_corrections_generated" > /dev/null; then
+                      continue
+                    fi
                     if grep -Fxq "$requirement_id" "$baseline"; then
                       echo "runtime-spine content-ref repair remains in inherited debt baseline: $requirement_id" >&2
                       exit 1
@@ -2903,6 +3318,10 @@
                     "$runtime_spine_preserves_boundary_repairs_generated" \
                     | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
                   do
+                    if jq -e --arg id "$requirement_id" '.withdrawn_repairs | any(.requirement_id == $id)' \
+                      "$coverage_corrections_generated" > /dev/null; then
+                      continue
+                    fi
                     if grep -Fxq "$requirement_id" "$baseline"; then
                       echo "runtime-spine Preserves boundary repair remains in inherited debt baseline: $requirement_id" >&2
                       exit 1
@@ -3089,6 +3508,106 @@
               name = "molten-release-policy-nextest";
               members = { inherit (workspaceTestBinarySets) molten-release-policy; };
             };
+            # r[verify molten.testing.molten_core_no_std_ci_gate]
+            # r[verify molten.project.molten_core_no_std]
+            molten-core-no-std =
+              assert moltenCoreNoStdPlanAdmitted;
+              pkgs.runCommand "molten-core-no-std"
+                {
+                  nativeBuildInputs = [ unit2nix.packages.${system}.unit2nix ];
+                  workspace = sourceForConfigChecks;
+                  bareLibrary = moltenCoreNoStdBare.lib;
+                  extentsLibrary = moltenCoreNoStdExtents.lib;
+                  noStdProfileTests = moltenCoreNoStdWs.test.check."molten-core";
+                  fsProbe = moltenCoreNoStdProbe "use std::fs::read;";
+                  timeProbe = moltenCoreNoStdProbe "use std::time::SystemTime;";
+                  envProbe = moltenCoreNoStdProbe "use std::env::var;";
+                }
+                ''
+                  set -euo pipefail
+                  # The checked-in unit graph must still be the one the current manifests resolve. The
+                  # pinned unit2nix fingerprints its CLI flags, Cargo.lock, and every Cargo.toml in the
+                  # tree, and only reports "up to date" when that fingerprint equals the plan's inputsHash.
+                  # No cargo is on PATH, so a stale plan cannot be regenerated here and fails closed.
+                  plan_is_current() {
+                    (
+                      cd "$1"
+                      unit2nix -p molten-core --no-default-features --features executable-extents \
+                        -o molten-core-no-std-build-plan.json
+                    ) > "$2" 2>&1 && grep -F 'Build plan is up to date' "$2" >/dev/null
+                  }
+                  cp -R "$workspace" fresh
+                  chmod -R u+w fresh
+                  if ! plan_is_current fresh "$TMPDIR/fresh.log"; then
+                    cat "$TMPDIR/fresh.log" >&2
+                    echo "molten-core-no-std-build-plan.json does not match the current manifests; regenerate it" >&2
+                    exit 1
+                  fi
+                  cmp fresh/molten-core-no-std-build-plan.json "$workspace/molten-core-no-std-build-plan.json"
+                  # Negative: re-enabling serde's default (std) features without regenerating the plan
+                  # must make the freshness check fail.
+                  cp -R "$workspace" flipped
+                  chmod -R u+w flipped
+                  sed -i 's/^serde = { version = "1", default-features = false, features = \["alloc", "derive"\] }$/serde = { version = "1", features = ["alloc", "derive"] }/' \
+                    flipped/crates/molten-core/Cargo.toml
+                  if cmp -s flipped/crates/molten-core/Cargo.toml "$workspace/crates/molten-core/Cargo.toml"; then
+                    echo "negative manifest flip did not change crates/molten-core/Cargo.toml" >&2
+                    exit 1
+                  fi
+                  if plan_is_current flipped "$TMPDIR/flipped.log"; then
+                    echo "no_std plan freshness accepted a manifest feature flip" >&2
+                    exit 1
+                  fi
+
+                  # Source guard: no `extern crate std` and no std paths in pure molten-core modules.
+                  guard="$workspace/scripts/check-molten-core-no-std-sources.sh"
+                  core_src="$workspace/crates/molten-core/src"
+                  bash "$guard" "$core_src"
+                  # Negatives: explicit std linkage in another module still compiles, so only the guard
+                  # catches it; a feature-gated std import in a pure module must be rejected as well.
+                  for planted in 'planning.rs|extern crate std; use std::fs::read;' \
+                    'codec.rs|#[cfg(feature = "std")] use ::std::time::SystemTime;'; do
+                    file="''${planted%%|*}"
+                    rm -rf planted-src
+                    cp -R "$core_src" planted-src
+                    chmod -R u+w planted-src
+                    printf '\n%s\n' "''${planted#*|}" >> "planted-src/$file"
+                    if bash "$guard" planted-src > "$TMPDIR/guard.log" 2>&1; then
+                      echo "no_std source guard accepted a planted std use in $file" >&2
+                      exit 1
+                    fi
+                    grep -F "./$file:" "$TMPDIR/guard.log" >/dev/null
+                  done
+
+                  # Positive: both no_std profiles compiled and the unit tests passed for that feature set.
+                  for library in "$bareLibrary" "$extentsLibrary"; do
+                    if ! ls "$library"/lib/libmolten_core-*.rlib >/dev/null 2>&1; then
+                      echo "missing no_std molten-core rlib in $library" >&2
+                      exit 1
+                    fi
+                  done
+                  test -e "$noStdProfileTests"
+                  # Negative: each injected ambient-std import must fail compilation in src/codec.rs.
+                  for probe in "$fsProbe" "$timeProbe" "$envProbe"; do
+                    test "$(cat "$probe/testBuildFailure.exit")" != 0
+                    if ! grep -F 'unresolved module or unlinked crate `std`' "$probe/testBuildFailure.log" >/dev/null \
+                      || ! grep -F 'src/codec.rs' "$probe/testBuildFailure.log" >/dev/null; then
+                      echo "no_std probe failed for a reason other than the injected std import: $probe" >&2
+                      cat "$probe/testBuildFailure.log" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
+            # Full molten-core unit/property tests under the default std feature set.
+            molten-core-tests = ws.test.check."molten-core";
+            molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-fastpath-core-no-std = noStdKernelCheck "molten-fastpath-core";
+            molten-preserves-core-no-std = noStdKernelCheck "molten-preserves-core";
+            molten-raft-core-no-std = noStdKernelCheck "molten-raft-core";
+            molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
+            molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
+            molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";
             clippy = ws.clippy.allWorkspaceMembers;
             executable-extent-consumer =
               assert executableExtentSource != null;
@@ -3812,6 +4331,21 @@
                   "$TMPDIR/check-license-boundary" .
                   touch "$out"
                 '';
+            # r[impl molten.project.real_module_encapsulation]
+            # Rust embeds (`include_str!`/`include_bytes!`) never read governing docs; data lives under config/.
+            docs-embed-hygiene =
+              pkgs.runCommand "molten-docs-embed-hygiene"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_check_docs_embeds.py
+                  python3 scripts/check-docs-embeds.py --root .
+                  touch "$out"
+                '';
             # r[impl molten.project.documentation_links.local_targets]
             # Local links and anchors in the public entry pages and docs/ resolve (#29).
             doc-links =
@@ -4383,7 +4917,8 @@
                     fi
                   done
 
-                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' src/fabric_consistency/fastpath; then
+                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' \
+                    crates/molten-fastpath-core/src src/fabric_consistency/fastpath; then
                     echo "pure fast-path model contains an ambient shell dependency" >&2
                     exit 1
                   fi
@@ -4546,14 +5081,25 @@
                   # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.positive]
                   # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.negative]
                   positive_fixture preserves-boundary-profile-valid docs/preserves-boundary-profile/valid.ncl
-                  for fixture in \
-                    docs/preserves-boundary-profile/non-canonical.ncl \
-                    docs/preserves-boundary-profile/missing-schema-label.ncl \
-                    docs/preserves-boundary-profile/stale-ref.ncl \
-                    docs/preserves-boundary-profile/raw-core-coupling.ncl
-                  do
-                    negative_fixture "preserves-boundary-$(basename "$fixture" .ncl)" "$fixture"
-                  done
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.validation]
+                  # Each negative must fail with the diagnostic of the rule it breaks, not an unrelated error.
+                  while IFS='|' read -r name expected; do
+                    fixture="docs/preserves-boundary-profile/$name.ncl"
+                    label="preserves-boundary-$name"
+                    negative_fixture "$label" "$fixture"
+                    if ! grep -Fq "$expected" "$TMPDIR/$label.err"; then
+                      echo "negative fixture $fixture did not report: $expected" >&2
+                      failed=1
+                    fi
+                  done <<'PROFILE_NEGATIVES'
+                  non-canonical|non-canonical-bytes: node-control-envelope
+                  missing-schema-label|missing definition for `schema_label`
+                  stale-ref|stale-blake3-ref:
+                  uppercase-ref|stale-blake3-ref:
+                  unsupported-consumer|unsupported-consumer: evidence-envelope
+                  missing-non-claim|missing-boundary-non-claim:
+                  raw-core-coupling|raw-preserves-core-coupling: receipt
+                  PROFILE_NEGATIVES
                   grep -Fq 'Profile success proves canonical boundary identity and adapter placement only' \
                     docs/modularity-boundaries.md
                   grep -Fq 'it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance' \
@@ -4989,7 +5535,7 @@
                   cd "$src"
                   python3 scripts/test_ci_coverage.py
                   python3 scripts/ci-coverage.py octet-baseline check --artifacts "$findings/workspace" \
-                    --scope molten,molten-core,molten-node-host,molten-release-policy
+                    --scope ${pkgs.lib.concatStringsSep "," workspacePackageNames}
                   mkdir -p "$out"
                   if python3 scripts/ci-coverage.py --root "$findings/planted-source" octet-baseline check \
                     --artifacts "$findings/planted" --baseline "$src/config/testing/octet-workspace-baseline.json" \
@@ -5058,9 +5604,11 @@
             inherit pkgs;
             src = sourceForConfigChecks;
           }
+          // import ./nix/production-raft-model.nix { inherit pkgs; }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
             dev-function-profiling = fluxProfilerCli;
-            verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
+            # The verified node-replication pilot is opt-in research, built as
+            # packages.x86_64-linux.verified-node-replication-pilot, not a default check.
             tpm2-sealed-identity = import ./nix/tpm2-identity.nix {
               inherit pkgs rustLibDir;
               testBinaries = moltenTestBinaries;

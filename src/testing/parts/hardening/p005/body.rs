@@ -233,6 +233,22 @@ fn validate_ref(reference: &str, label: &str) -> Result<()> {
         .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
+/// An invented digest is not the identity of any real artifact: a sequential
+/// placeholder (at least 128 leading zero bits, e.g. `blake3:000…0101`) or a
+/// single repeated nibble (e.g. `blake3:aaaa…`). Malformed refs are reported
+/// separately as stale refs.
+// r[impl molten.testing.evidence_matrix_native_producers]
+pub fn is_placeholder_ref(reference: &str) -> bool {
+    const PLACEHOLDER_ZERO_PREFIX: &str = "00000000000000000000000000000000";
+    let Some(hex) = reference.strip_prefix("blake3:") else {
+        return false;
+    };
+    let Some(first) = hex.bytes().next() else {
+        return false;
+    };
+    hex.starts_with(PLACEHOLDER_ZERO_PREFIX) || hex.bytes().all(|byte| byte == first)
+}
+
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
         Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
@@ -246,44 +262,4 @@ fn validate_decision(decision: &str) -> Result<()> {
         DECISION_PASS | DECISION_DENY => Ok(()),
         other => Err(MoltenError::invalid_harness(format!("unsupported decision {other}"))),
     }
-}
-
-fn ensure_bound(count: usize, label: &str) -> Result<()> {
-    crate::bounded::ensure_count_at_most(count, MAX_ITEMS, label)
-}
-
-fn ensure_ref_bound(count: usize, label: &str) -> Result<()> {
-    crate::bounded::ensure_count_at_most(count, MAX_REFS, label)
-}
-
-fn decision_for(diagnostics: &[String]) -> &'static str {
-    if diagnostics.is_empty() {
-        DECISION_PASS
-    } else {
-        DECISION_DENY
-    }
-}
-
-fn placeholder_ref() -> Result<String> {
-    Ok(crate::preserves_rail::content_ref_from_bytes(b"missing"))
-}
-
-fn hash(value: &IoValue) -> Result<String> {
-    crate::preserves_rail::canonical_hash(value)
-}
-
-fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
-    crate::preserves_rail::record(label, fields)
-}
-
-fn field_string(label: &'static str, value: &str) -> IoValue {
-    record(label, vec![string(value)])
-}
-
-fn field_u64(label: &'static str, value: u64) -> IoValue {
-    record(label, vec![IoValue::new(value)])
-}
-
-fn field_sequence(label: &'static str, values: Vec<IoValue>) -> IoValue {
-    record(label, vec![sequence(values)])
 }

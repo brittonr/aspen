@@ -1,3 +1,7 @@
+mod issue;
+
+pub use issue::ClosureIssue;
+
 use super::MAX_WORLD_COMMIT_CLOSURE_OBJECTS;
 use super::MAX_WORLD_COMMIT_PARENTS;
 use super::MAX_WORLD_COMMIT_REVISION_FENCES;
@@ -161,34 +165,6 @@ pub struct ClosureReport {
     pub complete: bool,
     pub first_missing_root: Option<RootKind>,
     pub issues: Vec<ClosureIssue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ClosureIssue {
-    InvalidCore(String),
-    BoundExceeded {
-        field: &'static str,
-        actual: usize,
-        maximum: usize,
-    },
-    DuplicateRootObservation(RootKind),
-    MissingRootObject(RootKind),
-    RootIdentityMismatch(RootKind),
-    RootSchemaMismatch(RootKind),
-    UnexpectedRootObservation(RootKind),
-    DuplicateParentObservation(String),
-    ParentEdgeBoundExceeded {
-        commit_ref: String,
-        actual: usize,
-        maximum: usize,
-    },
-    DuplicateParentEdge {
-        commit_ref: String,
-        parent_ref: String,
-    },
-    MissingParentObject(String),
-    MissingParentObservation(String),
-    ParentCycle(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

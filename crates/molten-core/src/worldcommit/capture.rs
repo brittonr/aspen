@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::CompletenessClaim;
 use super::RootKind;
@@ -13,6 +13,10 @@ use super::WorldRootRef;
 use super::validate_and_normalize_core;
 use super::validate_bounds;
 use super::validate_source_id;
+
+mod issue;
+
+pub use issue::CaptureIssue;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RevisionFence {
@@ -81,49 +85,6 @@ pub struct RevisionRecheck {
 pub struct RevisionComparison {
     pub current: bool,
     pub issues: Vec<CaptureIssue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CaptureIssue {
-    ZeroBound(&'static str),
-    BoundAboveHardLimit {
-        field: &'static str,
-        actual: usize,
-        maximum: usize,
-    },
-    BoundExceeded {
-        field: &'static str,
-        actual: usize,
-        maximum: usize,
-    },
-    LogicalProfileHasCohort,
-    OpaqueProfileMissingCohort,
-    DuplicateParent(String),
-    DuplicateRootKind(RootKind),
-    DuplicateRootRef(String),
-    MissingRequiredRoot(RootKind),
-    UnexpectedRoot(RootKind),
-    CompletenessMismatch,
-    RootDomainMismatch {
-        expected: RootKind,
-        actual: RootKind,
-    },
-    RootSchemaNotValidated(RootKind),
-    IncompleteInventory(RootKind),
-    FenceRootMismatch {
-        root: RootKind,
-        fence: RootKind,
-    },
-    DuplicateFenceSource(String),
-    MissingRecheck(String),
-    UnexpectedRecheck(String),
-    DuplicateRecheck(String),
-    RevisionDrift {
-        source_id: String,
-        expected: u64,
-        actual: u64,
-    },
-    RecheckInventoryIncomplete(String),
 }
 
 // r[impl molten.world_commit.capture]

@@ -3,8 +3,8 @@
     reason = "canonical identity uses ordered graph collections at each explicit framing boundary"
 )]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::*;
 
@@ -20,8 +20,8 @@ pub(super) fn assigned_peer(
         return None;
     }
     let digest = blake3::hash(object_ref.as_str().as_bytes());
-    let mut prefix = [0_u8; std::mem::size_of::<u64>()];
-    prefix.copy_from_slice(&digest.as_bytes()[..std::mem::size_of::<u64>()]);
+    let mut prefix = [0_u8; core::mem::size_of::<u64>()];
+    prefix.copy_from_slice(&digest.as_bytes()[..core::mem::size_of::<u64>()]);
     let peer_count = u64::try_from(peers.len()).ok()?;
     assert!(peer_count != 0, "nonempty peer set must have a nonzero length");
     let index = usize::try_from(u64::from_be_bytes(prefix) % peer_count).ok()?;

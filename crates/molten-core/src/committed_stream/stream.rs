@@ -36,10 +36,11 @@ pub fn commit_transition(
     stream: &mut CommittedChangeStream,
     input: &CommitInput,
 ) -> Result<Vec<CommittedChangeEvent>, CommittedStreamIssue> {
-    if input.payload_ref.is_empty() || !input.payload_ref.starts_with("blake3:") {
+    // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    if !crate::fabric::valid_blake3_ref(&input.payload_ref) {
         return Err(CommittedStreamIssue::InvalidPayloadRef);
     }
-    if input.state_ref.is_empty() || !input.state_ref.starts_with("blake3:") {
+    if !crate::fabric::valid_blake3_ref(&input.state_ref) {
         return Err(CommittedStreamIssue::InvalidStateRef);
     }
     if input.event_count == 0 {

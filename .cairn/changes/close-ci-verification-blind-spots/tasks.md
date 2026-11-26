@@ -78,3 +78,37 @@
   - The property moved from `src/chunk/parts/store/tests/m000/p000/body.rs` (299 lines) to `p005`.
 - `aremote 'cargo clippy -p molten --all-targets -- -D warnings'`: clean. The Octet findings run has 0 findings in `molten`, which includes every touched Rust file. `cargo fmt --all`: no changes.
 - `cairn validate --strict` with the pinned policy: valid.
+
+## Verification (2026-11-26, CiCoverage: merge of `cairn/swarm-core-no-std-20261126` at `054b09732`)
+
+- Conflicts resolved:
+  - `.config/nextest.toml`: `ci`/`deterministic` select all 11 workspace members, including the 7 no_std kernels; the integration `default` override and the `no-std-kernels` profile are kept.
+  - `AGENTS.md`, `flake.nix`: every integration kernel/no_std check is kept alongside every rail added here. The kernel crates join `workspaceTestBinarySets`, so the hermetic `checks.nextest` runs them like molten-core.
+  - The deleted chunk shards' bounded Hegel property, with its multi-chunk and boundary-range edits, moved to `src/chunk/store/tests/basics.rs`.
+- `crates/molten-core/Cargo.toml`: `[[test]] hegel_properties` with `required-features = ["std"]`, so the no_std profile (`molten-core-no-std`) does not build the std-only Hegel suite.
+- Plans regenerated with `--force` (at the integration plan path; `cargo metadata --locked` OK; `scripts/no-std-kernel-plans.sh --check` OK):
+  - `build-plan.json`
+  - `release-policy-build-plan.json`
+  - `molten-core-no-std-build-plan.json`, with `--no-default-features --features executable-extents` as `checks.molten-core-no-std` requires
+  - `nix/no-std-kernels/*`
+- Octet:
+  - The workspace run takes `-p` for every member, read from the manifests.
+  - Pinned-zero crates are now derived from `[workspace.metadata.octet] default_scope` (molten, molten-node-host, kernels) instead of a fixed list.
+  - The baseline was regenerated from the merged findings: 3,504 findings, 1,950 rows (`molten_core` 3,398, `molten-release-policy` 105, `fastpathquint` 1).
+  - The planted molten-core violation still reports `octet-new-finding:...codec.rs:no_unwrap:...:0->2`.
+- New `#[ignore]` (`src/preserves/bridge/tests/throughput.rs::writer_tree_and_borrowed_paths`) inventoried as `diagnostic-only`/`reviewed-exclusion`.
+- leviathan:
+  - `cargo check --workspace --all-targets` and `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+  - `cargo nextest run --workspace --profile ci`: 3,698 run, 3,698 passed, 41 skipped.
+  - `python3 scripts/test_ci_coverage.py`: 37 OK.
+  - Strict `cairn validate`: valid.
+- `anix build --keep-going` exit 0:
+  - `octet-workspace`, `cairn-validate-strict`, `molten-core-no-std`, `molten-preserves-core-no-std`, `license-boundary`
+  - `ci-coverage-audit`, `nextest-config`, `molten-core` (846 passed), `job-captured-nickel` (4 passed)
+  - `feature-matrix`: union lib 137 passed / 8 ignored, gated targets green, DoltLite passed
+- `checks.nextest`: 3,698 run, 3,686 passed, 12 failed. All 12 spawn children through `/proc/<pid>/fd/<n>` under the sandbox's multi-call busybox `/bin/sh`; they are owned by `cairn/swarm-live-adapter-sandbox-20261126`:
+  - `fabric_execution::tests::live::{adapter_clears_environment_round_trips_input_and_publishes_bounded_output, adapter_bounds_output_and_preserves_publication_failure_receipt, adapter_preserves_rejected_exit_and_descendant_teardown, adapter_reports_timeout_cancellation_and_definite_spawn_failure}`
+  - `fabric_execution::tests::binding::{live_adapter_denies_stdin_bytes_that_do_not_hash_to_the_admitted_reference, live_adapter_refuses_terminal_retries_but_retries_definite_prestart_failures, live_adapter_remeasures_an_executable_changed_after_a_cached_measurement}`
+  - `fabric_execution::tests::simulation::live_and_compositions_share_command_and_outcome_shape`
+  - `capability_qualification::products::effect::tests::no_started_child_or_untyped_failure_is_not_uncertain_effect_evidence`
+  - `capability_qualification::tests::producers::{host_work_stays_unknown_after_a_started_process_effect, started_child_effect_without_completion_stays_unknown, uncertain_host_work_is_never_readmitted_or_repeated}`

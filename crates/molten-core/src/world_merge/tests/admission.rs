@@ -2,6 +2,8 @@ use super::super::*;
 use super::support::*;
 use crate::world_commit::RootKind;
 
+mod failclosed;
+
 const EXPECTED_OUTPUT_ROOTS: usize = 2;
 
 struct TestHandler {
@@ -199,47 +201,5 @@ fn absent_and_generated_empty_outputs_have_distinct_plan_identities() {
     assert_eq!(
         validate_world_merge_plan(&generated).expect_err("absence cannot reuse generated identity"),
         WorldMergeIssue::PlanIdentityMismatch
-    );
-}
-
-#[test]
-fn runtime_sensitive_ambiguous_duplicate_and_bounded_inputs_fail_closed() {
-    // r[verify molten.world_merge.verification]
-    let mut runtime = request();
-    runtime.profile.root_modes.insert(RootKind::Tasks, WorldMergeMode::AncestorReplacement);
-    runtime.roots.push(WorldMergeRootInput {
-        kind: RootKind::Tasks,
-        base: value(RootKind::Tasks, "tasks-base"),
-        left: value(RootKind::Tasks, "tasks-left"),
-        right: value(RootKind::Tasks, "tasks-right"),
-    });
-    assert!(
-        plan_world_merge(runtime, Vec::new(), None)
-            .expect_err("task merge denied")
-            .contains(&WorldMergeIssue::RuntimeSensitiveRoot(RootKind::Tasks))
-    );
-
-    let mut ambiguous = request();
-    ambiguous.common_ancestor_ambiguous = true;
-    assert!(
-        plan_world_merge(ambiguous, Vec::new(), None)
-            .expect_err("ambiguous base denied")
-            .contains(&WorldMergeIssue::AmbiguousBase)
-    );
-
-    let mut duplicate = request();
-    duplicate.source_heads.push(duplicate.source_heads[0].clone());
-    assert!(
-        plan_world_merge(duplicate, Vec::new(), None)
-            .expect_err("duplicate source denied")
-            .contains(&WorldMergeIssue::DuplicateSource)
-    );
-
-    let mut bounded = request();
-    bounded.bounds.max_roots = 1;
-    assert!(
-        plan_world_merge(bounded, Vec::new(), None)
-            .expect_err("root bound denied")
-            .contains(&WorldMergeIssue::RootLimitExceeded)
     );
 }

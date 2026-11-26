@@ -17,9 +17,9 @@ Acceptance evidence should connect input, decision, and observable boundary. An 
 
 ## Policy material and evidence binding
 
-- [ ] **Does the packet bind the actual changed policy?** Require the canonical policy snapshot and the generated Nickel source/export relationships. [Policy parsing](../../../src/harness/parts/schema/p019/body.rs) recomputes hashes and normalization; retaining old gate material after changing policy must not be accepted.
+- [ ] **Does the packet bind the actual changed policy?** Require the canonical policy snapshot and the generated Nickel source/export relationships. [Policy parsing](../../../src/harness/schema/gates/covenant.rs) recomputes hashes and normalization; retaining old gate material after changing policy must not be accepted.
 - [ ] **Are backend and contract identities reviewed?** Check contract version, input/output schemas, receipt schema, and normalized-source reference. Do not accept arbitrary Nickel evaluation as equivalent to the selected Molten contract.
-- [ ] **Does changed capability material invalidate its old evidence?** [Capability validation](../../../src/harness/parts/schema/p020/body.rs) compares snapshot and grant refs and reconstructs expected gate evidence. Require a case that changes material without updating its evidence graph.
+- [ ] **Does changed capability material invalidate its old evidence?** [Capability validation](../../../src/harness/schema/grants/grants.rs) compares snapshot and grant refs and reconstructs expected gate evidence. Require a case that changes material without updating its evidence graph.
 - [ ] **Are negative artifacts preserved as negative?** Missing Basalt authority preflight, tampered grant bindings, and unchecked UCAN proof material have dedicated [test cases](../../../src/harness/parts/mod/tests/m000/p003/body.rs). A diagnostic failure artifact must not be submitted as a passing report.
 
 Request evidence of semantic rejection and boundary behavior, not just assertions that source text contains particular labels.

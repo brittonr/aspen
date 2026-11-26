@@ -175,12 +175,16 @@ impl TokioReplicaPort<crate::fabric_time::OperatingSystemEntropySource> {
     }
 }
 
+// A replica arms election timers only while it follows or campaigns and heartbeat timers only while
+// it leads, so arming one kind cancels the other: a superseded role's timer must not fire.
+// r[impl molten.consensus.raft_timer_lifecycle_safety]
 impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaPort<S> {
     fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String> {
         crate::preserves_rail::validate_content_ref(timer_ref)?;
         let (delay_ticks, entropy_evidence_ref) = self.election_delay()?;
         let timer_evidence_ref = self.timer_evidence(delay_ticks, self.next_timer_sequence)?;
         let duration = self.duration(delay_ticks)?;
+        abort(&mut self.heartbeat_handle);
         abort(&mut self.election_handle);
         let sender = self.sender.clone();
         let event_timer_ref = timer_ref.to_string();
@@ -205,6 +209,7 @@ impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaPort<S> {
     fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String> {
         let timer_evidence_ref = self.timer_evidence(self.heartbeat_ticks, self.next_timer_sequence)?;
         let duration = self.duration(self.heartbeat_ticks)?;
+        abort(&mut self.election_handle);
         abort(&mut self.heartbeat_handle);
         let sender = self.sender.clone();
         self.heartbeat_handle = Some(tokio::spawn(async move {

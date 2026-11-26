@@ -14,7 +14,7 @@ Nominal admission is another boundary. `admit_context_refs` constructs `Authorit
 
 `AdmissionPolicy::decide_with_capabilities` first invokes context authorization. Missing authority produces a denial before deny-rule policy evaluation. With a matching grant, policy rules can still deny the request. Thus “a matching grant exists” is necessary on this path but insufficient for admission. Conversely, calling `AdmissionPolicy::decide` alone evaluates policy without performing that capability check. Review must follow the entry point actually used, not just the types present nearby.
 
-There is an important implementation qualification to the phrase “deny by default.” An empty `CapabilityContext::from_grants` denies every request, but `CapabilityContext::default()` calls `allow_all()`. The evidence-bearing harness compensates at its own boundary by rejecting suites without an explicit capability fixture, alongside explicit actors and budgets, before collecting runtime traces ([runner preparation](../../../src/harness/parts/runner/p000/body.rs)). The deny-by-default architectural intent is not evidence that every constructor in every layer defaults to denial.
+“Deny by default” holds for every constructor except the one named for the opposite. `CapabilityContext::default()` holds no grants, exactly like an empty `CapabilityContext::from_grants`, and denies every request; granting every request requires the explicit `CapabilityContext::allow_all()` constructor ([admission core](../../../crates/molten-runtime-admission-core/src/ingress.rs)). A forgotten initialization therefore yields no authority rather than full authority. The evidence-bearing harness also rejects suites without an explicit capability fixture, alongside explicit actors and budgets, before collecting runtime traces ([runner preparation](../../../src/harness/parts/runner/p000/body.rs)); a suite that omits the fixture parses with the empty default context, not an implicit grant.
 
 For canonical contexts, `authority_grant_currentness` evaluates supplied facts: requested principal, capability and operation, scope, logical time, epoch interval, current keys, and revocations. A nonempty diagnostic set yields `fail`. Parsing errors instead return an error. Consumers should preserve that distinction between a validly formed denied request and a request that never entered the decision domain ([currentness implementation](../../../src/authority/parts/mod/p001/body.rs)).
 
@@ -32,7 +32,7 @@ Suggested review should trace a request from fixture or wire decoding to the exa
 
 ## Limits and non-claims
 
-A local matching law is not cryptographic authentication. Nominal typing is not freshness. Canonical receipt identity is not renewed permission, and a passing harness fixture is not production authority. No filesystem, network, clock, or other ambient effect is implied by these in-memory decisions. The constructor/default qualification above remains visible rather than being generalized away.
+A local matching law is not cryptographic authentication. Nominal typing is not freshness. Canonical receipt identity is not renewed permission, and a passing harness fixture is not production authority. No filesystem, network, clock, or other ambient effect is implied by these in-memory decisions. A deny-by-default constructor does not make an explicit `allow_all()` call safe; review still has to find and justify each one.
 
 ## Sources
 
@@ -40,6 +40,7 @@ A local matching law is not cryptographic authentication. Nominal typing is not 
 - [Nominal authority references](../../nominal-authority-references.md)
 - [Local filesystem authority](../../local-filesystem-authority.md)
 - [Runtime grant and policy implementation](../../../src/runtime/admission/mod.rs)
+- [Capability context and admission core](../../../crates/molten-runtime-admission-core/src/ingress.rs)
 - [Authority context representation](../../../src/authority/parts/mod/p000/body.rs)
 - [Currentness and admission](../../../src/authority/parts/mod/p001/body.rs)
 - [Nominal wire admission](../../../src/authority/nominal.rs)

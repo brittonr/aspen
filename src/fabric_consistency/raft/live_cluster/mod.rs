@@ -1,6 +1,8 @@
 use super::*;
 
+mod contexts;
 mod plan;
+mod regressions;
 pub(in crate::fabric_consistency::raft) mod setup;
 #[path = "trace/capture.rs"]
 mod trace_capture;

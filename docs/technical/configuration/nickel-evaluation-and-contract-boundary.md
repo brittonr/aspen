@@ -8,13 +8,13 @@ Molten reviews the command-line evaluator and embedded evaluator as one cohort: 
 
 The useful invariant is narrower than “all configuration is correct”: the reviewed evaluation surfaces are exercised against shared acceptance and rejection examples. A matching version string alone does not establish semantic equivalence for every Nickel expression, nor does fixture success establish policy completeness.
 
-There are two distinct consumers. The [fixture inventory](../../nickel-contract-fixture-inventory.md) describes repository-owned authoring modules whose checked JSON or Preserves exports feed Rust consumers. Separately, the [harness normalization implementation](../../../src/harness/parts/schema/p020/body.rs) embeds Nickel through `nickel_lang::Context`, calls `eval_deep_for_export`, then `expr_to_json`. Thus “Rust consumes checked exports” must not be broadened into “no Rust code evaluates Nickel.” The production-profile contract's comment is scoped to that profile consumption boundary, not to every harness path.
+There are two distinct consumers. The [fixture inventory](../../nickel-contract-fixture-inventory.md) describes repository-owned authoring modules whose checked JSON or Preserves exports feed Rust consumers. Separately, the [harness normalization implementation](../../../src/harness/schema/gates/evaluator.rs) embeds Nickel through `nickel_lang::Context`, calls `eval_deep_for_export`, then `expr_to_json`. Thus “Rust consumes checked exports” must not be broadened into “no Rust code evaluates Nickel.” The production-profile contract's comment is scoped to that profile consumption boundary, not to every harness path.
 
 ## Evaluation is not admission
 
 The embedded helper accepts source text and returns exported JSON or a converted Molten error. Contract choice, source construction, and subsequent interpretation belong to its callers. No filesystem mutation, network send, or capability grant follows merely from the helper returning successfully.
 
-The [policy preflight path](../../../src/harness/parts/schema/p019/body.rs) makes this layering concrete. `policy_preflight_material` starts with a Molten policy snapshot, computes its canonical reference, constructs Nickel source, hashes the source as a Preserves string, exports JSON, and hashes that JSON string separately. It then creates a Basalt contract envelope with explicit backend, contract identity, version, source hash, and schema identities. Envelope validation is another boundary, not an implied consequence of Nickel evaluation.
+The [policy preflight path](../../../src/harness/schema/gates/covenant.rs) makes this layering concrete. `policy_preflight_material` starts with a Molten policy snapshot, computes its canonical reference, constructs Nickel source, hashes the source as a Preserves string, exports JSON, and hashes that JSON string separately. It then creates a Basalt contract envelope with explicit backend, contract identity, version, source hash, and schema identities. Envelope validation is another boundary, not an implied consequence of Nickel evaluation.
 
 Readback of this evidence checks three different relationships:
 
@@ -48,6 +48,6 @@ The described code establishes explicit in-memory normalization and evidence rel
 - [Contract fixture inventory](../../nickel-contract-fixture-inventory.md)
 - [Proof workflow](../../proof-workflow.md)
 - [Cohort and export checks](../../../flake.nix)
-- [Embedded evaluator and error conversion](../../../src/harness/parts/schema/p020/body.rs)
-- [Policy source/export evidence](../../../src/harness/parts/schema/p019/body.rs)
+- [Embedded evaluator and error conversion](../../../src/harness/schema/gates/evaluator.rs)
+- [Policy source/export evidence](../../../src/harness/schema/gates/covenant.rs)
 - [Production profile contracts](../../production-profile-contracts.ncl)

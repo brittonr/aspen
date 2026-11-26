@@ -986,6 +986,76 @@ fn exclusive_lease_actions_require_fresh_fencing() {
     assert_eq!(expired.kind, LeaseDecisionKind::DeniedExpired);
 }
 
+fn renew_request(
+    consistency: LeaseConsistency,
+    fencing_token: Option<u64>,
+    previous_fencing_token: Option<u64>,
+) -> LeaseRequest {
+    LeaseRequest {
+        lease_id: "lease.renew".to_string(),
+        owner_id: "owner.renew".to_string(),
+        generation: ACTIVE_GENERATION,
+        now: virtual_time(DEADLINE_TICKS),
+        expires_at: virtual_time(LEASE_EXPIRY),
+        uncertainty_ticks: 0,
+        consistency,
+        action: LeaseAction::Renew,
+        fencing_token,
+        previous_fencing_token,
+    }
+}
+
+// r[verify molten.fabric_time.batch_item_atomicity_and_fenced_renew]
+#[test]
+fn fenced_exclusive_renewal_requires_a_current_fencing_token() {
+    let profile = profile();
+    let renew = |fencing_token, previous_fencing_token| {
+        evaluate_lease(
+            &profile,
+            ACTIVE_GENERATION,
+            &renew_request(LeaseConsistency::FencedExclusive, fencing_token, previous_fencing_token),
+        )
+        .expect("renew decision")
+        .kind
+    };
+    assert_eq!(renew(Some(FENCING_TOKEN), Some(FENCING_TOKEN)), LeaseDecisionKind::RenewalAllowed);
+    assert_eq!(renew(Some(FENCING_TOKEN), Some(PREVIOUS_FENCING_TOKEN)), LeaseDecisionKind::RenewalAllowed);
+    assert_eq!(renew(Some(PREVIOUS_FENCING_TOKEN), Some(FENCING_TOKEN)), LeaseDecisionKind::DeniedStaleFencingToken);
+    assert_eq!(renew(None, Some(FENCING_TOKEN)), LeaseDecisionKind::DeniedWithoutFencing);
+    assert_eq!(renew(Some(FENCING_TOKEN), None), LeaseDecisionKind::DeniedWithoutFencing);
+    assert_eq!(renew(None, None), LeaseDecisionKind::DeniedWithoutFencing);
+
+    let mut expired = renew_request(LeaseConsistency::FencedExclusive, Some(FENCING_TOKEN), Some(FENCING_TOKEN));
+    expired.now = virtual_time(LEASE_EXPIRY);
+    assert_eq!(
+        evaluate_lease(&profile, ACTIVE_GENERATION, &expired).expect("expired renew").kind,
+        LeaseDecisionKind::DeniedExpired
+    );
+}
+
+// r[verify molten.fabric_time.batch_item_atomicity_and_fenced_renew]
+#[test]
+fn local_observation_renewal_cannot_claim_fencing() {
+    let profile = profile();
+    let local =
+        evaluate_lease(&profile, ACTIVE_GENERATION, &renew_request(LeaseConsistency::LocalObservationOnly, None, None))
+            .expect("local renew");
+    assert_eq!(local.kind, LeaseDecisionKind::RenewalAllowed);
+    for (fencing_token, previous_fencing_token) in [
+        (Some(FENCING_TOKEN), None),
+        (None, Some(FENCING_TOKEN)),
+        (Some(PREVIOUS_FENCING_TOKEN), Some(FENCING_TOKEN)),
+    ] {
+        let denied = evaluate_lease(
+            &profile,
+            ACTIVE_GENERATION,
+            &renew_request(LeaseConsistency::LocalObservationOnly, fencing_token, previous_fencing_token),
+        )
+        .expect("local fenced renew");
+        assert_eq!(denied.kind, LeaseDecisionKind::DeniedWithoutFencing);
+    }
+}
+
 fn limited_scheduler_profile(max_runnables: u64, queue_depth: u64) -> AdmittedTimeProfile {
     let mut limited = descriptor(TimeProfileKind::DeterministicSimulation);
     limited.max_runnables = max_runnables;
@@ -1563,5 +1633,98 @@ fn eviction_preserves_a_blocked_occurrences_slot_and_exact_identity_resume() {
             .expect("resume selection")
             .selected,
         anchor
+    );
+}
+
+fn fixed_retry_policy() -> RetryPolicy {
+    RetryPolicy {
+        maximum_attempts: RETRY_ATTEMPTS,
+        base_delay_ticks: RETRY_BASE,
+        maximum_delay_ticks: RETRY_MAX,
+        backoff: RetryBackoff::Fixed,
+        jitter: RetryJitter::None,
+    }
+}
+
+// r[verify molten.fabric_time.retry_deadline_domain]
+#[test]
+fn retry_planning_denies_a_wall_clock_base_at_construction() {
+    let profile = profile();
+    let wall_now = TimeValue::Wall(WallClockObservation {
+        profile_ref: profile.profile_ref.clone(),
+        unix_nanos: WALL_START,
+        uncertainty_nanos: 0,
+        observation_sequence: 1,
+    });
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.wall",
+            ACTIVE_GENERATION,
+            &wall_now,
+            0,
+            fixed_retry_policy(),
+            None
+        ),
+        Err(DeadlineLeaseError::UnsupportedDeadlineDomain(TimeDomain::WallClock))
+    );
+}
+
+// r[verify molten.fabric_time.retry_deadline_domain]
+#[test]
+fn retry_planning_accepts_a_monotonic_base_and_keeps_its_domain() {
+    let profile = profile();
+    let monotonic_now = TimeValue::Monotonic(MonotonicInstant {
+        profile_ref: profile.profile_ref.clone(),
+        ticks: DEADLINE_TICKS,
+    });
+    let plan = plan_retry(
+        &profile,
+        ACTIVE_GENERATION,
+        "retry.monotonic",
+        ACTIVE_GENERATION,
+        &monotonic_now,
+        0,
+        fixed_retry_policy(),
+        None,
+    )
+    .expect("monotonic retry plan");
+    assert_eq!(plan.deadline.target.domain(), TimeDomain::Monotonic);
+    assert_eq!(plan.delay.domain, TimeDomain::Monotonic);
+    assert_eq!(plan.deadline.target.ticks(), DEADLINE_TICKS + RETRY_BASE);
+    let decision = evaluate_deadline(&profile, ACTIVE_GENERATION, &plan.deadline, &monotonic_now)
+        .expect("planned deadline evaluates");
+    assert_eq!(decision.status, DeadlineStatus::Pending);
+}
+
+// r[verify molten.fabric_time.entropy_capability_evidence]
+#[test]
+fn entropy_evidence_binds_the_admitted_stream_capability() {
+    let profile = profile();
+    let stream = open_simulation_stream();
+    let transition = draw_deterministic_entropy(&profile, ACTIVE_GENERATION, &stream, EntropyRequest::Bytes {
+        count: ENTROPY_BYTES,
+    })
+    .expect("draw");
+    let metadata = entropy_evidence_metadata(&stream, &transition);
+    assert_eq!(metadata.capability_ref, reference('b'));
+    assert_eq!(verify_entropy_evidence_capability(&stream, &metadata.capability_ref), Ok(()));
+}
+
+// r[verify molten.fabric_time.entropy_capability_evidence]
+#[test]
+fn entropy_replay_rejects_a_mismatched_capability_with_a_typed_diagnostic() {
+    let stream = open_simulation_stream();
+    assert_eq!(
+        verify_entropy_evidence_capability(&stream, &reference('d')),
+        Err(EntropyError::CapabilityMismatch {
+            expected: reference('b'),
+            actual: reference('d'),
+        })
+    );
+    assert_eq!(
+        verify_entropy_evidence_capability(&stream, "capability-label"),
+        Err(EntropyError::MalformedCapabilityRef("capability-label".to_string()))
     );
 }

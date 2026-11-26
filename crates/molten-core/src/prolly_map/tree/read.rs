@@ -3,8 +3,8 @@
     reason = "snapshot validators append bounded diagnostics to the caller-owned vector"
 )]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::super::*;
 

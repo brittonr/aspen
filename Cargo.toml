@@ -1,5 +1,17 @@
 [workspace]
-members = [".", "crates/molten-core", "crates/molten-node-host", "crates/molten-release-policy"]
+members = [
+  ".",
+  "crates/molten-composition-core",
+  "crates/molten-core",
+  "crates/molten-fastpath-core",
+  "crates/molten-node-host",
+  "crates/molten-preserves-core",
+  "crates/molten-release-policy",
+  "crates/molten-raft-core",
+  "crates/molten-reliability-model-core",
+  "crates/molten-runtime-admission-core",
+  "crates/molten-wasm-policy-core",
+]
 exclude = ["vendor"]
 resolver = "3"
 
@@ -8,7 +20,26 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [workspace.metadata.octet]
-default_scope = ["-p", "molten", "-p", "molten-node-host"]
+default_scope = [
+  "-p",
+  "molten",
+  "-p",
+  "molten-node-host",
+  "-p",
+  "molten-preserves-core",
+  "-p",
+  "molten-composition-core",
+  "-p",
+  "molten-fastpath-core",
+  "-p",
+  "molten-raft-core",
+  "-p",
+  "molten-reliability-model-core",
+  "-p",
+  "molten-runtime-admission-core",
+  "-p",
+  "molten-wasm-policy-core",
+]
 cargo_check_args = ["--all-targets"]
 
 [package]
@@ -133,6 +164,13 @@ marble = { version = "=16.0.2", optional = true }
 mantle-wasm-consumer-verifier = { git = "https://github.com/OnixResearch/mantle.git", rev = "dd2bebab894688d07e7a29c75c1437f4ecc120df", version = "0.1.0" }
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
+molten-preserves-core = { path = "crates/molten-preserves-core" }
+molten-composition-core = { path = "crates/molten-composition-core" }
+molten-fastpath-core = { path = "crates/molten-fastpath-core" }
+molten-raft-core = { path = "crates/molten-raft-core" }
+molten-reliability-model-core = { path = "crates/molten-reliability-model-core" }
+molten-runtime-admission-core = { path = "crates/molten-runtime-admission-core" }
+molten-wasm-policy-core = { path = "crates/molten-wasm-policy-core" }
 cairn = { git = "https://github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }
 clap = { version = "4", features = ["derive", "env"] }
 iroh = "1.0.0"
@@ -141,6 +179,8 @@ iroh-docs = "0.101.0"
 iroh-gossip = "0.101.0"
 kamacite-core = { git = "https://github.com/OnixResearch/kamacite.git", rev = "d76fe4abe543724d8fc0ac4b362187caf2e27622", version = "0.1.0" }
 n0-future = "0.3.2"
+# `preserves::Writer::write_int` names `num_bigint::BigInt`; already in the lock through `preserves`.
+num-bigint = "0.4"
 nickel-eval = { git = "https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git", rev = "2d1fb2b59f373967cc69e13ec289759d9cd4df46", version = "0.1.0", optional = true }
 nickel-lang = "2.2.0"
 valence = { git = "https://github.com/OnixResearch/valence.git", rev = "9201074343cd9da0ffaf6ec9db690af5b445d663", package = "valence-core" }
@@ -182,6 +222,8 @@ zstd = "0.13"
 [dev-dependencies]
 cap-tempfile = "3"
 molten = { path = ".", features = ["test-fixtures"] }
+# Dev-only lock-boundary seams for deterministic concurrency regressions; no new crate.
+molten-node-host = { path = "crates/molten-node-host", features = ["test-seams"] }
 schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
 quint-connect = { git = "https://github.com/quint-co/quint-connect.git", rev = "4f018f54fc7dd4cef341d10111427bab59d3b307", version = "=0.1.2" }
@@ -219,4 +261,29 @@ overflow-checks = true
 overflow-checks = true
 
 [profile.release.package.molten-release-policy]
+overflow-checks = true
+
+# The live execution adapter measures each executable's full bytes before its first spawn; debug native
+# callback fixtures are hundreds of MB, and unoptimized BLAKE3 turns that into tens of seconds per test.
+[profile.dev.package.blake3]
+opt-level = 3
+[profile.release.package.molten-raft-core]
+overflow-checks = true
+
+[profile.release.package.molten-composition-core]
+overflow-checks = true
+
+[profile.release.package.molten-fastpath-core]
+overflow-checks = true
+
+[profile.release.package.molten-reliability-model-core]
+overflow-checks = true
+
+[profile.release.package.molten-runtime-admission-core]
+overflow-checks = true
+
+[profile.release.package.molten-wasm-policy-core]
+overflow-checks = true
+
+[profile.release.package.molten-preserves-core]
 overflow-checks = true

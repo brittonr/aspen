@@ -5,9 +5,11 @@ use molten_core::world_snapshot::CohortFactKind;
 use molten_core::world_snapshot::SnapshotComponentKind;
 use molten_core::world_snapshot::SnapshotDescriptor;
 use molten_core::world_snapshot::SnapshotIssue;
-use serde::Serialize;
+use preserves::IOValue;
 use vm_cohort_core as vm;
 
+use super::super::chaoscontrol::guest_artifact_value;
+use super::super::chaoscontrol::guest_artifacts_value;
 use super::cohort::VM_COHORT_ADAPTER_DOMAIN;
 use super::cohort::VM_COHORT_CONTEXT_DOMAIN;
 use super::cohort::VM_COHORT_PLAN_DOMAIN;
@@ -28,7 +30,7 @@ pub(super) fn project_plan(
     }
     let mechanism_plan_json = serde_json::to_vec(plan)
         .map_err(|error| Failure::invalid_harness(format!("VM Cohort plan serialization failed: {error}")))?;
-    let plan_ref = json_ref("mechanism-plan", plan)?;
+    let plan_ref = canonical_ref("mechanism-plan", &super::plan::cohort_plan_value(plan))?;
     let mut clones = Vec::with_capacity(plan.clones.len());
     for (index, (child, clone)) in request.children.iter().zip(&plan.clones).enumerate() {
         clones.push(clone_binding(index, child, clone)?);
@@ -135,7 +137,11 @@ pub(super) fn guest_artifact_ref(
         .iter()
         .find(|artifact| artifact.role == role)
         .ok_or_else(|| Failure::invalid_harness("ChaosControl guest artifact is missing"))?;
-    json_ref("guest-artifact", artifact)
+    canonical_ref("guest-artifact", &guest_artifact_value(artifact))
+}
+
+pub(super) fn guest_image_ref(descriptor: &chaos::SnapshotDescriptor) -> Result<String> {
+    canonical_ref("guest-image", &guest_artifacts_value(&descriptor.guest_artifacts))
 }
 
 pub(super) fn context_ref(descriptor: &SnapshotDescriptor, request: &ClonePlanRequest) -> Result<String> {
@@ -157,9 +163,13 @@ pub(super) fn adapter_ref() -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-pub(super) fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
-    let bytes = serde_json::to_vec(value)
-        .map_err(|error| Failure::invalid_harness(format!("VM Cohort identity serialization failed: {error}")))?;
+/// BLAKE3 over the plan domain, the label, and the canonical packed bytes of an explicit Preserves
+/// projection of a VM Cohort or ChaosControl DTO. The JSON mechanism handoff bytes are payload only
+/// and never identity material.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+pub(super) fn canonical_ref(label: &str, value: &IOValue) -> Result<String> {
+    let bytes = crate::preserves_rail::canonical_bytes(value)
+        .map_err(|error| Failure::invalid_harness(format!("VM Cohort identity projection failed: {error}")))?;
     let mut hasher = blake3::Hasher::new_derive_key(VM_COHORT_PLAN_DOMAIN);
     update_text(&mut hasher, label)?;
     update_bytes(&mut hasher, &bytes)?;

@@ -36,8 +36,8 @@ pub async fn run(bundle: &super::materialization::Bundle, output: &cap_std::fs::
     let authority_cases = super::fixtureauth::negatives(&scope)?;
     let client_journal = super::journal::Recorder::new(output, "client")?;
     let server_journal = super::journal::Recorder::new(output, "server")?;
-    let mut server = super::fixturefabric::listener(&server_lease, 21).await?;
-    let result = super::fixturefabric::listener(&client_lease, 22).await?;
+    let mut server = super::fixturefabric::listener(&server_lease, 21, 22).await?;
+    let result = super::fixturefabric::listener(&client_lease, 22, 21).await?;
     let drift_case = drifted_transport(&client_lease, server.handoff().clone(), &scope).await?;
     let (request, response, response_session) =
         sessions(&scope, &client_lease, &server_lease, server.handoff().clone(), result.handoff().clone())?;

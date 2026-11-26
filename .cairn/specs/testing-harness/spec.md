@@ -3909,3 +3909,37 @@ r[molten.testing.service_recovery_composition] The harness MUST include a determ
 - GIVEN the running composition
 - WHEN an admitted generation upgrade drains, checkpoints, transforms state, and activates the replacement
 - THEN stale runtime-local work from before the upgrade is rejected, durable work is readmitted, and the unaffected sibling continues throughout.
+
+### Requirement: Hermetic CI verifies no_std compilation and full tests for molten-core
+r[molten.testing.molten_core_no_std_ci_gate] `flake.nix` and CI MUST execute both a `#![no_std]` (`--no-default-features`) compilation gate and full unit/property tests for `crates/molten-core`, ensuring zero behavioral drift between `no_std` and default builds.
+
+#### Scenario: Both no_std and std feature profiles pass tests
+- GIVEN the `molten-core` workspace crate
+- WHEN the hermetic Nix check runs
+- THEN both `--no-default-features` `#![no_std]` compilation and the full `molten-core` test suite MUST pass.
+
+### Requirement: Traceability coverage requires real code and test markers rather than prose or uncompiled stubs
+r[molten.testing.traceability_code_backed_coverage] `tools/tracey/inherited_debt_guard.rs` MUST count requirement coverage only when real compiled source and test files under `src/`, `crates/`, or `tests/` supply `impl` and `verify` requirement markers. Non-code files (`docs/`, `flake.nix`, `tools/`), `depends`/`related` markers, and uncompiled comment-only stub files MUST NOT discharge requirement coverage.
+
+#### Scenario: Markdown or flake comment cannot discharge requirement debt
+- GIVEN an accepted requirement referenced only via a `related` marker in `docs/` or a shell comment in `flake.nix`
+- WHEN `inherited_debt_guard` evaluates coverage
+- THEN the requirement MUST remain classified as uncovered rather than covered.
+
+#### Scenario: Uncompiled comment-only stub files are prohibited
+- GIVEN no compiled test or implementation backs a requirement
+- WHEN the repository traceability audit runs
+- THEN uncompiled `tools/tracey/*_proof.rs` stub files MUST NOT exist to satisfy coverage.
+
+### Requirement: Missing descriptor bridge is classified as unsupported
+r[molten.testing.descriptor_bridge_unsupported] When the test-workspace descriptor bridge (`/proc/self/fd`) is missing or unusable, the workspace helper MUST return the `Unsupported` error class on every host, not the raw filesystem error.
+
+#### Scenario: Unix host without a descriptor bridge
+- GIVEN a Unix host where `/proc/self/fd/<descriptor>` cannot be resolved
+- WHEN the workspace helper resolves a descriptor path
+- THEN it MUST return an `Unsupported` error.
+
+#### Scenario: Host with a descriptor bridge
+- GIVEN a host where `/proc/self/fd/<descriptor>` resolves
+- WHEN the workspace helper resolves a descriptor path
+- THEN it MUST return the resolved path.

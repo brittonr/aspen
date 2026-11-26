@@ -8,8 +8,8 @@
 //! the same number of times and include snapshot identity, validation and
 //! explanation rendering on both paths.
 
-use std::collections::BTreeSet;
-use std::hint::black_box;
+use alloc::collections::BTreeSet;
+use core::hint::black_box;
 
 use super::CollectionDeclaration;
 use super::CollectionState;

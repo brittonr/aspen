@@ -69,6 +69,17 @@ where
         if progress.verified.contains(&fetch.object_ref) {
             continue;
         }
+        // Authority and the reservation are re-admitted before every object fetch, so a revocation or
+        // released reservation observed mid-transfer stops the next request.
+        // r[impl molten.runtime_spine.admission_and_capability_hardening]
+        let current_authority = ports.authority.observe_authority(&plan)?;
+        validate_authority(&current_authority, &plan)?;
+        let current_resources = ports.resources.confirm(&plan, &resources.reservation_ref)?;
+        validate_resources(&current_resources, &plan)?;
+        if current_resources.reservation_ref != resources.reservation_ref {
+            return Err(Failure::invalid_harness("DAG resource reservation changed during transfer"));
+        }
+        evidence_refs.push(current_authority.authority_ref.clone());
         let envelope = match received_envelope(ports.transport.request(fetch)?)? {
             Ok(envelope) => envelope,
             Err(issue) => {
@@ -78,7 +89,7 @@ where
         };
         validate_envelope(&envelope, fetch)?;
         evidence_refs.push(envelope.transport_observation_ref.clone());
-        let response = ports.content.verify(&plan, &envelope, &authority.authority_ref)?;
+        let response = ports.content.verify(&plan, &envelope, &current_authority.authority_ref)?;
         let next = admit_dag_response(&plan, &progress, &response)
             .map_err(|issue| Failure::invalid_harness(format!("DAG response denied: {issue:?}")))?;
         let canonical_response = canonical_dag_response(&response)?;

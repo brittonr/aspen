@@ -3,6 +3,8 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 //! Capability-rooted infrastructure adapters and the explicit composition boundary.
+extern crate alloc;
+
 pub mod fault;
 pub mod identity;
 pub mod policy;

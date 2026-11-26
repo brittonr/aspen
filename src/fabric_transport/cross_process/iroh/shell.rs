@@ -8,7 +8,15 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/fabric_transport/cross_process/iroh/parts/shell/p004/body.rs"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/fabric_transport/cross_process/iroh/parts/shell/p002/body.rs"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/fabric_transport/cross_process/iroh/parts/shell/p005/body.rs"
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),

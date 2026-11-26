@@ -1,7 +1,7 @@
 //! Snapshot diff traversal over validated snapshots.
 
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
+use alloc::collections::BTreeMap;
+use alloc::collections::VecDeque;
 
 use super::*;
 

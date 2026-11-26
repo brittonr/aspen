@@ -1406,3 +1406,229 @@ fn execute_workload_uses_the_selected_executor_for_every_step() {
     ]);
     assert_eq!(execute_workload(&mut Stub, &workload), vec![Some(OutcomeClass::Delivered), None]);
 }
+
+/// The pre-repair `workload_ref` material: raw NUL-delimited fields without length framing.
+fn legacy_unframed_workload_material(steps: &[LiveWorkloadStep]) -> Vec<u8> {
+    let mut material = b"molten.fabric-simulation.live-workload.v1".to_vec();
+    for step in steps {
+        material.push(0);
+        material.extend_from_slice(&step.sequence.to_le_bytes());
+        material.push(0);
+        material.extend_from_slice(step.class.as_str().as_bytes());
+        material.push(0);
+        material.extend_from_slice(step.request_ref.as_bytes());
+        material.push(0);
+        for class in &step.permitted {
+            material.extend_from_slice(class.as_str().as_bytes());
+            material.extend_from_slice(b",");
+        }
+        material.push(0);
+        if let Some(key) = &step.ordering_key {
+            material.extend_from_slice(key.as_bytes());
+        }
+    }
+    material
+}
+
+fn colliding_live_workloads() -> (Vec<LiveWorkloadStep>, Vec<LiveWorkloadStep>) {
+    let two_steps = vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], Some("node-a")),
+    ];
+    let second = &two_steps[1];
+    let mut forged_key = String::from("node-a");
+    forged_key.push('\0');
+    forged_key.push_str(core::str::from_utf8(&second.sequence.to_le_bytes()).expect("small sequence is utf-8"));
+    forged_key.push('\0');
+    forged_key.push_str(second.class.as_str());
+    forged_key.push('\0');
+    forged_key.push_str(&second.request_ref);
+    forged_key.push_str("\0delivered,\0node-a");
+    let one_step = vec![live_step(1, 'a', vec![OutcomeClass::Delivered], Some(&forged_key))];
+    (one_step, two_steps)
+}
+
+#[test]
+fn live_workload_ref_frames_fields_so_a_forged_ordering_key_cannot_collide() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let (one_step, two_steps) = colliding_live_workloads();
+    assert_eq!(
+        legacy_unframed_workload_material(&one_step),
+        legacy_unframed_workload_material(&two_steps),
+        "fixture must reproduce the pre-repair collision"
+    );
+
+    assert_ne!(live_differential::workload_ref(&one_step), live_differential::workload_ref(&two_steps));
+    assert_eq!(live_differential::workload_ref(&two_steps), live_differential::workload_ref(&two_steps.clone()));
+    assert!(matches!(
+        LiveWorkload::new(one_step),
+        Err(issues) if issues == vec![LiveDifferentialIssue::MalformedOrderingKey(0)]
+    ));
+    assert!(LiveWorkload::new(two_steps).is_ok());
+}
+
+#[test]
+fn live_workload_rejects_nul_and_control_bytes_in_ordering_keys() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    for key in ["node\0a", "\0", "node\na", "node\u{7f}", "node\u{85}"] {
+        assert!(
+            matches!(
+                LiveWorkload::new(vec![live_step(1, 'a', vec![OutcomeClass::Delivered], Some(key))]),
+                Err(issues) if issues == vec![LiveDifferentialIssue::MalformedOrderingKey(0)]
+            ),
+            "control-bearing key {key:?} must be rejected"
+        );
+    }
+    let longest = "k".repeat(256);
+    for key in ["node-a", "node a/ü", longest.as_str()] {
+        assert!(LiveWorkload::new(vec![live_step(1, 'a', vec![OutcomeClass::Delivered], Some(key))]).is_ok());
+    }
+    assert!(LiveWorkload::new(vec![live_step(1, 'a', vec![OutcomeClass::Delivered], Some(&"k".repeat(257)))]).is_err());
+}
+
+#[test]
+fn live_workload_ref_distinguishes_absent_and_present_ordering_keys_and_permitted_lists() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let without_key = live_workload(vec![live_step(1, 'a', vec![OutcomeClass::Delivered], None)]);
+    let with_key = live_workload(vec![live_step(1, 'a', vec![OutcomeClass::Delivered], Some("none"))]);
+    let split_permitted = live_workload(vec![live_step(
+        1,
+        'a',
+        vec![OutcomeClass::Delivered, OutcomeClass::Delayed],
+        None,
+    )]);
+    assert_ne!(without_key.workload_ref, with_key.workload_ref);
+    assert_ne!(without_key.workload_ref, split_permitted.workload_ref);
+}
+
+#[test]
+fn live_differential_rejects_unsupported_or_unpermitted_simulated_classes() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let workload = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered, OutcomeClass::Delayed], None),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], None),
+    ]);
+    let live = [Some(OutcomeClass::Delayed), Some(OutcomeClass::Delivered)];
+
+    let unsupported = [Some(OutcomeClass::Unsupported), Some(OutcomeClass::Delivered)];
+    let decision = evaluate_live_differential(&workload, &unsupported, &live);
+    assert_eq!(decision, LiveDifferentialDecision::Incomplete {
+        incomplete: vec![IncompleteStep {
+            step: 0,
+            side: DifferentialSide::Simulated,
+            reason: IncompleteReason::Unsupported,
+        }],
+        divergences: Vec::new(),
+    });
+
+    let unpermitted = [Some(OutcomeClass::Backpressured), Some(OutcomeClass::Delivered)];
+    assert_eq!(evaluate_live_differential(&workload, &unpermitted, &live), LiveDifferentialDecision::Failure {
+        outcome: UnpermittedOutcome {
+            step: 0,
+            simulated: OutcomeClass::Backpressured,
+            live: OutcomeClass::Delayed,
+        },
+    });
+
+    let permitted = [Some(OutcomeClass::Delivered), Some(OutcomeClass::Delivered)];
+    assert_eq!(evaluate_live_differential(&workload, &permitted, &live).result_kind(), "permitted-divergence");
+}
+
+fn failing_summary(failed_invariant_ids: &[&str]) -> SimulationRunSummary {
+    SimulationRunSummary {
+        decision: SimulationDecision::InvariantFailed,
+        choice_records: Vec::new(),
+        invariant_results: failed_invariant_ids
+            .iter()
+            .map(|invariant_id| InvariantResult {
+                invariant: SimulationInvariant::ExtensionSemantic {
+                    service: ReferenceSystemKind::TransactionalKeyValue,
+                    invariant_id: (*invariant_id).to_string(),
+                },
+                passed: false,
+                first_failure_sequence: Some(2),
+            })
+            .collect(),
+        final_state_refs: Vec::new(),
+        first_divergence: None,
+        resource_units: 4,
+        virtual_ticks: 8,
+    }
+}
+
+#[test]
+fn failure_fingerprints_frame_invariants_so_joined_ids_cannot_collide() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let two = failure_fingerprint(&failing_summary(&["a", "b"])).expect("two failures fingerprint");
+    let joined = failure_fingerprint(&failing_summary(&["a|extension:transactional-key-value:b"]))
+        .expect("joined failure fingerprint");
+    assert_eq!(two.failed_invariants.join("|"), joined.failed_invariants.join("|"));
+    assert_ne!(two.fingerprint_ref, joined.fingerprint_ref);
+
+    let duplicated = failure_fingerprint(&failing_summary(&["b", "a", "b"])).expect("duplicate failures fingerprint");
+    assert_eq!(duplicated.failed_invariants, two.failed_invariants);
+    assert_eq!(duplicated.fingerprint_ref, two.fingerprint_ref);
+}
+
+#[test]
+fn replay_comparison_detects_selected_and_eligible_choice_metadata_divergence() {
+    // r[verify molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let choice = EligibleChoice {
+        kind: SchedulerChoiceKind::Runnable,
+        choice_id: "run-a".to_string(),
+        node_id: "node-a".to_string(),
+        generation: TEST_GENERATION,
+        ready_at_tick: FIRST_READY_TICK,
+    };
+    let other = EligibleChoice {
+        choice_id: "run-b".to_string(),
+        ..choice.clone()
+    };
+    let expected = [SchedulerChoiceRecord {
+        position: 0,
+        virtual_tick: SECOND_READY_TICK,
+        eligible: vec![choice.clone(), other.clone()],
+        selected: choice.clone(),
+        semantic_output_ref: content_ref('e'),
+    }];
+    let mut kind = expected.clone();
+    kind[0].selected.kind = SchedulerChoiceKind::TimerFire;
+    let mut node = expected.clone();
+    node[0].selected.node_id = "node-b".to_string();
+    let mut ready = expected.clone();
+    ready[0].selected.ready_at_tick = SECOND_READY_TICK;
+    let mut eligible_metadata = expected.clone();
+    eligible_metadata[0].eligible[1].node_id = "node-b".to_string();
+    let mut eligible_set = expected.clone();
+    eligible_set[0].eligible[1].choice_id = "run-c".to_string();
+
+    assert!(compare_replay(&expected, &expected).matches);
+    for (actual, field) in [
+        (kind, "choice-kind"),
+        (node, "node-id"),
+        (ready, "ready-at-tick"),
+        (eligible_metadata, "eligible-metadata"),
+        (eligible_set, "eligible-set"),
+    ] {
+        let comparison = compare_replay(&expected, &actual);
+        assert!(!comparison.matches, "{field} divergence must be detected");
+        assert_eq!(
+            comparison.first_divergence.map(|divergence| divergence.diagnostic),
+            Some(format!("scheduler record diverged at {field}"))
+        );
+    }
+}
+
+#[test]
+fn simulation_refs_reject_uppercase_digest_hex() {
+    // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    assert!(valid_ref(&content_ref('a')));
+    assert!(!valid_ref(&content_ref('A')));
+    assert!(!valid_ref(&format!("blake3:{}F", "a".repeat(TEST_DIGEST_HEX_LENGTH - 1))));
+    let mut uppercase_request = live_step(1, 'a', vec![OutcomeClass::Delivered], None);
+    uppercase_request.request_ref = content_ref('A');
+    assert!(matches!(
+        LiveWorkload::new(vec![uppercase_request]),
+        Err(issues) if issues == vec![LiveDifferentialIssue::MalformedRequestRef(0)]
+    ));
+}

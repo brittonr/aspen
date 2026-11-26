@@ -1,0 +1,216 @@
+//! Stable-view fast admission and session-keyed exactly-once convergence.
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct OperationIdentity {
+    pub command_ref: alloc::string::String,
+    pub session_ref: alloc::string::String,
+    pub session_sequence: u64,
+    pub group_ref: alloc::string::String,
+    pub extension_generation: u64,
+    pub application_schema_ref: alloc::string::String,
+    pub policy_ref: alloc::string::String,
+    pub authority_ref: alloc::string::String,
+    pub resource_ref: alloc::string::String,
+    pub engine_epoch: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FastAcknowledgement {
+    pub replica_id: alloc::string::String,
+    pub acceleration_view: u64,
+    pub base_view: u64,
+    pub operation: OperationIdentity,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProposerPromise {
+    pub proposer_id: alloc::string::String,
+    pub acceleration_view: u64,
+    pub base_view: u64,
+    pub proposal_order_preserved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StableViewAttempt {
+    pub operation: OperationIdentity,
+    pub original_operation: OperationIdentity,
+    pub acceleration_view: u64,
+    pub base_view: u64,
+    pub conflict_free: bool,
+    /// Admitted replica set of the view; acknowledgements from other ids are ignored.
+    pub replicas: alloc::collections::BTreeSet<alloc::string::String>,
+    pub acknowledgements: alloc::vec::Vec<FastAcknowledgement>,
+    pub promises: alloc::vec::Vec<ProposerPromise>,
+    /// Order-preserving active proposers. Each must promise and must itself acknowledge the
+    /// attempt.
+    pub active_proposers: alloc::collections::BTreeSet<alloc::string::String>,
+    pub original_path_available: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FallbackReason {
+    Conflict,
+    IdentityMismatch,
+    InsufficientAcknowledgements,
+    /// An active proposer promised but is not among the same-view acknowledgers, so the
+    /// superquorum need not contain the replica whose original engine orders the position.
+    MissingProposerAcknowledgement,
+    MissingProposerPromise,
+    MixedView,
+    OriginalPathUnavailable,
+    ReorderingProposer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StableViewDecision {
+    FastCommitted,
+    OriginalOnly,
+    Fallback(FallbackReason),
+}
+
+/// Exactly-once application keyed by client session operation `(session_ref, session_sequence)`.
+/// Equal commands from distinct sessions are distinct operations; a retry of one session operation
+/// must carry its original identity.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ApplicationLedger {
+    session_operations: alloc::collections::BTreeMap<(alloc::string::String, u64), OperationIdentity>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConvergenceOutcome {
+    pub is_applied: bool,
+    pub is_replied: bool,
+    pub is_duplicate_suppressed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LedgerIssue {
+    /// A session operation was retried with a different command or identity.
+    ConflictingSessionRetry,
+}
+
+impl core::fmt::Display for LedgerIssue {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
+            Self::ConflictingSessionRetry => "conflicting-session-retry",
+        })
+    }
+}
+
+impl core::error::Error for LedgerIssue {}
+
+// r[impl molten.consensus.fast_path_model.stable_view]
+// r[impl molten.consensus.fast_path_model.fallback_identity]
+pub fn evaluate_stable_view(
+    attempt: &StableViewAttempt,
+    quorums: crate::envelope::DerivedQuorums,
+) -> StableViewDecision {
+    if attempt.operation != attempt.original_operation {
+        return fallback(attempt, FallbackReason::IdentityMismatch);
+    }
+    if !attempt.conflict_free {
+        return fallback(attempt, FallbackReason::Conflict);
+    }
+    let Some(acknowledged) = same_view_acknowledgers(attempt) else {
+        return fallback(attempt, FallbackReason::MixedView);
+    };
+    if acknowledged.len() < quorums.superquorum {
+        return fallback(attempt, FallbackReason::InsufficientAcknowledgements);
+    }
+    match validate_promises(attempt, &acknowledged) {
+        Ok(()) => StableViewDecision::FastCommitted,
+        Err(reason) => fallback(attempt, reason),
+    }
+}
+
+fn fallback(attempt: &StableViewAttempt, reason: FallbackReason) -> StableViewDecision {
+    if attempt.original_path_available {
+        StableViewDecision::Fallback(reason)
+    } else {
+        StableViewDecision::Fallback(FallbackReason::OriginalPathUnavailable)
+    }
+}
+
+/// Distinct admitted replicas that acknowledged this exact attempt; `None` when an admitted
+/// replica acknowledged another view or operation. Ids outside the admitted set never count.
+fn same_view_acknowledgers(attempt: &StableViewAttempt) -> Option<alloc::collections::BTreeSet<alloc::string::String>> {
+    let members = attempt
+        .acknowledgements
+        .iter()
+        .filter(|acknowledgement| attempt.replicas.contains(&acknowledgement.replica_id));
+    for acknowledgement in members.clone() {
+        if acknowledgement.acceleration_view != attempt.acceleration_view
+            || acknowledgement.base_view != attempt.base_view
+            || acknowledgement.operation != attempt.operation
+        {
+            return None;
+        }
+    }
+    Some(members.map(|acknowledgement| acknowledgement.replica_id.clone()).collect())
+}
+
+/// Every active proposer promises in this view to preserve its proposal order and has itself
+/// acknowledged the attempt. The acknowledgement is what makes the promise compatible: the
+/// original engine orders the position from the proposer's own acceptance order, so a
+/// superquorum smaller than the replica set that omits the proposer can fast-commit a command
+/// the original engine later decides differently (`ConsensusFastPath.tla`,
+/// `CommittedOrderAgreement`).
+// r[impl molten.consensus.fast_path_model.stable_view]
+fn validate_promises(
+    attempt: &StableViewAttempt,
+    acknowledged: &alloc::collections::BTreeSet<alloc::string::String>,
+) -> Result<(), FallbackReason> {
+    for promise in &attempt.promises {
+        if promise.acceleration_view != attempt.acceleration_view || promise.base_view != attempt.base_view {
+            return Err(FallbackReason::MixedView);
+        }
+        if !promise.proposal_order_preserved {
+            return Err(FallbackReason::ReorderingProposer);
+        }
+    }
+    let promised: alloc::collections::BTreeSet<alloc::string::String> =
+        attempt.promises.iter().map(|promise| promise.proposer_id.clone()).collect();
+    if promised != attempt.active_proposers {
+        return Err(FallbackReason::MissingProposerPromise);
+    }
+    if !attempt.active_proposers.is_subset(acknowledged) {
+        return Err(FallbackReason::MissingProposerAcknowledgement);
+    }
+    Ok(())
+}
+
+impl ApplicationLedger {
+    pub fn new() -> Self {
+        Self {
+            session_operations: alloc::collections::BTreeMap::new(),
+        }
+    }
+
+    /// Apply and reply once per session operation. A retry with the same identity is suppressed;
+    /// a retry that changes the command or any other identity field is rejected.
+    // r[impl molten.consensus.fast_path_model.fallback_identity]
+    pub fn converge(&mut self, operation: &OperationIdentity) -> Result<ConvergenceOutcome, LedgerIssue> {
+        let key = (operation.session_ref.clone(), operation.session_sequence);
+        if let Some(original) = self.session_operations.get(&key) {
+            if original != operation {
+                return Err(LedgerIssue::ConflictingSessionRetry);
+            }
+            return Ok(ConvergenceOutcome {
+                is_applied: false,
+                is_replied: false,
+                is_duplicate_suppressed: true,
+            });
+        }
+        self.session_operations.insert(key, operation.clone());
+        Ok(ConvergenceOutcome {
+            is_applied: true,
+            is_replied: true,
+            is_duplicate_suppressed: false,
+        })
+    }
+
+    /// The applied session operations, in `(session_ref, session_sequence)` order.
+    pub fn applied_operations(&self) -> impl Iterator<Item = &OperationIdentity> {
+        self.session_operations.values()
+    }
+}

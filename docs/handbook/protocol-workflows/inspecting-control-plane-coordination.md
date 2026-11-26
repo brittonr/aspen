@@ -33,7 +33,7 @@ molten test coordination run-fixture \
 
 The handler writes `report.preserves` and indexed `evidence-N.preserves` files. The filename index is serialization order, not semantic identity. Use canonical record references to associate requests, receipts, state snapshots, tokens, and assertions.
 
-If the question is whether a real peer joined a real group, stop: this command is the wrong evidence source. `new_coordination_runtime` constructs `new_control_registry_model_runtime` from a fixture manifest. The path does not select a live cluster from the user's `control_group_ref`.
+If the question is whether a real peer joined a real group, stop: this command is the wrong evidence source. `new_coordination_runtime` constructs `new_control_registry_model_runtime` from the built-in single-process control-registry group manifest, and it fails closed when the coordination manifest's `control_group_ref` names any other group instead of silently substituting that fixture. `new_coordination_runtime_with_control_group` binds an explicit group manifest whose canonical ref must equal `control_group_ref`. Either way the runtime is an in-process model; it does not select a live cluster.
 
 ## 3. Read the worked fixture as mixed evidence
 
@@ -51,7 +51,7 @@ A reused operation identifier with a different request reference is instead a co
 
 ## 5. Stop at the observed boundary
 
-Record which artifacts you actually inspected and whether execution occurred. Distinguish declared `linearizable` versus `local-stale` read mode, model commit evidence, status assertions, and live adapter evidence. A dataspace status assertion is an observation, not admission authority. Re-running `apply` starts another fresh model and does not demonstrate durable deduplication across process restarts.
+Record which artifacts you actually inspected and whether execution occurred. Distinguish declared `linearizable` versus `local-stale` read mode, model commit evidence, status assertions, and live adapter evidence. A dataspace status assertion is an observation, not admission authority. Re-running `apply` starts another fresh model and does not demonstrate durable deduplication across process restarts. `apply` also samples the live node monotonic clock, and each run gets its own time basis, so its state and receipt refs differ between runs; `run-fixture` uses the deterministic fixture clock instead.
 
 Conclude with the narrow finding: for example, “the supplied duplicate receipt binds the prior receipt and preserves the model state.” Do not conclude exactly-once external work, current membership, or release readiness from it.
 

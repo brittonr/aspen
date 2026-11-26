@@ -4997,11 +4997,19 @@ dependencies = [
  "mantle-wasm-consumer-verifier",
  "marble",
  "molten",
+ "molten-composition-core",
  "molten-core",
+ "molten-fastpath-core",
  "molten-node-host",
+ "molten-preserves-core",
+ "molten-raft-core",
+ "molten-reliability-model-core",
+ "molten-runtime-admission-core",
+ "molten-wasm-policy-core",
  "n0-future",
  "nickel-eval",
  "nickel-lang",
+ "num-bigint",
  "preserves 5.0.0-rc.10",
  "preserves-schema",
  "quint-connect",
@@ -5045,6 +5053,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "molten-composition-core"
+version = "0.1.0"
+dependencies = [
+ "hegeltest",
+]
+
+[[package]]
 name = "molten-core"
 version = "0.1.0"
 dependencies = [
@@ -5063,6 +5078,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "molten-fastpath-core"
+version = "0.1.0"
+dependencies = [
+ "hegeltest",
+]
+
+[[package]]
 name = "molten-node-host"
 version = "0.1.0"
 dependencies = [
@@ -5074,6 +5096,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "molten-preserves-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
+]
+
+[[package]]
+name = "molten-raft-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
+ "molten-core",
+]
+
+[[package]]
 name = "molten-release-policy"
 version = "0.1.0"
 dependencies = [
@@ -5082,6 +5121,33 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "molten-reliability-model-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "molten-runtime-admission-core"
+version = "0.1.0"
+dependencies = [
+ "hegeltest",
+]
+
+[[package]]
+name = "molten-wasm-policy-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,3 +1,7 @@
+//! The replicated Raft shell: Tokio timers, Iroh transport, Redb durability, the effect executor,
+//! and live services around the pure `molten-raft-core` kernel, which owns the replica state,
+//! the transition function, its effect plans, start admission, and envelope shape validation.
+
 #[path = "parts/admission/mod.rs"]
 mod admission;
 mod application;
@@ -7,14 +11,12 @@ mod durability;
 mod evidence;
 mod executor;
 mod iroh;
-#[path = "parts/model/mod.rs"]
-mod model;
+mod kernel;
 mod ports;
 #[path = "parts/recovery/mod.rs"]
 mod recovery;
 mod service;
 mod time;
-mod transition;
 
 pub use admission::*;
 pub use application::*;
@@ -24,12 +26,22 @@ pub use durability::*;
 pub use evidence::*;
 pub use executor::*;
 pub use iroh::*;
-pub use model::*;
+pub use kernel::*;
+pub use molten_raft_core::admission::ReplicaStartPlan;
+pub use molten_raft_core::denial::ReplicaError;
+pub use molten_raft_core::denial::ReplicaErrorClass;
+pub use molten_raft_core::model::*;
+pub use molten_raft_core::ports::ReplicaAdapterSet;
+pub use molten_raft_core::ports::ReplicaPortBundle;
+pub use molten_raft_core::ports::ReplicaRuntimePortIdentity;
+pub use molten_raft_core::ports::validate_replica_runtime_identity_for_start;
+pub use molten_raft_core::transition::StaleTimerEvent;
+pub use molten_raft_core::transition::is_snapshot_due;
+pub use molten_raft_core::transition::stale_timer_event;
 pub use ports::*;
 pub use recovery::*;
 pub use service::*;
 pub use time::*;
-pub use transition::*;
 
 #[cfg(test)]
 #[path = "canonical/tests.rs"]
@@ -44,6 +56,9 @@ mod durability_tests;
 #[path = "evidence/tests.rs"]
 mod evidence_tests;
 #[cfg(test)]
+#[path = "executor/chunks.rs"]
+mod executor_chunk_tests;
+#[cfg(test)]
 #[path = "executor/tests.rs"]
 mod executor_tests;
 #[cfg(test)]
@@ -53,6 +68,9 @@ mod iroh_bundle_tests;
 #[path = "iroh/tests.rs"]
 mod iroh_tests;
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
+mod kernel_tests;
+#[cfg(test)]
 mod live_cluster;
 #[cfg(test)]
 mod live_process;
@@ -60,13 +78,10 @@ mod live_process;
 #[path = "ports/tests.rs"]
 mod port_tests;
 #[cfg(test)]
-#[path = "rejoin/tests.rs"]
-mod rejoin_tests;
+#[path = "rejoin/crash.rs"]
+mod rejoin_restart_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 #[cfg(test)]
 #[path = "time/tests.rs"]
 mod time_tests;
-#[cfg(test)]
-#[path = "transition/bounds.rs"]
-mod transition_bounds_tests;

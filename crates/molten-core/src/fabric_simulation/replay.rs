@@ -1,9 +1,10 @@
 use super::*;
+use crate::fabric_simulation::framing::FramedDigest;
 
 const SHRINK_ATTEMPT_INCREMENT: u64 = 1;
 const SHRINK_REMOVAL_INCREMENT: u64 = 1;
 const SHRINK_DIVISOR: u64 = 2;
-const FINGERPRINT_JOIN: &str = "|";
+const FINGERPRINT_DOMAIN: &str = "molten.fabric-simulation.failure-fingerprint.v2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShrinkIssue {
@@ -50,9 +51,8 @@ pub fn compare_replay(expected: &[SchedulerChoiceRecord], actual: &[SchedulerCho
     }
 }
 
+// r[impl molten.fabric_simulation.collision_free_workload_and_complete_comparison]
 fn record_divergence(expected: &SchedulerChoiceRecord, actual: &SchedulerChoiceRecord) -> Option<ReplayDivergence> {
-    let expected_eligible = choice_ids(&expected.eligible);
-    let actual_eligible = choice_ids(&actual.eligible);
     let mut mismatched_field = None;
     if expected.position != actual.position {
         mismatched_field = Some("position");
@@ -62,15 +62,28 @@ fn record_divergence(expected: &SchedulerChoiceRecord, actual: &SchedulerChoiceR
         mismatched_field = Some("generation");
     } else if expected.selected.choice_id != actual.selected.choice_id {
         mismatched_field = Some("choice-id");
+    } else if expected.selected.kind != actual.selected.kind {
+        mismatched_field = Some("choice-kind");
+    } else if expected.selected.node_id != actual.selected.node_id {
+        mismatched_field = Some("node-id");
+    } else if expected.selected.ready_at_tick != actual.selected.ready_at_tick {
+        mismatched_field = Some("ready-at-tick");
     } else if expected.semantic_output_ref != actual.semantic_output_ref {
         mismatched_field = Some("semantic-output-ref");
-    } else if expected_eligible != actual_eligible {
+    } else if !expected
+        .eligible
+        .iter()
+        .map(|choice| &choice.choice_id)
+        .eq(actual.eligible.iter().map(|choice| &choice.choice_id))
+    {
         mismatched_field = Some("eligible-set");
+    } else if expected.eligible != actual.eligible {
+        mismatched_field = Some("eligible-metadata");
     }
     mismatched_field.map(|field| ReplayDivergence {
         position: expected.position.min(actual.position),
         expected_choice_id: expected.selected.choice_id.clone(),
-        eligible_choice_ids: actual_eligible,
+        eligible_choice_ids: choice_ids(&actual.eligible),
         diagnostic: format!("scheduler record diverged at {field}"),
     })
 }
@@ -87,23 +100,26 @@ pub fn failure_fingerprint(summary: &SimulationRunSummary) -> Option<FailureFing
         .map(|result| invariant_fingerprint_key(&result.invariant))
         .collect::<Vec<_>>();
     failed_invariants.sort();
+    failed_invariants.dedup();
     let first_failure_sequence = summary
         .invariant_results
         .iter()
         .filter(|result| !result.passed)
         .filter_map(|result| result.first_failure_sequence)
         .min();
-    let material = format!(
-        "{}{FINGERPRINT_JOIN}{}{FINGERPRINT_JOIN}{}",
-        summary.decision.as_str(),
-        failed_invariants.join(FINGERPRINT_JOIN),
-        first_failure_sequence.map_or_else(|| "none".to_string(), |sequence| sequence.to_string()),
-    );
+    // r[impl molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+    let mut framed = FramedDigest::new(FINGERPRINT_DOMAIN);
+    framed.text(summary.decision.as_str());
+    framed.count(failed_invariants.len());
+    for invariant in &failed_invariants {
+        framed.text(invariant);
+    }
+    framed.optional_number(first_failure_sequence);
     Some(FailureFingerprint {
         decision: summary.decision,
         failed_invariants,
         first_failure_sequence,
-        fingerprint_ref: format!("blake3:{}", blake3::hash(material.as_bytes()).to_hex()),
+        fingerprint_ref: framed.content_ref(),
     })
 }
 

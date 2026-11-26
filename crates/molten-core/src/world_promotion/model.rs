@@ -1,9 +1,11 @@
 mod dispatch;
+mod grant;
 mod identity;
 mod plan;
 mod reference;
 
 pub use dispatch::*;
+pub use grant::*;
 pub use identity::*;
 pub use plan::*;
 pub use reference::*;

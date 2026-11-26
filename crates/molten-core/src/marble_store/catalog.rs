@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::*;
 
@@ -57,7 +57,7 @@ pub fn decode_catalog(bytes: &[u8]) -> Result<MarbleCatalog, MarbleStoreIssue> {
     }
     let mut heads = BTreeMap::new();
     for _ in 0..head_count {
-        let map_id = std::str::from_utf8(reader.take_field(MAX_MAP_ID_BYTES)?)
+        let map_id = core::str::from_utf8(reader.take_field(MAX_MAP_ID_BYTES)?)
             .map_err(|_| MarbleStoreIssue::InvalidCatalog("map-id-utf8"))?
             .to_owned();
         let head = reader.take_field(MAX_HEAD_BYTES)?.to_vec();

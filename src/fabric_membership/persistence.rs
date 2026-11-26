@@ -7,6 +7,10 @@ mod codec;
 
 const ASSIGNMENTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("fabric-assignments-v1");
 const ROLES: redb::TableDefinition<&str, &str> = redb::TableDefinition::new("fabric-assignment-role-slots-v1");
+/// Owner-written quarantine reconciliation records, keyed by quarantined assignment ID. Created on
+/// first write, so databases from before this table existed open unchanged.
+const RECONCILIATIONS: redb::TableDefinition<&str, &[u8]> =
+    redb::TableDefinition::new("fabric-assignment-quarantine-reconciliations-v1");
 const STORE_FILE: &str = "assignments.redb";
 
 /// Node-local durable implementation of the existing assignment owner.
@@ -18,11 +22,13 @@ const STORE_FILE: &str = "assignments.redb";
 /// reopen and block current admission and further effects; opening never replays a role effect or
 /// repairs old bytes. One same-owner role index (extension/service/role, excluding node) fences
 /// superseded IDs. Succession requires an exactly bound, fully released predecessor and advanced
-/// epoch/token. Canonical packed Preserves records are bounded to 4 MiB, with the core's existing
-/// 4,096 transition-reference and 256-byte identity-token limits. There is no implicit retry,
-/// role-effect recovery, quorum, or hardware-loss durability claim; unresolved intents require
-/// reconciliation. This supplies node-local persistence, not distributed exclusion or operator
-/// authorization.
+/// epoch/token, or a quarantined predecessor with explicit `QuarantineClearance` evidence.
+/// Canonical packed Preserves records are bounded to 4 MiB, with the core's existing 4,096
+/// transition-reference and 256-byte identity-token limits. There is no implicit retry, quorum,
+/// or hardware-loss durability claim. Unresolved intents are recovered only explicitly:
+/// `abort_pre_effect_intent` with definite non-execution evidence, or `reconcile_pending_intent`
+/// with confirmed effect evidence or an uncertainty-preserving quarantine. This supplies
+/// node-local persistence, not distributed exclusion or operator authorization.
 #[derive(Debug)]
 pub struct Redb {
     database: redb::Database,
@@ -64,12 +70,11 @@ impl Redb {
         }
         Ok(Self { database })
     }
-}
 
-impl crate::fabric_membership::AssignmentPersistence for Redb {
-    fn initialize(
+    fn initialize_slot(
         &mut self,
         proposal: &crate::fabric_membership::AssignmentProposal,
+        quarantine: Option<QuarantineAdmission<'_>>,
     ) -> crate::fabric::FabricPortResult<crate::fabric_membership::CurrentAssignment> {
         let record = codec::AssignmentRecord::propose(proposal)?;
         let current = record.current()?;
@@ -84,19 +89,28 @@ impl crate::fabric_membership::AssignmentPersistence for Redb {
             }
             let key = role_key(&record.assignment)?;
             let mut roles = write.open_table(ROLES).map_err(storage_error)?;
-            let predecessor = roles.get(key.as_str()).map_err(storage_error)?.map(|value| value.value().to_string());
-            let predecessor = predecessor
+            let predecessor_id = roles.get(key.as_str()).map_err(storage_error)?.map(|value| value.value().to_string());
+            let predecessor = predecessor_id
+                .as_ref()
                 .map(|id| {
                     let bytes = table
                         .get(id.as_str())
                         .map_err(storage_error)?
                         .ok_or_else(|| crate::fabric::FabricPortError::malformed("role slot predecessor is missing"))?;
                     let predecessor = codec::decode_record(bytes.value())?;
-                    require_key(&predecessor, &id)?;
+                    require_key(&predecessor, id)?;
                     predecessor.current()
                 })
                 .transpose()?;
-            admit_initialization(predecessor.as_ref(), &record.assignment)?;
+            let reconciliation = match (&quarantine, &predecessor_id) {
+                (Some(_), Some(id)) => {
+                    let reconciliations = write.open_table(RECONCILIATIONS).map_err(storage_error)?;
+                    let stored = reconciliations.get(id.as_str()).map_err(storage_error)?;
+                    stored.map(|bytes| codec::decode_reconciliation(bytes.value(), id)).transpose()?
+                }
+                _ => None,
+            };
+            admit_initialization(predecessor.as_ref(), &record.assignment, quarantine, reconciliation.as_ref())?;
             roles.insert(key.as_str(), proposal.assignment_id.as_str()).map_err(storage_error)?;
             table.insert(proposal.assignment_id.as_str(), bytes.as_slice()).map_err(storage_error)?;
         }
@@ -104,82 +118,42 @@ impl crate::fabric_membership::AssignmentPersistence for Redb {
         Ok(current)
     }
 
-    fn current(
-        &self,
-        assignment_id: &str,
-    ) -> crate::fabric::FabricPortResult<Option<crate::fabric_membership::CurrentAssignment>> {
-        let read = self.database.begin_read().map_err(storage_error)?;
-        let table = read.open_table(ASSIGNMENTS).map_err(storage_error)?;
-        let Some(bytes) = table.get(assignment_id).map_err(storage_error)? else {
-            return Ok(None);
-        };
-        let record = codec::decode_record(bytes.value())?;
-        require_key(&record, assignment_id)?;
-        let roles = read.open_table(ROLES).map_err(storage_error)?;
-        let key = role_key(&record.assignment)?;
-        let owner = roles.get(key.as_str()).map_err(storage_error)?;
-        require_role(owner.as_ref().map(|owner| owner.value()), &record.assignment)?;
-        record.current().map(Some)
-    }
-
-    fn record_intent(
+    /// Read-modify-write of one role-slot-owning record, plus any reconciliation record it
+    /// creates, under a single transaction.
+    fn recover<T>(
         &mut self,
-        current: &crate::fabric_membership::RoleAssignment,
-        transition: &crate::fabric_membership::AssignmentTransition,
-    ) -> crate::fabric::FabricPortResult<String> {
+        assignment_id: &str,
+        resolve: impl FnOnce(&mut codec::AssignmentRecord) -> crate::fabric::FabricPortResult<codec::Resolution<T>>,
+    ) -> crate::fabric::FabricPortResult<T> {
         let write = self.database.begin_write().map_err(storage_error)?;
-        let intent_ref;
+        let resolved;
         {
             let mut table = write.open_table(ASSIGNMENTS).map_err(storage_error)?;
             let mut record = {
-                let bytes = table.get(current.assignment_id.as_str()).map_err(storage_error)?.ok_or_else(|| {
-                    crate::fabric::FabricPortError::storage("assignment must be initialized before intent")
-                })?;
+                let bytes = table
+                    .get(assignment_id)
+                    .map_err(storage_error)?
+                    .ok_or_else(|| crate::fabric::FabricPortError::storage("assignment missing during recovery"))?;
                 codec::decode_record(bytes.value())?
             };
-            require_key(&record, &current.assignment_id)?;
+            require_key(&record, assignment_id)?;
             let roles = write.open_table(ROLES).map_err(storage_error)?;
             let key = role_key(&record.assignment)?;
             let owner = roles.get(key.as_str()).map_err(storage_error)?;
             require_role(owner.as_ref().map(|owner| owner.value()), &record.assignment)?;
-            let (reference, bytes) = record.prepare(current, transition)?;
-            intent_ref = reference;
-            table.insert(current.assignment_id.as_str(), bytes.as_slice()).map_err(storage_error)?;
+            let resolution = resolve(&mut record)?;
+            table.insert(assignment_id, resolution.bytes.as_slice()).map_err(storage_error)?;
+            if let Some((_, bytes)) = &resolution.reconciliation {
+                let mut reconciliations = write.open_table(RECONCILIATIONS).map_err(storage_error)?;
+                reconciliations.insert(assignment_id, bytes.as_slice()).map_err(storage_error)?;
+            }
+            resolved = resolution.value;
         }
         write.commit().map_err(uncertain_error)?;
-        Ok(intent_ref)
-    }
-
-    fn commit(
-        &mut self,
-        transition: &crate::fabric_membership::AssignmentTransition,
-        intent_ref: &str,
-        role_effect_ref: Option<&str>,
-    ) -> crate::fabric::FabricPortResult<String> {
-        let write = self.database.begin_write().map_err(uncertain_error)?;
-        let commit_ref;
-        {
-            let mut table = write.open_table(ASSIGNMENTS).map_err(uncertain_error)?;
-            let mut record = {
-                let bytes = table
-                    .get(transition.next.assignment_id.as_str())
-                    .map_err(uncertain_error)?
-                    .ok_or_else(|| crate::fabric::FabricPortError::uncertain("assignment missing during commit"))?;
-                codec::decode_record(bytes.value())?
-            };
-            require_key(&record, &transition.next.assignment_id)?;
-            let roles = write.open_table(ROLES).map_err(uncertain_error)?;
-            let key = role_key(&record.assignment)?;
-            let owner = roles.get(key.as_str()).map_err(uncertain_error)?;
-            require_role(owner.as_ref().map(|owner| owner.value()), &record.assignment)?;
-            let (reference, bytes) = record.finish(transition, intent_ref, role_effect_ref)?;
-            commit_ref = reference;
-            table.insert(transition.next.assignment_id.as_str(), bytes.as_slice()).map_err(uncertain_error)?;
-        }
-        write.commit().map_err(uncertain_error)?;
-        Ok(commit_ref)
+        Ok(resolved)
     }
 }
 
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_membership/persistence/parts/redb/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_membership/persistence/parts/memory/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_membership/persistence/parts/protocol/body.rs"));

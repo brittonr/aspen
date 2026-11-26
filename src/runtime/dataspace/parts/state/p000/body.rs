@@ -37,7 +37,33 @@ fn observe_value_matches(pattern_value: &Value, candidate: &Value) -> bool {
         .unwrap_or(false)
 }
 
+/// The successor of a runtime counter, or a typed failure when the successor
+/// would reach `u64::MAX`.
+///
+/// `RuntimeSnapshot::validate_for_restore` rejects an exhausted counter, so a
+/// live or replayed transition must never produce one: every committed
+/// snapshot stays restorable.
+fn next_restorable_counter(current: u64, counter: &str) -> Result<u64> {
+    current.checked_add(1).filter(|next| *next < u64::MAX).ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "runtime {counter} is exhausted; advancing past {current} would leave an unrestorable snapshot"
+        ))
+    })
+}
+
+/// The admitted random value range is `0..upper`; an empty range admits no value.
+fn validate_random_value(upper: u64, value: u64) -> Result<()> {
+    if value < upper {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "random effect value {value} is outside the admitted range 0..{upper}"
+        )))
+    }
+}
+
 // r[impl molten.runtime_state_machine_proof.turn_commit_delta]
+// r[impl molten.runtime_spine.dataspace_determinism_and_rollback_integrity]
 pub fn recorded_effect_response_transition(
     before: &RuntimeSnapshot,
     request: &Event,
@@ -50,8 +76,14 @@ pub fn recorded_effect_response_transition(
             sequence,
             upper,
         } => {
+            if value < before.logical_time {
+                return Err(MoltenError::invalid_harness(format!(
+                    "recorded clock value {value} regresses logical time {}",
+                    before.logical_time
+                )));
+            }
             let mut after = before.clone();
-            after.logical_time = value + 1;
+            after.logical_time = next_restorable_counter(value, "logical time")?;
             Ok(RuntimeRecordedEffectTransition {
                 after,
                 response: effect_response(Effect::Clock, actor.clone(), *sequence, *upper, value),
@@ -63,6 +95,7 @@ pub fn recorded_effect_response_transition(
             sequence,
             upper: Some(upper),
         } => {
+            validate_random_value(*upper, value)?;
             let mut after = before.clone();
             let (next_state, _ignored_local_value) = deterministic_random_step(after.rng_state, *upper);
             after.rng_state = next_state;

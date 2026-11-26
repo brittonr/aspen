@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::*;
 use crate::world_commit::RootKind;
@@ -65,28 +65,46 @@ fn compare_step(
         return make_divergence(WorldReplayDivergenceKind::ParentMismatch, step, Some(observation), None, Vec::new())
             .map(Some);
     }
-    if observation.actual.commit_ref == step.expected_successor {
-        return Ok(None);
-    }
     let Some(expected_commit) = expected.get(step.expected_successor.as_str()) else {
         return Err(vec![WorldReplayIssue::MissingCommit(
             step.expected_successor.as_str().to_string(),
         )]);
     };
     let root_kind = first_root_difference(&expected_commit.roots, &observation.actual.roots);
-    let field_path = first_field_path(root_kind, &observation.field_differences);
-    make_divergence(
-        if root_kind.is_some() {
-            WorldReplayDivergenceKind::RootMismatch
-        } else {
-            WorldReplayDivergenceKind::CommitMismatch
-        },
-        step,
-        Some(observation),
-        root_kind,
-        field_path,
-    )
-    .map(Some)
+    if observation.actual.commit_ref != step.expected_successor {
+        let field_path = first_field_path(root_kind, &observation.field_differences);
+        return make_divergence(
+            if root_kind.is_some() {
+                WorldReplayDivergenceKind::RootMismatch
+            } else {
+                WorldReplayDivergenceKind::CommitMismatch
+            },
+            step,
+            Some(observation),
+            root_kind,
+            field_path,
+        )
+        .map(Some);
+    }
+    // r[impl molten.world_commit.replay_sealed_observation_and_full_comparison]
+    // A matching commit ref is not enough: the observed roots and every
+    // reported field difference are compared too, so a capture whose roots or
+    // fields diverge under an equal commit ref is still a divergence.
+    let divergent_root = match root_kind {
+        Some(kind) => Some((kind, first_field_path(Some(kind), &observation.field_differences))),
+        None => first_field_difference(&observation.field_differences),
+    };
+    match divergent_root {
+        None => Ok(None),
+        Some((kind, field_path)) => {
+            make_divergence(WorldReplayDivergenceKind::RootMismatch, step, Some(observation), Some(kind), field_path)
+                .map(Some)
+        }
+    }
+}
+
+fn first_field_difference(differences: &[WorldReplayFieldDifference]) -> Option<(RootKind, Vec<String>)> {
+    differences.iter().map(|difference| (difference.root_kind, difference.field_path.clone())).min()
 }
 
 fn comparison_with_divergence(

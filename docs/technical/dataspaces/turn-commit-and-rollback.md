@@ -18,6 +18,8 @@ Set identity and event multiplicity are different questions. Repeating an identi
 
 Rollback itself is deliberately small. `rollback_turn` takes an immutable state reference, consumes the pending turn without applying it, and returns a `TurnRolledBack` event with actor and reason. The receipt-bearing rollback evaluates a denied outcome against the same before-state. This is discard-before-publication, not compensating work that attempts to undo an already observed external action.
 
+Staging can also decide a rollback itself: retracting an assertion the actor does not hold stages a `TurnRolledBack` event. `commit_turn_with_predicate_receipt` routes such a turn to rollback instead of commit. The caller receives only the `TurnRolledBack` event and a receipt evaluated for the rolled-back outcome against the unchanged before-state; no `TurnCommitted` event or committed-outcome receipt is produced. Facet turns (`apply_facet_create`, `_assert`, `_observe`, `_retract`, `_stop`) are attributed to the actor that owns the facet, so their `TurnCommitted` records name that actor.
+
 ## Worked reasoning: denied readiness
 
 Consider an illustrative producer asserting the exact value `"service.ready"` while a consumer already observes that value.
@@ -32,6 +34,8 @@ The crucial test is not merely that rollback returns a denial string. It is that
 ## Effects and admission remain separate
 
 The same state module handles `Clock` and `Random` through separate request/response paths. They are not ordinary `TurnAction` insertions; `begin_turn` does not stage them as dataspace actions. The local deterministic responses and recorded-response transition are not ambient clock or entropy access. Consequently, a claim that a dataspace rollback undoes arbitrary external I/O would exceed this implementation.
+
+Logical time and the effect sequence advance only through checked arithmetic, and never reach `u64::MAX`, the value snapshot restore rejects; an exhausted counter fails the step without a partial state change. A recorded clock response must not be earlier than the current logical time, and a recorded random response must lie in `0..upper` (an empty range admits no value, live or recorded). A recorded response that violates either rule denies replay with a typed failure instead of moving state.
 
 Similarly, structural transition validation does not replace policy, capability, or budget gates. The [reference harness contract](../../syndicate-reference-harness.md) preserves Molten admission boundaries even when local Syndicate observations agree. Transition correctness answers whether the declared state delta is right; admission answers whether that operation may occur.
 

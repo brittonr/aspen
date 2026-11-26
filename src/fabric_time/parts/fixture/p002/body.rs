@@ -1,34 +1,51 @@
 
+pub(super) const DETERMINISTIC_ENTROPY_DRAWS: [EntropyRequest; 2] = [
+    EntropyRequest::Bytes {
+        count: ENTROPY_BYTE_COUNT,
+    },
+    EntropyRequest::BoundedChoice {
+        upper_exclusive: ENTROPY_CHOICE_BOUND,
+    },
+];
+
+/// The fixture's admitted deterministic entropy stream request and the evidence its draws record.
+pub(super) fn deterministic_entropy_events(
+    profile: &Profile,
+) -> crate::error::Result<(EntropyStreamRequest, Vec<Event>)> {
+    let request = entropy_stream_request(
+        &profile.profile,
+        "simulation-stream",
+        "scheduler-choice",
+        EntropyMode::DeterministicSimulation,
+        Some(ENTROPY_SEED),
+    );
+    let mut stream = open_entropy_stream(&profile.profile, FIXTURE_GENERATION, &request)
+        .map_err(|error| core_error("open deterministic entropy stream", error))?;
+    let mut recorded = Vec::with_capacity(DETERMINISTIC_ENTROPY_DRAWS.len());
+    for draw in DETERMINISTIC_ENTROPY_DRAWS {
+        let transition = draw_deterministic_entropy(&profile.profile, FIXTURE_GENERATION, &stream, draw)
+            .map_err(|error| core_error("draw deterministic entropy", error))?;
+        recorded.push(entropy_event(&entropy_evidence_metadata(&stream, &transition))?);
+        stream = transition.next;
+    }
+    Ok((request, recorded))
+}
+
+/// Records deterministic entropy evidence only after it replays against the admitted stream.
 fn run_deterministic_entropy_scenario(
     profile: &Profile,
     events: &mut impl crate::bounded::VecSink<Event>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
-    let mut stream = open_entropy_stream(
-        &profile.profile,
-        FIXTURE_GENERATION,
-        &entropy_stream_request(
-            &profile.profile,
-            "simulation-stream",
-            "scheduler-choice",
-            EntropyMode::DeterministicSimulation,
-            Some(ENTROPY_SEED),
-        ),
-    )
-    .map_err(|error| core_error("open deterministic entropy stream", error))?;
-    for request in [
-        EntropyRequest::Bytes {
-            count: ENTROPY_BYTE_COUNT,
-        },
-        EntropyRequest::BoundedChoice {
-            upper_exclusive: ENTROPY_CHOICE_BOUND,
-        },
-    ] {
-        let transition = draw_deterministic_entropy(&profile.profile, FIXTURE_GENERATION, &stream, request)
-            .map_err(|error| core_error("draw deterministic entropy", error))?;
-        let metadata = entropy_evidence_metadata(&stream, &transition);
-        events.push_item(entropy_event(&metadata)?);
-        stream = transition.next;
+    let (stream, recorded) = deterministic_entropy_events(profile)?;
+    replay_fixture_entropy(profile, FixtureEntropyInput {
+        stream,
+        draws: &DETERMINISTIC_ENTROPY_DRAWS,
+        recorded: &recorded,
+    })
+    .map_err(|error| core_error("replay deterministic entropy evidence", error))?;
+    for event in recorded {
+        events.push_item(event);
         counters.entropy_events = checked_increment(counters.entropy_events, "entropy event count")?;
     }
     Ok(())

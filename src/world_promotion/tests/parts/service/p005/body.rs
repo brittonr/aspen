@@ -32,17 +32,28 @@
             self.inner.update_reservation(reservation)
         }
         fn store_attempt(&mut self, attempt: &WorldAttemptRecord) -> crate::error::Result<()> {
-            // Admit the pre-dispatch `attempting` write; fail only the post-error uncertain record.
-            if attempt.state == WorldReleaseState::Uncertain {
-                return Err(crate::error::Failure::invalid_harness("store boom"));
-            }
             self.inner.store_attempt(attempt)
         }
         fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> crate::error::Result<Option<WorldAttemptRecord>> {
             self.inner.read_attempt(attempt_ref)
         }
-        fn list_attempts_in_progress(&self) -> crate::error::Result<Vec<WorldAttemptRecord>> {
-            self.inner.list_attempts_in_progress()
+        fn list_attempts(&self) -> crate::error::Result<Vec<WorldAttemptRecord>> {
+            self.inner.list_attempts()
+        }
+    }
+    impl WorldPromotionTransitionPort for FailingStore {
+        fn record_attempt_transition(&mut self, reservation: &WorldReleaseReservation, attempt: &WorldAttemptRecord) -> crate::error::Result<()> {
+            // Admit the pre-dispatch `attempting` write; fail only the post-error uncertain record.
+            if attempt.state == WorldReleaseState::Uncertain {
+                return Err(crate::error::Failure::invalid_harness("store boom"));
+            }
+            self.inner.record_attempt_transition(reservation, attempt)
+        }
+        fn observe_live(&self, branch_id: &molten_core::world_head::WorldBranchId, nonce: &WorldPromotionGrantNonce) -> crate::error::Result<WorldPromotionLiveFacts> {
+            self.inner.observe_live(branch_id, nonce)
+        }
+        fn apply_operator_mutation(&mut self, mutation: &WorldOperatorMutation) -> crate::error::Result<()> {
+            self.inner.apply_operator_mutation(mutation)
         }
     }
 

@@ -6,7 +6,7 @@ Use this reference when inventorying an isolated node or assembling an evidence 
 
 ## Root lifecycle artifacts
 
-The root names are declared by the [daemon constants](../../../src/node/parts/daemon/p000/body.rs); current-run names and observation reads belong to the [run-observation shell](../../../src/node/parts/daemon/p058/body.rs). Publication belongs to the daemon shell, while canonical values come from the profile, identity, and runtime modules.
+The root names are declared by the [daemon constants](../../../src/node/daemon/vocabulary/settings.rs); current-run names and observation reads belong to the [run-observation shell](../../../src/node/daemon/state/tracking.rs). Publication belongs to the daemon shell, while canonical values come from the profile, identity, and runtime modules.
 
 | Relative path | Publishing owner | Operational meaning and limit |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Layout creation additionally prepares `cache`, `remote-dataspace`, `jobs`, `coor
 
 ## Request-relative and adapter-relative artifacts
 
-The [path helpers](../../../src/node/parts/daemon/p034/body.rs) derive names from a request-ref file stem. The following are naming patterns, not executable templates or fabricated references.
+The [path helpers](../../../src/node/daemon/state/paths.rs) derive names from a request-ref file stem. The following are naming patterns, not executable templates or fabricated references.
 
 | Pattern | Meaning |
 | --- | --- |
@@ -79,9 +79,9 @@ Canonical identity comes from Preserves and BLAKE3, not host paths, in-memory po
 - [Handbook](../README.md)
 - [Node-state filesystem authority](../../node-state-filesystem-authority.md)
 - [Capability-rooted state companion](../../technical/storage/capability-rooted-node-state.md)
-- [Artifact constants](../../../src/node/parts/daemon/p000/body.rs)
+- [Artifact constants](../../../src/node/daemon/vocabulary/settings.rs)
 - [Root and namespace ownership](../../../crates/molten-node-host/src/node/state/authority.rs)
-- [Lifecycle classifier and restart](../../../src/node/parts/daemon/p036/body.rs)
-- [Publication ordering](../../../src/node/parts/daemon/p018/body.rs)
+- [Lifecycle classifier and restart](../../../src/node/daemon/records/inspection.rs)
+- [Publication ordering](../../../src/node/daemon/lifecycle/running.rs)
 - [Canonical run and completion records](../../../src/node/parts/runtime/p009/body.rs)
-- [Current-run observation and immutable receipt readback](../../../src/node/parts/daemon/p058/body.rs)
+- [Current-run observation and immutable receipt readback](../../../src/node/daemon/state/tracking.rs)

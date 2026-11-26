@@ -16,6 +16,8 @@ pub use binding::GroupInput;
 pub use binding::canonical_group;
 pub use lifecycle::apply_outcome;
 pub use live_service::plan_replica_start_for_host;
+/// The read consistency a caller requests; owned by the `molten-raft-core` kernel.
+pub use molten_raft_core::model::ReadMode;
 pub use operation::ConfigurationTransition;
 pub use operation::GroupOpenMode;
 pub use operation::PlanDecision;
@@ -60,23 +62,6 @@ impl GroupLifecycle {
             Self::Active => "active",
             Self::Draining => "draining",
             Self::Removed => "removed",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReadMode {
-    LocalStale,
-    Linearizable,
-    Lease,
-}
-
-impl ReadMode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::LocalStale => "local-stale",
-            Self::Linearizable => "linearizable",
-            Self::Lease => "lease",
         }
     }
 }

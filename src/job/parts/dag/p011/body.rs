@@ -13,8 +13,15 @@ fn capability_contexts_admit(
     for capability_ref in &request.capability_refs {
         match authority_context_value_for_ref(target_registry, capability_ref)? {
             Some(context_value) => {
-                let admission =
-                    crate::authority::admit_authority(&context_value, "job:execute", &request.job_ref, 0, &[])?;
+                // Job admission has no independent principal or key source; it admits capability scope
+                // only, and the receipt records that non-claim.
+                let admission = crate::authority::admit_capability_scope(
+                    &context_value,
+                    "job:execute",
+                    &request.job_ref,
+                    0,
+                    &[],
+                )?;
                 push_bounded(
                     &mut receipt_refs,
                     admission.receipt.receipt_ref.clone(),

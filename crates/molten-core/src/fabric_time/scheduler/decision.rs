@@ -317,7 +317,7 @@ fn compare_ready(
     right: &RunnableState,
     ordering: SchedulerOrdering,
     fairness_bound: Option<u64>,
-) -> std::cmp::Ordering {
+) -> core::cmp::Ordering {
     let fairness = fairness_bound.map(|bound| {
         let left_due = left.wait_turns >= bound;
         let right_due = right.wait_turns >= bound;
@@ -325,12 +325,12 @@ fn compare_ready(
             if left_due && right_due {
                 right.wait_turns.cmp(&left.wait_turns)
             } else {
-                std::cmp::Ordering::Equal
+                core::cmp::Ordering::Equal
             }
         })
     });
     fairness
-        .unwrap_or(std::cmp::Ordering::Equal)
+        .unwrap_or(core::cmp::Ordering::Equal)
         .then_with(|| match ordering {
             SchedulerOrdering::Fifo => left.enqueue_sequence.cmp(&right.enqueue_sequence),
             SchedulerOrdering::PriorityThenFifo => {

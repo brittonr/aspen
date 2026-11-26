@@ -100,6 +100,7 @@ Compare bounded processes, component hosts, and executable mappings without conf
 - [Component resource accounting](execution/component-resource-accounting.md)
 - [Executable extent trust boundary](execution/executable-extent-trust-boundary.md)
 - [Execution performance evidence](execution/execution-performance-evidence.md)
+- [Steel sandbox and metering](execution/steel-sandbox-and-metering.md)
 
 ### Time
 
@@ -233,17 +234,11 @@ Maintain dependency cohorts, purity boundaries, test authority, static audits, a
 
 ## Reading source discrepancies
 
-Some articles identify differences between governing prose and the inspected implementation. These are source-review observations, not reproduced bug reports, new policy exceptions, or fixes. Follow the linked sources before depending on the disputed guarantee. In particular:
+Some articles identify differences between governing prose and the inspected implementation. These are source-review observations, not new policy exceptions or fixes. Follow the linked sources before depending on the disputed guarantee.
 
-- [Envelope admission](envelopes/envelope-admission-pipeline.md) distinguishes constructor validation from deserialization and later revalidation.
-- [Proof composition](proof/aggregate-proof-obligations.md) separates aggregate extraction and layered diagnostics from acceptance of every child.
-- [Promotion atomicity](world-effects/promotion-and-reservation-atomicity.md) distinguishes transactional publication from the timing of supplied authority observations.
-- [Typed merge](world-state/typed-diff-and-merge-conflicts.md) identifies the equal-root shortcut's admission precedence.
-- [DAG exchange](replication/bounded-dag-closure-exchange.md) scopes observation refresh relative to the transfer loop.
-- [Transport replay](transport/transport-failure-and-replay-boundaries.md) distinguishes the generic registered shell from the cross-process wrapper.
-- [Context expansion](configuration/context-profile-expansion.md) identifies category-specific override handling.
-- [Local startup](operations/node-lifecycle-and-recovery.md) separates synthetic source-gate evidence from production requirements.
-- [Static audits](engineering/static-authority-audit-method.md) distinguishes rule files, default profiles, and metadata identity.
+Every discrepancy found between the implementation and a governing spec must be filed as a tracked Cairn defect change under `.cairn/changes/`, and the companion article must link to it. A companion-doc disclaimer alone does not track a defect. When the linked change is archived, update the link to its archive record, and remove the entry once the article no longer describes a discrepancy. Current discrepancies and their tracking changes:
+
+- [Local startup](operations/node-lifecycle-and-recovery.md) separates synthetic source-gate evidence from production requirements. Tracked by [`eliminate-self-certifying-evidence-gates`](../../.cairn/changes/eliminate-self-certifying-evidence-gates/proposal.md).
 
 ## Documentation-only scope
 

@@ -19,14 +19,29 @@ use molten_core::world_snapshot::SnapshotCohort;
 use molten_core::world_snapshot::SnapshotComponent;
 use molten_core::world_snapshot::SnapshotComponentKind;
 use molten_core::world_snapshot::SnapshotDescriptor;
-use serde::Serialize;
+use preserves::IOValue;
 
+use self::projection::devices_value;
+#[cfg(feature = "world-snapshot-vm-cohort")]
+pub(crate) use self::projection::guest_artifact_value;
+pub(crate) use self::projection::guest_artifacts_value;
+use self::projection::msr_indices_value;
+use self::projection::payload_closure_value;
+use self::projection::state_owner_value;
+use self::projection::strings_value;
+use self::projection::tagged_digest_value;
 use crate::error::Failure;
 use crate::error::Result;
+use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
+use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
+
+mod projection;
 
 const COHORT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-cohort.v1";
-const COMPONENT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-component.v1";
-const FACT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-fact.v1";
+const COMPONENT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-component.v2";
+const FACT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-fact.v2";
 
 /// Molten-owned roots and reviewed compatibility bindings for one ChaosControl descriptor.
 #[derive(Debug, Clone)]
@@ -82,29 +97,47 @@ fn cohort_facts(
     binding: &ChaosControlSnapshotBinding,
 ) -> Result<Vec<CohortFact>> {
     Ok(vec![
-        fact(CohortFactKind::Architecture, json_ref("architecture", &descriptor.architecture)?),
-        fact(CohortFactKind::RuntimeBuild, json_ref("runtime-build", &descriptor.runtime.runtime_build)?),
+        fact(CohortFactKind::Architecture, fact_ref("architecture", &string(&descriptor.architecture))?),
+        fact(
+            CohortFactKind::RuntimeBuild,
+            fact_ref("runtime-build", &tagged_digest_value(&descriptor.runtime.runtime_build))?,
+        ),
         fact(CohortFactKind::RuntimeAbi, binding.runtime_abi_ref.clone()),
         fact(
             CohortFactKind::KvmStateProfile,
-            json_ref(
+            fact_ref(
                 "kvm-state-profile",
-                &(
-                    &descriptor.completeness_profile,
-                    descriptor.state_schema_version,
-                    &descriptor.runtime.kvm_operations,
-                ),
+                &record("kvm-state-profile", vec![
+                    string(&descriptor.completeness_profile),
+                    u64_value(u64::from(descriptor.state_schema_version)),
+                    strings_value(&descriptor.runtime.kvm_operations),
+                ]),
             )?,
         ),
         fact(
             CohortFactKind::CpuFeatureInventory,
-            json_ref("cpu-feature-inventory", &(&descriptor.topology.msr_indices, &descriptor.runtime.kvm_operations))?,
+            fact_ref(
+                "cpu-feature-inventory",
+                &record("cpu-feature-inventory", vec![
+                    msr_indices_value(&descriptor.topology.msr_indices),
+                    strings_value(&descriptor.runtime.kvm_operations),
+                ]),
+            )?,
         ),
         fact(
             CohortFactKind::VcpuTopology,
-            json_ref("vcpu-topology", &(descriptor.topology.vcpu_count, descriptor.topology.memory_bytes))?,
+            fact_ref(
+                "vcpu-topology",
+                &record("vcpu-topology", vec![
+                    u64_value(u64::from(descriptor.topology.vcpu_count)),
+                    u64_value(descriptor.topology.memory_bytes),
+                ]),
+            )?,
         ),
-        fact(CohortFactKind::DeviceInventory, json_ref("device-inventory", &descriptor.topology.devices)?),
+        fact(
+            CohortFactKind::DeviceInventory,
+            fact_ref("device-inventory", &devices_value(&descriptor.topology.devices))?,
+        ),
         fact(CohortFactKind::MemoryFormat, binding.memory_format_ref.clone()),
         fact(CohortFactKind::DiskFormat, binding.disk_format_ref.clone()),
         fact(CohortFactKind::BackendProfile, binding.backend_profile_ref.clone()),
@@ -124,27 +157,30 @@ fn descriptor_components(
         opaque_machine_component(descriptor_ref)?,
         opaque_component(
             SnapshotComponentKind::CpuState,
-            json_component_ref("cpu-state", &descriptor.topology.msr_indices)?,
+            component_ref("cpu-state", &msr_indices_value(&descriptor.topology.msr_indices))?,
         ),
-        opaque_component(SnapshotComponentKind::Memory, json_component_ref("memory", &descriptor.payload)?),
+        opaque_component(
+            SnapshotComponentKind::Memory,
+            component_ref("memory", &payload_closure_value(&descriptor.payload))?,
+        ),
         opaque_component(
             SnapshotComponentKind::DeviceState,
-            json_component_ref("device-state", &descriptor.topology.devices)?,
+            component_ref("device-state", &devices_value(&descriptor.topology.devices))?,
         ),
         opaque_component(
             SnapshotComponentKind::DiskState,
-            json_component_ref("disk-state", &descriptor.guest_artifacts)?,
+            component_ref("disk-state", &guest_artifacts_value(&descriptor.guest_artifacts))?,
         ),
         opaque_component(
             SnapshotComponentKind::BackendState,
-            json_component_ref(
+            component_ref(
                 "backend-state",
-                &(
-                    &descriptor.runtime.scheduler_profile,
-                    &descriptor.runtime.time_profile,
-                    &descriptor.runtime.entropy_profile,
-                    &descriptor.state_owners,
-                ),
+                &record("backend-state", vec![
+                    string(&descriptor.runtime.scheduler_profile),
+                    string(&descriptor.runtime.time_profile),
+                    string(&descriptor.runtime.entropy_profile),
+                    sequence(descriptor.state_owners.iter().map(state_owner_value).collect()),
+                ]),
             )?,
         ),
     ])
@@ -193,17 +229,20 @@ fn identify_cohort(facts: &[CohortFact]) -> Result<SnapshotCohortRef> {
         .map_err(|issue| Failure::invalid_harness(format!("ChaosControl cohort identity denied: {issue:?}")))
 }
 
-fn json_component_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
-    json_identity(COMPONENT_IDENTITY_DOMAIN, label, value)
+fn component_ref(label: &str, value: &IOValue) -> Result<String> {
+    canonical_identity(COMPONENT_IDENTITY_DOMAIN, label, value)
 }
 
-fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
-    json_identity(FACT_IDENTITY_DOMAIN, label, value)
+fn fact_ref(label: &str, value: &IOValue) -> Result<String> {
+    canonical_identity(FACT_IDENTITY_DOMAIN, label, value)
 }
 
-fn json_identity<T: Serialize>(domain: &'static str, label: &str, value: &T) -> Result<String> {
-    let bytes = serde_json::to_vec(value)
-        .map_err(|error| Failure::invalid_harness(format!("ChaosControl identity serialization failed: {error}")))?;
+/// BLAKE3 over the domain, the label, and the canonical packed bytes of an explicit Preserves
+/// projection of a ChaosControl DTO. JSON or serde bytes are not an identity encoding.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+fn canonical_identity(domain: &'static str, label: &str, value: &IOValue) -> Result<String> {
+    let bytes = crate::preserves_rail::canonical_bytes(value)
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl identity projection failed: {error}")))?;
     let mut hasher = blake3::Hasher::new_derive_key(domain);
     update_text(&mut hasher, label)?;
     update_bytes(&mut hasher, &bytes)?;

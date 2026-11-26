@@ -152,6 +152,7 @@ pub fn evaluate_deadline(
     })
 }
 
+// r[impl molten.fabric_time.retry_deadline_domain]
 pub fn plan_retry(
     profile: &AdmittedTimeProfile,
     active_generation: u64,
@@ -174,6 +175,7 @@ pub fn plan_retry(
         });
     }
     validate_time_value(profile, now).map_err(DeadlineLeaseError::Arithmetic)?;
+    validate_deadline_domain(now.domain())?;
     if attempt >= policy.maximum_attempts {
         return Err(DeadlineLeaseError::RetryExhausted {
             attempt,
@@ -228,6 +230,7 @@ pub fn plan_retry(
 }
 
 // r[impl molten.fabric_time.deadline_lease]
+// r[impl molten.fabric_time.batch_item_atomicity_and_fenced_renew]
 pub fn evaluate_lease(
     profile: &AdmittedTimeProfile,
     active_generation: u64,
@@ -239,7 +242,7 @@ pub fn evaluate_lease(
         (LeaseAction::Observe, DeadlineStatus::Pending) => LeaseDecisionKind::LocallyActive,
         (LeaseAction::Observe, DeadlineStatus::Expired) => LeaseDecisionKind::LocallyExpired,
         (_, DeadlineStatus::IndeterminateWithinUncertainty) => LeaseDecisionKind::IndeterminateWithinUncertainty,
-        (LeaseAction::Renew, DeadlineStatus::Pending) => LeaseDecisionKind::RenewalAllowed,
+        (LeaseAction::Renew, DeadlineStatus::Pending) => classify_lease_renewal(request),
         (LeaseAction::Renew, DeadlineStatus::Expired) | (LeaseAction::AcquireExclusive, DeadlineStatus::Expired) => {
             LeaseDecisionKind::DeniedExpired
         }
@@ -341,6 +344,33 @@ fn classify_exclusive_lease(request: &LeaseRequest) -> LeaseDecisionKind {
         return LeaseDecisionKind::DeniedStaleFencingToken;
     }
     LeaseDecisionKind::ExclusiveActionAllowed
+}
+
+/// A renewal must match its consistency level. A `LocalObservationOnly` renewal
+/// extends a local observation only and cannot carry fencing tokens it has no
+/// authority to enforce. A `FencedExclusive` renewal must present its fencing
+/// token and the lease's current fence (`previous_fencing_token`); a token below
+/// that fence belongs to a superseded holder and is denied.
+fn classify_lease_renewal(request: &LeaseRequest) -> LeaseDecisionKind {
+    match request.consistency {
+        LeaseConsistency::LocalObservationOnly => {
+            if request.fencing_token.is_some() || request.previous_fencing_token.is_some() {
+                LeaseDecisionKind::DeniedWithoutFencing
+            } else {
+                LeaseDecisionKind::RenewalAllowed
+            }
+        }
+        LeaseConsistency::FencedExclusive => {
+            let (Some(token), Some(previous)) = (request.fencing_token, request.previous_fencing_token) else {
+                return LeaseDecisionKind::DeniedWithoutFencing;
+            };
+            if token < previous {
+                LeaseDecisionKind::DeniedStaleFencingToken
+            } else {
+                LeaseDecisionKind::RenewalAllowed
+            }
+        }
+    }
 }
 
 // r[impl molten.audit_f12.saturation]

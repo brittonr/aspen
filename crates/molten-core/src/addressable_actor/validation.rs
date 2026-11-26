@@ -160,7 +160,7 @@ pub fn validate_actor_request(request: &ActorRequest) -> Vec<ActorIssue> {
 pub fn validate_restore_classes(matrix: &ActorSurvivalMatrix, classes: &[SurvivalClass]) -> Vec<ActorIssue> {
     let issue_capacity = classes.len().saturating_mul(MAX_RESTORE_ISSUES_PER_CLASS);
     let mut issues = Vec::with_capacity(issue_capacity);
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     for class in classes {
         if !seen.insert(*class) {
             issues.push(ActorIssue::DuplicateRestoreClass { class: *class });
@@ -223,7 +223,7 @@ fn validate_survival_matrix(matrix: &ActorSurvivalMatrix) -> Vec<ActorIssue> {
     {
         issues.push(ActorIssue::SurvivalMatrixMismatch);
     }
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     for rule in &matrix.rules {
         if !seen.insert(rule.class) {
             issues.push(ActorIssue::DuplicateSurvivalClass);

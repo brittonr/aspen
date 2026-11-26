@@ -1,8 +1,15 @@
 {
  "schema": "molten-octet-workspace-baseline-v3",
  "anchor": "sha256, first 16 hex digits, of the finding's whitespace-normalized source line together with the nearest 2 non-blank lines above and below it, then '#' and the 1-based ordinal of that window among identical windows in the file",
- "total": 3492,
+ "total": 3504,
  "findings": [
+  {
+   "crate": "fastpathquint",
+   "file": "tests/fastpathquint.rs",
+   "lint": "no_unwrap",
+   "anchor": "sha256:8cef41e808dd8f50#1",
+   "count": 1
+  },
   {
    "crate": "molten-release-policy",
    "file": "crates/molten-release-policy/src/main.rs",
@@ -434,7 +441,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/cluster/harness.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:c6451e81af099ec2#1",
+   "anchor": "sha256:f2f4645013f25010#1",
    "count": 2
   },
   {
@@ -448,28 +455,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/cluster/harness.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:25ce828dc917400b#1",
+   "anchor": "sha256:8d3c1ab6353e6341#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/cluster/harness.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:81c008bc05885dda#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/codec.rs",
-   "lint": "module_file_count",
-   "anchor": "sha256:3ab385513a74964b#1",
+   "anchor": "sha256:cb6d237feb7eaf64#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/codec.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3ab385513a74964b#1",
+   "anchor": "sha256:9ded0bd3e10489a2#1",
    "count": 2
   },
   {
@@ -477,6 +477,13 @@
    "file": "crates/molten-core/src/codec.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:3b8ea38767092efc#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/codec.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:bff8facf7ba1d3b1#1",
    "count": 1
   },
   {
@@ -504,7 +511,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/collaborationscope/model.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:ea56b89f778b493e#1",
+   "anchor": "sha256:6558fda9b9d7bbbe#1",
    "count": 2
   },
   {
@@ -588,7 +595,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/compute_capacity/mod.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:5ca710a1ddc19ed3#1",
+   "anchor": "sha256:fc374f05332c5abe#1",
    "count": 2
   },
   {
@@ -637,28 +644,28 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/compute_capacity/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:44877b04273ba4f5#1",
+   "anchor": "sha256:128e4908cdc577bd#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/compute_capacity/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:4a7281bf6c47a4d8#1",
+   "anchor": "sha256:2944ad9c04fe2cec#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/compute_capacity/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:751cd6876958bd45#1",
+   "anchor": "sha256:635fa9064cca19eb#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/compute_capacity/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:80dc4f6f9d919620#1",
+   "anchor": "sha256:c44ecadfaffbf88a#1",
    "count": 2
   },
   {
@@ -903,21 +910,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/consensus_recovery/reconcile/observations.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:4f2231198f199e21#1",
+   "anchor": "sha256:6144d19b0415f647#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/consensus_recovery/reconcile/observations.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:6144d19b0415f647#1",
+   "anchor": "sha256:7f4c63eafb3d984b#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/consensus_recovery/repair.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3e1751467ac9208f#1",
+   "anchor": "sha256:7d3506dfbe71dad4#1",
    "count": 2
   },
   {
@@ -1510,41 +1517,6 @@
   },
   {
    "crate": "molten_core",
-   "file": "crates/molten-core/src/dependency.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:65a8441608b7a201#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/dependency.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:94a73b344f4dada4#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/dependency.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:bdb19dae7854933d#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/dependency.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:fd89c21e562989fa#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/dependency.rs",
-   "lint": "unbounded_collection_growth",
-   "anchor": "sha256:82e926333766bfd2#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
    "file": "crates/molten-core/src/fabric/boundary.rs",
    "lint": "bool_naming",
    "anchor": "sha256:95826e2654c33bfe#1",
@@ -1834,7 +1806,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:a614f3d719f08826#1",
+   "anchor": "sha256:611cb924e7d557a0#1",
    "count": 2
   },
   {
@@ -1904,7 +1876,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric/port.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:88f76a498aabf038#1",
+   "anchor": "sha256:0b368d5a146f87fe#1",
    "count": 2
   },
   {
@@ -1912,6 +1884,20 @@
    "file": "crates/molten-core/src/fabric/port.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:05bf798770d392cd#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric/port.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:07cb8b0ec1dd9c6e#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric/port.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:0b368d5a146f87fe#1",
    "count": 2
   },
   {
@@ -1927,27 +1913,6 @@
    "lint": "non_trait_imports",
    "anchor": "sha256:42796e98a2ede4ad#1",
    "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric/port.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:7307d6d76f02cda5#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric/port.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:7b71533e7afd177a#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric/port.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:88f76a498aabf038#1",
-   "count": 2
   },
   {
    "crate": "molten_core",
@@ -1975,6 +1940,13 @@
    "file": "crates/molten-core/src/fabric/port.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:f455fc0ae3f39c4f#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric/port.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:f4a64eeccbcc7838#1",
    "count": 2
   },
   {
@@ -2429,7 +2401,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:62d31d08c62b4f9e#1",
+   "anchor": "sha256:5072d95eca4411a6#1",
    "count": 2
   },
   {
@@ -2444,6 +2416,13 @@
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:0488dcfe9772ae89#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:19b29bf6201bbcd4#1",
    "count": 2
   },
   {
@@ -2513,13 +2492,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3c717d96f693067d#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:42f28d547b97a68c#1",
    "count": 2
   },
@@ -2534,14 +2506,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:5191a8ead6cb1758#1",
+   "anchor": "sha256:5072d95eca4411a6#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:62d31d08c62b4f9e#1",
+   "anchor": "sha256:5191a8ead6cb1758#1",
    "count": 2
   },
   {
@@ -2569,13 +2541,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:952fed1ca02ee1f1#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:996bd513c9de15fe#1",
    "count": 2
   },
@@ -2591,6 +2556,13 @@
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:c84a8fab34fd97a0#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:ebf945004ebbfbe2#1",
    "count": 2
   },
   {
@@ -2618,6 +2590,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "path_segment_repetition",
+   "anchor": "sha256:50e5885f1104bd40#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
+   "lint": "path_segment_repetition",
    "anchor": "sha256:5700ed3997cc881a#1",
    "count": 2
   },
@@ -2631,13 +2610,6 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:f26e17f8c814deaa#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_crypto_identity/artifact/auth.rs",
    "lint": "renamed_imports",
    "anchor": "sha256:c84a8fab34fd97a0#1",
    "count": 2
@@ -2646,14 +2618,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/model.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:e8dd189da681dc98#1",
+   "anchor": "sha256:94a76cd6fd4960e1#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/model.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e8dd189da681dc98#1",
+   "anchor": "sha256:94a76cd6fd4960e1#1",
    "count": 2
   },
   {
@@ -2737,21 +2709,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/rotation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:369f5dccc36ad351#1",
+   "anchor": "sha256:011eda7bdd310f05#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_crypto_identity/rotation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:9acb785830833fb4#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_crypto_identity/rotation.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:106927148a89d7d8#1",
+   "anchor": "sha256:7277125c57228e82#1",
    "count": 2
   },
   {
@@ -2773,6 +2738,13 @@
    "file": "crates/molten-core/src/fabric_crypto_identity/rotation.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:9adb4ccebb9b6ff6#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_crypto_identity/rotation.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:bee8c7f7287a8ef3#1",
    "count": 2
   },
   {
@@ -2815,6 +2787,13 @@
    "file": "crates/molten-core/src/fabric_crypto_identity/tests.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:f700ffbdc2f1bb52#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_crypto_identity/tests/spelling.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:25b67cbeaf7088a9#1",
    "count": 1
   },
   {
@@ -2877,7 +2856,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_durability/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c8eaf80f47f68453#1",
+   "anchor": "sha256:6d1b42c00a751a80#1",
    "count": 2
   },
   {
@@ -3024,7 +3003,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_durability/transition.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:87028b69e59afe7d#1",
+   "anchor": "sha256:553621ab97995afb#1",
    "count": 2
   },
   {
@@ -3108,14 +3087,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_durability/transition.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:87028b69e59afe7d#1",
+   "anchor": "sha256:553621ab97995afb#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_durability/transition.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:f04acf6404cd8679#1",
+   "anchor": "sha256:f66a321a142f59f7#1",
    "count": 2
   },
   {
@@ -3262,42 +3241,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "bool_naming",
-   "anchor": "sha256:323ed07291b7f952#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "bool_naming",
-   "anchor": "sha256:5a85931472ff3bba#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "bool_naming",
-   "anchor": "sha256:5a85931472ff3bba#2",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "bool_naming",
-   "anchor": "sha256:5fbdce579ac034f0#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "bool_naming",
-   "anchor": "sha256:5fbdce579ac034f0#2",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "bool_naming",
-   "anchor": "sha256:a0a26c39b42c3bf6#1",
+   "anchor": "sha256:3bd0432833c1871a#1",
    "count": 2
   },
   {
@@ -3305,6 +3249,13 @@
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "bool_naming",
    "anchor": "sha256:c94585e69a956f03#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "bool_naming",
+   "anchor": "sha256:cea7db96854d9c0f#1",
    "count": 2
   },
   {
@@ -3346,7 +3297,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "borrowed_argument_types",
-   "anchor": "sha256:9a88bf2f24c9ec25#1",
+   "anchor": "sha256:ae8281152c67e310#1",
    "count": 2
   },
   {
@@ -3395,7 +3346,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "fallible_int_fallback",
-   "anchor": "sha256:729401937bb1c73a#1",
+   "anchor": "sha256:29ed7b4072380758#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "fallible_int_fallback",
+   "anchor": "sha256:6a1f1fa5dabc51c2#1",
    "count": 2
   },
   {
@@ -3403,6 +3361,13 @@
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "fallible_int_fallback",
    "anchor": "sha256:c7299f3b4407b8b8#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "fallible_int_fallback",
+   "anchor": "sha256:cd079d2a375c7209#1",
    "count": 2
   },
   {
@@ -3423,35 +3388,35 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "negated_predicate",
-   "anchor": "sha256:77af5805359f7036#1",
+   "anchor": "sha256:a8bf4b8d82b0a5a6#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_recursion",
-   "anchor": "sha256:3b1b28cd1322c56f#1",
+   "anchor": "sha256:a42e1d0f390eb186#1",
    "count": 1
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_recursion",
-   "anchor": "sha256:b60e9ad98e2b0eea#1",
+   "anchor": "sha256:ff2b844c24593a7e#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_unwrap",
-   "anchor": "sha256:26e7c845154346d5#1",
+   "anchor": "sha256:58dc776059785bb4#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_unwrap",
-   "anchor": "sha256:26e7c845154346d5#2",
+   "anchor": "sha256:58dc776059785bb4#2",
    "count": 1
   },
   {
@@ -3472,21 +3437,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_unwrap",
-   "anchor": "sha256:873321c7b5060e3a#1",
+   "anchor": "sha256:8884bef912a825cf#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "no_unwrap",
-   "anchor": "sha256:873321c7b5060e3a#2",
+   "anchor": "sha256:8884bef912a825cf#2",
    "count": 1
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:53491af27644be8c#1",
+   "anchor": "sha256:3869ae1b8a7d2a7e#1",
    "count": 2
   },
   {
@@ -3500,14 +3465,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:cbee9d9478a3430b#1",
+   "anchor": "sha256:a833dabbeab36b2f#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:f6d64926d84d92f5#1",
+   "anchor": "sha256:ead45621c9c8f0f7#1",
    "count": 2
   },
   {
@@ -3563,7 +3528,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "sentinel_fallback",
-   "anchor": "sha256:729401937bb1c73a#1",
+   "anchor": "sha256:29ed7b4072380758#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "sentinel_fallback",
+   "anchor": "sha256:6a1f1fa5dabc51c2#1",
    "count": 2
   },
   {
@@ -3571,6 +3543,13 @@
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "sentinel_fallback",
    "anchor": "sha256:c7299f3b4407b8b8#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "sentinel_fallback",
+   "anchor": "sha256:cd079d2a375c7209#1",
    "count": 2
   },
   {
@@ -3591,7 +3570,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/mod.rs",
    "lint": "unbounded_collection_growth",
+   "anchor": "sha256:1622c62c47bb202c#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "unbounded_collection_growth",
    "anchor": "sha256:3401f3077cac825d#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/mod.rs",
+   "lint": "unbounded_collection_growth",
+   "anchor": "sha256:3a7a814005a4aa4a#1",
    "count": 2
   },
   {
@@ -3624,13 +3617,6 @@
   },
   {
    "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_membership/mod.rs",
-   "lint": "unbounded_collection_growth",
-   "anchor": "sha256:ec86742ab4f4c1b8#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/tests.rs",
    "lint": "excessive_file_length",
    "anchor": "sha256:8770b232807166c2#1",
@@ -3641,6 +3627,13 @@
    "file": "crates/molten-core/src/fabric_membership/tests.rs",
    "lint": "function_length",
    "anchor": "sha256:9eb556b8d565c5c5#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/tests.rs",
+   "lint": "function_length",
+   "anchor": "sha256:f14ad058e3729f20#1",
    "count": 1
   },
   {
@@ -3702,6 +3695,13 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_membership/transition.rs",
+   "lint": "bool_naming",
+   "anchor": "sha256:769e36a9536120d6#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/transition.rs",
    "lint": "borrowed_argument_types",
    "anchor": "sha256:40d7a52eedd2cc84#1",
    "count": 2
@@ -3711,6 +3711,13 @@
    "file": "crates/molten-core/src/fabric_membership/transition.rs",
    "lint": "borrowed_argument_types",
    "anchor": "sha256:53668dc47b80a0b5#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/transition.rs",
+   "lint": "borrowed_argument_types",
+   "anchor": "sha256:a9e1152e2e6fa36c#1",
    "count": 2
   },
   {
@@ -3732,6 +3739,13 @@
    "file": "crates/molten-core/src/fabric_membership/transition.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:993b542f78505da1#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_membership/transition.rs",
+   "lint": "too_many_parameters",
+   "anchor": "sha256:0572af884a61b6cc#1",
    "count": 2
   },
   {
@@ -3829,14 +3843,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/aggregation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:1c6cbc50a4cf5ee0#1",
+   "anchor": "sha256:242536a17effc9f3#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/aggregation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
@@ -4123,14 +4137,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/health.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:5b8ae9755b83b460#1",
+   "anchor": "sha256:094e772ecceb1905#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/health.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:ae9f4905c9db8b42#1",
+   "anchor": "sha256:1a7de93159471d14#1",
    "count": 2
   },
   {
@@ -4256,7 +4270,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/integrity.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
@@ -4270,21 +4284,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/integrity.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:04a20a6d54d81a44#1",
+   "anchor": "sha256:16e3a4921f5d5b57#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/integrity.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:0a873ddba2196bb0#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/integrity.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:7c98ffa075b856b4#1",
    "count": 2
   },
   {
@@ -4445,7 +4459,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/validation.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:def10d621f967f03#1",
+   "anchor": "sha256:3af2ee3943877f3b#1",
    "count": 2
   },
   {
@@ -4459,14 +4473,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/validation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c1466661f9a3558f#1",
+   "anchor": "sha256:3af2ee3943877f3b#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_observability/validation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:def10d621f967f03#1",
+   "anchor": "sha256:a92d71b99291ba34#1",
    "count": 2
   },
   {
@@ -4487,21 +4501,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/adapters.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:0697192df6c89c74#1",
+   "anchor": "sha256:da849b6aa6e35507#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/adapters.rs",
    "lint": "module_file_count",
-   "anchor": "sha256:0697192df6c89c74#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_simulation/adapters.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:0697192df6c89c74#1",
+   "anchor": "sha256:da849b6aa6e35507#1",
    "count": 2
   },
   {
@@ -4515,7 +4522,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/adapters.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:6ba6e38e006b9dc3#1",
+   "anchor": "sha256:c2af4f6e37bb53d9#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/adapters.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:da849b6aa6e35507#1",
    "count": 2
   },
   {
@@ -4641,28 +4655,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/admission.rs",
    "lint": "borrowed_argument_types",
-   "anchor": "sha256:e7e62aad72e2893f#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_simulation/admission.rs",
-   "lint": "borrowed_argument_types",
    "anchor": "sha256:ed0051b045acc15e#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/admission.rs",
-   "lint": "excessive_file_length",
-   "anchor": "sha256:0391d96042be8685#1",
+   "lint": "borrowed_argument_types",
+   "anchor": "sha256:f7228328f269b7e7#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/admission.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:0391d96042be8685#1",
+   "lint": "excessive_file_length",
+   "anchor": "sha256:25a2a25a5cc63932#1",
    "count": 2
   },
   {
@@ -4676,7 +4683,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/admission.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:b9c095fcb39d17c2#1",
+   "anchor": "sha256:25a2a25a5cc63932#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/admission.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:a0c7fdb6995fc842#1",
    "count": 2
   },
   {
@@ -4688,16 +4702,44 @@
   },
   {
    "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/framing.rs",
+   "lint": "fallible_int_fallback",
+   "anchor": "sha256:2b28cd1accdf5842#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/framing.rs",
+   "lint": "fallible_int_fallback",
+   "anchor": "sha256:fe92119d4b264d49#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/framing.rs",
+   "lint": "sentinel_fallback",
+   "anchor": "sha256:2b28cd1accdf5842#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/framing.rs",
+   "lint": "sentinel_fallback",
+   "anchor": "sha256:fe92119d4b264d49#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/installed.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:d9d391269d69056c#1",
+   "anchor": "sha256:4b83986b35720211#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/installed.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:1037a26bdb42f54f#1",
+   "anchor": "sha256:036252ba6a9cd8be#1",
    "count": 2
   },
   {
@@ -4787,36 +4829,64 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
+   "lint": "bool_naming",
+   "anchor": "sha256:4373201d8e62fb8d#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
+   "lint": "bool_naming",
+   "anchor": "sha256:a3a2ebfffa5b8ce5#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:db8bc49e141faf88#1",
+   "anchor": "sha256:0ffd00fa6ff9f286#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
+   "lint": "function_length",
+   "anchor": "sha256:af07aea354d33ddf#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:0b541836fdbff91a#1",
+   "anchor": "sha256:063901d27e72e7cd#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:2e97d61bf44f22d8#1",
+   "anchor": "sha256:0ffd00fa6ff9f286#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:49b6d67174715dcf#1",
+   "anchor": "sha256:21c3be0c9f1efeaa#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:db8bc49e141faf88#1",
+   "anchor": "sha256:2d3f244406a04b4f#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:ccfc97e0622c8bff#1",
    "count": 2
   },
   {
@@ -4865,35 +4935,35 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "unbounded_collection_growth",
-   "anchor": "sha256:b23db0205c87f8bb#1",
+   "anchor": "sha256:aebe2cb6dceb116a#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "unbounded_collection_growth",
-   "anchor": "sha256:eff550133e7854be#1",
+   "anchor": "sha256:b23db0205c87f8bb#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/live_differential.rs",
    "lint": "underscore_in_module_filename",
-   "anchor": "sha256:db8bc49e141faf88#1",
+   "anchor": "sha256:0ffd00fa6ff9f286#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/protocol.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:445caf1f48276122#1",
+   "anchor": "sha256:323edf076d175663#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/protocol.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:4cfa0202068c644f#1",
+   "anchor": "sha256:e029a875483b7e36#1",
    "count": 2
   },
   {
@@ -4949,7 +5019,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/reference.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:09442985a99e6a06#1",
+   "anchor": "sha256:8a6605c6c6e89d72#1",
    "count": 2
   },
   {
@@ -4970,21 +5040,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/reference.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:09442985a99e6a06#1",
+   "anchor": "sha256:7e37d6f2bc91e697#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/reference.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:94856d1ae98e9f2f#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_simulation/reference.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:a662b6e7dd364e4b#1",
+   "anchor": "sha256:8a6605c6c6e89d72#1",
    "count": 2
   },
   {
@@ -4992,6 +5055,13 @@
    "file": "crates/molten-core/src/fabric_simulation/reference.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:d73e969849145d35#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/reference.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:db4be9ed86b781b1#1",
    "count": 2
   },
   {
@@ -5089,7 +5159,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/replay.rs",
    "lint": "nested_conditionals",
-   "anchor": "sha256:2ca108b4becae965#1",
+   "anchor": "sha256:70c5a3f75dbd6c65#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/replay.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:bf230ef297f29068#1",
    "count": 2
   },
   {
@@ -5131,7 +5208,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/scheduler.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:1d4b6e42cbed6d62#1",
+   "anchor": "sha256:4b54b180b8b9af57#1",
    "count": 2
   },
   {
@@ -5193,6 +5270,13 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_simulation/tests.rs",
+   "lint": "clone_then_borrow",
+   "anchor": "sha256:0055d479e7b41075#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/tests.rs",
    "lint": "excessive_file_length",
    "anchor": "sha256:56be4e13db60bdd4#1",
    "count": 1
@@ -5223,6 +5307,13 @@
    "file": "crates/molten-core/src/fabric_simulation/tests.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:fb95e3726f95e068#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_simulation/tests.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:5ba571f2d904006f#1",
    "count": 1
   },
   {
@@ -5327,14 +5418,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/domain.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:7ecda3859111604c#1",
+   "anchor": "sha256:3c4b5fe8c1d1a66d#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/domain.rs",
    "lint": "module_file_count",
-   "anchor": "sha256:7ecda3859111604c#1",
+   "anchor": "sha256:3c4b5fe8c1d1a66d#1",
    "count": 1
   },
   {
@@ -5348,21 +5439,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/domain.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:23df75c34103ae54#1",
+   "anchor": "sha256:3c4b5fe8c1d1a66d#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/domain.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:7ecda3859111604c#1",
+   "anchor": "sha256:9e84f30fd8454719#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/domain.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e5cc4144cf72d84e#1",
+   "anchor": "sha256:be1afffea5225a67#1",
    "count": 2
   },
   {
@@ -5474,13 +5565,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/entropy.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:0ed8c0a3eb6fae28#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_time/entropy.rs",
-   "lint": "path_segment_repetition",
    "anchor": "sha256:22b1d263fe07db9f#1",
    "count": 2
   },
@@ -5489,6 +5573,13 @@
    "file": "crates/molten-core/src/fabric_time/entropy.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:25436744267d8f4b#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/entropy.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:3ccb50190fcce8b1#1",
    "count": 2
   },
   {
@@ -5537,13 +5628,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/entropy.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:b2bcfa13847c58b3#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_time/entropy.rs",
-   "lint": "path_segment_repetition",
    "anchor": "sha256:c45b2c0c95d9ccd3#1",
    "count": 2
   },
@@ -5558,7 +5642,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/entropy.rs",
    "lint": "path_segment_repetition",
+   "anchor": "sha256:e91ccf0772317d92#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/entropy.rs",
+   "lint": "path_segment_repetition",
    "anchor": "sha256:f19dcaf2dbbc9310#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/entropy.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:fb4aaa28b23b4c4b#1",
    "count": 2
   },
   {
@@ -5663,6 +5761,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/lease.rs",
    "lint": "path_segment_repetition",
+   "anchor": "sha256:694cf0d063fb5418#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/lease.rs",
+   "lint": "path_segment_repetition",
    "anchor": "sha256:6cdd7d0733cd4ce0#1",
    "count": 2
   },
@@ -5671,6 +5776,13 @@
    "file": "crates/molten-core/src/fabric_time/lease.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:6dbacc0ff0df001a#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/lease.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:7d23082da12403ff#1",
    "count": 2
   },
   {
@@ -5691,13 +5803,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/lease.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:b061daef815a4a2a#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_time/lease.rs",
-   "lint": "path_segment_repetition",
    "anchor": "sha256:dae107ca25d0b17c#1",
    "count": 2
   },
@@ -5705,7 +5810,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/lease.rs",
    "lint": "too_many_parameters",
-   "anchor": "sha256:8523a44a1b1de225#1",
+   "anchor": "sha256:1c888923edeefa2b#1",
    "count": 2
   },
   {
@@ -5936,7 +6041,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/reservation/batch.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:ed3ab4e42eee79ee#1",
+   "anchor": "sha256:ef602e482c182ab0#1",
    "count": 2
   },
   {
@@ -5956,15 +6061,29 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/reservation/mod.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:ca4ce4c15c527935#1",
+   "lint": "bool_naming",
+   "anchor": "sha256:1f92e17f1c821fa5#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation/mod.rs",
+   "lint": "excessive_file_length",
+   "anchor": "sha256:3bd2b4d308bd253e#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/reservation/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:f1405bd3b927a2cd#1",
+   "anchor": "sha256:1f622f77c9734715#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation/mod.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:7a29d54219c283fa#1",
    "count": 2
   },
   {
@@ -6033,6 +6152,27 @@
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "bool_naming",
+   "anchor": "sha256:b1e5e30befd2b5a0#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "excessive_file_length",
+   "anchor": "sha256:32f8cf73e231b421#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "no_recursion",
+   "anchor": "sha256:89719084a072484b#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:9c584f918018fcb6#1",
    "count": 1
@@ -6041,7 +6181,28 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
    "lint": "path_segment_repetition",
+   "anchor": "sha256:5ea7166e8685ed6a#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:991ed994897cac9b#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "path_segment_repetition",
    "anchor": "sha256:e03dcb5d5bcb8344#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_time/reservation_tests.rs",
+   "lint": "unbounded_collection_growth",
+   "anchor": "sha256:5d056d4fb2f01760#1",
    "count": 1
   },
   {
@@ -6062,7 +6223,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_time/scheduler/decision.rs",
    "lint": "bool_naming",
-   "anchor": "sha256:5ac785891b19d681#1",
+   "anchor": "sha256:7f75e94365ee50d7#1",
    "count": 2
   },
   {
@@ -6650,14 +6811,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/cross_process/endpoint.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:7274524b6e03f356#1",
+   "anchor": "sha256:5457ef2bcf1ba498#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/cross_process/endpoint.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:7274524b6e03f356#1",
+   "anchor": "sha256:5457ef2bcf1ba498#1",
    "count": 2
   },
   {
@@ -7287,7 +7448,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:748e68c069017d1b#1",
+   "anchor": "sha256:a346313165b4f8ec#1",
    "count": 2
   },
   {
@@ -7448,13 +7609,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:0c47fd9d5c1838ab#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/fabric_transport/receive.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:0ffdb254a2520f12#1",
    "count": 2
   },
@@ -7462,21 +7616,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3804f351b176d51e#1",
+   "anchor": "sha256:2a21dadf59d4f422#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:5da3bf7efdd0afc9#1",
+   "anchor": "sha256:8706e0d0b2bb9801#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:88fa4c59b254f4f4#1",
+   "anchor": "sha256:8789d5f495849c55#1",
    "count": 2
   },
   {
@@ -7490,21 +7644,28 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:90500221876a5abc#1",
+   "anchor": "sha256:92cf3950b9d0473b#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c3f9eebb21a64403#1",
+   "anchor": "sha256:d17a7d2e899d2499#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/fabric_transport/receive.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e5035deef970ee74#1",
+   "anchor": "sha256:dc4b809012c38f36#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/fabric_transport/receive.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:f1f3ba98f1e9cc84#1",
    "count": 2
   },
   {
@@ -8372,14 +8533,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:0649900ea5293eff#1",
+   "anchor": "sha256:1aeeeea3469fd812#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:1eaeee4638aeb31b#1",
+   "anchor": "sha256:2ee07e68ffa71dc7#1",
    "count": 2
   },
   {
@@ -8400,7 +8561,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:636038a2081d97be#1",
+   "anchor": "sha256:57db2ec478fb8306#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/live_binding/semantic.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:762939354d2906a2#1",
    "count": 2
   },
   {
@@ -8415,13 +8583,6 @@
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:b4ea81ad95c78432#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/live_binding/semantic.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:e32c2ea2a40a8f61#1",
    "count": 2
   },
   {
@@ -8449,13 +8610,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:074b802d5e472b38#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/live_binding/semantic.rs",
-   "lint": "path_segment_repetition",
    "anchor": "sha256:2b9988f100ada626#1",
    "count": 2
   },
@@ -8471,6 +8625,13 @@
    "file": "crates/molten-core/src/live_binding/semantic.rs",
    "lint": "path_segment_repetition",
    "anchor": "sha256:b849e02ba7af374b#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/live_binding/semantic.rs",
+   "lint": "path_segment_repetition",
+   "anchor": "sha256:e33db065a0da81ac#1",
    "count": 2
   },
   {
@@ -8736,7 +8897,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/batch.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:a1b27da2770cfa38#1",
+   "anchor": "sha256:2ec250bb2271644d#1",
    "count": 2
   },
   {
@@ -8785,14 +8946,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/cache.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c38b014a7d0ebc18#1",
+   "anchor": "sha256:e4db08f654cabaef#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/cache.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:d22e7ac102f5cb10#1",
+   "anchor": "sha256:fd8d3c67128e2a2a#1",
    "count": 2
   },
   {
@@ -8813,14 +8974,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/catalog.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:b20e80df8108bf04#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/catalog.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:5a8db0236ab9230f#1",
    "count": 2
   },
   {
@@ -8855,14 +9016,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/decision.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:11d36695993aac9a#1",
+   "anchor": "sha256:197e32ac0f0e3b3c#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/decision.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:fcdd4c3ae56e7bcd#1",
+   "anchor": "sha256:369133f14c6186ff#1",
    "count": 2
   },
   {
@@ -8953,14 +9114,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/recovery.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c7fbf478f374d8d3#1",
+   "anchor": "sha256:24bf5e3b3465f708#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/marble_store/recovery.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
@@ -9051,14 +9212,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/outside_in/judge.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:88d6da1d053a1852#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/outside_in/judge.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:5f1c225c47006f0a#1",
    "count": 2
   },
   {
@@ -9079,7 +9240,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/outside_in/validate.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:4999d5350553aa71#1",
+   "anchor": "sha256:32723b78ba111a56#1",
    "count": 2
   },
   {
@@ -9094,118 +9255,6 @@
    "file": "crates/molten-core/src/outside_in/validate.rs",
    "lint": "unbounded_collection_growth",
    "anchor": "sha256:eab97dbd3ae394b2#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/planning.rs",
-   "lint": "excessive_file_length",
-   "anchor": "sha256:28a965102ff9238f#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/policy.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:27118e676ffd5ab5#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/policy.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:3953a713043c9ba9#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/policy.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:6a358a58b94ace9f#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/policy.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:80934ce12da4cf53#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/policy.rs",
-   "lint": "unbounded_collection_growth",
-   "anchor": "sha256:758efa6465ddfbfc#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "borrowed_argument_types",
-   "anchor": "sha256:77cc271f343caec4#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:30779bc71086c566#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:6fe96956eecbaf07#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:896eb3659896dbbc#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:a78861d4a8af4023#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:af0684cd85612911#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:af7b7aba038eda3d#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "path_segment_repetition",
-   "anchor": "sha256:c20db4578be290e9#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "unbounded_collection_growth",
-   "anchor": "sha256:24370455d92ab7f6#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/preserves_profile.rs",
-   "lint": "underscore_in_module_filename",
-   "anchor": "sha256:37d8e737c95350d4#1",
    "count": 2
   },
   {
@@ -9254,21 +9303,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/cohort.rs",
    "lint": "module_file_count",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/cohort.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:62552a3e4e6722cb#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/cohort.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:a5bb3441fcd34709#1",
    "count": 2
   },
   {
@@ -9296,7 +9345,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/counters.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:379bf0ae8ab06b3a#1",
+   "anchor": "sha256:cafac739b50bb783#1",
    "count": 2
   },
   {
@@ -9422,14 +9471,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/novelty.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:3331e0327830f0fc#1",
+   "anchor": "sha256:35f0493c8b275910#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/novelty.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:35f0493c8b275910#1",
+   "anchor": "sha256:613bdf12e36b14b5#1",
    "count": 2
   },
   {
@@ -9443,14 +9492,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/novelty.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:aadd6bfbb7ad060a#1",
+   "anchor": "sha256:d46a485a97ee1c7a#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/profile.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:948c3cdb32eb4d58#1",
+   "anchor": "sha256:c8a5d26dcfd7385e#1",
    "count": 2
   },
   {
@@ -9541,14 +9590,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/safety.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e2b9494e9c937c76#1",
+   "anchor": "sha256:3daeb9a91a9ed657#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/protocol_oracle/safety.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e941a951f9eb6d1d#1",
+   "anchor": "sha256:702b51b8f02b24dc#1",
    "count": 2
   },
   {
@@ -9835,21 +9884,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:88f68fd2331e1304#1",
+   "anchor": "sha256:e74a4db266c39e60#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:cb16b63118334724#1",
+   "anchor": "sha256:8247af12ba495309#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:d70de217fd919bba#1",
+   "anchor": "sha256:b1a72f46bbb80fae#1",
    "count": 2
   },
   {
@@ -9975,7 +10024,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency.rs",
    "lint": "underscore_in_module_filename",
-   "anchor": "sha256:88f68fd2331e1304#1",
+   "anchor": "sha256:e74a4db266c39e60#1",
    "count": 2
   },
   {
@@ -10024,7 +10073,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:4b2fd605f728c738#1",
+   "anchor": "sha256:601b87ea75235b96#1",
    "count": 2
   },
   {
@@ -10052,7 +10101,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:ab76194b2e7e9d0c#1",
+   "anchor": "sha256:b030f1edd3fc1ef5#1",
    "count": 2
   },
   {
@@ -10066,14 +10115,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c5183372fb7684e7#1",
+   "anchor": "sha256:b6dc7848927514f6#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:c6b5706fadb60bff#1",
+   "anchor": "sha256:c5183372fb7684e7#1",
    "count": 2
   },
   {
@@ -10171,6 +10220,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:12305b034e087dd0#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:1c7d287564b97291#1",
    "count": 1
   },
@@ -10248,13 +10304,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:919cf2f0e2b5ecee#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:9748d098264ef074#1",
    "count": 1
   },
@@ -10262,7 +10311,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:b8c044ad26bd6d6c#1",
+   "anchor": "sha256:a9f97bb3c88ea335#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:af33b167b770f113#1",
    "count": 1
   },
   {
@@ -10283,21 +10339,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:e011030f3c2bcf93#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:e0475b60a5322c02#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:e0dad465befe3980#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/comparison.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:ea2f1edc17a55cc1#1",
    "count": 1
   },
   {
@@ -10339,6 +10388,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:3bc501cdc0849e05#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:3f8da8988f0c3436#1",
    "count": 1
   },
@@ -10374,6 +10430,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:6dc98c4c52d5b628#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:752efb973ffc6714#1",
    "count": 1
   },
@@ -10389,20 +10452,6 @@
    "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:9392d210a160a1a7#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:9f689ca7cf5bc74c#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:b6f1d903280442ef#1",
    "count": 1
   },
   {
@@ -10430,7 +10479,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/corpus.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:f19cd134eb52381b#1",
+   "anchor": "sha256:f7b1c78844f62f6c#1",
    "count": 1
   },
   {
@@ -10577,7 +10626,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:23b503b1f023873d#1",
+   "anchor": "sha256:2c34b8dab1e50975#1",
    "count": 1
   },
   {
@@ -10598,7 +10647,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:5fd40ddedbae331a#1",
+   "anchor": "sha256:6949d0f132bbd4be#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:6cb5b31a7e3d55e9#1",
    "count": 1
   },
   {
@@ -10612,21 +10668,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:79d6d72e5f509053#1",
+   "count": 1
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:e25f7d74944464fc#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:e8347796ba4fe0ea#1",
-   "count": 1
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/explanation/relational_pilot.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:f398028c02479aa6#1",
    "count": 1
   },
   {
@@ -10976,21 +11025,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/registry.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:1ea592ca84bd2603#1",
+   "anchor": "sha256:9321b8b95f11a2b2#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/registry.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:1ea592ca84bd2603#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/registry.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:264d48b82376ea73#1",
+   "anchor": "sha256:1bba3f9e685c237c#1",
    "count": 2
   },
   {
@@ -10998,6 +11040,13 @@
    "file": "crates/molten-core/src/release_dependency/registry.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:299b9dd412a980a0#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/registry.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:344c87be3bcda4aa#1",
    "count": 2
   },
   {
@@ -11039,6 +11088,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/registry.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:9321b8b95f11a2b2#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/release_dependency/registry.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:a376838ca9cd252f#1",
    "count": 1
   },
@@ -11074,14 +11130,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/release_dependency/registry.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:bb95439d0c989319#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/release_dependency/registry.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:e26969791f55e449#1",
+   "anchor": "sha256:c225048465acfa96#1",
    "count": 2
   },
   {
@@ -11193,6 +11242,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/stack.rs",
    "lint": "path_segment_repetition",
+   "anchor": "sha256:748a7055a6ddfe1f#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/stack.rs",
+   "lint": "path_segment_repetition",
    "anchor": "sha256:7f5b9ae1270b1b87#1",
    "count": 2
   },
@@ -11221,14 +11277,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/stack.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:a239d70813836882#1",
-   "count": 2
+   "anchor": "sha256:a64f1eeff6287658#1",
+   "count": 1
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/stack.rs",
    "lint": "path_segment_repetition",
-   "anchor": "sha256:a64f1eeff6287658#1",
+   "anchor": "sha256:b56fa9d9c5ecbbdc#1",
    "count": 1
   },
   {
@@ -11291,21 +11347,21 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/startup_binding/closure.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:0287600ea68ddc65#1",
+   "anchor": "sha256:40499eeae6038dd7#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/startup_binding/closure.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:38b2df0f1bb135f2#1",
+   "anchor": "sha256:75cacc7fe2cdea45#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/startup_binding/closure.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:7dd8d99830536022#1",
+   "anchor": "sha256:aead43a6d507c69d#1",
    "count": 2
   },
   {
@@ -11326,14 +11382,14 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/startup_binding/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:15f1dc773287aba0#1",
+   "anchor": "sha256:7e36014bbbb4f483#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/startup_binding/mod.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3a67fe6cd43ff9b7#1",
+   "anchor": "sha256:8a44f48bf38c3196#1",
    "count": 2
   },
   {
@@ -12502,7 +12558,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/system_extension/manifest.rs",
    "lint": "excessive_file_length",
-   "anchor": "sha256:76e6de77adc5f5dd#1",
+   "anchor": "sha256:75814fd4bc397438#1",
    "count": 2
   },
   {
@@ -12544,20 +12600,6 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/system_extension/manifest.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:3573e444f37157e7#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/system_extension/manifest.rs",
-   "lint": "non_trait_imports",
-   "anchor": "sha256:4505be437d511696#1",
-   "count": 2
-  },
-  {
-   "crate": "molten_core",
-   "file": "crates/molten-core/src/system_extension/manifest.rs",
-   "lint": "non_trait_imports",
    "anchor": "sha256:45b61dba3c1209f7#1",
    "count": 2
   },
@@ -12579,6 +12621,13 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/system_extension/manifest.rs",
    "lint": "non_trait_imports",
+   "anchor": "sha256:6a81a8a6976f257b#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/system_extension/manifest.rs",
+   "lint": "non_trait_imports",
    "anchor": "sha256:6cfb411b641c9162#1",
    "count": 2
   },
@@ -12593,7 +12642,7 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/system_extension/manifest.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:76e6de77adc5f5dd#1",
+   "anchor": "sha256:75814fd4bc397438#1",
    "count": 2
   },
   {
@@ -12650,6 +12699,13 @@
    "file": "crates/molten-core/src/system_extension/manifest.rs",
    "lint": "non_trait_imports",
    "anchor": "sha256:c344533c78e8d2eb#1",
+   "count": 2
+  },
+  {
+   "crate": "molten_core",
+   "file": "crates/molten-core/src/system_extension/manifest.rs",
+   "lint": "non_trait_imports",
+   "anchor": "sha256:c5037292162c68aa#1",
    "count": 2
   },
   {
@@ -13223,35 +13279,35 @@
    "crate": "molten_core",
    "file": "crates/molten-core/src/world_witness/bounds.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:a0fe748899901d1b#1",
+   "anchor": "sha256:6082bd3b1b1e0400#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/world_witness/bounds.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:b8a501e9313bf2d9#1",
+   "anchor": "sha256:822bd1279b47b25e#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/world_witness/bounds.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:eb01f8ce2b25672e#1",
+   "anchor": "sha256:8baaf3b49fe86e46#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/world_witness/domain.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:4d95be275092396c#1",
+   "anchor": "sha256:03f88f7429c04493#1",
    "count": 2
   },
   {
    "crate": "molten_core",
    "file": "crates/molten-core/src/world_witness/domain.rs",
    "lint": "non_trait_imports",
-   "anchor": "sha256:733a487c08e000ec#1",
+   "anchor": "sha256:1c40dc13b07a6403#1",
    "count": 2
   },
   {

@@ -45,68 +45,11 @@ const MAX_REF_LIST_ITEMS: usize = 256;
 const MAX_ACTOR_ID_BYTES: usize = 256;
 const MAX_CAPABILITY_BYTES: usize = 512;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct ActorId(String);
+mod checked;
 
-impl ActorId {
-    pub fn parse(value: impl Into<String>) -> Result<Self> {
-        let value = value.into();
-        validate_nonempty_token("actor id", &value, MAX_ACTOR_ID_BYTES)?;
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct Capability(String);
-
-impl Capability {
-    pub fn parse(value: impl Into<String>) -> Result<Self> {
-        let value = value.into();
-        validate_nonempty_token("capability", &value, MAX_CAPABILITY_BYTES)?;
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct EvidenceRef(String);
-
-impl EvidenceRef {
-    pub fn parse(value: impl Into<String>) -> Result<Self> {
-        let value = value.into();
-        validate_content_ref(&value)?;
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
+pub use checked::ActorId;
+pub use checked::Capability;
+pub use checked::EvidenceRef;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EnvelopeDto {
@@ -216,10 +159,30 @@ impl Envelope {
         })
     }
 
+    /// Revalidates every bounded field, not only list lengths: version, sender, each capability,
+    /// and each blob and evidence ref must satisfy the same parsers as construction and
+    /// deserialization.
+    // r[impl molten.runtime_spine.admission_and_capability_hardening]
     pub fn validate_core(&self) -> Result<EnvelopeBoundary> {
+        if self.version != ENVELOPE_VERSION {
+            return Err(MoltenError::invalid_harness(format!(
+                "unsupported envelope version {}, expected {ENVELOPE_VERSION}",
+                self.version
+            )));
+        }
         validate_ref_list_len("blob refs", self.blob_refs.len())?;
         validate_ref_list_len("capabilities", self.capabilities.len())?;
         validate_ref_list_len("evidence refs", self.evidence_refs.len())?;
+        ActorId::parse(self.sender.as_str())?;
+        for capability in &self.capabilities {
+            Capability::parse(capability.as_str())?;
+        }
+        for reference in &self.blob_refs {
+            validate_content_ref(reference.as_str())?;
+        }
+        for reference in &self.evidence_refs {
+            EvidenceRef::parse(reference.as_str())?;
+        }
         self.boundary()
     }
 }

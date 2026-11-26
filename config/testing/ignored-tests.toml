@@ -147,6 +147,13 @@ selector = "captured_nickel_live_"
 prerequisite = "pinned Nickel 1.17.0 and util-linux prlimit executables"
 
 [[test]]
+path = "src/preserves/bridge/tests/throughput.rs"
+test = "writer_tree_and_borrowed_paths"
+category = "diagnostic-only"
+disposition = "reviewed-exclusion"
+prerequisite = "single-host encoding throughput timing whose output is recorded manually; not a pass/deny test"
+
+[[test]]
 path = "src/prolly_map/tests/marble/measure.rs"
 test = "measure_redb_and_marble_stores"
 category = "diagnostic-only"

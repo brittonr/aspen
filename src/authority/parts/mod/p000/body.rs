@@ -33,6 +33,8 @@ type RuntimeValue = crate::runtime::RuntimeValue;
 
 const AUTHORITY_DEFAULT_GRANT_EPOCH: u64 = 0;
 const AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY: usize = 8;
+/// Receipt diagnostic stating that capability-scope admission makes no principal or key claim.
+pub const CAPABILITY_SCOPE_NON_CLAIM: &str = "principal-and-key-currentness-not-claimed";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
@@ -165,112 +167,43 @@ pub struct AuthorityGrantCurrentnessInput<'a> {
     pub revocations: &'a [Revocation],
 }
 
+/// Caller-independent facts for [`admit_authority`] and [`gatekeeper_resolve_live_ref`]. The expected
+/// principal, minimum epoch and current key set must come from the caller's own authenticated view,
+/// never from the context being admitted.
+#[derive(Debug, Clone, Copy)]
+pub struct AuthorityAdmissionInput<'a> {
+    pub context_value: &'a IoValue,
+    pub expected_principal_ref: &'a str,
+    pub requested_capability: &'a str,
+    pub requested_scope: &'a str,
+    pub logical_time: u64,
+    pub minimum_epoch: u64,
+    pub current_key_refs: &'a [String],
+    pub revocation_values: &'a [IoValue],
+}
+
+#[derive(Clone, Copy)]
+struct ScopeCheck<'a> {
+    context: &'a Context,
+    requested_capability: &'a str,
+    requested_operation: &'a str,
+    requested_scope: &'a str,
+    logical_time: u64,
+    revocations: &'a [Revocation],
+}
+
+struct AdmissionReceiptInput<'a> {
+    operation: &'a str,
+    decision: String,
+    context: &'a Context,
+    capability: &'a str,
+    scope: &'a str,
+    logical_time: u64,
+    diagnostics: &'a [String],
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorityGrantCurrentness {
     pub decision: String,
     pub diagnostics: Vec<String>,
-}
-
-pub fn identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {
-    validate_identity_type(input.identity_type)?;
-    validate_non_empty(input.id, "authority identity id")?;
-    validate_non_empty(input.display_name, "authority identity display name")?;
-    validate_refs(input.key_refs, "authority identity key ref")?;
-    validate_refs(input.parent_refs, "authority identity parent ref")?;
-    validate_refs(input.metadata_refs, "authority identity metadata ref")?;
-    Ok(record("authority-identity-v1", vec![
-        string(crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA),
-        record("identity", vec![
-            record("type", vec![string(input.identity_type)]),
-            record("id", vec![string(input.id)]),
-            record("display-name", vec![string(input.display_name)]),
-        ]),
-        record("keys", vec![sequence(input.key_refs.iter().map(string).collect())]),
-        record("parents", vec![sequence(input.parent_refs.iter().map(string).collect())]),
-        record("metadata", vec![sequence(input.metadata_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("names-are-metadata"), string("pass")]),
-            record("check", vec![string("identity-alone-grants-no-authority"), string("pass")]),
-        ])]),
-    ]))
-}
-
-pub fn parse_identity(value: &IoValue) -> Result<Identity> {
-    let fields = value
-        .collect_simple_record("authority-identity-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <authority-identity-v1 ...>"))?;
-    require_schema(&fields[0], crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA, "authority identity schema")?;
-    let identity = value_to_iovalue(&fields[1]);
-    let identity_fields = identity
-        .collect_simple_record("identity", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("authority identity missing identity field"))?;
-    let checks = parse_checks(&fields[5])?;
-    require_check(&checks, "identity-alone-grants-no-authority")?;
-    Ok(Identity {
-        identity_ref: canonical_hash(value)?,
-        identity_type: record_string(&identity_fields[0], "type")?,
-        id: record_string(&identity_fields[1], "id")?,
-        display_name: record_string(&identity_fields[2], "display-name")?,
-        key_refs: parse_ref_sequence(&fields[2], "keys")?,
-        parent_refs: parse_ref_sequence(&fields[3], "parents")?,
-        metadata_refs: parse_ref_sequence(&fields[4], "metadata")?,
-        value: value.clone(),
-    })
-}
-
-pub fn context_value(input: ContextValueInput<'_>) -> Result<IoValue> {
-    require_ref(input.subject_ref, "authority context subject ref")?;
-    for capability in input.capabilities {
-        validate_capability(capability)?;
-    }
-    validate_refs(input.delegation_refs, "authority context delegation ref")?;
-    validate_refs(input.revocation_refs, "authority context revocation ref")?;
-    validate_refs(input.key_refs, "authority context key ref")?;
-    validate_refs(input.policy_refs, "authority context policy ref")?;
-    validate_refs(input.evidence_refs, "authority context evidence ref")?;
-    Ok(record("authority-context-v1", vec![
-        string(crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA),
-        record("subject", vec![string(input.subject_ref)]),
-        record("capabilities", vec![sequence(input.capabilities.iter().map(capability_value).collect())]),
-        record("delegations", vec![sequence(input.delegation_refs.iter().map(string).collect())]),
-        record("validity", vec![
-            optional_u64_value(input.not_before),
-            optional_u64_value(input.expires_at),
-        ]),
-        record("revocations", vec![sequence(input.revocation_refs.iter().map(string).collect())]),
-        record("keys", vec![sequence(input.key_refs.iter().map(string).collect())]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("scoped-capabilities"), string("pass")]),
-            record("check", vec![string("attenuation-monotonic"), string("pass")]),
-            record("check", vec![string("revocation-checked-at-admission"), string("pass")]),
-        ])]),
-    ]))
-}
-
-pub fn parse_context(value: &IoValue) -> Result<Context> {
-    let fields = value
-        .collect_simple_record("authority-context-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <authority-context-v1 ...>"))?;
-    require_schema(&fields[0], crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA, "authority context schema")?;
-    let validity = value_to_iovalue(&fields[4]);
-    let validity_fields = validity
-        .collect_simple_record("validity", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("authority context missing validity"))?;
-    let checks = parse_checks(&fields[9])?;
-    require_check(&checks, "revocation-checked-at-admission")?;
-    Ok(Context {
-        context_ref: canonical_hash(value)?,
-        subject_ref: record_string(&fields[1], "subject")?,
-        capabilities: parse_capability_sequence(&fields[2], "capabilities")?,
-        delegation_refs: parse_ref_sequence(&fields[3], "delegations")?,
-        not_before: parse_optional_u64_value(&validity_fields[0])?,
-        expires_at: parse_optional_u64_value(&validity_fields[1])?,
-        revocation_refs: parse_ref_sequence(&fields[5], "revocations")?,
-        key_refs: parse_ref_sequence(&fields[6], "keys")?,
-        policy_refs: parse_ref_sequence(&fields[7], "policy")?,
-        evidence_refs: parse_ref_sequence(&fields[8], "evidence")?,
-        value: value.clone(),
-    })
 }

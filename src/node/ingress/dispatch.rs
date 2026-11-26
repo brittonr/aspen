@@ -6,8 +6,8 @@ pub(in crate::daemon_core) fn run(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
-    action: impl FnOnce() -> Result<ObservedControlDispatch>,
-) -> Result<ObservedControlDispatch> {
+    action: impl FnOnce() -> crate::error::Result<super::super::tracking::ObservedControlDispatch>,
+) -> crate::error::Result<super::super::tracking::ObservedControlDispatch> {
     store.require_healthy()?;
     let mut intents = prepare(root, request, store)?;
     let result = (|| {
@@ -20,7 +20,7 @@ pub(in crate::daemon_core) fn run(
         Err(error) if intents.is_empty() => Err(error),
         Err(error) => match store.quarantine() {
             Ok(()) => Err(error),
-            Err(quarantine_error) => Err(MoltenError::invalid_harness(format!(
+            Err(quarantine_error) => Err(crate::error::Failure::invalid_harness(format!(
                 "ingress dispatch outcome unknown: {error}; quarantine persistence failed: {quarantine_error}"
             ))),
         },
@@ -31,7 +31,7 @@ fn prepare(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
-) -> Result<Vec<crate::delivery_idempotency::PublicationIntent>> {
+) -> crate::error::Result<Vec<crate::delivery_idempotency::PublicationIntent>> {
     let mut intents = store.for_payload(&request.request_ref)?;
     if intents.is_empty() {
         return Ok(intents);
@@ -42,7 +42,11 @@ fn prepare(
         match classify(request, store, intent, &evidence)? {
             PublicationDecision::ReusePublication => {}
             PublicationDecision::RepairQueueReceipt => needs_queue_observation = true,
-            _ => return Err(MoltenError::invalid_harness("ingress publication is unresolved; dispatch is blocked")),
+            _ => {
+                return Err(crate::error::Failure::invalid_harness(
+                    "ingress publication is unresolved; dispatch is blocked",
+                ));
+            }
         }
     }
     if needs_queue_observation {
@@ -58,7 +62,7 @@ pub(in crate::daemon_core) fn complete(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     store.require_healthy()?;
     let mut intents = store.for_payload(&request.request_ref)?;
     complete_intents(root, request, store, &mut intents)
@@ -69,14 +73,14 @@ fn complete_intents(
     request: &crate::node_runtime::ControlRequest,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
     intents: &mut [crate::delivery_idempotency::PublicationIntent],
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if intents.is_empty() {
         return Ok(());
     }
     let evidence = observations::Evidence::read(root, request)?;
     for intent in intents.iter() {
         if classify(request, store, intent, &evidence)? != PublicationDecision::CompletedDispatch {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "completed ingress dispatch lacks exact durable result observations",
             ));
         }
@@ -92,7 +96,7 @@ fn classify(
     store: &crate::delivery_idempotency::PublicationStore<'_>,
     intent: &crate::delivery_idempotency::PublicationIntent,
     evidence: &observations::Evidence,
-) -> Result<PublicationDecision> {
+) -> crate::error::Result<PublicationDecision> {
     Ok(reconcile(&ReconcileInput {
         operation_ref: &intent.operation_ref,
         request_ref: &request.request_ref,
@@ -114,7 +118,7 @@ fn transition(
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
     intent: &mut crate::delivery_idempotency::PublicationIntent,
     next: PublicationPhase,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if state::phase(intent)? != next {
         let value = state::metadata(next);
         store.update(intent, &value)?;

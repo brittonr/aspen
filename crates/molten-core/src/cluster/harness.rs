@@ -1,7 +1,7 @@
 //! Pure receipt-first cluster run-directory assessment.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 pub const RUN_DIRECTORY_PASS: &str = "pass";
 pub const RUN_DIRECTORY_DENY: &str = "deny";

@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::super::*;
 use super::encoding::*;
 
 mod incremental;
+mod rebalance;
 
 pub use incremental::*;
 
@@ -193,36 +194,8 @@ fn chunk_children(profile: &ProllyProfile, children: Vec<ChildRange>) -> Result<
     if !current.is_empty() {
         groups.push(current);
     }
-    rebalance_last_group(profile, &mut groups)?;
+    rebalance::rebalance_last_group(profile, &mut groups)?;
     Ok(groups)
-}
-
-#[allow(
-    tigerstyle::borrowed_argument_types,
-    reason = "deterministic rebalancing must pop and merge the bounded group vector"
-)]
-fn rebalance_last_group(profile: &ProllyProfile, groups: &mut Vec<Vec<ChildRange>>) -> Result<(), ProllyIssue> {
-    if groups.len() < 2 {
-        return Ok(());
-    }
-    let minimum = usize::from(profile.min_fanout);
-    let last_index = groups.len() - 1;
-    while groups[last_index].len() < minimum && groups[last_index - 1].len() > minimum {
-        let moved = groups[last_index - 1].pop().ok_or(ProllyIssue::InternalFanoutExceeded)?;
-        groups[last_index].insert(0, moved);
-    }
-    if groups[last_index].len() < minimum {
-        let combined = groups[last_index - 1]
-            .len()
-            .checked_add(groups[last_index].len())
-            .ok_or(ProllyIssue::InternalFanoutExceeded)?;
-        if combined > usize::from(profile.max_fanout) {
-            return Err(ProllyIssue::InternalFanoutExceeded);
-        }
-        let last = groups.pop().ok_or(ProllyIssue::InternalFanoutExceeded)?;
-        groups.last_mut().ok_or(ProllyIssue::InternalFanoutExceeded)?.extend(last);
-    }
-    Ok(())
 }
 
 fn range_for_entries(entries: &[SemanticEntry], block: &EncodedBlock) -> Result<ChildRange, Vec<ProllyIssue>> {

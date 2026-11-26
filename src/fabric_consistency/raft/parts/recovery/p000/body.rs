@@ -71,7 +71,7 @@ pub fn plan_replica(
         .cloned()
         .collect::<Vec<_>>();
     state.last_applied = durable_commit_index;
-    record_completed_requests(&mut state, &replay_entries);
+    molten_raft_core::transition::record_completed_requests(&mut state, &replay_entries);
     finish_recovered_state(&mut state, durable_commit_index)?;
     let effects = initial_effects(&state, &replay_entries)?;
     let recovery_ref = r#ref(&state, &durable_record_refs, snapshot_bytes)?;

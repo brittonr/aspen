@@ -4,17 +4,17 @@ This article explains how to read local node lifecycle evidence without mistakin
 
 ## Lifecycle state is a constrained observation
 
-The daemon's `node_lifecycle_state` classifies five observed facts: configuration, identity receipt, startup receipt, shutdown receipt, and active lock. Its [implementation](../../../src/node/parts/daemon/p036/body.rs) recognizes four combinations. An empty root has none of these facts. An initialized root has configuration and identity but neither lifecycle receipt nor lock. A running root additionally has startup and the active lock, but no shutdown. A stopped root has both lifecycle receipts and no active lock. Other combinations are `Inconsistent`.
+The daemon's `node_lifecycle_state` classifies five observed facts: configuration, identity receipt, startup receipt, shutdown receipt, and active lock. Its [implementation](../../../src/node/daemon/records/inspection.rs) recognizes four combinations. An empty root has none of these facts. An initialized root has configuration and identity but neither lifecycle receipt nor lock. A running root additionally has startup and the active lock, but no shutdown. A stopped root has both lifecycle receipts and no active lock. Other combinations are `Inconsistent`.
 
 This is useful precisely because it does not infer intent. A lock without startup is not evidence of a healthy process. A startup receipt without a clean shutdown does not become a stopped node merely because an operator believes the process exited. The classification is a deterministic function of supplied file-presence observations; obtaining those observations and reading durable artifacts are shell effects.
 
-The presence-only inspector is not the current-run status decision. The [status path](../../../src/node/parts/daemon/p018/body.rs) supplies exact run/startup, active-lock and completion observations to the pure lifecycle classifier. A current completion must also name matching passing shutdown and immutable control receipts. Missing, unreadable or conflicting observations reject rather than deriving `stopped` from a filename or lock absence. Status still constructs and imports health/control evidence; its result is not an independent process-liveness or adapter-responsiveness probe.
+The presence-only inspector is not the current-run status decision. The [status path](../../../src/node/daemon/lifecycle/running.rs) supplies exact run/startup, active-lock and completion observations to the pure lifecycle classifier. A current completion must also name matching passing shutdown and immutable control receipts. Missing, unreadable or conflicting observations reject rather than deriving `stopped` from a filename or lock absence. Status still constructs and imports health/control evidence; its result is not an independent process-liveness or adapter-responsiveness probe.
 
 ## Startup and shutdown have different admission boundaries
 
 `run_local_with_root` checks restart state before reading configuration and identity. It gathers runtime-startup refs, writes adapter-start and startup receipts, and rejects a denied startup before installing an active lock. A passing startup publishes canonical run context and a matching run-bound lock, then imports startup evidence. Each run context binds state-root/startup/previous-run refs, so identical startup bytes do not merge successive runs. These are ordered operations, not one demonstrated atomic transaction across every file and ledger member.
 
-Shutdown makes its admission boundary especially visible. `stop_local_node_with_request` validates current observations and calls `admit_shutdown_request`. If no plan is returned, it writes control-denial evidence and exits without executing a shutdown plan. An admitted plan writes/imports adapter, node shutdown and control receipts, publishes exact run/startup/shutdown/control completion linkage, and removes the active lock. The [shutdown regression source](../../../src/node/parts/daemon/tests/m000/p014/body.rs) checks admission-denial preservation; [current-run regressions](../../../src/node/parts/daemon/tests/m000/p023/body.rs) cover observation rejection, historical duplicates and later denied stops.
+Shutdown makes its admission boundary especially visible. `stop_local_node_with_request` validates current observations and calls `admit_shutdown_request`. If no plan is returned, it writes control-denial evidence and exits without executing a shutdown plan. An admitted plan writes/imports adapter, node shutdown and control receipts, publishes exact run/startup/shutdown/control completion linkage, and removes the active lock. The [shutdown regression source](../../../src/node/daemon/tests/shutdown/halts.rs) checks admission-denial preservation; [current-run regressions](../../../src/node/daemon/tests/shutdown/succession.rs) cover observation rejection, historical duplicates and later denied stops.
 
 A receipt that records denial is valuable evidence, but it is not a failed-looking substitute for a successful transition. Similarly, a write failure during an admitted plan is not equivalent to admission denial: earlier effects may already have happened. Recovery analysis should identify the observed boundary rather than describing all errors as interchangeable.
 
@@ -39,6 +39,8 @@ The [runbooks](../../production-operator-runbooks.md) require backup drills to b
 
 There is an important source boundary. Normal local startup loads the operator-selected `source-gate-trust.json` and admits the authenticated source binding of the executing candidate; the fabricated `synthetic_clean_octet_gate_receipt_for_tests()` receipt is compiled only into test targets. `molten dogfood local-node` has no authenticated Octet output, so it composes startup over an unqualified fixture gate whose startup receipt records `strict-octet-source-gate-bound` as failed. The production runbook requires current evidence for the exact reviewed source candidate and policy, so dogfood lifecycle success does not demonstrate fulfillment of that production requirement.
 
+This gap between dogfood startup evidence and the production source-gate requirement is tracked as a defect by the Cairn change [`eliminate-self-certifying-evidence-gates`](../../../.cairn/changes/eliminate-self-certifying-evidence-gates/proposal.md).
+
 ## Verification and limits
 
 Suggested review follows the runbook's init/run/status/stop sequence in an isolated root and retains startup, health, shutdown, current-run, exact completion and runbook-check artifacts. Compare canonical refs and decisions, including a prior-run duplicate and a new admitted shutdown. Review denied admission separately from observation rejection, aggregate service denial and interrupted writes. For a cluster exercise, the [receipt-first harness](../../receipt-first-cluster-harness.md) preserves child lifecycle and cleanup evidence in its durable run directory.
@@ -49,10 +51,10 @@ These are proposed verification activities, not commands executed for this artic
 
 - [Production operator runbooks](../../production-operator-runbooks.md)
 - [Receipt-first cluster harness](../../receipt-first-cluster-harness.md)
-- [Daemon startup, status, and shutdown implementation](../../../src/node/parts/daemon/p018/body.rs)
-- [Lifecycle classification and restart implementation](../../../src/node/parts/daemon/p036/body.rs)
-- [Shutdown preservation regression cases](../../../src/node/parts/daemon/tests/m000/p014/body.rs)
+- [Daemon startup, status, and shutdown implementation](../../../src/node/daemon/lifecycle/running.rs)
+- [Lifecycle classification and restart implementation](../../../src/node/daemon/records/inspection.rs)
+- [Shutdown preservation regression cases](../../../src/node/daemon/tests/shutdown/halts.rs)
 - [Technical companion](../README.md)
 - [Canonical run and completion values](../../../src/node/parts/runtime/p009/body.rs)
-- [Capability-rooted observations and immutable completion readback](../../../src/node/parts/daemon/p058/body.rs)
-- [Current-run regression cases](../../../src/node/parts/daemon/tests/m000/p023/body.rs)
+- [Capability-rooted observations and immutable completion readback](../../../src/node/daemon/state/tracking.rs)
+- [Current-run regression cases](../../../src/node/daemon/tests/shutdown/succession.rs)

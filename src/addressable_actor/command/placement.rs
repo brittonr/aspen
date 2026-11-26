@@ -61,6 +61,8 @@ use crate::addressable_actor::native::SigningPort;
 use crate::fabric_membership::*;
 use crate::node_service_hosting::AuthorityPort;
 
+mod effects;
+
 pub(super) fn initialize(session: &mut super::Session, path: &str) -> crate::error::Result<serde_json::Value> {
     let proposal: Selection = super::read_json(&session.root, path)?;
     proposal.validate(&session.member())?;
@@ -141,15 +143,49 @@ pub(super) fn step(session: &mut super::Session, input: &serde_json::Value) -> c
         enforced_fencing_token: current.assignment.fencing_token,
         required_enforcement: FencingEnforcement::NodeLocalDurable,
     };
-    let mut lifecycle = Lifecycle {
+    let mut native = effects::Native {
         owner: &mut session.owner,
         signing: &mut session.signing,
-        tick: session.tick,
     };
-    let outcome =
-        execute_assignment_command(&mut session.placement, &mut lifecycle, &current.assignment, &command, &authority)
-            .map_err(super::problem)?;
+    let mut lifecycle = effects::Lifecycle::new(&mut native, session.tick);
+    let outcome = execute_and_abort_pre_effect(
+        &mut session.placement,
+        &mut lifecycle,
+        &current.assignment,
+        &command,
+        &authority,
+    )?;
     step_result(session, outcome)
+}
+
+/// Runs one placement command and, when the lifecycle refused the role effect before any native
+/// effect, clears that exact pending intent through the owner's port-verified abort so the next
+/// placement step reads a committed current assignment instead of failing on the pending intent.
+/// The refusal itself is still returned as an error.
+fn execute_and_abort_pre_effect(
+    placement: &mut dyn AssignmentPersistence,
+    lifecycle: &mut effects::Lifecycle<'_>,
+    current: &RoleAssignment,
+    command: &AssignmentCommand,
+    authority: &AssignmentAuthoritySnapshot,
+) -> crate::error::Result<AssignmentExecutionOutcome> {
+    let outcome =
+        execute_assignment_command(placement, lifecycle, current, command, authority).map_err(super::problem)?;
+    let AssignmentExecutionOutcome::Uncertain(uncertain) = &outcome else {
+        return Ok(outcome);
+    };
+    let (AssignmentExecutionPhase::RoleEffect, false, Some(intent_ref)) =
+        (&uncertain.phase, uncertain.effect_may_have_happened, uncertain.intent_ref.as_deref())
+    else {
+        return Ok(outcome);
+    };
+    placement
+        .abort_pre_effect_intent(&current.assignment_id, intent_ref, lifecycle)
+        .map_err(|error| super::invalid(format!("placement refusal left an unresolved intent: {error}")))?;
+    Err(super::invalid(format!(
+        "placement role effect refused before any native effect; pending intent aborted: {}",
+        uncertain.message
+    )))
 }
 
 fn validated_effect_port(
@@ -235,50 +271,5 @@ fn authorize(
     Ok(())
 }
 
-struct Lifecycle<'a> {
-    owner: &'a mut crate::node_service_host::installed::Owner,
-    signing: &'a mut dyn SigningPort,
-    tick: u64,
-}
-impl ExtensionRoleLifecyclePort for Lifecycle<'_> {
-    fn activate(&mut self, assignment: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        let preview = self
-            .owner
-            .actor_preview(crate::node_service_hosting::native::actor::Input::Rewake(&assignment.service_id), self.tick)
-            .map_err(|error| role_failure(error, false))?;
-        self.signing.prepare(&preview).map_err(|error| role_failure(error, false))?;
-        let observed = self
-            .owner
-            .actor_rewake(&assignment.service_id, self.tick)
-            .map_err(|error| role_failure(error, true))?;
-        if observed.lifecycle.phase != crate::system_extension::LifecyclePhase::Running
-            || observed.lifecycle.generation.get() != assignment.service_generation
-        {
-            return Err(role_failure("native role activation did not reach exact Running generation", true));
-        }
-        crate::system_extension::canonical_instance_record(&observed)
-            .map(|receipt| receipt.record_ref)
-            .map_err(|error| role_failure(error, true))
-    }
-    fn begin_drain(&mut self, _: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        Err(role_failure("drain is outside placement initialization", false))
-    }
-    fn begin_replacement(&mut self, _: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        Err(role_failure("replacement requires its existing owner protocol", false))
-    }
-    fn release(&mut self, _: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        Err(role_failure("release requires its existing owner protocol", false))
-    }
-    fn fail(&mut self, _: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        Err(role_failure("failure requires its existing owner protocol", false))
-    }
-    fn quarantine(&mut self, _: &RoleAssignment) -> std::result::Result<String, RoleEffectFailure> {
-        Err(role_failure("quarantine requires its existing owner protocol", false))
-    }
-}
-fn role_failure(error: impl std::fmt::Debug, effect_may_have_happened: bool) -> RoleEffectFailure {
-    RoleEffectFailure {
-        message: format!("actual native placement role: {error:?}"),
-        effect_may_have_happened,
-    }
-}
+#[cfg(test)]
+mod tests;

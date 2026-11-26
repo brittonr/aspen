@@ -79,12 +79,19 @@ fn path(name: &str) -> crate::error::Result<crate::node_state::RelativePath> {
     crate::node_state::RelativePath::parse(name)
 }
 
+/// Mode and bytes come from one no-follow opened handle, so a leaf swapped between the mode check
+/// and the read can never be admitted.
+// r[impl molten.runtime_spine.admission_and_capability_hardening]
 fn protected<T: serde::de::DeserializeOwned>(scope: &crate::node_state::Scope, name: &str) -> crate::error::Result<T> {
-    let locator = path(name)?;
-    if scope.unix_mode(&locator)?.is_none_or(|mode| mode & 0o777 != 0o600) {
+    let crate::node_state::FileObservation::Regular(file) = scope.observe_file(&path(name)?)? else {
+        return Err(super::denied("coordination authority must be owner-only mode 0600"));
+    };
+    if file.unix_mode().is_none_or(|mode| mode & 0o777 != 0o600) {
         return Err(super::denied("coordination authority must be owner-only mode 0600"));
     }
-    serde_json::from_slice(&scope.read(&locator, LIMIT)?).map_err(|e| super::denied(e.to_string()))
+    #[cfg(test)]
+    protected_seam::after_mode_check();
+    serde_json::from_slice(&file.read_bounded(LIMIT)?).map_err(|e| super::denied(e.to_string()))
 }
 
 fn persist<T: serde::Serialize>(scope: &crate::node_state::Scope, name: &str, value: &T) -> crate::error::Result<()> {
@@ -123,4 +130,59 @@ fn wall_clock() -> crate::error::Result<crate::fabric_time::LiveClockAdapter> {
         non_claims: crate::fabric_time::REQUIRED_TIME_NON_CLAIMS.to_vec(),
     })?;
     crate::fabric_time::LiveClockAdapter::new(&profile.profile, 0)
+}
+
+/// Test-only hook between `protected`'s mode check and its read, so a regression can swap the leaf
+/// at exactly that boundary.
+#[cfg(test)]
+mod protected_seam {
+    type Hook = Box<dyn FnMut()>;
+
+    thread_local! {
+        static AFTER_MODE_CHECK: std::cell::RefCell<Option<Hook>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn set_after_mode_check(hook: impl FnMut() + 'static) {
+        AFTER_MODE_CHECK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+    }
+
+    pub(super) fn after_mode_check() {
+        let hook = AFTER_MODE_CHECK.with(|slot| slot.borrow_mut().take());
+        if let Some(mut hook) = hook {
+            hook();
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod protected_tests {
+    const LEAF: &str = "coordination-protected-swap.json";
+
+    // r[verify molten.runtime_spine.admission_and_capability_hardening]
+    #[test]
+    fn reads_mode_and_bytes_from_one_handle() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let workspace = crate::test_support::process_workspace("reliability-protected-swap").expect("workspace");
+        let root = AsRef::<std::path::Path>::as_ref(&workspace).to_path_buf();
+        let scope = crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &root).expect("scope");
+        super::persist(&scope, LEAF, &"owner").expect("owner-only leaf");
+        assert_eq!(super::protected::<String>(&scope, LEAF).expect("positive control"), "owner");
+
+        // After the 0600 check passes, a loose intruder file replaces the leaf before the read.
+        let (leaf, loose) = (root.join(LEAF), root.join("loose.copy"));
+        std::fs::write(&loose, serde_json::to_vec("intruder").expect("json")).expect("loose copy");
+        std::fs::set_permissions(&loose, std::fs::Permissions::from_mode(0o644)).expect("loose mode");
+        let (swap_leaf, swap_loose) = (leaf.clone(), loose.clone());
+        super::protected_seam::set_after_mode_check(move || {
+            std::fs::rename(&swap_loose, &swap_leaf).expect("swap in loose leaf");
+        });
+        assert_eq!(
+            super::protected::<String>(&scope, LEAF).expect("bytes from the checked handle"),
+            "owner",
+            "bytes from a non-0600 leaf were admitted"
+        );
+        // The swapped-in loose leaf is denied outright.
+        assert!(super::protected::<String>(&scope, LEAF).is_err());
+    }
 }

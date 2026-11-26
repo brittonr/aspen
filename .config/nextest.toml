@@ -15,12 +15,22 @@ slow-timeout = { period = "30s", terminate-after = 2, grace-period = "10s" }
 leak-timeout = { period = "1s", result = "fail" }
 global-timeout = "30m"
 
+# Reviewed budget for native capability producer scenarios (one scenario per test).
+# World scenarios capture/restore through the runtime-spine profile, which measures the
+# executing debug test binary via /proc/self/exe on every run; control-plane scenarios
+# start, SIGKILL and restart three replica processes over real Iroh and Redb. Each test
+# still runs exactly one scenario; the cap bounds a loaded debug host, not a retry.
+[[profile.default.overrides]]
+filter = 'package(molten) & test(/capability_qualification::products::(world|control_plane)::tests::/)'
+slow-timeout = { period = "60s", terminate-after = 4, grace-period = "10s" }
+
 # The CI and deterministic aggregates select every workspace member explicitly; the
 # `nextest-config` flake check rejects a filter that drops one. Named semantic
-# profiles below remain partitions of `package(molten)`.
+# profiles below remain partitions of `package(molten)`; `no-std-kernels` selects
+# only the extracted kernel crates.
 [profile.ci]
 inherits = "default"
-default-filter = 'package(molten) | package(molten-core) | package(molten-node-host) | package(molten-release-policy)'
+default-filter = 'package(molten) | package(molten-composition-core) | package(molten-core) | package(molten-fastpath-core) | package(molten-node-host) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-release-policy) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)'
 test-threads = 4
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 3, grace-period = "10s" }
@@ -28,7 +38,7 @@ junit = { path = "junit.xml", report-name = "molten-ci", store-failure-output = 
 
 [profile.deterministic]
 inherits = "default"
-default-filter = '(package(molten) | package(molten-core) | package(molten-node-host) | package(molten-release-policy)) & not test(/live|vm|dogfood|soak|exploratory/)'
+default-filter = '(package(molten) | package(molten-composition-core) | package(molten-core) | package(molten-fastpath-core) | package(molten-node-host) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-release-policy) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)) & not test(/live|vm|dogfood|soak|exploratory/)'
 test-threads = 4
 global-timeout = "20m"
 slow-timeout = { period = "10s", terminate-after = 1, grace-period = "5s" }
@@ -44,6 +54,12 @@ final-status-level = "flaky"
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 2, grace-period = "10s" }
 junit = { path = "junit.xml", report-name = "molten-exploratory", store-failure-output = true, store-success-output = false }
+
+# Extracted no_std + alloc kernels: every unit and Hegel property test of the pure crates.
+[profile.no-std-kernels]
+inherits = "deterministic"
+default-filter = 'package(molten-composition-core) | package(molten-fastpath-core) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)'
+junit = { path = "junit.xml", report-name = "molten-no-std-kernels", store-failure-output = true, store-success-output = false }
 
 [profile.fast-core]
 inherits = "deterministic"

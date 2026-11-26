@@ -3,8 +3,8 @@
     reason = "the pure planner uses ordered maps and sets to keep placement and evidence deterministic"
 )]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 mod action;
 

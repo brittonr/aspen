@@ -8,7 +8,7 @@ The model is not a live engine and cannot select a production profile.
 The design reference is `Jetpack: Consensus Made Generally Fast`, OSDI 2026.
 The artifact reference is `stonysystems/jetpack` commit `c03e318ec355b11edd42aac56c68d0765f88d1d2` under MIT terms.
 
-Aspen independently expresses its profile, transitions, schedules, and invariants. The authoritative bounded TLA+ source is [`verification/tla/ConsensusFastPath.tla`](../verification/tla/ConsensusFastPath.tla). The combined `consensus-fastpath-model-parity` check executes pinned TLC and TLA-ts against the same three-replica/two-command/three-view instance and a deliberate guard mutant; parse-only acceptance is not parity. See [the property/fault mapping, exact commands, integration and evidence status](consensus-fastpath-tla.md).
+Aspen independently expresses its profile, transitions, schedules, and invariants. The authoritative bounded TLA+ source is [`verification/tla/ConsensusFastPath.tla`](../verification/tla/ConsensusFastPath.tla): per-replica acceptance logs, reordered client requests, superquorum acknowledgement counting and quorum-limited view-change recovery. The combined `consensus-fastpath-model-parity` check executes pinned TLC, TLA-ts and Dive against a three-replica/two-command/three-view instance and a four-replica/two-command/two-view instance (the one where recovery-quorum intersection is load-bearing), plus missing-promise, insufficient-superquorum and small-recovery-quorum mutants; parse-only acceptance is not parity. This package is blocked and not wired into production Raft, which has a [separate model](raft-tla.md). See [the property/fault mapping, exact commands, integration and evidence status](consensus-fastpath-tla.md).
 External TLA+, Quint or Veil results and benchmarks do not prove Aspen behavior or performance. Internal Rust/CLI/schema names remain `molten`.
 
 ## Profile and quorum boundary
@@ -47,11 +47,11 @@ A modeled fast commit needs all of these facts:
 - one canonical operation identity on both paths
 - matching acceleration and base views
 - one same-view superquorum
-- a compatible promise from every active original-path proposer
+- a compatible promise from every active original-path proposer, which has itself acknowledged the operation in that superquorum
 - a conflict-free classification
 
 Mixed-view acknowledgements never combine.
-Missing promises, conflicts, identity drift, or insufficient acknowledgements use the original path.
+Missing promises, a proposer absent from the acknowledgers, conflicts, identity drift, or insufficient acknowledgements use the original path.
 Convergence applies and replies to one session operation at most once.
 
 ## Recovery boundary

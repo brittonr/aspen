@@ -59,6 +59,27 @@ molten test traceability scan --root . --changed-only \
 
 The pure core derives coverage from validated receipt fields rather than rendered logs. The Nix/release gate surface can call the same scan command and fail closed on missing positive, missing negative, stale receipt refs, duplicate receipt refs, or compatibility-only coverage when receipt-backed coverage is required. `tests/evidence-matrix.ncl` is the checked-in Nickel matrix source for durable review; its exported entries feed the same requirement ids, positive/negative coverage split, artifact refs, receipt refs, evidence scope, and diagnostic-only exemptions.
 
+Every matrix row names exactly one executed command and refs computed from real artifacts. Sequential or
+repeated-nibble placeholder digests (`blake3:000…0101`, `blake3:aaaa…`) and one command (for example a single
+`--ignored` rail) aliased across several rows or both polarities are rejected by the Nickel contract, by
+`build_evidence_matrix_manifest` (`placeholder-ref:` and `aliased-command:` diagnostics deny the manifest) and by
+`tools/capability-report.rs`. Native producer rows bind the plan and runtime-artifact refs that
+`molten evidence qualify` actually computes; see [native capability qualification producers](distributed-testing.md#native-capability-qualification-producers).
+Rows whose test cannot produce a canonical artifact without independently signed inputs are omitted rather than
+given invented refs, and recorded as tracked debt below.
+
+### Evidence-matrix tracked debt
+
+These requirements have no matrix row and make no matrix claim until a producer retains a canonical artifact
+with a reproducible ref. The same list heads `tests/evidence-matrix.ncl`.
+
+| Requirement / family | Why there is no row | What would close it |
+| --- | --- | --- |
+| `molten.system_extension.native_effect_installation`, `_authority`, `_completion`, `_lifetime`, `_consumer` | Their only executable evidence is the ignored `tests/collaborationnative` rail. It needs an independently signed cohort (`MOLTEN_TEST_SOURCE_TRUST`) and retains no canonical artifact with a reproducible ref. One ignored test used to be aliased across ten rows with invented refs. | A signed rail that retains per-requirement canonical receipts, or native producer scenarios for the native supervisor path |
+| `molten.testing.cli_receipt_first.negative_fail_closed` | The denial test emits no receipt by design: the absence of a receipt is the property, so there is no artifact to bind. The positive `normative_artifacts` row is bound. | A canonical deny receipt emitted by the CLI before refusing |
+| `molten.system_extension.native_effect_uncertainty` (partial) | Producer rows exist, but the service host runs a producer-owned runtime port around a real child-process effect, not the native supervisor or the Raft-committed path. | Native supervisor producer scenarios |
+| `post-effect-uncertainty-same-process`, every `*-nixos-vm` and `*-cross-host` family, `cross-host-transport` | No native producer. These families stay unqualified (`not-recorded`/`unsupported`), never observed. | VM and two-host producers |
+
 ## Pre-sync source identities and inherited debt
 
 <!-- r[impl molten.project.inherited_tracey_debt.active_delta_non_claims] -->
@@ -66,6 +87,30 @@ The pure core derives coverage from validated receipt fields rather than rendere
 The standalone inherited-debt guard separates accepted coverage from pending identity
 resolution. Only accepted `.cairn/specs` requirements contribute to accepted reference
 counts, uncovered requirements, and the exact reviewed inherited baseline.
+
+Accepted coverage is code-backed: a requirement leaves the inherited baseline only when
+compiled Rust sources under `src/`, `crates/`, or `tests/` carry both an `impl` and a
+`verify` marker for it. Markers in `tools/`, `docs/`, `scripts/`, `pilots/`, `nix/`, and
+`flake.nix`, and every `depends` or `related` marker, are cross-references: the guard
+still rejects them when they dangle, but they never discharge debt. The guard also
+rejects uncompiled comment-only Rust stubs that hold markers and coverage-bearing files
+that cite repository files which do not exist.
+
+"Compiled" is approximated, not measured. The guard walks each workspace target's
+module tree (`mod`, `#[path]`, `include!`) with a heuristic, dependency-free lexer that
+ignores comments and string literals. It treats items under `#[cfg(any())]`,
+`#[cfg(FALSE)]`, and `#[cfg(not(all()))]`, together with the comments directly attached
+above them, as dead, and does not evaluate any other `cfg`. Macros are handled
+conservatively: `macro_rules!` bodies never add reachability and their comments never
+discharge coverage, and no macro invocation is resolved as an include. Any macro-mediated or
+build-script-generated source is therefore not counted, so its markers are reported as debt
+rather than coverage. Reachability is file-level: it follows only item-level `mod` and
+`include!` (never ones inside another macro invocation's arguments, such as `cfg_if!` or a
+token-discarding macro), and it does not judge whether code inside a reached file is itself
+expanded. It does not resolve macro paths: only unqualified, `std::`, or `core::` `include!`
+is followed, and the check fails closed when any scanned Rust file defines a macro named
+`include`. The guard is not compiler dep-info: a passing check does not claim that every
+counted file is compiled under every feature set, or that every compiled file was found.
 
 An otherwise unknown source reference can resolve as pending when its identifier is
 declared under ADDED or MODIFIED requirements in a native

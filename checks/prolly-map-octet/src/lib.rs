@@ -4,6 +4,8 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod world_benchmark {
     #![allow(
         tigerstyle::path_segment_repetition,

@@ -10,7 +10,7 @@
 mod request;
 mod state;
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::*;
 

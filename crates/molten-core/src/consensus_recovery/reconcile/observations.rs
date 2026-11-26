@@ -19,7 +19,7 @@ pub(super) fn recovery_base(input: &ReconcileInput) -> u64 {
 }
 
 pub(super) fn reconcile_snapshot(input: &ReconcileInput, peers: &[PeerSnapshotReport]) -> SnapshotRepairDecision {
-    let mut snapshots = std::collections::BTreeMap::new();
+    let mut snapshots = alloc::collections::BTreeMap::new();
     for snapshot in input.local_snapshot.iter().chain(peers.iter().map(|peer| &peer.snapshot)) {
         if snapshots
             .insert(snapshot.last_included_index, snapshot)
@@ -64,7 +64,7 @@ pub(super) fn reconcile_snapshot(input: &ReconcileInput, peers: &[PeerSnapshotRe
     }
 }
 
-pub(super) fn validated_indices(input: &ReconcileInput) -> Option<std::collections::BTreeSet<u64>> {
+pub(super) fn validated_indices(input: &ReconcileInput) -> Option<alloc::collections::BTreeSet<u64>> {
     if input.peers.len() > MAX_RECOVERY_PEER_REPORTS
         || input.local_entries.len() > MAX_RECONCILED_INDICES
         || !input.voters.contains(&input.participant_id)
@@ -76,7 +76,7 @@ pub(super) fn validated_indices(input: &ReconcileInput) -> Option<std::collectio
     {
         return None;
     }
-    let mut identities = std::collections::BTreeSet::new();
+    let mut identities = alloc::collections::BTreeSet::new();
     for peer in &input.peers {
         if !peer.is_complete
             || peer.entries.len() > MAX_RECONCILED_INDICES
@@ -105,7 +105,7 @@ pub(super) fn validated_indices(input: &ReconcileInput) -> Option<std::collectio
                 .iter()
                 .any(|peer| peer.commit_index >= *index && peer.entries.get(index).is_some_and(|entry| entry != local))
         {
-            return Some(std::collections::BTreeSet::from([*index]));
+            return Some(alloc::collections::BTreeSet::from([*index]));
         }
     }
     let committed_through = input.peers.iter().map(|peer| peer.commit_index).fold(input.local_commit_index, u64::max);
@@ -113,7 +113,7 @@ pub(super) fn validated_indices(input: &ReconcileInput) -> Option<std::collectio
     {
         return None;
     }
-    let mut indices = std::collections::BTreeSet::new();
+    let mut indices = alloc::collections::BTreeSet::new();
     for index in input.local_entries.keys().chain(input.peers.iter().flat_map(|peer| peer.entries.keys())) {
         if *index > repair_base {
             indices.insert(*index);

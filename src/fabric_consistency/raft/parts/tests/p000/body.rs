@@ -11,9 +11,6 @@ const IN_FLIGHT_LIMIT: u32 = 8;
 const EFFECT_LIMIT: usize = 16;
 pub(super) const TEST_REQUEST_RETENTION_ENTRIES: u64 = 2_048;
 const EXPECTED_INITIAL_EFFECT_COUNT: usize = 2;
-const EXPECTED_SINGLE_LOG_ENTRY: usize = 1;
-const STALE_EPOCH_STEP: u64 = 1;
-const NEXT_INDEX_AFTER_FIRST_ENTRY: u64 = 2;
 pub(super) const NODE_A: &str = "node-a";
 pub(super) const NODE_B: &str = "node-b";
 pub(super) const NODE_C: &str = "node-c";
@@ -25,7 +22,7 @@ pub(super) fn test_ref(label: &str) -> String {
     .expect("test ref")
 }
 
-pub(super) fn active_group() -> crate::fabric_consistency::Group {
+pub(crate) fn active_group() -> crate::fabric_consistency::Group {
     active_group_for("extension-live-raft", &test_ref("application-manifest"))
 }
 
@@ -259,7 +256,7 @@ fn live_replica_start_denies_duplicate_membership_and_unsafe_timer_bounds() {
     assert!(unsafe_timer.to_string().contains("heartbeat < election minimum"));
 }
 
-pub(super) fn started_state(group: &crate::fabric_consistency::Group, node_id: &str) -> ReplicaState {
+pub(crate) fn started_state(group: &crate::fabric_consistency::Group, node_id: &str) -> ReplicaState {
     plan_live_replica_start(ReplicaStartInput {
         node_id: node_id.to_string(),
         membership: membership(group),

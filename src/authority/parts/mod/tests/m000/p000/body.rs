@@ -49,9 +49,9 @@
             evidence_refs: &[ref_for("evidence")],
         })
         .expect("context");
-        let pass = admit_authority(&context_value, "read", "catalog:public", 1, &[]).expect("admit");
+        let pass = admit_with_key(&context_value, &subject, "read", "catalog:public", 1, &[]).expect("admit");
         assert_eq!(pass.decision, "pass");
-        let fail = admit_authority(&context_value, "write", "catalog:public", 1, &[]).expect("deny");
+        let fail = admit_with_key(&context_value, &subject, "write", "catalog:public", 1, &[]).expect("deny");
         assert_eq!(fail.decision, "fail");
     }
 
@@ -69,7 +69,7 @@
             not_before: None,
             expires_at: None,
             revocation_refs: &[],
-            key_refs: &[],
+            key_refs: &[ref_for("key")],
             policy_refs: &[],
             evidence_refs: &[],
         })
@@ -84,10 +84,11 @@
             evidence_refs: &[],
         })
         .expect("revocation");
-        let before = admit_authority(&context_value, "effect:clock", "actor:a", 4, &[]).expect("before revoke");
+        let before =
+            admit_with_key(&context_value, &subject, "effect:clock", "actor:a", 4, &[]).expect("before revoke");
         assert_eq!(before.decision, "pass");
         let after =
-            admit_authority(&context_value, "effect:clock", "actor:a", 5, std::slice::from_ref(&revocation_value))
+            admit_with_key(&context_value, &subject, "effect:clock", "actor:a", 5, std::slice::from_ref(&revocation_value))
                 .expect("after revoke");
         assert_eq!(after.decision, "fail");
         let assertion = RuntimeAssertion {
@@ -118,16 +119,27 @@
             not_before: Some(2),
             expires_at: Some(5),
             revocation_refs: &[],
-            key_refs: &[],
+            key_refs: &[ref_for("key")],
             policy_refs: &[],
             evidence_refs: &[],
         })
         .expect("context");
-        let early = admit_authority(&context_value, "resolve", "service:db", 1, &[]).expect("early");
+        let early = admit_with_key(&context_value, &subject, "resolve", "service:db", 1, &[]).expect("early");
         assert_eq!(early.decision, "fail");
-        let live = gatekeeper_resolve_live_ref(&context_value, "service:db", "resolve", 2, &[]).expect("live ref");
+        let key_refs = [ref_for("key")];
+        let live = gatekeeper_resolve_live_ref(AuthorityAdmissionInput {
+            context_value: &context_value,
+            expected_principal_ref: &subject,
+            requested_capability: "resolve",
+            requested_scope: "service:db",
+            logical_time: 2,
+            minimum_epoch: 0,
+            current_key_refs: &key_refs,
+            revocation_values: &[],
+        })
+        .expect("live ref");
         assert_eq!(live.scope, "service:db");
-        let expired = admit_authority(&context_value, "resolve", "service:db", 5, &[]).expect("expired");
+        let expired = admit_with_key(&context_value, &subject, "resolve", "service:db", 5, &[]).expect("expired");
         assert_eq!(expired.decision, "fail");
     }
 
@@ -153,7 +165,9 @@
         })
         .expect("old context");
         let context = parse_context(&context_value).expect("context");
-        let historical = admit_authority(&context_value, "sign", "receipt", 1, &[]).expect("historical admission");
+        let old_key_refs = [old_key.clone()];
+        let historical = admit_as(&context_value, &subject, &old_key_refs, "sign", "receipt", 1, &[])
+            .expect("historical admission");
         replay_verify_receipt(&historical.receipt, &context_value).expect("historical replay");
         let new_key_refs = [new_key];
         let revoke_old_key = revocation_value(RevocationValueInput {
@@ -165,7 +179,8 @@
             evidence_refs: &new_key_refs,
         })
         .expect("rotate");
-        let current = admit_authority(&context_value, "sign", "receipt", 2, &[revoke_old_key]).expect("current denied");
+        let current = admit_as(&context_value, &subject, &old_key_refs, "sign", "receipt", 2, &[revoke_old_key])
+            .expect("current denied");
         assert_eq!(current.decision, "fail");
         assert_eq!(historical.receipt.context_ref.as_deref(), Some(context.context_ref.as_str()));
     }
@@ -196,96 +211,27 @@
             not_before: None,
             expires_at: None,
             revocation_refs: &[],
-            key_refs: &[],
+            key_refs: &[ref_for("key")],
             policy_refs: &[],
             evidence_refs: &[],
         })
         .expect("context");
         assert_eq!(
-            admit_authority(&context_value, "storage:read", "store:typed", 0, &[]).expect("storage").decision,
+            admit_with_key(&context_value, &subject, "storage:read", "store:typed", 0, &[])
+                .expect("storage")
+                .decision,
             "pass"
         );
         assert_eq!(
-            admit_authority(&context_value, "remote-sync:pull", "catalog:public", 0, &[])
+            admit_with_key(&context_value, &subject, "remote-sync:pull", "catalog:public", 0, &[])
                 .expect("remote")
                 .decision,
             "pass"
         );
         assert_eq!(
-            admit_authority(&context_value, "catalog:visible", "catalog:public", 0, &[])
+            admit_with_key(&context_value, &subject, "catalog:visible", "catalog:public", 0, &[])
                 .expect("catalog")
                 .decision,
             "pass"
         );
-    }
-
-    #[hegel::test(test_cases = 16)]
-    fn hegel_attenuation_monotonicity_identity_no_authority_and_cleanup(tc: hegel::TestCase) {
-        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let subject = ref_for(&format!("principal-{salt}"));
-        let identity_id = format!("p-{salt}");
-        let identity_value = identity_value(IdentityValueInput {
-            identity_type: "principal",
-            id: &identity_id,
-            display_name: "principal",
-            key_refs: &[],
-            parent_refs: &[],
-            metadata_refs: &[],
-        })
-        .expect("identity");
-        parse_identity(&identity_value).expect("identity parses");
-        let no_context_receipt = receipt_value(ReceiptValueInput {
-            operation: "identity-only",
-            decision: "fail",
-            context_ref: None,
-            capability: "read",
-            scope: "scope",
-            logical_time: salt,
-            diagnostics: &[],
-        });
-        assert!(crate::preserves_rail::to_text(&no_context_receipt).expect("receipt text").contains("fail"));
-
-        let scope = format!("scope:{salt}");
-        let context_value = context_value(ContextValueInput {
-            subject_ref: &subject,
-            capabilities: &[Capability {
-                capability: "read".to_string(),
-                scope: scope.clone(),
-                attenuation: "scoped".to_string(),
-            }],
-            delegation_refs: &[],
-            not_before: None,
-            expires_at: None,
-            revocation_refs: &[],
-            key_refs: &[],
-            policy_refs: &[],
-            evidence_refs: &[],
-        })
-        .expect("context");
-        assert_eq!(admit_authority(&context_value, "read", &scope, salt, &[]).expect("same scope").decision, "pass");
-        assert_eq!(
-            admit_authority(&context_value, "read", "other-scope", salt, &[]).expect("other scope").decision,
-            "fail"
-        );
-        let context = parse_context(&context_value).expect("context");
-        let revocation = revocation_value(RevocationValueInput {
-            target_kind: "authority-context",
-            target_ref: &context.context_ref,
-            reason: "cleanup",
-            effective_at: salt,
-            issuer_ref: &subject,
-            evidence_refs: &[],
-        })
-        .expect("revocation");
-        let assertion = RuntimeAssertion {
-            actor: "authority".to_string(),
-            value: RuntimeValue::new(record("authority-bound-assertion", vec![
-                record("authority", vec![string(&context.context_ref)]),
-                record("value", vec![string("x")]),
-            ]))
-            .expect("assertion value"),
-            facet: None,
-        };
-        let (remaining, _) = cleanup_for_revocation(&[assertion], &revocation, salt).expect("cleanup");
-        assert!(remaining.is_empty());
     }

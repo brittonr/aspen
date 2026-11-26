@@ -35,7 +35,7 @@ pub fn first_slot_divergence(
     let by_position = observations
         .iter()
         .map(|observation| (observation.slot.order_key(), &observation.slot))
-        .collect::<std::collections::BTreeMap<_, _>>();
+        .collect::<alloc::collections::BTreeMap<_, _>>();
     for slot in slots {
         let Some(observed) = by_position.get(&slot.order_key()) else {
             continue;

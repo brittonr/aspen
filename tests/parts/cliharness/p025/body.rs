@@ -83,6 +83,84 @@ fn cli_ci_run_receipt_binds_nextest_metadata_and_junit_view() -> CliResult<()> {
     assert!(receipt_text.contains("<profile-id \"ci\">"));
     assert!(receipt_text.contains("<passed 2>"));
     assert!(receipt_text.contains("<skipped 0>"));
+    // The checked-in evidence-matrix row binds exactly this canonical receipt
+    // and the content refs of the inputs this test wrote.
+    let receipt_ref = molten::preserves_rail::canonical_hash(&molten::preserves_rail::parse_text(&receipt_text)?)?;
+    let mut artifact_refs = [&nextest_config, &cargo_metadata, &binaries_metadata, &junit]
+        .into_iter()
+        .map(|path| Ok(molten::preserves_rail::content_ref_from_bytes(&std::fs::read(path)?)))
+        .collect::<CliResult<Vec<_>>>()?;
+    artifact_refs.sort();
+    assert_evidence_matrix_row(
+        "cargo test --test cliharness cli_ci_run_receipt_binds_nextest_metadata_and_junit_view",
+        &artifact_refs,
+        &receipt_ref,
+    );
+    Ok(())
+}
+
+/// The row of `tests/evidence-matrix.ncl` whose command is `command` (one field per line).
+fn assert_evidence_matrix_row(command: &str, artifact_refs: &[String], receipt_ref: &str) {
+    let matrix = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/evidence-matrix.ncl"));
+    let lines: Vec<_> = matrix.lines().map(str::trim).collect();
+    let marker = format!("command = \"{command}\",");
+    let rows: Vec<_> = lines.iter().enumerate().filter(|(_, line)| **line == marker).map(|(index, _)| index).collect();
+    assert_eq!(rows.len(), 1, "exactly one evidence-matrix row must name {command}");
+    let quoted = |line: &str| -> Vec<String> {
+        line.split('"').skip(1).step_by(2).filter(|text| text.starts_with("blake3:")).map(str::to_string).collect()
+    };
+    assert_eq!(quoted(lines[rows[0] + 1]), artifact_refs, "matrix artifact refs for {command}");
+    assert_eq!(quoted(lines[rows[0] + 2]), [receipt_ref.to_string()], "matrix receipt ref for {command}");
+}
+
+// The hidden distinct-process peer entry of the native capability producers
+// starts from the real CLI: a transport listener peer binds loopback Iroh and
+// hands off a canonical endpoint descriptor in its run directory.
+// r[verify molten.testing.evidence_matrix_native_producers]
+#[test]
+fn cli_evidence_qualify_peer_starts_a_transport_listener_peer() -> CliResult<()> {
+    let dir = temp_dir("cli-qualify-peer")?;
+    let run = dir.join("peer-run");
+    std::fs::create_dir(&run)?;
+    let mut child = molten_cmd()
+        .args(["evidence", "qualify-peer", "--role", "transport-listener", "--run-directory"])
+        .arg(&run)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let endpoint = run.join("endpoint.preserves");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !endpoint.is_file() && std::time::Instant::now() < deadline && child.try_wait()?.is_none() {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let handoff = std::fs::read(&endpoint);
+    child.kill()?;
+    child.wait()?;
+    let handoff = molten::preserves_rail::strict_canonical_decode(&handoff?)?.value;
+    let parsed = molten::fabric_transport::parse_endpoint(&handoff)?;
+    assert!(parsed.descriptor.public_endpoint_identity.starts_with("iroh:"));
+    assert_eq!(parsed.descriptor.profile_id, "iroh-cross-process-v1");
+    Ok(())
+}
+
+#[test]
+fn cli_evidence_qualify_peer_rejects_unknown_roles_and_missing_run_directories() -> CliResult<()> {
+    let dir = temp_dir("cli-qualify-peer-negative")?;
+    let run = dir.join("peer-run");
+    std::fs::create_dir(&run)?;
+    let unknown = molten_cmd()
+        .args(["evidence", "qualify-peer", "--role", "caller-invented-role", "--run-directory"])
+        .arg(&run)
+        .output()?;
+    assert_failure(&unknown, "unknown qualification peer role");
+    assert!(stderr(&unknown).contains("unsupported qualification peer role"));
+    let absent = dir.join("absent");
+    let missing = molten_cmd()
+        .args(["evidence", "qualify-peer", "--role", "transport-listener", "--run-directory"])
+        .arg(&absent)
+        .output()?;
+    assert_failure(&missing, "missing qualification peer run directory");
+    assert!(!absent.exists());
     Ok(())
 }
 

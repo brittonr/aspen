@@ -1,6 +1,6 @@
 //! Incremental leaf planning over a prior validated build.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::super::encoding::*;
 use super::*;

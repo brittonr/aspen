@@ -93,36 +93,8 @@ pub fn greeting() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::prelude::*;
-
     #[test]
     fn greeting_mentions_project_name() {
         assert!(super::greeting().contains("molten"));
-    }
-
-    #[test]
-    fn prelude_exposes_core_boundary_planner() {
-        let admitted = AdmissionInputs {
-            has_authority: true,
-            evidence_fresh: true,
-            resource_allowed: true,
-            adapter_supported: true,
-        };
-        let plan = plan_adapter_effects(admitted, &[EffectKind::ReceiptWrite]);
-        assert_eq!(plan.decision, BoundaryDecision::Admit);
-        assert_eq!(plan.effects, vec![EffectKind::ReceiptWrite]);
-    }
-
-    #[test]
-    fn prelude_boundary_planner_denies_missing_authority_without_effects() {
-        let denied = AdmissionInputs {
-            has_authority: false,
-            evidence_fresh: true,
-            resource_allowed: true,
-            adapter_supported: true,
-        };
-        let plan = plan_adapter_effects(denied, &[EffectKind::StoreWrite]);
-        assert_eq!(plan.decision, BoundaryDecision::Deny);
-        assert!(plan.effects.is_empty());
     }
 }

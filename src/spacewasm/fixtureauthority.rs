@@ -77,14 +77,7 @@ impl Authority {
             ucan::TokenTimeBounds::new(100, 200).map_err(|e| e.to_string())?,
         )
         .map_err(|e| e.to_string())?;
-        let identity = crate::codec::record("spacewasm-isolated-fixture-authority-v1", vec![
-            crate::codec::string(&issuer_id),
-            crate::codec::string(audience.as_str()),
-            crate::codec::string(POLICY),
-            crate::codec::string(&resource),
-            crate::codec::string("not-production-authority"),
-        ]);
-        binding.authority = crate::codec::canonical_hash(&identity).map_err(|e| e.to_string())?;
+        binding.authority = admission::authority_ref(&issuer_id, audience.as_str(), POLICY, &resource)?;
         Ok(Self {
             current: cell::RefCell::new(binding),
             holder,
@@ -174,5 +167,63 @@ impl authority::AuthoritySource for Authority {
     }
     fn expected_holder(&self) -> &str {
         self.audience.as_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> Authority {
+        let reference = |bytes: &[u8]| crate::codec::content_ref_from_bytes(bytes);
+        Authority::new(continuation::Binding {
+            actor: "fixture".into(),
+            generation: 1,
+            artifact: reference(b"module"),
+            profile: reference(b"profile"),
+            input: reference(b"input"),
+            authority: String::new(),
+            resource: reference(b"resource"),
+            effects: reference(b"effect-plan"),
+        })
+        .expect("fixture authority")
+    }
+
+    fn verify(source: &Authority, actor: &str, policy_json: &str) -> Result<(), String> {
+        let current = source.current.borrow();
+        let context = admission::Current {
+            actor,
+            generation: current.generation,
+            authority_ref: &current.authority,
+            resource_ref: &current.resource,
+            expected_issuer: &source.issuer,
+            expected_holder: source.audience.as_str(),
+        };
+        let credentials = [admission::Credential {
+            hostcall: "assert",
+            token: &source.token,
+            policy_json,
+        }];
+        admission::verify_authority(context, &credentials, &authority::AuthoritySource::services(source)).map(|_| ())
+    }
+
+    // r[verify molten.runtime_spine.admission_and_capability_hardening]
+    #[test]
+    fn credential_policy_must_be_the_policy_bound_into_current_authority() {
+        let source = fixture();
+        verify(&source, "fixture", POLICY).expect("bound policy admits");
+        let permissive = r#"{"version":1,"rules":[]}"#;
+        let error = verify(&source, "fixture", permissive).expect_err("substituted policy must deny");
+        assert!(error.contains("policy is not the policy bound"), "{error}");
+    }
+
+    // r[verify molten.runtime_spine.admission_and_capability_hardening]
+    #[test]
+    fn actor_resource_segment_rejects_path_injection() {
+        let source = fixture();
+        for actor in ["fixture/1", "fixture/../other", "..", "", "a\\b", "fix ture"] {
+            let error = verify(&source, actor, POLICY).expect_err("non-nominal actor must deny");
+            assert!(error.contains("nominal resource segment"), "{actor}: {error}");
+        }
     }
 }

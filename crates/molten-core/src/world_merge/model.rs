@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use crate::world_commit::RootKind;
 use crate::world_commit::WorldCommitRef;
@@ -30,8 +30,8 @@ macro_rules! digest_reference {
             }
         }
 
-        impl std::fmt::Display for $name {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl core::fmt::Display for $name {
+            fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 formatter.write_str(self.as_str())
             }
         }
@@ -245,6 +245,7 @@ pub enum WorldMergeIssue {
     ModeNotDeclared(RootKind),
     HandlerMissing(RootKind),
     HandlerMismatch(RootKind),
+    HandlerInputSchemaMismatch(RootKind),
     HandlerEffectRequested(RootKind),
     HandlerFailed(RootKind),
 }
@@ -254,13 +255,13 @@ pub enum WorldMergeReferenceError {
     InvalidDigest,
 }
 
-impl std::fmt::Display for WorldMergeReferenceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for WorldMergeReferenceError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(formatter, "{self:?}")
     }
 }
 
-impl std::error::Error for WorldMergeReferenceError {}
+impl core::error::Error for WorldMergeReferenceError {}
 
 fn validate_digest_reference(value: &str) -> Result<(), WorldMergeReferenceError> {
     const BLAKE3_PREFIX: &str = "blake3:";

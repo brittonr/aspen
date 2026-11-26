@@ -2,31 +2,66 @@
 
 <a id="molten-modularity-boundary-inventory"></a>
 
-This inventory records the first production-readiness modularity slice. It is evidence for the active Cairn modularity changes and is intentionally scoped: it defines ownership, pure cores, shell responsibilities, and focused checks without claiming full crate extraction or whole-system correctness.
+This inventory records the modularity slices that are in place, as evidence for the active Cairn modularity changes. It is intentionally scoped: it defines ownership, pure cores, shell responsibilities, and focused checks without claiming full crate extraction or whole-system correctness.
 
 ## Core and dependency classes
 
-`crates/molten-core/` is the minimal pure build surface. It has no dependencies beyond the Rust standard library and is validated with `cargo test -p molten-core`. The root crate depends on it and re-exports it through `molten::core_api` and `molten::prelude` so existing root-crate compatibility aliases keep working while new code has a stable preferred API.
+`crates/molten-core/` holds in-memory decision cores, transitions, typed identities, and plans. It performs no filesystem, process, network, or clock access and links no execution or backend runtime. It is not dependency-free. Its [manifest](../crates/molten-core/Cargo.toml) declares these external dependencies:
+
+| Dependency | Source |
+| --- | --- |
+| `blake3`, `serde` | crates.io |
+| `artifact-auth-core`, `artifact-binding-core` | Git, `OnixResearch/onix-artifact` |
+| `basalt` | Git, `OnixResearch/basalt` |
+| `choregraph-history` | Git, `OnixResearch/choregraph` |
+| `kamacite-core` | Git, `OnixResearch/kamacite` |
+| `content-identity-core`, `schema-migration-core`, `transactional-reconciliation-core` | Git, three `seed.radicle.garden` repositories |
+| `executable-extent-core` (optional, `executable-extents` feature) | Git, `seed.radicle.garden` |
+
+Every Git dependency is pinned to a reviewed revision. `cargo test -p molten-core` validates the crate. The root crate depends on it and re-exports it through `molten::core_api` and `molten::prelude`.
+
+<a id="molten-core-no-std-scope"></a>
+
+r[impl molten.project.molten_core_no_std] `molten-core` is `#![no_std]` + `alloc` whenever its default `std` feature is off (`#![cfg_attr(not(any(feature = "std", test)), no_std)]`). In that build, `src/lib.rs` replaces the standard prelude with `core`'s prelude plus the `alloc` items that the standard prelude would otherwise provide (`Vec`, `String`, `Box`, `ToString`, `ToOwned`, `format!`, `vec!`), through a crate-private `#[prelude_import]`. As a result, module sources look the same under both profiles and need no per-file imports that would trip Tigerstyle's `non_trait_imports` lint. Other items are named through `alloc` (collections, `alloc::string`, `alloc::vec`) or `core` (`fmt`, `cmp`, `mem`, `net`, `hint`, `error`, `iter`, `slice`, `str`, `ops`), never through `std`. `blake3` and `serde` are declared with `default-features = false` (`serde` keeps `alloc` and `derive`); the `std` feature turns their `std` features back on. Exactly three modules need the `std` feature, because their upstream dependencies still require the standard library:
+
+| `std`-gated module | Upstream dependency |
+| --- | --- |
+| `live_binding` | `kamacite-core` |
+| `world_merge` (migration identity via `kamacite_core::encode_typed_preserves`) | `kamacite-core` |
+| `world_branch_authority` | `basalt` |
+
+Every other module, including `executable_extent` behind `executable-extents`, compiles under `no_std`. `std` is a default feature so the root crate, `molten-node-host`, `molten-release-policy`, and the focused Octet workspaces keep their current API; a consumer that wants only the pure cores depends on `molten-core` with `default-features = false`. Crates that mount `molten-core` module sources directly (the `checks/*-octet` roots and `pilots/orchestration/adapters`) declare `extern crate alloc;` whenever a mounted module names an `alloc::` path. Unit tests always link the standard library, so test modules may still use `std`, and the same tests run under both feature profiles.
+
+r[impl molten.testing.molten_core_no_std_ci_gate] The `molten-core-no-std` flake check builds `molten-core` from its own unit graph (`molten-core-no-std-build-plan.json`, generated with `unit2nix -p molten-core --no-default-features --features executable-extents`) and checks, at evaluation time, that the plan enables no `std` feature on `molten-core` or on any crate linked into it and does not contain `basalt` or `kamacite-core`. The check then:
+
+- **Plan freshness.** It runs the pinned `unit2nix` with the same flags in a copy of the source and requires "Build plan is up to date". That message appears only when the recorded `inputsHash` matches the current fingerprint (CLI flags, `Cargo.lock`, and every `Cargo.toml` in the tree). No cargo is available inside the check, so a stale plan fails, and the plan must be regenerated after any manifest change. As a negative, it flips `serde` back to its default (`std`) features in a copy of `crates/molten-core/Cargo.toml` and requires the freshness test to fail.
+- **Source guard.** It runs `scripts/check-molten-core-no-std-sources.sh`. The guard rejects any `extern crate` except `extern crate alloc;` in `lib.rs`. It also rejects any `std` path or `use std` outside the `std`-gated modules and test files (`tests.rs`, `**/tests/**`), including imports hidden behind `#[cfg(feature = "std")]`. Compilation alone misses an explicit `extern crate std;` in some module, because the library still builds. So the check plants `extern crate std; use std::fs::read;` in `planning.rs` and a feature-gated `use ::std::time::SystemTime;` in `codec.rs`, and requires the guard to reject both.
+- **Compilation.** It compiles the library with `--no-default-features` and with `--no-default-features --features executable-extents`, and runs the unit tests for the no_std feature set.
+- **Compile probes.** It appends `use std::fs::read;`, `use std::time::SystemTime;`, and `use std::env::var;` in turn to `src/codec.rs`. Each of those builds must fail with rustc's unresolved-`std` diagnostic for that file.
+
+The `molten-core-tests` flake check runs the unit tests under the default `std` feature set. Compiling under `no_std` rules out ambient OS input/output at compile time. It does not prove that the logic is correct, it does not replace runtime authority gates, and it says nothing about embedded hardware targets.
 
 Cargo dependency classes for the current root crate:
 
 | Class | Dependencies | Boundary rule |
 | --- | --- | --- |
 | Core | `molten-core`, `blake3` for identity-only helpers | Pure functions over in-memory values; no filesystem, process, network, clock, Redb, Wasmtime, Steel execution, Nickel runtime, Iroh, or CLI shells. |
-| Codec | `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. |
-| Policy/evidence | `basalt`, `cairn`, `octet`, `trellis`, `nickel-lang` as authoring or evidence inputs | Constructs and verifies evidence-only values; does not grant authority or runtime trust by itself. Runtime consumes checked exports, refs, or receipts, not live policy tooling. |
+| Codec | `molten-preserves-core` (no_std canonical packed encoding, strict decoding, identity, traversal), `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. The canonical byte law is owned by `molten-preserves-core`; `preserves` supplies text syntax and `IOValue` interop through the `src/preserves/` bridge. |
+| Policy/evidence | `basalt`, `cairn`, `octet`, `trellis`, `nickel-lang` as authoring or evidence inputs | Constructs and verifies evidence-only values; does not grant authority or runtime trust by itself. |
 | Runtime | `syndicate`, `tokio`, `n0-future`, `tracing` | Produces deterministic state transitions and planned effects after admission; shells execute effects. |
 | Adapter | `iroh`, `iroh-blobs`, `iroh-docs`, `iroh-gossip`, `redb`, `wasmtime`, `wasmtime-wasi`, `wit-bindgen`, `wasmparser`, `steel-core` | Owns filesystem, transport, store, executor, and hostcall mechanics. Adapter availability is never trust. |
-| CLI | `clap` | Parses flags and paths, reads/writes files, renders output, and exits. CLI code calls typed command cores. |
+| CLI | `clap` | Parses flags and paths, reads/writes files, renders output, and exits. |
 | Test/integration | `hegeltest`, `wat`, Nix VM checks, dogfood checks | Produces evidence for selected fixtures and integration profiles only. |
 
-Reviewed boundary rules are authored in `docs/dependency-boundary-policy/valid.ncl`; negative fixtures cover duplicate rules, invalid layers, and empty allow/deny targets. The Rust pure validator in `molten_core::dependency` reports rule id, source file, forbidden target, and guidance for representative import facts.
+Dependency-direction rules are authored as Nickel data in `docs/dependency-boundary-policy/valid.ncl`; negative fixtures cover duplicate rules, invalid layers, and empty allow/deny targets. That file is policy data only: no Rust code consumes it, and it does not by itself block an import. Import direction is enforced by the ast-grep [runtime-authority audits](ast-grep-runtime-authority-audits.md) and the Octet source gate. An earlier `molten_core::dependency` import-fact validator had no production caller and was removed.
 
-## Policy authoring, export, runtime, and freshness
+## Filesystem and Nickel boundaries
 
-Policy source is authored in Nickel (`cairn-policy/default.ncl`, `cairn-policy/contracts.ncl`, and docs contracts). Checked generated JSON is a source-controlled export consumed by Cairn and runtime evidence checks. Runtime admission may consume checked exports, canonical refs, or policy-gate receipts; it must not invoke Nickel evaluation, Cairn policy export, or policy tooling availability as live authority.
+`molten-core` contains no `std::fs` calls. The root crate is not uniformly pure. `std::fs::` appears at 781 call sites across 236 files under `src/`. They concentrate in CLI shells (`src/cli/`), node state and daemon shells (`src/node/`), the cluster harness, component RPC, Wasm tooling, and Raft durability. Ongoing node I/O is meant to go through `NodeStateRoot` and typed store roots. See [node-state filesystem authority](node-state-filesystem-authority.md). A `std::fs` call outside those roots is a review finding, not an approved pattern.
 
-The Cairn policy export now includes the current schema-owned fields `traceability_policy`, `stack_provenance_gate`, and `runtime_evidence_policy`. `molten_core::policy::validate_policy_freshness` is the pure freshness core for detecting missing schema fields or stale checked-export refs; the shell remains responsible for reading files and computing refs.
+Only the harness schema evaluates Nickel in-process: its policy, budget, and capability source checks call `nickel_export_json` in `src/harness/schema/gates/evaluator.rs`, which uses `nickel-lang`. Job-graph construction lowering under the `job-dag-construction` feature (`src/job/authoring/construction*.rs`) does not evaluate in-process. It admits captured modules through `nickel-eval` and runs them in the separate `molten-nickel-eval-worker` process, launched only through `nickel_eval::captured::evaluate_isolated` with an explicitly selected path.
+
+Fixture tests may also run the `nickel` CLI. Policy source (`cairn-policy/default.ncl`, `cairn-policy/contracts.ncl`, and docs contracts) is authored in Nickel and exported to checked JSON. The `contract-export-drift-gate` flake check re-exports `cairn-policy/default.ncl` and fails on any difference from `cairn-policy/generated/cairn-policy.json`. Runtime admission may consume checked exports, canonical refs, or policy-gate receipts; it must not treat Nickel evaluation, Cairn policy export, or policy tooling availability as live authority. An earlier `molten_core::policy` freshness validator duplicated that drift gate without a caller and was removed.
 
 ## Stack evidence adapter boundary
 
@@ -48,48 +83,87 @@ Representative workflow: a runtime operation with evidence-backed admission.
 3. Runtime modules consume admitted inputs and return planned effects.
 4. Adapter shells execute store, transport, executor, clock, or receipt writes after the plan is admitted.
 
-`molten_core::planning::plan_evidence_policy_runtime_flow` and `plan_adapter_effects` provide the in-memory core for this slice. Negative tests prove evidence-only data and adapter availability do not become trust.
+Each domain owns its own admission decision; there is no shared boolean planner. Retention's `admit_destructive_evidence_with_root` is a representative example: it resolves referenced authority, policy, supporting-evidence, and clearance records before any delete. `molten_core::planning` now carries only the `EffectKind` port vocabulary that the world-replay boundary classifies. The earlier generic `plan_*` planners took caller-asserted booleans, had no production caller, and were removed.
 
 ## CLI imperative shell boundary
 
-The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and output files. The selected typed command-core boundary is the adapter effect planner exposed from `molten::prelude`; CLI handlers can pass parsed facts and receive `EffectPlan` without Clap, filesystem, stdout, stderr, network, or live adapter execution. Root tests prove the prelude exposes the positive and negative planner contracts.
-
-Existing command names, flags, and documented output contracts are unchanged in this slice.
+The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and output files. Command handlers call the domain entry points (`molten::chunk_store`, `molten::retention`, `molten::job_dag`, `molten::node_daemon`, and others) with parsed inputs.
 
 ## Semantic module layout
 
-The highest-pressure ordinal `include!` shard selected for the first semantic split is `src/chunk/store.rs` because it owns model, codec, verification, Redb index, pinning, GC, Iroh exchange, lineage, and receipt checks. The entry point now wraps all ordinal shards in a named `semantic_store` module and re-exports the public surface, preserving existing `molten::chunk_store::*` paths while giving reviewers a semantic boundary to expand into model/codec/verify/fs_store/index/exchange/retention/lineage/shell modules later.
+Retention (`src/retention/mod.rs`) and job DAG (`src/job/dag.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. The node daemon (`src/node/daemon.rs`) is converted; see [Node daemon layout](#node-daemon-layout). The harness schema and the chunk store are converted as described below. Converting the rest into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
 
-Remaining ordinal shards are staged compatibility artifacts. They stay acceptable while generated or review-sized extractions still need path compatibility, and each future split must preserve public paths or provide an explicit compatibility package.
+- re-export every public item from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths (explicitly where the list fits the file limit; the node daemon uses one glob per submodule, see below);
+- reference other modules by qualified owner path, because Octet's `non_trait_imports` rejects non-trait `use`, and replace shared-scope aliases (`type Result<T>`, forwarding wrappers around `preserves_rail`) with their owner paths;
+- name modules so that no contained item repeats a module word (`path_segment_repetition`), and keep each file within 300 lines and each directory within seven Rust files;
+- start every item private and raise its visibility only where another module uses it;
+- leave `src/job/selected/` and `src/job/authoring/` textually included and unedited. Their source text is hashed into selected-stage signatures (`selected_stage_signature`) and job-lowering provenance refs. Editing them would change canonical job identities, so the job DAG conversion must keep the names they use resolvable in the `workload` scope.
 
-Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`; Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`; world-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`; and world-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships. Existing `include!` assemblies and their ordering remain unchanged.
+The internal root names (`blocks`, `custody`, `workload`, and `daemon_core`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names. The chunk store keeps `#[doc(hidden)] pub mod blocks`, because separately compiled consumers name `molten::blocks::*`, and keeps its `chunk_store` alias, which callers in 52 files use. A doc test in `src/chunk/store.rs` names former shard items through `molten::blocks::`.
+
+The internal root names (`blocks`, `custody`, `workload`, and `daemon_core`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names.
+
+The harness schema (`src/harness/schema.rs`) is converted. It is the real `testbed::schema` module; the former internal name `format` and its `schema` alias module are gone, because no item name repeats `schema` once three private names were renamed (`POLICY_INPUT_ID`, `CAPABILITY_INPUT_ID`, `parse_budget_limits_record`). `schema.rs` declares 50 private child modules with `#[path]`. They are grouped into ten directories under `src/harness/schema/`: `model`, `trace`, `gates`, `grants`, `checks`, `receipts`, `repro`, `redaction`, `preflight`, and `executors`. Each child module owns one responsibility, such as `intake` (suite parsing), `tape` (effect logs), `covenant` (policy preflight material), `evaluator` (in-process Nickel), or `scrub` (bounded redaction traversal). Siblings call each other through `super::<module>::<item>`, and those items are `pub(super)`. Other items stay private. Items used by other harness modules are `pub` and re-exported with `pub use` from `schema.rs`, so `super::schema::*` and `molten::harness::*` paths resolve as before. Their effective visibility is still bounded by the private `schema` module. The shared aliases (`IoValue`, `Result`, `MoltenError`, and others) and the `preserves_rail` forwarding wrappers were replaced by owner paths. Child modules import nothing except the `preserves::ValueImpl` trait, and only where its methods are called. `effect_log_value` is re-exported under `#[cfg(test)]` because only the harness tests call it from outside the module. No schema text, fixture, or source file of this module is hashed into an identity, and canonical encodings are unchanged.
+
+The chunk store (`src/chunk/store.rs`) is converted. The entrypoint mounts each submodule under `src/chunk/store/` with `#[path]`, because a file that `src/lib.rs` loads through `#[path]` resolves nested modules relative to its own directory. It re-exports every public item by name and defines the two crate-visible helpers that other domains call, `hash_chunk` and `read_verified_chunk`. The submodules are:
+
+- `model`: public DTOs;
+- `limits`: count and byte bounds;
+- `layout`: content paths and immutable writes;
+- `integrity`: chunk and blob verification;
+- `wire/`: the Preserves codec (`encode`, `decode`, `fields`, `outcome`, `policy`);
+- `local/`: put, read, range read, pins, listings, and availability;
+- `registry/`: the Redb index (`update`, `survey`);
+- `retire/`: GC;
+- `history/`: lineage;
+- `exchange/`: sync and the Iroh adapter;
+- `planner` and `outboard`: traversal plans and remote range readback.
+
+Cross-module references use `crate::blocks::` owner paths. The former local aliases and wrappers now use the owner paths `crate::preserves_rail::`, `crate::bounded::`, `crate::error::`, `preserves::`, and `redb::`. Only trait imports (`redb::Readable*`) remain as `use`. Unit tests live in `store/tests/` and call the public API through `crate::chunk_store::`. Chunk, manifest, and receipt refs, Redb table names, and the on-disk layout are unchanged. No chunk-store source file is hashed into an identity.
+
+Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
+
+### Node daemon layout
+
+`src/node/daemon.rs` mounts the internal root `daemon_core` (public alias `node_daemon`) as a real module tree. Its 61 production shards and 24 test shards under `src/node/parts/daemon/` are gone.
+
+- **Submodules.** The entrypoint declares 81 flat submodules with `#[path]`, one responsibility each, plus the existing `ingress` and `source_binding` modules. Physical directories under `src/node/daemon/` group them, each with at most seven files:
+  - `vocabulary/`: limits and public request and outcome records.
+  - `access/` and `trust/`: grants, tickets, peer admission, and delegation.
+  - `workflow/` and `protocol/`: live workflow bundles and the protocol gate.
+  - `records/`: Preserves field readers, validators, receipt parsers, and lifecycle inspection.
+  - `encoding/` and `stamping/`: receipt values and summaries.
+  - `lifecycle/`, `service/`, and `dispatch/`: local lifecycle, the control service, and dispatch.
+  - `live/`, `listen/`, and `preflight/`: live Iroh ingress, sends, listeners, and profiles.
+  - `state/`: state-root storage, paths, locks, and current-run tracking.
+- **References.** Siblings refer to each other by qualified path, such as `super::storage::read_preserves`. The only `use` items are trait imports (`n0_future::StreamExt`). The former shared aliases (`Result`, `IoValue`, `Path`, `PathBuf`, `MoltenError`, `Ipv4Addr`) are replaced by their owner paths, in `ingress/` as well.
+- **Visibility.** Items, fields, and methods stay private unless another daemon submodule or test uses them; those get `pub(super)`. Public items keep `pub`.
+- **Re-exports.** The entrypoint has one `pub use self::<module>::*;` for each submodule that holds a public item. An explicit per-item list (about 190 lines) plus the `#[path]` declarations would exceed the 300-line file limit. Outside `daemon_core`, the globs expose only `pub` items.
+- **Tests.** `src/node/daemon/tests/` uses the same layout: 30 flat modules under `daemon_core::tests`. The `cfg(test)` helpers that used to sit in the production shards moved to `tests/mod.rs`: the `fs` wrappers, the `Path`/`PathBuf` `NodeStateAuthority` impls, and the test authority refs.
+- **ast-grep rules.** The host-path helpers (`config_path`, `startup_path`, `shutdown_path`, `diagnostic_node_state_path`) live in `state/ambient.rs`. It is the only daemon file the node-state ambient-filesystem rule ignores. The root-reacquisition rule lists the modules that now hold the items of the shards it used to list.
+- **Alias.** `daemon_core` stays the internal root and `node_daemon` stays its alias. 184 call sites use `node_daemon`. Promoting the alias would repeat `node` in 22 item names, 7 of them public (for example `NodeLifecycleState`).
 
 ## Chunk store semantic boundary
 
-Ownership split for the chunk store:
-
-| Area | Owner | First boundary |
+| Area | Owner | Boundary |
 | --- | --- | --- |
-| model | `ChunkRef`, `ChunkManifest`, receipt DTOs | In-memory DTOs and refs. |
-| codec | Preserves constructors/parsers | Canonical bytes and BLAKE3 refs must stay byte-preserving. |
-| verify | manifest/chunk/receipt checks | Pure validation over parsed values where possible. |
-| fs_store | file read/write/remove/list | Shell-only. |
-| index | Redb table definitions and transactions | Redb adapter shell. |
-| exchange | Iroh publish/fetch | Transport adapter shell. |
-| retention | pin/unpin/GC admission | Destructive plans before deletes. |
-| lineage | manifest lineage and receipt chains | Evidence-only summaries. |
-| shell | CLI and filesystem orchestration | Effect execution and receipts. |
+| model and codec | `store/model.rs` DTOs; `store/wire/` Preserves constructors and parsers | In-memory DTOs, canonical bytes, and BLAKE3 refs. |
+| verify | `store/integrity.rs`, `store/wire/decode.rs`, `store/wire/policy.rs` | Validation over parsed values. |
+| fs_store and index | `store/layout.rs` file writes, `store/local/` operations, `store/registry/` Redb tables | Shell and Redb adapter. |
+| exchange | `store/exchange/` peer sync and Iroh publish/fetch, `store/planner.rs`, `store/outboard.rs` remote range readback | Transport adapter shell. |
+| retention | `store/local/hold.rs` pin/unpin, `store/retire/` GC admission | Decisions before deletes. |
+| lineage | `store/history/` manifest lineage and receipt chains | Evidence-only summaries. |
 
-`semantic_store` preserves the existing parser and identity tests. `molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. `molten_core::planning::plan_retention_gc` and `plan_store_write` provide the pure destructive/store planning cores used by this slice.
+`molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. `gc_with_root` deletes only targets whose retention evidence and apply refs pass, and writes a receipt either way.
 
 ## Preserves boundary adoption profile
 
 <!-- r[impl molten.runtime_spine.preserves_boundary_profile.docs] -->
 <!-- r[impl molten.runtime_spine.preserves_boundary_profile.docs.non_claims] -->
 
-The Preserves adoption profile lives under `docs/preserves-boundary-profile/`. It records artifact family, schema label, canonical-byte requirement, BLAKE3 identity field, adapter owner, core DTO boundary, allowed consumers, and non-claims for node control envelopes, tickets, workflow bundles, receipts, and evidence envelopes. `molten_core::preserves_profile::validate_preserves_boundary_profile` is the pure in-memory validator; shells remain responsible for measuring artifact bytes and refs.
+The Preserves adoption profile lives under `docs/preserves-boundary-profile/`. It records artifact family, schema label, canonical-byte requirement, BLAKE3 identity field, adapter owner, core DTO boundary, allowed consumers, and non-claims for node control envelopes, tickets, workflow bundles, receipts, and evidence envelopes. The Nickel contract in `contracts.ncl` is the validator: `valid.ncl` applies it to the shared `fixture.ncl`, and the `contract-export-drift-gate` flake check requires every negative fixture to fail on that contract. A duplicate Rust validator (`molten_core::preserves_profile`) had no production caller and was removed.
 
-Valid fixtures cover canonical node control, ticket, workflow bundle, receipt, and evidence envelope measurements. Negative fixtures fail closed for non-canonical bytes, missing schema labels, stale BLAKE3 refs, and raw-Preserves core coupling. Profile success proves canonical boundary identity and adapter placement only; it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance.
+Valid fixtures cover canonical node control, ticket, workflow bundle, receipt, and evidence envelope measurements. Negative fixtures fail closed for non-canonical bytes, missing schema labels, stale or uppercase BLAKE3 refs, unsupported consumers, missing non-claims, and raw-Preserves core coupling. Profile success proves canonical boundary identity and adapter placement only; it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance.
 
 ## Domain codec façade
 
@@ -97,64 +171,32 @@ The selected high-fan-in Preserves domain is the chunk store. It directly constr
 
 Shared broad codec helpers remain in `preserves_rail`; they must not import high-level runtime, node, retention, job, plugin, CLI, or adapter domains.
 
-## Redb store port boundary
-
-Direct Redb usage remains in the chunk-store adapter shell. The selected first domain for port extraction is chunk-store write/delete planning. `plan_store_write` returns a store write and receipt plan only after authority, evidence freshness, resource admission, adapter support, and value well-formedness pass. `plan_retention_gc` returns no delete plan when authority, remote clearance, index completeness, or plan freshness fails.
-
 ## Retention core/store boundary
 
-Retention ownership:
+Retention ownership: admission (plan gates, destructive-evidence admission, remote clearance refs); plan, apply, execution gate, and audit records; lifecycle and candidate bundles; remote clearance exchange; and store/receipt persistence. `apply_gc_plan_with_root` recomputes the stored plan and re-runs destructive admission before writing an apply receipt or tombstone. Negative tests cover missing authority, missing remote clearance, stale plans, and incomplete indexes.
 
-- admission: authority, policy, resource, and remote clearance inputs;
-- plan: pure destructive `EffectPlan` values;
-- apply: filesystem/store deletes in shell;
-- audit: receipt-only evidence;
-- store/bundle/live: adapter-specific mechanics;
-- receipts: evidence-only canonical values.
+## Job DAG and node daemon boundaries
 
-The first pure destructive boundary is `plan_retention_gc`. Negative tests cover missing authority, missing remote clearance, stale plans, and incomplete indexes before any delete effect is returned.
-
-## Job DAG execution boundary
-
-Job DAG ownership:
-
-- planning/admission/scheduling: pure DAG and lease checks;
-- worker/blob IO/coordination/receipts/CLI: shells and adapters.
-
-`plan_job_execution` returns worker execution only when admission passes, the DAG is acyclic, the manifest is present, the lease is fresh, and the executor is supported. Negative tests cover cycles, stale leases, missing manifests, and unsupported executors.
-
-## Node daemon semantic boundary
-
-The first node daemon decision boundary is duplicate enqueue planning. `plan_node_enqueue` turns duplicate operations into receipt-only replay plans without queue mutation while fresh admitted operations can produce store-write plans. State-root IO, live Iroh transport, and service-loop orchestration remain in node shell modules.
+Job DAG planning, admission, and scheduling decisions are separate from worker, blob I/O, and remote execution shells. Node daemon state-root I/O, live Iroh transport, and service-loop orchestration are separate from workflow bundle, grant, and ticket decisions and their receipt encoders.
 
 ## Harness schema/gate modularity
 
-Harness ownership:
-
-- schema DTOs and report checks: pure in-memory validation;
-- gate decision: `plan_harness_gate`;
-- fixture IO and command orchestration: shell.
-
-Positive tests accept supported, well-formed reports. Negative tests deny missing suites, malformed reports, unsupported schemas, and stale reports.
+Harness schema DTOs and report checks are in-memory validation. Repro bundles, redaction, and policy, capability, and UCAN gate evidence are separate concerns. Fixture I/O and command orchestration stay in the harness shell.
 
 ## Evidence ledger and registry/catalog boundary
 
-Evidence parsers and verifiers should run over in-memory values before local ledger persistence. Ledger storage owns content-addressed persistence. Registry/catalog modules own classification, search, MCP read-only views, and operator discovery.
-
-`plan_registry_discovery` preserves registry/catalog discovery as read-only evidence. Registry-only presence yields a deny decision with read/receipt effects and does not grant authority, provenance, policy, retention, source-gate, execution, or replay trust.
+Evidence parsers and verifiers should run over in-memory values before local ledger persistence. Ledger storage owns content-addressed persistence. Registry/catalog modules own classification, search, MCP read-only views, and operator discovery. Registry or catalog presence is evidence only and does not grant authority, provenance, policy, retention, source-gate, execution, or replay trust.
 
 ## Operator dogfood and integration boundary
 
 Dogfood, prod-soak, and NixOS VM modules are integration shells. Runtime/node cores must not import operator dogfood, production soak, or VM modules. Their receipts remain evidence-only and do not grant authority, policy, provenance, resource, transport, source-gate, retention, destructive-operation, deployment, or release trust.
-
-Focused evidence aggregation tests live in existing dogfood/prod modules; the new dependency-boundary policy names the integration boundary for future automated scans.
 
 ## Public API surface
 
 Preferred stable API for new boundary work:
 
 - `molten::core_api::*` for explicit core modules;
-- `molten::prelude::*` for ergonomic planning, dependency, policy, and stack evidence cores;
+- `molten::prelude::*` for ergonomic core and stack evidence imports;
 - existing compatibility aliases such as `molten::chunk_store`, `molten::node_runtime`, and `molten::job_dag` remain preserved.
 
 Current public root modules are classified as:
@@ -162,9 +204,9 @@ Current public root modules are classified as:
 - stable API: `prelude`, `core_api`, `Failure`, `Result`;
 - compatibility aliases: domain aliases created with `compat_module!`;
 - internal implementation compatibility: `#[doc(hidden)]` root modules that back aliases;
-- generated/test support: ordinal `parts/**` shards and `test_support`.
+- generated/test support: remaining ordinal `parts/**` shards and `test_support`.
 
-No implementation-only public module is removed in this slice because downstream compatibility aliases intentionally re-export the historical surface. The migration blocker is compatibility evidence: removing a hidden module requires a separate change that proves all documented aliases and downstream imports continue to compile.
+No hidden module is removed in this slice because the compatibility aliases re-export the historical surface and callers use them. Removing a hidden module requires a separate change that proves all documented aliases and downstream imports continue to compile.
 
 ## Validation paths
 
@@ -172,12 +214,17 @@ Focused checks for this boundary slice:
 
 ```sh
 cargo test -p molten-core
+cargo test -p molten-core --no-default-features --features executable-extents
+cargo check -p molten-core --no-default-features
+nix build .#checks.x86_64-linux.molten-core-no-std
 cargo test --lib
+cargo test -p molten --lib chunk_store
+cargo test -p molten --lib retention
 cargo fmt --check
-nickel export cairn-policy/default.ncl > /tmp/cairn-policy.json
+cargo octet check --artifact-dir target/octet
+nix build .#checks.x86_64-linux.contract-export-drift-gate
 nickel export docs/dependency-boundary-policy/valid.ncl
 nickel export docs/stack-evidence-envelope/valid.ncl
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
 ```
 
-Negative Nickel fixtures under `docs/dependency-boundary-policy/` and `docs/stack-evidence-envelope/` must fail to export. These checks are evidence for positive and negative contract coverage, not production deployment trust.
+Negative Nickel fixtures under `docs/dependency-boundary-policy/`, `docs/preserves-boundary-profile/`, and `docs/stack-evidence-envelope/` must fail to export. These checks are evidence for positive and negative contract coverage, not production deployment trust.

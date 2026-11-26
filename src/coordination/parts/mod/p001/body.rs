@@ -6,7 +6,7 @@ pub struct StatusAssertionInput<'a> {
     pub read_consistency_mode: &'a str,
     pub fact: &'a IoValue,
     pub state_ref: &'a str,
-    pub receipt_ref: &'a str,
+    pub control_plane_receipt_ref: &'a str,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -178,10 +178,12 @@ pub fn parse_fencing_token(value: &IoValue) -> Result<FencingToken> {
     })
 }
 
+/// v2 adds the committed coordination time `(time_basis_ref, ticks)` and each lock/election lease expiry,
+/// so lease expiry is replayable from the snapshot alone.
 pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IoValue> {
     let records = state_records(state)?;
     let retention_refs = retention_refs_for_state(state)?;
-    Ok(record("coordination-state-snapshot-v1", vec![
+    Ok(record("coordination-state-snapshot-v2", vec![
         string(COORDINATION_STATE_SNAPSHOT_SCHEMA),
         record("locks", vec![sequence(records.locks)]),
         record("queues", vec![sequence(records.queues)]),
@@ -191,6 +193,7 @@ pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<Io
         record("barriers", vec![sequence(records.barriers)]),
         record("registry", vec![sequence(records.registry)]),
         record("next-fencing-token", vec![u64_value(state.next_fencing_token)]),
+        record("time", vec![string(&state.time_basis_ref), u64_value(state.time_ticks)]),
         record("retention", vec![strings_sequence(&retention_refs)]),
         checks_value(&[
             ("deterministic-state-order", "pass"),
@@ -236,6 +239,7 @@ fn lock_records(locks: &OrderedMap<String, LockState>) -> Vec<IoValue> {
                 u64_value(lock.token),
                 string(&lock.token_ref),
                 u64_value(lock.lease_epoch),
+                u64_value(lock.lease_expires_at),
             ])
         })
         .collect()
@@ -271,6 +275,7 @@ fn election_records(elections: &OrderedMap<String, ElectionState>) -> Vec<IoValu
                 string(&election.leader),
                 u64_value(election.token),
                 string(&election.token_ref),
+                u64_value(election.lease_expires_at),
             ])
         })
         .collect()

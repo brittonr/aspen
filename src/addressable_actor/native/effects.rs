@@ -1,6 +1,6 @@
 use molten_core::addressable_actor::*;
 
-use crate::fabric_membership::AssignmentPersistence;
+use crate::fabric_membership::AssignmentLog;
 
 pub(super) struct Executor<'a, C: crate::fabric_time::TimerClockAdapter> {
     pub configuration: &'a super::Configuration,

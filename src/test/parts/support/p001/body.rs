@@ -254,8 +254,23 @@ fn workspace_identity(logical_label: &str, diagnostic_host_path: &std::path::Pat
 fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> FixtureResult<std::path::PathBuf> {
     use std::os::fd::AsRawFd;
 
-    let descriptor_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
-    std::fs::read_link(descriptor_path)
+    resolve_descriptor_bridge(std::path::Path::new("/proc/self/fd"), dir.as_raw_fd())
+}
+
+/// A missing or unreadable descriptor bridge is a host capability gap, so it is `Unsupported` like a host
+/// without the bridge; every other I/O failure keeps its class.
+// r[impl molten.testing.descriptor_bridge_unsupported]
+#[cfg(unix)]
+fn resolve_descriptor_bridge(
+    bridge_root: &std::path::Path,
+    descriptor: std::os::fd::RawFd,
+) -> FixtureResult<std::path::PathBuf> {
+    std::fs::read_link(bridge_root.join(descriptor.to_string())).map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory | std::io::ErrorKind::PermissionDenied => {
+            std::io::Error::new(std::io::ErrorKind::Unsupported, format!("test descriptor bridge unavailable: {error}"))
+        }
+        _ => error,
+    })
 }
 
 #[cfg(not(unix))]

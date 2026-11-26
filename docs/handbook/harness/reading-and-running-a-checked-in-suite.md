@@ -61,7 +61,7 @@ If actually executed successfully, this path supplies local deterministic fixtur
 - [Distributed testing evidence](../../distributed-testing.md)
 - [Deterministic playback theory](../../technical/foundations/deterministic-playback-contract.md)
 - [Two-actor fixture](../../../examples/two-actor.preserves)
-- [Suite parser](../../../src/harness/parts/schema/p001/body.rs)
+- [Suite parser](../../../src/harness/schema/model/intake.rs)
 - [Runner admission and trace](../../../src/harness/parts/runner/p000/body.rs)
 - [Runner budgets and rollback](../../../src/harness/parts/runner/p001/body.rs)
 - [Report validation and replay](../../../src/harness/replay.rs)

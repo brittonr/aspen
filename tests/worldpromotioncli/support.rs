@@ -58,10 +58,10 @@ impl Promoted {
         self.temporary.path().to_str().expect("path")
     }
 
-    /// The promotion grant re-signed as an operator grant for `generation`.
-    pub(super) fn operator_grant(&self, name: &str, generation: u64, admitted: bool) -> std::path::PathBuf {
+    /// The promotion grant re-issued and re-signed as the operator grant `grant`.
+    pub(super) fn operator_grant(&self, name: &str, grant: &signed::OperatorGrant<'_>) -> std::path::PathBuf {
         let path = self.temporary.path().join(name);
-        signed::write_operator_authority(&self.authority_path, &path, generation, admitted);
+        signed::write_operator_authority(&self.authority_path, &path, grant);
         path
     }
 

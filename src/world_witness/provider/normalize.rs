@@ -146,8 +146,8 @@ pub fn claim_digest(reference: &molten_core::world_head::WorldHeadClaimRef) -> R
         .strip_prefix("blake3:")
         .ok_or_else(|| super::types::Error::invalid("unsupported world claim digest"))?;
     let mut digest = [0; 32];
-    if text.len() != 64 {
-        return Err(super::types::Error::invalid("invalid world claim digest length"));
+    if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return Err(super::types::Error::invalid("invalid world claim digest"));
     }
     for (index, byte) in digest.iter_mut().enumerate() {
         *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)

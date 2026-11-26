@@ -1,8 +1,8 @@
 pub mod explanation;
 mod registry;
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use self::registry::registry_material_rows;
 use self::registry::validate_registry_rows;

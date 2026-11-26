@@ -1,261 +1,62 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdmissionPolicy {
-    deny_rules: Vec<AdmissionDenyRule>,
-}
+//! Shell for runtime admission: the pure capability/deny-rule policy lives in
+//! `molten_runtime_admission_core::ingress`, instantiated here with the canonical Preserves
+//! `RuntimeValue`.
 
-impl AdmissionPolicy {
-    pub fn allow_all() -> Self {
-        Self { deny_rules: Vec::new() }
-    }
+pub use molten_runtime_admission_core::ingress::AdmissionAction;
+pub use molten_runtime_admission_core::ingress::AdmissionDecision;
 
-    pub fn deny_rules(&self) -> &[AdmissionDenyRule] {
-        &self.deny_rules
-    }
+pub type AdmissionPolicy = molten_runtime_admission_core::ingress::AdmissionPolicy<super::RuntimeValue>;
+pub type CapabilityContext = molten_runtime_admission_core::ingress::CapabilityContext<super::RuntimeValue>;
+pub type CapabilityGrant = molten_runtime_admission_core::ingress::CapabilityGrant<super::RuntimeValue>;
+pub type CapabilityAuthorization = molten_runtime_admission_core::ingress::CapabilityAuthorization<super::RuntimeValue>;
+pub type AdmissionDenyRule = molten_runtime_admission_core::ingress::AdmissionDenyRule<super::RuntimeValue>;
+pub type AdmissionRequest = molten_runtime_admission_core::ingress::AdmissionRequest<super::RuntimeValue>;
 
-    pub fn from_deny_rules(deny_rules: Vec<AdmissionDenyRule>) -> Self {
-        Self { deny_rules }
-    }
-
-    // r[impl molten.preserves_boundary_codegen.no_schema_authority]
-    pub fn decide_with_capabilities(
-        &self,
-        capabilities: &CapabilityContext,
-        request: &AdmissionRequest,
-    ) -> AdmissionDecision {
-        let authorization = capabilities.authorize(request);
-        if !authorization.authorized {
-            return AdmissionDecision::Deny {
-                reason: "missing capability grant".to_string(),
-            };
-        }
-        self.decide(request)
-    }
-
-    pub fn decide(&self, request: &AdmissionRequest) -> AdmissionDecision {
-        for rule in &self.deny_rules {
-            if rule.matches(request) {
-                return AdmissionDecision::Deny {
-                    reason: rule.reason.clone(),
-                };
-            }
-        }
-        AdmissionDecision::Allow {
-            reason: "default-allow".to_string(),
-        }
-    }
-}
-
-impl Default for AdmissionPolicy {
-    fn default() -> Self {
-        Self::allow_all()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CapabilityContext {
-    grants: Vec<CapabilityGrant>,
-}
-
-impl CapabilityContext {
-    pub fn allow_all() -> Self {
-        Self {
-            grants: AdmissionAction::all()
-                .iter()
-                .cloned()
-                .map(|action| CapabilityGrant {
-                    actor: None,
-                    action: Some(action),
-                    target: None,
-                    value: None,
-                })
-                .collect(),
-        }
-    }
-
-    pub fn from_grants(grants: Vec<CapabilityGrant>) -> Self {
-        Self { grants }
-    }
-
-    pub fn grants(&self) -> &[CapabilityGrant] {
-        &self.grants
-    }
-
-    pub fn authorize(&self, request: &AdmissionRequest) -> CapabilityAuthorization {
-        for grant in &self.grants {
-            if grant.matches(request) {
-                return CapabilityAuthorization {
-                    authorized: true,
-                    grant: Some(grant.clone()),
-                };
-            }
-        }
-        CapabilityAuthorization {
-            authorized: false,
-            grant: None,
-        }
-    }
-}
-
-impl Default for CapabilityContext {
-    fn default() -> Self {
-        Self::allow_all()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CapabilityGrant {
-    pub actor: Option<String>,
-    pub action: Option<AdmissionAction>,
-    pub target: Option<String>,
-    pub value: Option<super::RuntimeValue>,
-}
-
-impl CapabilityGrant {
-    pub fn matches(&self, request: &AdmissionRequest) -> bool {
-        self.actor.as_ref().is_none_or(|actor| actor == &request.actor)
-            && self.action.as_ref().is_none_or(|action| action == &request.action)
-            && self.target.as_ref().is_none_or(|target| request.target.as_ref() == Some(target))
-            && self.value.as_ref().is_none_or(|value| request.value.as_ref() == Some(value))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CapabilityAuthorization {
-    pub authorized: bool,
-    pub grant: Option<CapabilityGrant>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdmissionDenyRule {
-    pub actor: Option<String>,
-    pub action: Option<AdmissionAction>,
-    pub target: Option<String>,
-    pub value: Option<super::RuntimeValue>,
-    pub reason: String,
-}
-
-impl AdmissionDenyRule {
-    pub fn matches(&self, request: &AdmissionRequest) -> bool {
-        self.actor.as_ref().is_none_or(|actor| actor == &request.actor)
-            && self.action.as_ref().is_none_or(|action| action == &request.action)
-            && self.target.as_ref().is_none_or(|target| request.target.as_ref() == Some(target))
-            && self.value.as_ref().is_none_or(|value| request.value.as_ref() == Some(value))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdmissionRequest {
-    pub actor: String,
-    pub action: AdmissionAction,
-    pub target: Option<String>,
-    pub value: Option<super::RuntimeValue>,
-    pub upper: Option<u64>,
-}
-
-impl AdmissionRequest {
-    pub fn from_step(step: &super::RuntimeStep) -> Self {
-        match step {
-            super::RuntimeStep::Send { from, to, body } => Self {
+impl molten_runtime_admission_core::ingress::AdmissionStep<super::RuntimeValue> for super::RuntimeStep {
+    fn admission_request(&self) -> AdmissionRequest {
+        match self {
+            super::RuntimeStep::Send { from, to, body } => AdmissionRequest {
                 actor: from.clone(),
                 action: AdmissionAction::Send,
                 target: Some(to.clone()),
                 value: Some(body.clone()),
                 upper: None,
             },
-            super::RuntimeStep::Observe { actor, pattern } => Self {
+            super::RuntimeStep::Observe { actor, pattern } => AdmissionRequest {
                 actor: actor.clone(),
                 action: AdmissionAction::Observe,
                 target: None,
                 value: Some(pattern.clone()),
                 upper: None,
             },
-            super::RuntimeStep::Assert { actor, value } => Self {
+            super::RuntimeStep::Assert { actor, value } => AdmissionRequest {
                 actor: actor.clone(),
                 action: AdmissionAction::Assert,
                 target: None,
                 value: Some(value.clone()),
                 upper: None,
             },
-            super::RuntimeStep::Retract { actor, value } => Self {
+            super::RuntimeStep::Retract { actor, value } => AdmissionRequest {
                 actor: actor.clone(),
                 action: AdmissionAction::Retract,
                 target: None,
                 value: Some(value.clone()),
                 upper: None,
             },
-            super::RuntimeStep::Clock { actor } => Self {
+            super::RuntimeStep::Clock { actor } => AdmissionRequest {
                 actor: actor.clone(),
                 action: AdmissionAction::Clock,
                 target: None,
                 value: None,
                 upper: None,
             },
-            super::RuntimeStep::Random { actor, upper } => Self {
+            super::RuntimeStep::Random { actor, upper } => AdmissionRequest {
                 actor: actor.clone(),
                 action: AdmissionAction::Random,
                 target: None,
                 value: None,
                 upper: Some(*upper),
             },
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AdmissionAction {
-    Send,
-    Observe,
-    Assert,
-    Retract,
-    Clock,
-    Random,
-}
-
-impl AdmissionAction {
-    pub fn all() -> &'static [AdmissionAction] {
-        &[
-            AdmissionAction::Send,
-            AdmissionAction::Observe,
-            AdmissionAction::Assert,
-            AdmissionAction::Retract,
-            AdmissionAction::Clock,
-            AdmissionAction::Random,
-        ]
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            AdmissionAction::Send => "send",
-            AdmissionAction::Observe => "observe",
-            AdmissionAction::Assert => "assert",
-            AdmissionAction::Retract => "retract",
-            AdmissionAction::Clock => "clock",
-            AdmissionAction::Random => "random",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AdmissionDecision {
-    Allow { reason: String },
-    Deny { reason: String },
-}
-
-impl AdmissionDecision {
-    pub fn is_allowed(&self) -> bool {
-        matches!(self, AdmissionDecision::Allow { .. })
-    }
-
-    pub fn status(&self) -> &'static str {
-        match self {
-            AdmissionDecision::Allow { .. } => "allow",
-            AdmissionDecision::Deny { .. } => "deny",
-        }
-    }
-
-    pub fn reason(&self) -> &str {
-        match self {
-            AdmissionDecision::Allow { reason } | AdmissionDecision::Deny { reason } => reason,
         }
     }
 }
@@ -282,18 +83,40 @@ mod tests {
     }
 
     #[test]
-    fn deny_rule_matches_specific_actor_action_and_value() {
-        let policy = super::AdmissionPolicy::from_deny_rules(vec![super::AdmissionDenyRule {
+    fn runtime_steps_project_their_canonical_value_and_bounds() {
+        let body = crate::runtime::RuntimeValue::string("hello").expect("runtime test value");
+        let send = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Send {
+            from: "a".into(),
+            to: "b".into(),
+            body: body.clone(),
+        });
+        assert_eq!(send.action, super::AdmissionAction::Send);
+        assert_eq!(send.target.as_deref(), Some("b"));
+        assert_eq!(send.value, Some(body));
+        let random = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Random {
+            actor: "a".into(),
+            upper: 6,
+        });
+        assert_eq!((random.action, random.value, random.upper), (super::AdmissionAction::Random, None, Some(6)));
+    }
+
+    #[test]
+    fn default_runtime_capability_context_denies_and_an_explicit_grant_admits() {
+        // r[verify molten.runtime_spine.capability_context_deny_by_default]
+        let value = crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value");
+        let request = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Assert {
+            actor: "producer".into(),
+            value: value.clone(),
+        });
+        let policy = super::AdmissionPolicy::allow_all();
+        let denied = policy.decide_with_capabilities(&super::CapabilityContext::default(), &request);
+        assert_eq!(denied.reason(), "missing capability grant");
+        let explicit = super::CapabilityContext::from_grants(vec![super::CapabilityGrant {
             actor: Some("producer".to_string()),
             action: Some(super::AdmissionAction::Assert),
             target: None,
-            value: Some(crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value")),
-            reason: "producer cannot assert readiness".to_string(),
+            value: Some(value),
         }]);
-        let request = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Assert {
-            actor: "producer".into(),
-            value: crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value"),
-        });
-        assert!(matches!(policy.decide(&request), super::AdmissionDecision::Deny { .. }));
+        assert!(policy.decide_with_capabilities(&explicit, &request).is_allowed());
     }
 }

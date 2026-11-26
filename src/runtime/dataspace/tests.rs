@@ -3,3 +3,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/dataspace/parts/tests/p006/body.rs"));

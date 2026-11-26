@@ -35,16 +35,35 @@ pub struct ReplicaIngressConfig {
     pub delivery_window: std::time::Duration,
 }
 
-/// One bounded payload poll: a decoded event, idle deadline, or recoverable decode failure.
-/// A decode failure ends the frame's session without acknowledgement. The frame source's outer
-/// result separately carries fatal transport or listener failures; the decoded event stays inline.
-pub type PolledReplicaFrame = std::result::Result<Option<ReceivedReplicaEvent>, crate::error::Failure>;
+/// One bounded payload poll: a decoded event, idle deadline, or a rejected connection. A rejected
+/// connection ends only that connection, without acknowledgement. The frame source's outer result
+/// separately carries fatal listener failures; the decoded event stays inline.
+pub type PolledReplicaFrame = std::result::Result<Option<ReceivedReplicaEvent>, RejectedReplicaFrame>;
 
 pub type ReplicaFrameFuture<'a> =
     std::pin::Pin<Box<dyn Future<Output = crate::error::Result<PolledReplicaFrame>> + Send + 'a>>;
 
-/// A source of peer frames for the ingress pump. An outer `Err` is a transport or listener failure
-/// and ends ingress; an inner `Err` is an undecodable payload that the pump drops and counts.
+/// Why ingress dropped one connection without delivering an event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RejectedReplicaFrame {
+    /// The connection failed or stalled (handshake, stream, frame bound, peer close) or its payload
+    /// is not a canonical Raft envelope.
+    Connection(crate::error::Failure),
+    /// The authenticated remote endpoint is not admitted, or it is not the admitted endpoint of the
+    /// envelope's `from` voter.
+    Unauthenticated(crate::error::Failure),
+}
+
+impl RejectedReplicaFrame {
+    pub fn failure(&self) -> &crate::error::Failure {
+        match self {
+            Self::Connection(failure) | Self::Unauthenticated(failure) => failure,
+        }
+    }
+}
+
+/// A source of peer frames for the ingress pump. An outer `Err` is a listener failure and ends
+/// ingress; an inner `Err` is one rejected connection that the pump drops and counts.
 pub trait ReplicaFrameSource: Send + 'static {
     fn poll_frame<'a>(&'a mut self, session_ref: &'a str, timeout: std::time::Duration) -> ReplicaFrameFuture<'a>;
 }
@@ -77,6 +96,7 @@ pub struct ReplicaIngressPump<S: ReplicaFrameSource = crate::fabric_transport::L
     cancel: Option<tokio::sync::oneshot::Sender<()>>,
     task: Option<tokio::task::JoinHandle<crate::error::Result<S>>>,
     dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    authentication_failures: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl ReplicaTransportPort {
@@ -151,38 +171,64 @@ async fn poll_replica_event<L: ReplicaListenerSource>(
     timeout: std::time::Duration,
 ) -> crate::error::Result<Option<ReceivedReplicaEvent>> {
     let listener = listener.admitted_listener()?;
-    let Some(received) = listener.poll_one_derived_frame(session_ref, timeout, derive_replica_request_ref).await?
-    else {
-        return Ok(None);
-    };
-    received_event(received).map(Some)
+    poll_listener_frame(listener, session_ref, timeout)
+        .await?
+        .map_err(|rejected| rejected.failure().clone())
 }
 
-/// Poll one listener session, separating a payload that fails to decode from transport failures.
+/// Poll one listener connection, separating a rejected connection from listener failures. The
+/// envelope sender is bound to the admitted voter of the authenticated remote endpoint before the
+/// transport acknowledges, so a spoofed `from` never obtains delivered-frame evidence.
+// r[impl molten.fabric_transport.raft_peer_auth_and_isolation]
 async fn poll_listener_frame(
     listener: &mut crate::fabric_transport::Listener,
     session_ref: &str,
     timeout: std::time::Duration,
 ) -> crate::error::Result<PolledReplicaFrame> {
-    let mut is_undecodable = false;
-    let derive = |payload: &[u8]| derive_replica_request_ref(payload).inspect_err(|_error| is_undecodable = true);
-    match listener.poll_one_derived_frame(session_ref, timeout, derive).await {
-        Ok(None) => Ok(Ok(None)),
-        Ok(Some(received)) => received_event(received).map(|event| Ok(Some(event))),
-        Err(error) if is_undecodable => Ok(Err(error)),
-        Err(error) => Err(error),
-    }
+    let mut is_spoofed_sender = false;
+    let derive = |peer_id: &str, payload: &[u8]| {
+        let envelope = parse_replica_message(payload)?;
+        if envelope.from != peer_id {
+            is_spoofed_sender = true;
+            return Err(crate::error::Failure::invalid_harness(
+                "live Raft envelope sender differs from the authenticated remote endpoint's admitted voter",
+            ));
+        }
+        Ok(replica_message(&envelope)?.envelope_ref)
+    };
+    let polled = listener.poll_one_derived_frame(session_ref, timeout, derive).await?;
+    Ok(match polled {
+        crate::fabric_transport::ListenerPoll::Idle => Ok(None),
+        crate::fabric_transport::ListenerPoll::Received(received) => received_event(received).map(Some),
+        crate::fabric_transport::ListenerPoll::Rejected(rejection) => Err(match rejection.kind {
+            crate::fabric_transport::ConnectionRejectionKind::UnadmittedPeer => {
+                RejectedReplicaFrame::Unauthenticated(rejection.failure)
+            }
+            crate::fabric_transport::ConnectionRejectionKind::Session if is_spoofed_sender => {
+                RejectedReplicaFrame::Unauthenticated(rejection.failure)
+            }
+            crate::fabric_transport::ConnectionRejectionKind::Handshake
+            | crate::fabric_transport::ConnectionRejectionKind::Session => {
+                RejectedReplicaFrame::Connection(rejection.failure)
+            }
+        }),
+    })
 }
 
-fn received_event(received: crate::fabric_transport::ReceivedFrame) -> crate::error::Result<ReceivedReplicaEvent> {
-    let envelope = parse_replica_message(&received.payload)?;
-    let refs = replica_transport_refs(&envelope)?;
-    let payload_bytes = u64::try_from(received.payload.len())
-        .map_err(|_| crate::error::Failure::invalid_harness("live Raft received payload length exceeds u64"))?;
+fn received_event(
+    received: crate::fabric_transport::ReceivedFrame,
+) -> std::result::Result<ReceivedReplicaEvent, RejectedReplicaFrame> {
+    let envelope = parse_replica_message(&received.payload).map_err(RejectedReplicaFrame::Connection)?;
+    let refs = replica_transport_refs(&envelope).map_err(RejectedReplicaFrame::Connection)?;
+    let payload_bytes = u64::try_from(received.payload.len()).map_err(|_| {
+        RejectedReplicaFrame::Connection(crate::error::Failure::invalid_harness(
+            "live Raft received payload length exceeds u64",
+        ))
+    })?;
     if received.evidence.request_ref != refs.request_ref || received.evidence.payload_bytes != payload_bytes {
-        return Err(crate::error::Failure::invalid_harness(
+        return Err(RejectedReplicaFrame::Connection(crate::error::Failure::invalid_harness(
             "live Raft received payload shape does not match transport evidence",
-        ));
+        )));
     }
     Ok(ReceivedReplicaEvent {
         event: ReplicaEvent::Message { envelope },
@@ -207,11 +253,6 @@ fn prepare_send(
     })?;
     input.request_ref.clone_from(&message.envelope_ref);
     Ok((input, message, timeout))
-}
-
-fn derive_replica_request_ref(payload: &[u8]) -> crate::error::Result<String> {
-    let envelope = parse_replica_message(payload)?;
-    Ok(replica_message(&envelope)?.envelope_ref)
 }
 
 pub(super) fn validate_ingress_config(config: &ReplicaIngressConfig) -> crate::error::Result<()> {

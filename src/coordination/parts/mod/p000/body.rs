@@ -17,6 +17,7 @@ const COORDINATION_REQUEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_RE
 const COORDINATION_SERVICE_MANIFEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_SERVICE_MANIFEST_SCHEMA;
 const COORDINATION_STATE_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
 const COORDINATION_STATUS_ASSERTION_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
+const COORDINATION_COMMIT_INTENT_SCHEMA: &str = "molten.coordination.commit-intent.v1";
 
 fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
@@ -67,6 +68,11 @@ pub const OP_ARRIVE: &str = "arrive";
 pub const OP_REGISTER: &str = "register";
 pub const OP_UNREGISTER: &str = "unregister";
 pub const OP_READ: &str = "read";
+/// Releases a lock lease or leader term once the runtime's coordination clock reaches its expiry. It takes
+/// no payload: requests never carry time.
+pub const OP_EXPIRE: &str = "expire";
+/// Steps the current leader down; only the leader holding the current fencing token may resign.
+pub const OP_RESIGN: &str = "resign";
 /// Requested from the coordination runtime, `linearizable` is denied: its in-process control registry has
 /// no replicated read index.
 pub const READ_CONSISTENCY_LINEARIZABLE: &str = crate::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE;
@@ -94,6 +100,18 @@ pub const DEFAULT_COORDINATION_QUEUE_CAPACITY: u64 = 4;
 pub const DEFAULT_COORDINATION_SEMAPHORE_CAPACITY: u64 = 2;
 pub const DEFAULT_COORDINATION_RATE_LIMIT: u64 = 2;
 pub const DEFAULT_COORDINATION_BARRIER_PARTIES: u64 = 2;
+/// Coordination time is sampled from the runtime's shell-owned [`CoordinationClock`] port, once per
+/// admitted mutation, and recorded with each committed mutation as `(time_basis_ref, ticks)`. Lease lengths
+/// are measured in the ticks of that basis (nanoseconds on the live node monotonic basis).
+///
+/// Lease length for a lock or leader term requested without `<lease ttl>`: 30 seconds on the live basis.
+pub const DEFAULT_COORDINATION_LEASE_TICKS: u64 = 30_000_000_000;
+/// Largest lease a lock or leader term may request (one hour on the live basis), so every holder eventually
+/// becomes expirable.
+pub const MAX_COORDINATION_LEASE_TICKS: u64 = 3_600_000_000_000;
+/// Last clock sample a commit may record. Above it a maximal lease would not be representable, so further
+/// mutations are denied instead of overflowing.
+pub const MAX_COORDINATION_TIME_TICKS: u64 = u64::MAX - MAX_COORDINATION_LEASE_TICKS;
 
 const MAX_COORDINATION_REFS: usize = 4096;
 const MAX_COORDINATION_ITEMS: usize = 4096;
@@ -107,187 +125,5 @@ const _: () = assert!(MAX_COORDINATION_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_COORDINATION_CHECKS <= 10_000);
 const _: () = assert!(MAX_COORDINATION_SERVICES <= 64);
 const _: () = assert!(MAX_COORDINATION_KEY_LEN <= 4096);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationServiceManifestInput {
-    pub service_id: String,
-    pub services: Vec<String>,
-    pub control_group_ref: String,
-    pub queue_capacity: u64,
-    pub semaphore_capacity: u64,
-    pub rate_limit: u64,
-    pub barrier_parties: u64,
-    pub policy_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationServiceManifest {
-    pub manifest_ref: String,
-    pub service_id: String,
-    pub services: Vec<String>,
-    pub control_group_ref: String,
-    pub queue_capacity: u64,
-    pub semaphore_capacity: u64,
-    pub rate_limit: u64,
-    pub barrier_parties: u64,
-    pub policy_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationRequestInput {
-    pub service: String,
-    pub operation: String,
-    pub key: String,
-    pub client_session: String,
-    pub operation_id_ref: String,
-    pub read_consistency_mode: String,
-    pub payload: Option<IoValue>,
-    pub authority_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
-    pub policy_refs: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationRequest {
-    pub request_ref: String,
-    pub service: String,
-    pub operation: String,
-    pub key: String,
-    pub client_session: String,
-    pub operation_id_ref: String,
-    pub read_consistency_mode: String,
-    pub payload: Option<IoValue>,
-    pub authority_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
-    pub policy_refs: Vec<String>,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FencingToken {
-    pub token_ref: String,
-    pub key: String,
-    pub owner: String,
-    pub token: u64,
-    pub lease_epoch: u64,
-    pub commit_receipt_ref: String,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationStatusAssertion {
-    pub assertion_ref: String,
-    pub service: String,
-    pub key: String,
-    pub read_consistency_mode: String,
-    pub state_ref: String,
-    pub receipt_ref: String,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationStateSnapshot {
-    pub state_ref: String,
-    pub retention_refs: Vec<String>,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationReceipt {
-    pub receipt_ref: String,
-    pub decision: String,
-    pub service: String,
-    pub operation: String,
-    pub read_consistency_mode: String,
-    pub request_ref: String,
-    pub raft_receipt_ref: Option<String>,
-    pub token_ref: Option<String>,
-    pub state_ref: String,
-    pub transition_kind: String,
-    pub before_state_ref: String,
-    pub after_state_ref: Option<String>,
-    pub preserved_state_ref: Option<String>,
-    pub output_refs: Vec<String>,
-    pub control_plane_intent_ref: Option<String>,
-    pub prior_receipt_ref: Option<String>,
-    pub dataspace_assertion_refs: Vec<String>,
-    pub diagnostics: Vec<String>,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationApplyResult {
-    pub receipt: CoordinationReceipt,
-    pub request: CoordinationRequest,
-    pub token: Option<FencingToken>,
-    pub state_snapshot: CoordinationStateSnapshot,
-    pub assertions: Vec<CoordinationStatusAssertion>,
-    pub raft_commit_ref: Option<String>,
-    pub raft_read_receipt: Option<RaftReadReceipt>,
-    pub evidence_values: Vec<IoValue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationFixtureRun {
-    pub decision: String,
-    pub manifest_ref: String,
-    pub final_state_ref: String,
-    pub receipt_refs: Vec<String>,
-    pub assertion_refs: Vec<String>,
-    pub evidence_values: Vec<IoValue>,
-    pub report_value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationApplyReport {
-    pub report_ref: String,
-    pub decision: String,
-    pub manifest_ref: String,
-    pub final_state_ref: String,
-    pub receipt_refs: Vec<String>,
-    pub assertion_refs: Vec<String>,
-    pub evidence_refs: Vec<String>,
-    pub value: IoValue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoordinationRuntime {
-    pub manifest: CoordinationServiceManifest,
-    pub raft: ControlRegistryRuntime,
-    pub state: CoordinationState,
-    pub applied_operations: OrderedMap<String, CoordinationApplyResult>,
-    pub receipts: Vec<CoordinationReceipt>,
-    pub assertions: Vec<CoordinationStatusAssertion>,
-    pub tokens: Vec<FencingToken>,
-    pub next_sequence: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CoordinationState {
-    pub locks: OrderedMap<String, LockState>,
-    pub queues: OrderedMap<String, Vec<String>>,
-    pub semaphores: OrderedMap<String, OrderedSet<String>>,
-    pub rates: OrderedMap<String, u64>,
-    pub elections: OrderedMap<String, ElectionState>,
-    pub barriers: OrderedMap<String, BarrierState>,
-    pub registry: OrderedMap<String, RegistryEntry>,
-    pub next_fencing_token: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockState {
-    pub owner: String,
-    pub token: u64,
-    pub token_ref: String,
-    pub lease_epoch: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ElectionState {
-    pub leader: String,
-    pub token: u64,
-    pub token_ref: String,
-}
+const _: () = assert!(DEFAULT_COORDINATION_LEASE_TICKS > 0);
+const _: () = assert!(DEFAULT_COORDINATION_LEASE_TICKS <= MAX_COORDINATION_LEASE_TICKS);

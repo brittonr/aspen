@@ -140,3 +140,46 @@
         let reference = super::canonical_content_ref(&value).expect("canonical content ref");
         assert_eq!(reference.as_str(), super::canonical_hash(&value).expect("canonical hash"));
     }
+
+    #[test]
+    fn optional_content_refs_have_one_canonical_encoding() {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        let reference = super::content_ref_from_bytes(b"optional-ref-uniqueness");
+        let some = preserves::Value::from(super::optional_ref_value(Some(&reference)));
+        let none = preserves::Value::from(super::optional_ref_value(None));
+        let bare = preserves::Value::from(super::string(&reference));
+        assert_eq!(super::optional_content_ref_string(&some, "optional ref").expect("some"), Some(reference.clone()));
+        assert_eq!(super::optional_content_ref_string(&none, "optional ref").expect("none"), None);
+        let error = super::optional_content_ref_string(&bare, "optional ref").expect_err("bare string is not Some");
+        assert!(error.to_string().contains("must be <none> or <some"));
+
+        let spec = &super::EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_SCHEMA;
+        let index = boundary_field_index(spec, |field| matches!(field.kind, super::BoundaryFieldKind::OptionalRefRecord));
+        let label = spec.fields[index].label;
+        let wrapped = boundary_fixture_with_field(spec, index, super::record(label, vec![super::record(
+            "some",
+            vec![super::string(&reference)],
+        )]));
+        assert!(super::validate_boundary_schema(&wrapped, spec).is_ok());
+        let absent = boundary_fixture_with_field(spec, index, super::record(label, vec![super::record("none", Vec::new())]));
+        assert!(super::validate_boundary_schema(&absent, spec).is_ok());
+        let bare_boundary = boundary_fixture_with_field(spec, index, super::record(label, vec![super::string(&reference)]));
+        assert!(super::validate_boundary_schema(&bare_boundary, spec).is_err());
+    }
+
+    #[hegel::test(test_cases = 32)]
+    fn hegel_optional_content_refs_reject_bare_and_uppercase_digests(tc: hegel::TestCase) {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        let bytes = tc.draw(hegel::generators::binary().max_size(64));
+        let reference = super::content_ref_from_bytes(&bytes);
+        let some = preserves::Value::from(super::optional_ref_value(Some(&reference)));
+        assert_eq!(super::optional_content_ref_string(&some, "optional ref").expect("some"), Some(reference.clone()));
+        let bare = preserves::Value::from(super::string(&reference));
+        assert!(super::optional_content_ref_string(&bare, "optional ref").is_err());
+
+        let uppercase = format!("blake3:{}", reference.trim_start_matches("blake3:").to_ascii_uppercase());
+        if uppercase != reference {
+            let wrapped = preserves::Value::from(super::optional_ref_value(Some(&uppercase)));
+            assert!(super::optional_content_ref_string(&wrapped, "optional ref").is_err());
+        }
+    }

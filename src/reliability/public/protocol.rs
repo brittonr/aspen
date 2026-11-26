@@ -44,6 +44,14 @@ pub struct Response {
     pub diagnostic: Option<String>,
     #[serde(default)]
     pub pre_effect_denial: bool,
+    /// The answering node's current Raft term, returned only to an unchallenged probe. Advisory and
+    /// unsigned: a client signs it as a write's `fence_term`, and the leader enforces the fence.
+    #[serde(default = "absent_fence_term", skip_serializing_if = "Option::is_none")]
+    pub fence_term: Option<u64>,
+}
+
+fn absent_fence_term() -> Option<u64> {
+    None
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -170,6 +178,7 @@ pub fn uncertain(request: &Request, diagnostic: String) -> Response {
         value: serde_json::Value::Null,
         diagnostic: Some(diagnostic),
         pre_effect_denial: false,
+        fence_term: None,
         operation_id: request.operation.as_ref().and_then(|v| v.get("id")).and_then(|v| v.as_str()).map(String::from),
         attempt_id: request
             .operation
