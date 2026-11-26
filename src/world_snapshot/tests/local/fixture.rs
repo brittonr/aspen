@@ -75,6 +75,7 @@ impl Fixture {
             .begin_effect_for_step(&RuntimeStep::Clock {
                 actor: "producer".into(),
             })
+            .expect("checked effect sequence")
             .expect("unresolved request");
         history.push(unresolved.to_value());
         let image = LogicalRuntimeImage {

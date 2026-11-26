@@ -69,6 +69,7 @@ const _: () = assert!(WASM_MAX_EXPORTS <= 16_384);
 #[derive(Debug)]
 struct WasmExecutionState {
     hostcalls: Vec<String>,
+    denied_hostcall: Option<String>,
     limits: StoreLimits,
 }
 
@@ -91,6 +92,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     let decision_bytes = canonical_bytes(input.hostcall_decision)?;
     link_imports(&mut linker, LinkInput {
         actor_id: prepared.actor_id,
+        operation: &prepared.operation,
         allowed: &prepared.allowed,
         has_preserves_abi: prepared.has_preserves_abi,
         decision_bytes: &decision_bytes,
@@ -103,29 +105,33 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
         ))
     })?;
 
-    let abi_receipt = if prepared.has_preserves_abi {
-        Some(execute_preserves_abi(
-            prepared.actor_id,
-            &instance,
-            &mut store,
-            &prepared.export,
-            input.actor_input,
-        )?)
+    let call_result = if prepared.has_preserves_abi {
+        execute_preserves_abi(prepared.actor_id, &instance, &mut store, &prepared.export, input.actor_input).map(Some)
     } else {
-        let func = instance.get_typed_func::<(), ()>(&mut store, &prepared.export).map_err(|error| {
-            MoltenError::invalid_harness(format!(
-                "Wasm executor actor {} missing required export {} for hostcall operation {}: {error}",
-                prepared.actor_id, prepared.export, prepared.operation
-            ))
-        })?;
-        func.call(&mut store, ()).map_err(|error| {
-            MoltenError::invalid_harness(format!(
-                "Wasm executor actor {} export {} trapped while requesting hostcall {}: {error}",
-                prepared.actor_id, prepared.export, prepared.operation
-            ))
-        })?;
-        None
+        instance
+            .get_typed_func::<(), ()>(&mut store, &prepared.export)
+            .map_err(|error| {
+                MoltenError::invalid_harness(format!(
+                    "Wasm executor actor {} missing required export {} for hostcall operation {}: {error}",
+                    prepared.actor_id, prepared.export, prepared.operation
+                ))
+            })?
+            .call(&mut store, ())
+            .map(|()| None)
+            .map_err(|error| {
+                MoltenError::invalid_harness(format!(
+                    "Wasm executor actor {} export {} trapped while requesting hostcall {}: {error}",
+                    prepared.actor_id, prepared.export, prepared.operation
+                ))
+            })
     };
+    if let Some(denied) = store.data().denied_hostcall.as_deref() {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm executor actor {} hostcall {denied} was denied before dispatch: step {} ({}) admits exactly one {} call",
+            prepared.actor_id, input.sequence, input.step_ref, prepared.operation
+        )));
+    }
+    let abi_receipt = call_result?;
 
     let fuel_remaining = store.get_fuel().map_err(|error| {
         MoltenError::invalid_harness(format!(
@@ -166,6 +172,7 @@ struct Compiled {
 
 struct LinkInput<'a> {
     actor_id: &'a str,
+    operation: &'a str,
     allowed: &'a [String],
     has_preserves_abi: bool,
     decision_bytes: &'a [u8],
@@ -217,6 +224,9 @@ fn compile(actor_id: &str, bytes: &[u8]) -> Result<Compiled> {
     })?;
     let mut engine_config = Config::new();
     engine_config.consume_fuel(true);
+    // Deterministic playback: NaN results take one canonical bit pattern
+    // instead of whatever the host FPU produces.
+    engine_config.cranelift_nan_canonicalization(true);
     let engine = Engine::new(&engine_config).map_err(|error| {
         MoltenError::invalid_harness(format!("Wasm executor engine creation failed for actor {actor_id}: {error}"))
     })?;
@@ -237,6 +247,7 @@ fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -
     }
     for hostcall in input.allowed {
         let captured_hostcall = hostcall.clone();
+        let operation = input.operation.to_string();
         if input.has_preserves_abi {
             let response_bytes = input.decision_bytes.to_vec();
             linker
@@ -244,9 +255,9 @@ fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -
                     "molten:hostcall",
                     hostcall,
                     move |mut caller: Caller<'_, WasmExecutionState>, ptr: i32, len: i32| -> wasmtime::Result<i64> {
+                        admit_single_hostcall(caller.data_mut(), &operation, &captured_hostcall)?;
                         validate_hostcall_preserves_bytes(&mut caller, ptr, len)?;
                         write_hostcall_response_bytes(&mut caller, &response_bytes)?;
-                        caller.data_mut().hostcalls.push(captured_hostcall.clone());
                         Ok(((WASM_ABI_HOSTCALL_RESPONSE_PTR as u64) << 32 | response_bytes.len() as u64) as i64)
                     },
                 )
@@ -258,9 +269,13 @@ fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -
                 })?;
         } else {
             linker
-                .func_wrap("molten:hostcall", hostcall, move |mut caller: Caller<'_, WasmExecutionState>| {
-                    caller.data_mut().hostcalls.push(captured_hostcall.clone());
-                })
+                .func_wrap(
+                    "molten:hostcall",
+                    hostcall,
+                    move |mut caller: Caller<'_, WasmExecutionState>| -> wasmtime::Result<()> {
+                        admit_single_hostcall(caller.data_mut(), &operation, &captured_hostcall)
+                    },
+                )
                 .map_err(|error| {
                     MoltenError::invalid_harness(format!(
                         "Wasm executor hostcall linker setup failed for actor {}: {error}",

@@ -12,7 +12,9 @@ Visibility is a separate computation. `evaluate_assertion_visibility` receives a
 
 ## Explicit retraction versus scope cleanup
 
-A `Retract` step stages an owner-specific removal and an `AssertionRetracted` event. It also stages `AssertionRetractionObserved` for observers whose patterns match the value. Successful commit applies the set removal. In the inspected staging code these events are built without first testing whether the owned assertion exists, so an event trace must not be interpreted as a count of actual set entries removed.
+A `Retract` step stages an owner-specific removal and an `AssertionRetracted` event. When the retraction removes the last visible owner of the value, it also stages `AssertionRetractionObserved` for observers whose patterns match the value. Successful commit applies the set removal. Staging first tests whether the actor holds the assertion; a retraction of an unheld assertion stages a rollback, and the turn returns only `TurnRolledBack` with a rolled-back receipt (see [turn commit and rollback](turn-commit-and-rollback.md)).
+
+Stopping a facet retracts the assertions of the facet and its running descendants in one turn. Observers outside the stopping facets receive `AssertionRetractionObserved` when the stop removes the last visible owner of a value; observers owned by the stopping facets are removed with them and are not notified.
 
 `cleanup_actor_scope` has a different shape. It gathers canonical references for assertions and observers owned by the named actor, and messages whose sender **or recipient** is that actor. It sorts those references, removes the corresponding entries, and returns a `RuntimeScopeCleanup` with `actor`, `assertion_refs`, `observer_refs`, and `message_refs`. The [state implementation](../../../src/runtime/dataspace/parts/state/p001/body.rs) performs all fallible reference construction before its retain operations.
 

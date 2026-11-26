@@ -126,7 +126,7 @@ fn initial_image() -> FixtureResult<molten::world_snapshot::LogicalRuntimeImage>
         }
         history.extend(events.iter().map(|event| event.to_value()));
     }
-    let unresolved = runtime.begin_effect_for_step(&molten::runtime::RuntimeStep::Clock { actor: "producer".into() })
+    let unresolved = runtime.begin_effect_for_step(&molten::runtime::RuntimeStep::Clock { actor: "producer".into() })?
         .ok_or("fixture clock effect was not prepared")?;
     history.push(unresolved.to_value());
     Ok(molten::world_snapshot::LogicalRuntimeImage {

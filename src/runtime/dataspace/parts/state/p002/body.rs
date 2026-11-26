@@ -33,7 +33,7 @@ impl RuntimeState {
             state: FacetState::Running,
             stop_handler_ref: stop_handler_ref.map(str::to_string),
         };
-        let mut turn = PendingTurn::new();
+        let mut turn = facet_turn(actor);
         turn.events.push(Event::FacetCreated {
             facet_id: facet_id.to_string(),
             actor: actor.to_string(),
@@ -50,7 +50,7 @@ impl RuntimeState {
         value: &Value,
     ) -> Result<(Vec<Event>, PredicateReceipt)> {
         self.require_running_facet(actor, facet_id)?;
-        let mut turn = PendingTurn::new();
+        let mut turn = facet_turn(actor);
         self.stage_assert(&mut turn, actor, value, Some(facet_id));
         self.commit_turn_with_predicate_receipt(turn)
     }
@@ -62,7 +62,7 @@ impl RuntimeState {
         pattern: &Value,
     ) -> Result<(Vec<Event>, PredicateReceipt)> {
         self.require_running_facet(actor, facet_id)?;
-        let mut turn = PendingTurn::new();
+        let mut turn = facet_turn(actor);
         self.stage_observe(&mut turn, actor, pattern, Some(facet_id));
         self.commit_turn_with_predicate_receipt(turn)
     }
@@ -74,7 +74,7 @@ impl RuntimeState {
         value: &Value,
     ) -> Result<(Vec<Event>, PredicateReceipt)> {
         self.require_running_facet(actor, facet_id)?;
-        let mut turn = PendingTurn::new();
+        let mut turn = facet_turn(actor);
         self.stage_retract(&mut turn, actor, value, Some(facet_id));
         self.commit_turn_with_predicate_receipt(turn)
     }
@@ -85,14 +85,19 @@ impl RuntimeState {
         facet_id: &str,
     ) -> Result<(Vec<Event>, PredicateReceipt)> {
         self.require_running_facet(actor, facet_id)?;
-        let mut turn = PendingTurn::new();
+        let mut turn = facet_turn(actor);
         self.stage_facet_stop(&mut turn, facet_id)?;
         self.commit_turn_with_predicate_receipt(turn)
     }
 
     fn stage_facet_stop(&self, turn: &mut PendingTurn, facet_id: &str) -> Result<()> {
-        for id in self.facet_stop_order(facet_id)? {
-            self.stage_single_facet_stop(turn, &id);
+        let order = self.facet_stop_order(facet_id)?;
+        let mut scope = FacetStopScope {
+            stopping: order.iter().cloned().collect(),
+            remaining_owners: OrderedMap::new(),
+        };
+        for id in &order {
+            self.stage_single_facet_stop(turn, id, &mut scope);
         }
         Ok(())
     }
@@ -120,12 +125,38 @@ impl RuntimeState {
         Ok(order)
     }
 
-    fn stage_single_facet_stop(&self, turn: &mut PendingTurn, facet_id: &str) {
+    // r[impl molten.runtime_spine.dataspace_determinism_and_rollback_integrity]
+    /// Stage one facet's stop: retract its assertions, notify every surviving
+    /// observer when the last visible owner of a value disappears, remove its
+    /// observers, and run its stop handler.
+    ///
+    /// Observers owned by facets stopping in the same turn are removed with
+    /// their facet and are not notified. A value stays visible while any owner
+    /// outside the stopped facets still asserts it.
+    fn stage_single_facet_stop(&self, turn: &mut PendingTurn, facet_id: &str, scope: &mut FacetStopScope) {
         for assertion in self.assertions.iter().filter(|assertion| assertion.facet.as_deref() == Some(facet_id)) {
             turn.events.push(Event::AssertionRetracted {
                 actor: assertion.actor.clone(),
                 value: assertion.value.clone(),
             });
+            let remaining = scope
+                .remaining_owners
+                .entry(assertion.value.clone())
+                .or_insert_with(|| self.visible_owner_count(&assertion.value));
+            *remaining = remaining.saturating_sub(1);
+            if *remaining == 0 {
+                for observer in self.observers.iter().filter(|observer| {
+                    !observer.facet.as_ref().is_some_and(|facet| scope.stopping.contains(facet))
+                        && observe_value_matches(&observer.pattern, &assertion.value)
+                }) {
+                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
+                    turn.events.push(Event::AssertionRetractionObserved {
+                        observer: observer.actor.clone(),
+                        owner: assertion.actor.clone(),
+                        value: assertion.value.clone(),
+                    });
+                }
+            }
             turn.actions.push(TurnAction::Retract(assertion.clone()));
         }
         for observer in self.observers.iter().filter(|observer| observer.facet.as_deref() == Some(facet_id)) {
@@ -200,6 +231,18 @@ impl RuntimeState {
         }
         depth
     }}
+
+/// The facets stopping in one turn and, per retracted value, how many visible
+/// owners remain after the retractions staged so far.
+struct FacetStopScope {
+    stopping: OrderedSet<String>,
+    remaining_owners: OrderedMap<Value, usize>,
+}
+
+/// A facet turn attributed to the actor that owns the facet.
+fn facet_turn(actor: &str) -> PendingTurn {
+    PendingTurn::with_cause(actor.to_string(), super::super::RuntimeTurnCause::external("runtime-turn"))
+}
 
 fn validate_facet_token(label: &str, value: &str) -> Result<()> {
     if value.is_empty() {
