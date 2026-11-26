@@ -10,6 +10,8 @@ This binding prevents a reviewer from interpreting a signature over one destinat
 
 The [admission implementation](../../../crates/molten-core/src/world_head/admission.rs) checks policy, generation, authentication, authority/currentness, ancestry, and bounds as distinct stages. Authentication observations contain more than a cryptographic pass bit: duplicate signer identities, unrecognized roles, stale or revoked signers, and insufficient admitted signer counts are rejected. A threshold of valid signatures is therefore not a substitute for current role and authority checks.
 
+The [shell evaluation](../../../src/world_head/parts/service/p001/body.rs) builds those signer observations without trusting the detached signature carrier, which carries only producer, key id, public key, signature, and key generation. A signer's role is the one named by the trusted Artifact Auth policy key whose identity, producer, and key id the signed statement carries; a key id outside the `world-head-<role>-authority-key` convention yields no role and is denied. Only a cryptographically verified, current, unrevoked, role-bearing signer is offered to `WorldHeadSignerAuthorityPort`, and that port alone decides the signer's authority. Relabeling a carrier's key id breaks the signed statement rather than changing its role.
+
 ## Generations describe a durable transition sequence
 
 For an admitted claim, the successor generation equals the expected generation plus one, with overflow checked explicitly. Creation uses expected generation zero and no expected head. Non-creation compares both expected head and expected generation against the supplied current state.
@@ -22,9 +24,11 @@ Recovery deserves a narrow reading. The governing document says recovery require
 
 [LocalWorldHeadStore](../../../src/world_head/store.rs) places heads and transition receipts in the same Redb write transaction. It reads the current head inside that transaction and compares the complete observed state with the plan's predecessor. Only then does it call the fresh-admission closure.
 
-Fresh admission checks authentication, authority, exact policy identity, and observed generation. The adapter inserts the successor state and canonical transition receipt before committing. Thus the local atomic unit is the head-plus-receipt transition, not the earlier claim construction, signature collection, object publication, or external authority service.
+Fresh admission checks authentication, authority, exact policy identity, and observed generation. The executor's authentication recheck re-evaluates every signer through `WorldHeadSignerAuthorityPort` and re-runs pure admission over those fresh signer observations, so a signer role, signer authority, currentness, or threshold withdrawn after planning denies the commit inside the transaction; the signature's cryptographic pass bit alone is not forwarded as fresh authentication. The adapter inserts the successor state and canonical transition receipt before committing. Thus the local atomic unit is the head-plus-receipt transition, not the earlier claim construction, signature collection, object publication, or external authority service.
 
 The implementation distinguishes `AlreadyApplied`, `Stale`, `Applied`, and `Uncertain`. In particular, observing the exact successor returns `AlreadyApplied` without performing another insertion. This is recognition of durable state, not a fresh grant to mutate. A commit error yields `Uncertain`; it is not evidence that the transaction certainly failed, and it is not confirmed success either.
+
+The [executor](../../../src/world_head/parts/service/p000/body.rs) returns a receipt whose decision names that observed outcome: `applied`, `already-applied`, `stale` (with the stale-expected-head issue), or `uncertain`. Each outcome therefore has its own canonical receipt identity. The store is offered only the `applied` receipt, which it writes inside the transaction that commits the successor head; a stale observation writes nothing. An uncertain commit records the `uncertain` receipt in the reconciliation table; whether the `applied` head-plus-receipt write became durable is exactly what reconciliation must establish. No executor outcome returns or persists an `admitted` receipt prepared before the mutation boundary.
 
 ## Worked race: two admissible proposals
 

@@ -151,7 +151,7 @@ fn validate_authentication(request: &WorldHeadPlanRequest) -> Vec<WorldHeadIssue
             issues.push(WorldHeadIssue::AuthenticationDenied);
             is_signer_admitted = false;
         }
-        if !request.policy.allowed_signer_roles.contains(&signer.role) {
+        if !signer.role.is_some_and(|role| request.policy.allowed_signer_roles.contains(&role)) {
             issues.push(WorldHeadIssue::UnknownSignerRole);
             is_signer_admitted = false;
         }

@@ -111,8 +111,13 @@ fn authentication_authority_and_signer_failures_never_promote_a_claim() {
     assert!(denied_issues(&duplicate).contains(&WorldHeadIssue::DuplicateSigner));
 
     let mut wrong_role = advance_request();
-    wrong_role.authentication.signers[0].role = WorldHeadSignerRole::Release;
+    wrong_role.authentication.signers[0].role = Some(WorldHeadSignerRole::Release);
     assert!(denied_issues(&wrong_role).contains(&WorldHeadIssue::UnknownSignerRole));
+
+    // A signer no trusted policy key binds to a role is never admitted under any role.
+    let mut unattributed = advance_request();
+    unattributed.authentication.signers[0].role = None;
+    assert!(denied_issues(&unattributed).contains(&WorldHeadIssue::UnknownSignerRole));
 }
 
 #[test]
@@ -122,7 +127,7 @@ fn recovery_requires_independent_currentness_and_never_implies_whole_store_detec
     request.claim_ref = WorldHeadClaimRef::new(reference("recovery-claim")).expect("recovery claim ref");
     request.claim.purpose = WorldHeadPurpose::Recovery;
     request.claim.successor_head = commit("right");
-    request.authentication.signers[0].role = WorldHeadSignerRole::Recovery;
+    request.authentication.signers[0].role = Some(WorldHeadSignerRole::Recovery);
     let issues = denied_issues(&request);
     assert!(issues.contains(&WorldHeadIssue::IndependentCurrentnessRequired));
 

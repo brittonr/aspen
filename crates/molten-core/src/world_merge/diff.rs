@@ -41,19 +41,27 @@ fn classify_root(input: &super::WorldMergeRootInput, is_profile_included: bool) 
     if !input.base.available || !input.left.available || !input.right.available {
         return WorldRootDiffClass::Unavailable;
     }
-    if input.base.root.is_none() || input.left.root.is_none() || input.right.root.is_none() {
+    let present = [&input.base, &input.left, &input.right].into_iter().filter(|value| value.root.is_some());
+    if present.clone().next().is_none() {
         return WorldRootDiffClass::Absent;
     }
-    if !schemas_compatible(input) {
+    // Creation and deletion are changes: a root absent from base, left, or right is compared
+    // with the present sides rather than reported as wholly absent, and a side missing its root
+    // is never reported as equal to the other side.
+    // r[impl molten.world_commit.merge_conservative_precedence_and_full_graph_closure]
+    if !schemas_compatible(present) {
         return WorldRootDiffClass::Incompatible;
     }
-    if input.left.root == input.right.root {
+    if input.left.root.is_some() && input.left.root == input.right.root {
         WorldRootDiffClass::Equal
     } else {
         WorldRootDiffClass::Changed
     }
 }
 
-fn schemas_compatible(input: &super::WorldMergeRootInput) -> bool {
-    input.base.schema_ref == input.left.schema_ref && input.left.schema_ref == input.right.schema_ref
+fn schemas_compatible<'a>(mut present: impl Iterator<Item = &'a super::WorldMergeValue>) -> bool {
+    let Some(first) = present.next() else {
+        return true;
+    };
+    present.all(|value| value.schema_ref == first.schema_ref)
 }

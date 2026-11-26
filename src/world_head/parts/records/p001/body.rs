@@ -98,7 +98,13 @@ pub fn canonical_world_head_transition_receipt(
 ) -> Result<CanonicalWorldHeadTransitionReceipt> {
     if !matches!(
         input.decision,
-        TRANSITION_DECISION_ADMITTED | TRANSITION_DECISION_DENIED | TRANSITION_DECISION_CONFLICT
+        TRANSITION_DECISION_ADMITTED
+            | TRANSITION_DECISION_DENIED
+            | TRANSITION_DECISION_CONFLICT
+            | TRANSITION_DECISION_APPLIED
+            | TRANSITION_DECISION_ALREADY_APPLIED
+            | TRANSITION_DECISION_STALE
+            | TRANSITION_DECISION_UNCERTAIN
     ) {
         return Err(Failure::invalid_harness("unknown world-head receipt decision"));
     }

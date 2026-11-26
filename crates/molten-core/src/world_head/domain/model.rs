@@ -70,7 +70,9 @@ pub struct WorldHeadPolicy {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldHeadSignerObservation {
     pub key_identity_ref: String,
-    pub role: WorldHeadSignerRole,
+    /// Role named by the trusted policy key that verified the signed statement; `None` when no
+    /// trusted key binds the signer to a world-head role.
+    pub role: Option<WorldHeadSignerRole>,
     pub authenticated: bool,
     pub current: bool,
     pub revoked: bool,
