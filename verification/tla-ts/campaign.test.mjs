@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTlc, requireCheckerCapture, validatePair } from "./campaign.mjs";
+import { MODEL_RUNS, parseTlc, requireCheckerCapture, validatePair } from "./campaign.mjs";
 import { DIVE_RELEASE, parseDive, parseDiveVersion, readDiveReport, verifyDiveArchive } from "./dive.mjs";
 
 // Synthetic protocol inputs test evidence reading, NOT observed model-run evidence.
@@ -17,7 +17,7 @@ const diveSuccess = () => ({
   statistics: { generated: 1234, distinct: 567, left_on_queue: 0 }, property: null, counterexample: null,
 });
 
-function diveViolation(property = "NoMissingPromise") {
+function diveViolation(property = "CommittedOrderAgreement") {
   const { execution, ...common } = diveSuccess();
   return { ...common,
     check_kind: "safety", verdict: "invariant-violation", exit_code: 12, property,
@@ -56,19 +56,38 @@ test("parse-only, truncated, timeout and drift outputs never become semantic suc
 });
 
 // r[verify molten.consensus.fast_path_model.fault_corpus]
-test("guard mutant requires the named invariant and causal trace", () => {
-  const tlc = parseTlc(header + "Error: Invariant NoMissingPromise is violated.\n" +
+test("each mutant requires its named invariant and causal trace", () => {
+  const expected = "CommittedOrderAgreement";
+  const tlc = parseTlc(header + `Error: Invariant ${expected} is violated.\n` +
     "State 1: <Initial predicate>\nState 2: <FastCommit>\n" +
     "12 states generated, 9 distinct states found, 3 states left on queue.\n", 12);
   const ts = { tool: "synthetic-checker", status: "invariant-violation", generatedStates: 14,
     distinctStates: 10, queuedStates: 4,
-    violation: { name: "NoMissingPromise", trace: [{ action: "Init" }, { action: "FastCommit" }] } };
+    violation: { name: expected, trace: [{ action: "Init" }, { action: "FastCommit" }] } };
   const dive = parseDive(diveViolation(), 12, true);
-  assert.deepEqual(validatePair(tlc, ts, dive, true), { verdictsAgree: true, countsAgree: false, exhaustive: false });
-  assert.throws(() => validatePair(tlc, { ...ts, violation: { name: "TypeOK", trace: [1, 2] } }, dive, true), /wrong mutant/);
-  assert.throws(() => validatePair(tlc, { ...ts, violation: { name: "NoMissingPromise", trace: [] } }, dive, true), /causal/);
-  assert.throws(() => validatePair(tlc, baseline(), dive, true), /expected invariant-violation/);
-  assert.throws(() => validatePair(tlc, ts, parseDive(diveViolation("TypeOK"), 12, true), true), /dive .*wrong mutant/);
+  assert.deepEqual(validatePair(tlc, ts, dive, expected), { verdictsAgree: true, countsAgree: false, exhaustive: false });
+  assert.throws(() => validatePair(tlc, { ...ts, violation: { name: "TypeOK", trace: [1, 2] } }, dive, expected), /wrong mutant/);
+  assert.throws(() => validatePair(tlc, ts, dive, "Recoverability"), /wrong mutant/);
+  assert.throws(() => validatePair(tlc, { ...ts, violation: { name: expected, trace: [] } }, dive, expected), /causal/);
+  assert.throws(() => validatePair(tlc, baseline(), dive, expected), /expected invariant-violation/);
+  assert.throws(() => validatePair(tlc, ts, parseDive(diveViolation("TypeOK"), 12, true), expected), /dive .*wrong mutant/);
+  // A mutant whose verdict is a clean pass is never treated as caught.
+  assert.throws(() => validatePair(baseline(), baseline(), parseDive(diveSuccess(), 0), expected), /expected invariant-violation/);
+});
+
+test("every configured mutant names a semantic safety invariant", () => {
+  const semantic = new Set(["CommittedOrderAgreement", "Recoverability", "ExecutionOrderAgreement",
+    "LinearizableConflictOrder", "AtMostOnceApplication"]);
+  assert.ok(MODEL_RUNS.some((run) => run.violation === null && run.bounds.replicas === 3));
+  for (const run of MODEL_RUNS.filter((run) => run.violation !== null)) assert.ok(semantic.has(run.violation), run.label);
+  // Recovery-quorum intersection is only load-bearing with more replicas than
+  // the superquorum: a four-replica baseline and its small-quorum mutant must
+  // share bounds.
+  const four = MODEL_RUNS.filter((run) => run.bounds.replicas === 4);
+  assert.deepEqual(four.map((run) => run.violation), [null, "CommittedOrderAgreement"]);
+  assert.deepEqual(four[0].bounds, four[1].bounds);
+  assert.ok(MODEL_RUNS.some((run) => run.label === "insufficient-quorum"));
+  assert.equal(new Set(MODEL_RUNS.map((run) => run.config)).size, MODEL_RUNS.length);
 });
 
 // r[verify molten.consensus.fast_path_model.dive_parity]

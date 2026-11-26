@@ -249,8 +249,14 @@ consumer policy that this tool does not own.
 ```sh
 nix build
 nix flake check
-nix build .#checks.x86_64-linux.verified-node-replication-pilot --no-link -L
+# Formal models: production Raft (TLC) and the blocked fast-path package (TLC/TLA-ts/Dive).
+nix build .#checks.x86_64-linux.production-raft-model --no-link -L
+nix build .#checks.x86_64-linux.consensus-fastpath-model-parity --no-link -L
+# Opt-in research pilot, not part of `nix flake check`.
+nix build .#packages.x86_64-linux.verified-node-replication-pilot --no-link -L
 ```
+
+See [production Raft model](raft-tla.md) and [fast-path model](consensus-fastpath-tla.md) for scope and non-claims.
 
 ## Release builds
 

@@ -27,9 +27,15 @@ bytes that do not match the existing profile hash before replacing the copy.
 Run the reproducible pilot with:
 
 ```bash
-nix build .#checks.x86_64-linux.verified-node-replication-pilot \
+nix build .#packages.x86_64-linux.verified-node-replication-pilot \
   --no-link --print-out-paths -L
 ```
+
+The pilot is **opt-in research**: it is a package, not a member of `checks`, so
+default `nix flake check` does not build the extra Octet/Verus verifier cohort
+for this unused external crate. Earlier records that name
+`.#checks.x86_64-linux.verified-node-replication-pilot` refer to the same
+derivation before it left the default check set.
 
 ## Decision
 

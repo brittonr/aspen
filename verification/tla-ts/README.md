@@ -26,10 +26,12 @@ The Dive adapter invokes `check` with `--workers 1 --compat=tlc --output json`.
 It maps schema 3, requires a completed exhaustive temporal baseline, and
 rejects refusal, budget stop, timeout, drift or malformed/incomplete reports.
 The baseline must succeed with the same generated and distinct counts as TLC
-and an empty queue in all three tools. The missing-promise mutant must violate
-`NoMissingPromise` in all three with more than one trace state; early-stop
-counts are retained but need not agree. Each checker/config has 180 seconds;
-all six sequential runs share 720 seconds.
+and an empty queue in all three tools, for each baseline in `MODEL_RUNS`
+(three replicas; four replicas with a smaller superquorum). Each mutant
+(missing promise, insufficient superquorum, four-replica small recovery
+quorum) must violate `CommittedOrderAgreement` in all three with more than one
+trace state; early-stop counts are retained but need not agree. Each
+checker/config has 180 seconds; all fifteen sequential runs share 720 seconds.
 
 Run `nix build --keep-failed .#checks.x86_64-linux.consensus-fastpath-model-parity`.
 The existing Nix check retains actual durations, options, byte-exact stdout
