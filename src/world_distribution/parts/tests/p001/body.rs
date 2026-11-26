@@ -238,7 +238,7 @@ impl WorldClaimAuthenticationPort for ClaimAuthentication {
             policy_matches: true,
             signers: vec![WorldHeadSignerObservation {
                 key_identity_ref: reference("claim-key"),
-                role: WorldHeadSignerRole::Maintainer,
+                role: Some(WorldHeadSignerRole::Maintainer),
                 authenticated: true,
                 current: true,
                 revoked: false,

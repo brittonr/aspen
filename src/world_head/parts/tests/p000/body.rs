@@ -22,6 +22,7 @@ use molten_core::world_head::WorldHeadClaim;
 use molten_core::world_head::WorldHeadClaimRef;
 use molten_core::world_head::WorldHeadCurrentnessObservation;
 use molten_core::world_head::WorldHeadDecision;
+use molten_core::world_head::WorldHeadIssue;
 use molten_core::world_head::WorldHeadPlanRequest;
 use molten_core::world_head::WorldHeadPolicy;
 use molten_core::world_head::WorldHeadPolicyRef;
@@ -47,6 +48,8 @@ const WORLD_HEAD_SCHEMA_COUNT: usize = 3;
 const WORLD_HEAD_SCHEMA_FIELD_COUNT: u64 = 6;
 const RECORD_LABEL_FIELD_INDEX: usize = 3;
 const SCHEMA_ID_FIELD_INDEX: usize = 4;
+const TRANSITION_RECEIPT_FIELD_COUNT: u64 = 13;
+const RECEIPT_DECISION_FIELD_INDEX: usize = 1;
 const WORLD_HEAD_SCHEMA_ARTIFACTS: [&str; WORLD_HEAD_SCHEMA_COUNT] = [
     include_str!("../../../../../schemas/preserves-boundaries/molten-world-head-claim-v1.preserves"),
     include_str!("../../../../../schemas/preserves-boundaries/molten-world-head-conflict-v1.preserves"),
@@ -167,9 +170,8 @@ fn signing_adapter<'a>(
 }
 
 fn signed_request(signer: &mut LocalWorldHeadSigningAdapter<'_>, claim: WorldHeadClaim) -> WorldHeadExecutionRequest {
-    let (_, mut carrier, _) =
+    let (_, carrier, _) =
         sign_world_head_claim(signer, &claim, WorldHeadSignerRole::Maintainer).expect("signed world-head claim");
-    carrier.authority_admitted = true;
     let policy = authentication_policy(&carrier);
     WorldHeadExecutionRequest {
         claim,
@@ -187,7 +189,37 @@ fn signed_request(signer: &mut LocalWorldHeadSigningAdapter<'_>, claim: WorldHea
 
 struct TestAuthority {
     admitted: bool,
+    signer_admitted: bool,
+    stale_on_recheck: bool,
+    withdraw_signer_on_recheck: bool,
     calls: usize,
+    signer_roles: Vec<WorldHeadSignerRole>,
+}
+
+impl TestAuthority {
+    fn new(admitted: bool) -> Self {
+        Self {
+            admitted,
+            signer_admitted: true,
+            stale_on_recheck: false,
+            withdraw_signer_on_recheck: false,
+            calls: 0,
+            signer_roles: Vec::new(),
+        }
+    }
+}
+
+impl WorldHeadSignerAuthorityPort for TestAuthority {
+    fn signer_authority(
+        &mut self,
+        _claim: &WorldHeadClaim,
+        signer: &WorldHeadVerifiedSigner<'_>,
+    ) -> std::result::Result<bool, WorldHeadPortError> {
+        self.signer_roles.push(signer.role);
+        // Signer authority withdrawn after planning: every evaluation past the first denies.
+        let is_withdrawn = self.withdraw_signer_on_recheck && self.signer_roles.len() > 1;
+        Ok(self.signer_admitted && !is_withdrawn)
+    }
 }
 
 impl WorldHeadAuthorityPort for TestAuthority {
@@ -198,20 +230,40 @@ impl WorldHeadAuthorityPort for TestAuthority {
         expected_generation: u64,
     ) -> std::result::Result<WorldHeadAuthorityObservation, WorldHeadPortError> {
         self.calls = self.calls.saturating_add(1);
+        // A recheck that observes a concurrent generation makes the local CAS report `Stale`.
+        let is_recheck = self.calls > 1;
+        let observed_generation = if self.stale_on_recheck && is_recheck {
+            expected_generation.saturating_add(1)
+        } else {
+            expected_generation
+        };
         Ok(WorldHeadAuthorityObservation {
             authority_ref: WorldHeadAuthorityRef::new(reference("authority-observation")).expect("authority ref"),
             policy_ref: policy_ref.clone(),
             admitted: self.admitted,
-            observed_generation: expected_generation,
+            observed_generation,
         })
     }
 }
 
-struct UncertainStore {
-    reconciliation_recorded: bool,
+/// A creation-only store that reports a scripted CAS outcome and records what it was offered.
+struct ScriptedStore {
+    outcome: WorldHeadMutationOutcome,
+    offered_receipt: Option<CanonicalWorldHeadTransitionReceipt>,
+    reconciliation_receipt: Option<CanonicalWorldHeadTransitionReceipt>,
 }
 
-impl WorldHeadStatePort for UncertainStore {
+impl ScriptedStore {
+    const fn new(outcome: WorldHeadMutationOutcome) -> Self {
+        Self {
+            outcome,
+            offered_receipt: None,
+            reconciliation_receipt: None,
+        }
+    }
+}
+
+impl WorldHeadStatePort for ScriptedStore {
     fn read_head(&self, _branch_id: &WorldBranchId) -> std::result::Result<Option<WorldHeadState>, WorldHeadPortError> {
         Ok(None)
     }
@@ -219,7 +271,7 @@ impl WorldHeadStatePort for UncertainStore {
     fn apply_transition<F>(
         &mut self,
         _plan: &WorldHeadTransitionPlan,
-        _receipt: &CanonicalWorldHeadTransitionReceipt,
+        receipt: &CanonicalWorldHeadTransitionReceipt,
         recheck: F,
     ) -> std::result::Result<WorldHeadMutationOutcome, WorldHeadPortError>
     where
@@ -228,19 +280,31 @@ impl WorldHeadStatePort for UncertainStore {
         let fresh = recheck(None)?;
         assert!(fresh.authentication_passed);
         assert!(fresh.authority.admitted);
-        Ok(WorldHeadMutationOutcome::Uncertain)
+        self.offered_receipt = Some(receipt.clone());
+        Ok(self.outcome)
     }
 }
 
-impl WorldHeadReconciliationPort for UncertainStore {
+impl WorldHeadReconciliationPort for ScriptedStore {
     fn record_uncertain_transition(
         &mut self,
         _plan: &WorldHeadTransitionPlan,
-        _receipt: &CanonicalWorldHeadTransitionReceipt,
+        receipt: &CanonicalWorldHeadTransitionReceipt,
     ) -> std::result::Result<(), WorldHeadPortError> {
-        self.reconciliation_recorded = true;
+        self.reconciliation_receipt = Some(receipt.clone());
         Ok(())
     }
+}
+
+fn receipt_decision(receipt: &CanonicalWorldHeadTransitionReceipt) -> String {
+    let fields = crate::preserves_rail::simple_record_fields(
+        &receipt.value,
+        WORLD_HEAD_TRANSITION_RECEIPT_RECORD,
+        TRANSITION_RECEIPT_FIELD_COUNT,
+    )
+    .expect("transition receipt fields");
+    crate::preserves_rail::record_string_field(&fields[RECEIPT_DECISION_FIELD_INDEX], "decision", "decision")
+        .expect("receipt decision")
 }
 
 #[test]

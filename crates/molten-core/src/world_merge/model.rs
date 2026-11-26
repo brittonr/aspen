@@ -245,6 +245,7 @@ pub enum WorldMergeIssue {
     ModeNotDeclared(RootKind),
     HandlerMissing(RootKind),
     HandlerMismatch(RootKind),
+    HandlerInputSchemaMismatch(RootKind),
     HandlerEffectRequested(RootKind),
     HandlerFailed(RootKind),
 }

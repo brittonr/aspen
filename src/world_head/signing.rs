@@ -68,7 +68,7 @@ impl WorldHeadSigningPort for LocalWorldHeadSigningAdapter<'_> {
             .map_err(|_| WorldHeadPortError::new("world-head-public-key", "public key is malformed"))?;
         Ok(WorldHeadSignerIdentity {
             producer_id: self.producer_id.clone(),
-            key_id: format!("world-head-{}-authority-key", role.as_str()),
+            key_id: world_head_signer_key_id(role),
             key_identity: artifact_auth_ed25519::public_key_identity(public_key.as_bytes()),
         })
     }
@@ -76,7 +76,7 @@ impl WorldHeadSigningPort for LocalWorldHeadSigningAdapter<'_> {
     fn sign_statement(
         &mut self,
         statement: &ArtifactStatement,
-        role: WorldHeadSignerRole,
+        _role: WorldHeadSignerRole,
         policy_ref: &WorldHeadPolicyRef,
     ) -> Result<WorldHeadSignatureCarrier, WorldHeadPortError> {
         let resolved = self.resolve(policy_ref)?;
@@ -92,10 +92,22 @@ impl WorldHeadSigningPort for LocalWorldHeadSigningAdapter<'_> {
             public_key_bytes: public_key.as_bytes().to_vec(),
             signature_bytes: signed.signature_bytes,
             key_generation: resolved.handle.handle.generation,
-            role,
-            authority_admitted: false,
         })
     }
+}
+
+const SIGNER_KEY_ID_PREFIX: &str = "world-head-";
+const SIGNER_KEY_ID_SUFFIX: &str = "-authority-key";
+
+/// The signed Artifact Auth key id naming a world-head signer role.
+pub fn world_head_signer_key_id(role: WorldHeadSignerRole) -> String {
+    format!("{SIGNER_KEY_ID_PREFIX}{}{SIGNER_KEY_ID_SUFFIX}", role.as_str())
+}
+
+/// The role a trusted, signed key id names; `None` when the key id names no world-head role.
+pub fn world_head_signer_role(key_id: &str) -> Option<WorldHeadSignerRole> {
+    let role = key_id.strip_prefix(SIGNER_KEY_ID_PREFIX)?.strip_suffix(SIGNER_KEY_ID_SUFFIX)?;
+    WorldHeadSignerRole::parse(role).ok()
 }
 
 fn signing_error(error: crate::error::Failure) -> WorldHeadPortError {

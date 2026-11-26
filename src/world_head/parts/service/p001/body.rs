@@ -1,21 +1,58 @@
 
-fn signer_observation(
-    policy: &AuthenticationPolicy,
-    statement: &artifact_auth_core::ArtifactStatement,
-    carrier: &WorldHeadSignatureCarrier,
-) -> WorldHeadSignerObservation {
+struct SignerObservationInput<'a> {
+    policy: &'a AuthenticationPolicy,
+    claim: &'a WorldHeadClaim,
+    statement: &'a artifact_auth_core::ArtifactStatement,
+    carrier: &'a WorldHeadSignatureCarrier,
+}
+
+/// Observes one signer without trusting unsigned carrier metadata.
+///
+/// Trust is the policy key whose identity, producer, and key id the signed statement carries; its
+/// policy-bound key id names the role. Only a cryptographically verified, current, unrevoked,
+/// role-bearing signer is offered to the authority port, which alone decides authority.
+// r[impl molten.world_commit.world_head_truthful_receipts_and_verified_signers]
+fn signer_observation<P: WorldHeadSignerAuthorityPort + ?Sized>(
+    input: SignerObservationInput<'_>,
+    signer_authority: &mut P,
+) -> Result<WorldHeadSignerObservation> {
+    let SignerObservationInput {
+        policy,
+        claim,
+        statement,
+        carrier,
+    } = input;
     let cryptographic =
         artifact_auth_ed25519::verify_statement(statement, &carrier.public_key_bytes, &carrier.signature_bytes);
-    let trusted = policy.trusted_keys.iter().find(|trusted| trusted.key_identity == statement.key_identity);
+    let trusted = policy.trusted_keys.iter().find(|trusted| {
+        trusted.key_identity == statement.key_identity
+            && trusted.producer_id == statement.producer_id
+            && trusted.key_id == statement.key_id
+    });
     let currentness = trusted.map(|trusted| trusted.currentness);
-    WorldHeadSignerObservation {
-        key_identity_ref: format!("blake3:{}", statement.key_identity.digest_hex),
-        role: carrier.role,
+    let is_current = matches!(currentness, Some(KeyCurrentness::Current | KeyCurrentness::VerificationOverlap));
+    let is_revoked = matches!(currentness, Some(KeyCurrentness::Revoked));
+    let role = trusted.and_then(|trusted| world_head_signer_role(&trusted.key_id));
+    let key_identity_ref = format!("blake3:{}", statement.key_identity.digest_hex);
+    let is_authority_admitted = match (trusted, role) {
+        (Some(trusted), Some(role)) if cryptographic.verified && is_current && !is_revoked => signer_authority
+            .signer_authority(claim, &WorldHeadVerifiedSigner {
+                key_identity_ref: &key_identity_ref,
+                producer_id: &trusted.producer_id,
+                key_id: &trusted.key_id,
+                role,
+            })
+            .map_err(port_error)?,
+        _ => false,
+    };
+    Ok(WorldHeadSignerObservation {
+        key_identity_ref,
+        role,
         authenticated: cryptographic.verified,
-        current: matches!(currentness, Some(KeyCurrentness::Current | KeyCurrentness::VerificationOverlap)),
-        revoked: matches!(currentness, Some(KeyCurrentness::Revoked)),
-        authority_admitted: carrier.authority_admitted,
-    }
+        current: is_current,
+        revoked: is_revoked,
+        authority_admitted: is_authority_admitted,
+    })
 }
 
 fn statement_set_ref(

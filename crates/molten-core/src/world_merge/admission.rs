@@ -11,6 +11,7 @@ use super::WorldMergeRootInput;
 use super::WorldMergedRoot;
 use super::planning::PlanIdentityInput;
 use super::planning::add_application_handler;
+use super::planning::admitted_handler_profile;
 use super::planning::identify_plan;
 use crate::world_commit::RootKind;
 
@@ -102,14 +103,12 @@ fn reduce_root(
     handler: Option<&dyn WorldMergeHandler>,
     reduction: &mut MergeReduction<'_>,
 ) {
+    // Runtime sensitivity, material availability, schema admission, and the declared profile
+    // mode are checked before any equality shortcut: equal references neither make
+    // runtime-sensitive state mergeable nor admit a root kind the profile excludes.
+    // r[impl molten.world_commit.merge_conservative_precedence_and_full_graph_closure]
     if root.left.root.is_none() && root.right.root.is_none() {
         super::planning::reduce_absent(request, root, reduction.outputs, reduction.issues);
-        return;
-    }
-    if root.left.root == root.right.root && root.left.schema_ref == root.right.schema_ref {
-        if let Some(selected) = root.left.root.clone() {
-            reduction.outputs.push(selected_output(root.kind, selected));
-        }
         return;
     }
     if is_runtime_sensitive(root.kind) {
@@ -124,6 +123,18 @@ fn reduce_root(
         reduction.issues.push(WorldMergeIssue::ModeNotDeclared(root.kind));
         return;
     };
+    if root.left.root == root.right.root {
+        if mode == WorldMergeMode::ApplicationHandler
+            && let Err(issue) = admitted_handler_profile(request, root)
+        {
+            reduction.issues.push(issue);
+            return;
+        }
+        if let Some(selected) = root.left.root.clone() {
+            reduction.outputs.push(selected_output(root.kind, selected));
+        }
+        return;
+    }
     match mode {
         WorldMergeMode::IdenticalOnly => {
             add_identical(root, reduction.outputs, reduction.conflicts);
