@@ -1,4 +1,6 @@
-use std::collections::BTreeSet;
+//! View-change recovery: pause, agree a recovery set, commit its marker, then resume.
+
+use alloc::borrow::ToOwned;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecoveryPhase {
@@ -14,20 +16,28 @@ pub struct RecoveryState {
     pub base_view: u64,
     pub last_normal_view: u64,
     pub phase: RecoveryPhase,
-    pub accepted_commands: BTreeSet<String>,
-    pub recovery_set: BTreeSet<String>,
-    pub marker_ref: Option<String>,
+    pub accepted_commands: alloc::collections::BTreeSet<alloc::string::String>,
+    pub recovery_set: alloc::collections::BTreeSet<alloc::string::String>,
+    pub marker_ref: Option<alloc::string::String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecoveryAction {
-    BeginViewChange { new_base_view: u64 },
-    AgreeRecoverySet { commands: BTreeSet<String> },
-    CommitRecoveryMarker { marker_ref: String },
-    ResumeNormalView { new_acceleration_view: u64 },
+    BeginViewChange {
+        new_base_view: u64,
+    },
+    AgreeRecoverySet {
+        commands: alloc::collections::BTreeSet<alloc::string::String>,
+    },
+    CommitRecoveryMarker {
+        marker_ref: alloc::string::String,
+    },
+    ResumeNormalView {
+        new_acceleration_view: u64,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecoveryIssue {
     EmptyMarker,
     NewViewNotAhead,
@@ -37,6 +47,22 @@ pub enum RecoveryIssue {
     ResumeBeforeMarker,
     ViewMismatch,
 }
+
+impl core::fmt::Display for RecoveryIssue {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
+            Self::EmptyMarker => "empty-marker",
+            Self::NewViewNotAhead => "new-view-not-ahead",
+            Self::RecoverySetDropsAcceptedCommand => "recovery-set-drops-accepted-command",
+            Self::RecoverySetNotAgreed => "recovery-set-not-agreed",
+            Self::RecoveryNotPaused => "recovery-not-paused",
+            Self::ResumeBeforeMarker => "resume-before-marker",
+            Self::ViewMismatch => "view-mismatch",
+        })
+    }
+}
+
+impl core::error::Error for RecoveryIssue {}
 
 // r[impl molten.consensus.fast_path_model.view_change_recovery]
 pub fn transition_recovery(state: &RecoveryState, action: &RecoveryAction) -> Result<RecoveryState, RecoveryIssue> {
@@ -63,7 +89,10 @@ fn begin_view_change(state: &RecoveryState, new_base_view: u64) -> Result<Recove
     Ok(next)
 }
 
-fn agree_recovery_set(state: &RecoveryState, commands: &BTreeSet<String>) -> Result<RecoveryState, RecoveryIssue> {
+fn agree_recovery_set(
+    state: &RecoveryState,
+    commands: &alloc::collections::BTreeSet<alloc::string::String>,
+) -> Result<RecoveryState, RecoveryIssue> {
     if state.phase != RecoveryPhase::Paused {
         return Err(RecoveryIssue::RecoveryNotPaused);
     }

@@ -47,11 +47,11 @@ A modeled fast commit needs all of these facts:
 - one canonical operation identity on both paths
 - matching acceleration and base views
 - one same-view superquorum
-- a compatible promise from every active original-path proposer
+- a compatible promise from every active original-path proposer, which has itself acknowledged the operation in that superquorum
 - a conflict-free classification
 
 Mixed-view acknowledgements never combine.
-Missing promises, conflicts, identity drift, or insufficient acknowledgements use the original path.
+Missing promises, a proposer absent from the acknowledgers, conflicts, identity drift, or insufficient acknowledgements use the original path.
 Convergence applies and replies to one session operation at most once.
 
 ## Recovery boundary

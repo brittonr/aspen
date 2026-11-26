@@ -14,17 +14,17 @@ Likewise, a planner's refusal to combine conflicting membership views is not a c
 
 The [checked configuration](../../../config/consensus-fastpath/profile.ncl) defines three- and five-replica crash-fault model profiles. The configured bounds are eight commands, four keys, four views, and 64 steps. These are finite exploration parameters, not service capacity or throughput limits. The contract admits only pure-model or deterministic-simulation selection and a pure-model-only claim profile.
 
-[Rust profile admission](../../../src/fabric_consistency/fastpath/profile.rs) separately rejects live and production selection and unsupported fault models, counts, bounds, or claim profiles. It checks the reference cohort and ordering prerequisites. The external paper and pinned artifact identify the design reference; their results do not transfer into proof of Molten's implementation.
+[Rust profile admission](../../../crates/molten-fastpath-core/src/envelope.rs) separately rejects live and production selection and unsupported fault models, counts, bounds, or claim profiles. It checks the reference cohort and ordering prerequisites. The external paper and pinned artifact identify the design reference; their results do not transfer into proof of Molten's implementation.
 
 The quorum calculation is concrete: majority is `floor(n / 2) + 1`, and superquorum is `floor(3n / 4) + 1`. The admitted counts therefore yield majority/superquorum pairs of 2/3 and 3/4. For three replicas, one failed replica can leave majority progress possible while preventing the fast path. That is a structural model observation, not a measured availability result.
 
 ## Stable-view evidence is conjunctive
 
-[`evaluate_stable_view`](../../../src/fabric_consistency/fastpath/stable.rs) checks equality between the operation identity used by the two paths, conflict-free classification, same-attempt view coordinates for acknowledgements, enough distinct replica identifiers, and compatible promises from exactly the active proposer set. An acknowledgement for another operation or either different view coordinate prevents the same-view acknowledgement set from forming.
+[`evaluate_stable_view`](../../../crates/molten-fastpath-core/src/quorate.rs) checks equality between the operation identity used by the two paths, conflict-free classification, same-attempt view coordinates for acknowledgements, enough distinct replica identifiers, compatible promises from exactly the active proposer set, and each active proposer's own same-view acknowledgement. An acknowledgement for another operation or either different view coordinate prevents the same-view acknowledgement set from forming.
 
 A membership view does not supply these promises. A node being eligible to host a role does not establish that it acknowledged this command in this consensus attempt. The identity record includes command and session context alongside group, generation, schema, policy, authority, resource, and engine-epoch context; matching only the node list is insufficient.
 
-There is a scoped distinction between intended composition and a helper's checks. The [governing stable-view boundary](../../consensus-fastpath-hazard-model.md#stable-view-boundary) calls for matching acceleration and base views. The stable helper compares each acknowledgement and promise to the attempt's respective acceleration and base fields, but does not directly require the attempt's two fields to equal each other. The [recovery helper](../../../src/fabric_consistency/fastpath/recovery.rs) does require equality when resuming normal operation. This article therefore does not claim that an arbitrary standalone call to the stable helper independently establishes the entire matching-view precondition.
+There is a scoped distinction between intended composition and a helper's checks. The [governing stable-view boundary](../../consensus-fastpath-hazard-model.md#stable-view-boundary) calls for matching acceleration and base views. The stable helper compares each acknowledgement and promise to the attempt's respective acceleration and base fields, but does not directly require the attempt's two fields to equal each other. The [recovery helper](../../../crates/molten-fastpath-core/src/succession.rs) does require equality when resuming normal operation. This article therefore does not claim that an arbitrary standalone call to the stable helper independently establishes the entire matching-view precondition.
 
 ## Illustrative view-straddled attempt
 
@@ -52,6 +52,6 @@ Canonical model evidence does not prove transport, durability, production linear
 - [Membership provider adapter](../../../src/fabric_membership/adapters.rs)
 - [Fast-path configured bounds and claims](../../../config/consensus-fastpath/profile.ncl)
 - [Fast-path configuration contract](../../../config/consensus-fastpath/contracts.ncl)
-- [Rust profile admission and quorums](../../../src/fabric_consistency/fastpath/profile.rs)
-- [Stable-view and convergence model](../../../src/fabric_consistency/fastpath/stable.rs)
-- [Recovery transition model](../../../src/fabric_consistency/fastpath/recovery.rs)
+- [Rust profile admission and quorums](../../../crates/molten-fastpath-core/src/envelope.rs)
+- [Stable-view and convergence model](../../../crates/molten-fastpath-core/src/quorate.rs)
+- [Recovery transition model](../../../crates/molten-fastpath-core/src/succession.rs)

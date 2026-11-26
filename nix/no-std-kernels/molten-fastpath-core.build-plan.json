@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "roots": [
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0"
+  ],
+  "workspaceMembers": {
+    "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0"
+  },
+  "cargoLockHash": "b7a6aa4f3a4052619cc0b0b000f5a68ff35117cb79655220323d54bb247ab3d1",
+  "inputsHash": "522cd0d8438cd0585564ab069835b8078f65f9a76d4d04b76d6adf592375af88",
+  "crates": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0": {
+      "crateName": "molten-fastpath-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-fastpath-core"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "no_std bounded consensus fast-path design model for Aspen",
+      "license": "AGPL-3.0-or-later"
+    }
+  }
+}

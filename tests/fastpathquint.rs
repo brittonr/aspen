@@ -87,15 +87,9 @@ impl FastPathDriver {
 
     fn fast_commit(&mut self, command: String, ack_mode: String, promise_mode: String, conflict_free: bool) {
         let attempt = attempt(&command, &ack_mode, &promise_mode, conflict_free, &self.recovery);
-        let decision = molten::fabric_consistency::fastpath::evaluate_stable_view(
-            &attempt,
-            molten::fabric_consistency::fastpath::DerivedQuorums {
-                majority: 2,
-                superquorum: 3,
-                tolerated_failures: 1,
-                fast_path_requires_every_replica: true,
-            },
-        );
+        // The derived five-replica quorums: superquorum 4, so a superquorum can omit the proposer.
+        let quorums = molten::fabric_consistency::fastpath::derive_quorums(5).expect("five-replica quorums");
+        let decision = molten::fabric_consistency::fastpath::evaluate_stable_view(&attempt, quorums);
         self.conflict_free = conflict_free;
         self.decision = match decision {
             molten::fabric_consistency::fastpath::StableViewDecision::FastCommitted => {
@@ -115,7 +109,7 @@ impl FastPathDriver {
         let outcome = self
             .ledger
             .converge(&operation(&command))
-            .map_err(|issue| std::io::Error::other(format!("model convergence rejected: {issue:?}")))?;
+            .map_err(|issue| std::io::Error::other(molten::fabric_consistency::fastpath::failure(issue)))?;
         if outcome.is_applied {
             self.applied.push(command.clone());
             self.application_events += 1;
@@ -198,7 +192,7 @@ impl State<FastPathDriver> for Projection {
         // Identities/order below come only from real admission/convergence outcomes.
         // The model supplies the caller's ordered-convergence precondition; the
         // ledger itself does not implement a consensus ordering engine.
-        assert_eq!(driver.ledger.applied_count(), driver.applied.len());
+        assert_eq!(driver.ledger.applied_operations().count(), driver.applied.len());
         Ok(Self {
             phase: format!("{:?}", driver.recovery.phase),
             acceleration_view: driver.recovery.acceleration_view,
@@ -231,6 +225,17 @@ include!("parts/fastpathquint/p000/body.rs");
     seed = "5"
 )]
 fn mixed_view_guard_replay() -> impl Driver {
+    FastPathDriver::empty()
+}
+
+// r[verify molten.consensus.fast_path_model.stable_view]
+#[quint_connect::quint_test(
+    spec = "verification/tla/ConsensusFastPath.qnt",
+    test = "proposerAcknowledgementTest",
+    max_samples = 1,
+    seed = "5"
+)]
+fn proposer_acknowledgement_replay() -> impl Driver {
     FastPathDriver::empty()
 }
 

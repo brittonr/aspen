@@ -4999,6 +4999,7 @@ dependencies = [
  "molten",
  "molten-composition-core",
  "molten-core",
+ "molten-fastpath-core",
  "molten-node-host",
  "molten-raft-core",
  "molten-reliability-model-core",
@@ -5071,6 +5072,13 @@ dependencies = [
  "schema-migration-core",
  "serde",
  "transactional-reconciliation-core",
+]
+
+[[package]]
+name = "molten-fastpath-core"
+version = "0.1.0"
+dependencies = [
+ "hegeltest",
 ]
 
 [[package]]

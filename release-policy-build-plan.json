@@ -8,8 +8,8 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "e48f8eb677837644f43a5bdded12c231350caf6f4f374c3a827b58f5038e0474",
-  "inputsHash": "e48333335a420bb9e6665297ac42c3dcb9af26cf31f90b7bac850c75a93a769d",
+  "cargoLockHash": "b7a6aa4f3a4052619cc0b0b000f5a68ff35117cb79655220323d54bb247ab3d1",
+  "inputsHash": "0804c029422d3f47f968f634aae9b6531a028ae42ed6b8012018045b0c977df9",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
