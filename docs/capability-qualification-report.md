@@ -88,6 +88,8 @@ valid harness report or authored carrier without that chain remains
 inconclusive, not qualified for an arbitrary build. The separate `describe`
 mode used to construct inputs reads metadata (`subjects`) without running a
 scenario.
+In source, each reviewed capability row a producer runs is the
+`capability_qualification::NativeProducer` type (renamed from `Capability`).
 
 The product producers and their scenarios are listed in
 [native capability qualification producers](distributed-testing.md#native-capability-qualification-producers).

@@ -223,52 +223,18 @@ where
     // head, so a durable `applied` receipt is never written for a stale or failed mutation.
     // r[impl molten.world_commit.world_head_truthful_receipts_and_verified_signers]
     let applied_receipt = receipt_context.receipt(WorldHeadExecutionStatus::Applied, &[])?;
-    let fresh_authentication_policy = &request.authentication_policy;
-    let fresh_signatures = &request.signatures;
-    let fresh_canonical = &canonical;
+    let fresh_input = FreshAdmissionInput {
+        plan: &plan,
+        plan_request: &plan_request,
+        canonical: &canonical,
+        authentication_policy: &request.authentication_policy,
+        signatures: &request.signatures,
+    };
     let mutation = store
-        .apply_transition(&plan, &applied_receipt, |observed| {
-            if observed != plan.before.as_ref() {
-                return Err(WorldHeadPortError::new("fresh-head-mismatch", "head changed inside mutation boundary"));
-            }
-            let fresh_authentication = evaluate_world_head_authentication(
-                fresh_canonical,
-                fresh_authentication_policy,
-                fresh_signatures,
-                &mut *authority,
-            )
-            .map_err(|error| WorldHeadPortError::new("fresh-authentication", error.to_string()))?;
-            // Re-run pure admission over the fresh signer observations so a signer role, authority,
-            // currentness, or threshold withdrawn since planning denies inside the mutation boundary.
-            // Branch authority and its generation are rechecked by the store from `fresh_authority`.
-            // r[impl molten.world_commit.world_head_truthful_receipts_and_verified_signers]
-            let fresh_request = WorldHeadPlanRequest {
-                current: observed.cloned(),
-                authentication: fresh_authentication.observation,
-                ..plan_request.clone()
-            };
-            let is_fresh_authentication_admitted = matches!(
-                plan_world_head_transition(&fresh_request),
-                WorldHeadDecision::Admitted(fresh_plan) if fresh_plan == plan
-            );
-            let fresh_authority = authority.observe_authority(
-                &plan.after.branch_id,
-                &plan.after.policy_ref,
-                plan.before.as_ref().map_or(0, |state| state.generation),
-            )?;
-            Ok(WorldHeadFreshAdmission {
-                authentication_passed: is_fresh_authentication_admitted,
-                authority: fresh_authority,
-            })
-        })
+        .apply_transition(&plan, &applied_receipt, |observed| fresh_admission(&fresh_input, &mut *authority, observed))
         .map_err(port_error)?;
     // The returned receipt reflects the observed CAS outcome, never the pre-mutation admission.
-    let (status, issues) = match mutation {
-        WorldHeadMutationOutcome::Applied => (WorldHeadExecutionStatus::Applied, Vec::new()),
-        WorldHeadMutationOutcome::AlreadyApplied => (WorldHeadExecutionStatus::AlreadyApplied, Vec::new()),
-        WorldHeadMutationOutcome::Stale => (WorldHeadExecutionStatus::Stale, vec![WorldHeadIssue::StaleExpectedHead]),
-        WorldHeadMutationOutcome::Uncertain => (WorldHeadExecutionStatus::Uncertain, Vec::new()),
-    };
+    let (status, issues) = mutation_status(mutation);
     let receipt = if status == WorldHeadExecutionStatus::Applied {
         applied_receipt
     } else {
@@ -283,66 +249,4 @@ where
         issues,
         receipt,
     })
-}
-
-struct OutcomeReceiptContext<'a> {
-    plan: &'a WorldHeadTransitionPlan,
-    claim: &'a CanonicalWorldHeadClaim,
-    authentication: &'a WorldHeadAuthenticationResult,
-    authority_ref: &'a str,
-}
-
-impl OutcomeReceiptContext<'_> {
-    fn receipt(
-        &self,
-        status: WorldHeadExecutionStatus,
-        issues: &[WorldHeadIssue],
-    ) -> Result<CanonicalWorldHeadTransitionReceipt> {
-        transition_receipt(TransitionReceiptInput {
-            decision: status.as_str(),
-            plan: Some(self.plan),
-            claim: self.claim,
-            authentication: self.authentication,
-            authority_ref: self.authority_ref,
-            issues,
-        })
-    }
-}
-
-fn denied_execution(
-    decision: WorldHeadDecision,
-    canonical: &CanonicalWorldHeadClaim,
-    authentication: &WorldHeadAuthenticationResult,
-    authority_ref: &str,
-) -> Result<WorldHeadExecutionResult> {
-    let issues = decision_issues(decision);
-    let receipt = transition_receipt(TransitionReceiptInput {
-        decision: DECISION_DENIED,
-        plan: None,
-        claim: canonical,
-        authentication,
-        authority_ref,
-        issues: &issues,
-    })?;
-    Ok(WorldHeadExecutionResult {
-        status: WorldHeadExecutionStatus::Denied,
-        plan: None,
-        issues,
-        receipt,
-    })
-}
-
-pub fn record_world_head_conflict<S: WorldHeadConflictPort>(
-    store: &mut S,
-    plans: &[WorldHeadTransitionPlan],
-    maximum: u32,
-) -> Result<Option<(WorldHeadConflictSet, CanonicalWorldHeadConflict)>> {
-    let conflict = classify_world_head_conflict(plans, maximum)
-        .map_err(|issues| Failure::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
-    let Some(conflict) = conflict else {
-        return Ok(None);
-    };
-    let canonical = canonical_world_head_conflict(&conflict)?;
-    store.record_conflict(&conflict, &canonical).map_err(port_error)?;
-    Ok(Some((conflict, canonical)))
 }

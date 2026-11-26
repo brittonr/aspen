@@ -146,5 +146,6 @@ fn equal_commit_ref_and_roots_with_field_differences_is_a_divergence() {
     let clean = matching_observations(&request);
     let complete =
         compare_world_replay(&request.trace, &request.commits, &clean, &request.bounds).expect("bounded comparison");
-    assert!(complete.complete && complete.divergence.is_none());
+    assert!(complete.complete);
+    assert!(complete.divergence.is_none());
 }

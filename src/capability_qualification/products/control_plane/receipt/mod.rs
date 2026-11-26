@@ -3,15 +3,12 @@
 //! carry process ids and endpoint identities only so the producer can prove
 //! distinct-process execution; those never enter a product observation.
 
-use preserves::ValueImpl as _;
-
-use crate::fabric_consistency::raft::ReplicaRejoin;
+mod decode;
 
 const REPLICA_SCHEMA: &str = "qualification-live-raft-replica-v1";
 const REPLICA_FIELD_COUNT: usize = 24;
 const PROBE_FIELD_COUNT: usize = 6;
 const REJECTION_FIELD_COUNT: usize = 3;
-const MAX_RECEIPT_MEMBERS: usize = 8;
 
 pub(super) const START_FILE: &str = "start.preserves";
 pub(super) const CATCH_UP_FILE: &str = "catch-up.preserves";
@@ -155,43 +152,43 @@ impl Replica {
     }
 
     pub(super) fn parse(value: &preserves::IOValue) -> crate::error::Result<Self> {
-        let fields = fields(value, REPLICA_SCHEMA, REPLICA_FIELD_COUNT)?;
-        let has_quorum = flag(&fields[16])?;
-        let has_recovery = flag(&fields[22])?;
-        let recovery = fields_of(&fields[23], "recovery", 3)?;
+        let fields = decode::fields(value, REPLICA_SCHEMA, REPLICA_FIELD_COUNT)?;
+        let has_quorum = decode::flag(&fields[16])?;
+        let has_recovery = decode::flag(&fields[22])?;
+        let recovery = decode::fields_of(&fields[23], "recovery", 3)?;
         Ok(Self {
-            node_id: text(&fields[0])?,
-            process_id: number(&fields[1])?,
-            endpoint_identity: text(&fields[2])?,
-            role: text(&fields[3])?,
-            is_voter: flag(&fields[4])?,
-            term: number(&fields[5])?,
-            commit_index: number(&fields[6])?,
-            last_applied: number(&fields[7])?,
-            committed_log_ref: text(&fields[8])?,
-            applied_request_refs: texts(&fields[9])?,
-            application_state_ref: text(&fields[10])?,
-            group_binding_ref: text(&fields[11])?,
-            membership_ref: text(&fields[12])?,
-            config_epoch: number(&fields[13])?,
-            voters: texts(&fields[14])?,
-            durable_record_count: number(&fields[15])?,
+            node_id: decode::text(&fields[0])?,
+            process_id: decode::number(&fields[1])?,
+            endpoint_identity: decode::text(&fields[2])?,
+            role: decode::text(&fields[3])?,
+            is_voter: decode::flag(&fields[4])?,
+            term: decode::number(&fields[5])?,
+            commit_index: decode::number(&fields[6])?,
+            last_applied: decode::number(&fields[7])?,
+            committed_log_ref: decode::text(&fields[8])?,
+            applied_request_refs: decode::texts(&fields[9])?,
+            application_state_ref: decode::text(&fields[10])?,
+            group_binding_ref: decode::text(&fields[11])?,
+            membership_ref: decode::text(&fields[12])?,
+            config_epoch: decode::number(&fields[13])?,
+            voters: decode::texts(&fields[14])?,
+            durable_record_count: decode::number(&fields[15])?,
             commit_quorum: if has_quorum {
                 Some(CommitQuorum {
-                    term: number(&fields[17])?,
-                    index: number(&fields[18])?,
-                    source_ref: text(&fields[19])?,
-                    evidence_ref: text(&fields[20])?,
-                    members: texts(&fields[21])?,
+                    term: decode::number(&fields[17])?,
+                    index: decode::number(&fields[18])?,
+                    source_ref: decode::text(&fields[19])?,
+                    evidence_ref: decode::text(&fields[20])?,
+                    members: decode::texts(&fields[21])?,
                 })
             } else {
                 None
             },
             recovery: if has_recovery {
                 Some(Recovery {
-                    recovery_ref: text(&recovery[0])?,
-                    durable_commit_index: number(&recovery[1])?,
-                    replay_entry_count: number(&recovery[2])?,
+                    recovery_ref: decode::text(&recovery[0])?,
+                    durable_commit_index: decode::number(&recovery[1])?,
+                    replay_entry_count: decode::number(&recovery[2])?,
                 })
             } else {
                 None
@@ -200,8 +197,8 @@ impl Replica {
     }
 }
 
-pub(super) fn rejoin_is_voter(rejoin: &ReplicaRejoin) -> bool {
-    matches!(rejoin, ReplicaRejoin::Voter)
+pub(super) fn rejoin_is_voter(rejoin: &crate::fabric_consistency::raft::ReplicaRejoin) -> bool {
+    matches!(rejoin, crate::fabric_consistency::raft::ReplicaRejoin::Voter)
 }
 
 /// How the re-elected leader's actual service handled one stale probe.
@@ -228,14 +225,14 @@ impl ProbeOutcome {
     }
 
     pub(super) fn parse(value: &preserves::IOValue) -> crate::error::Result<Self> {
-        let fields = fields(value, "qualification-live-raft-stale-probe-v1", PROBE_FIELD_COUNT)?;
+        let fields = decode::fields(value, "qualification-live-raft-stale-probe-v1", PROBE_FIELD_COUNT)?;
         Ok(Self {
-            probe: text(&fields[0])?,
-            outcome: text(&fields[1])?,
-            leader_retained: flag(&fields[2])?,
-            term_retained: flag(&fields[3])?,
-            commit_retained: flag(&fields[4])?,
-            log_retained: flag(&fields[5])?,
+            probe: decode::text(&fields[0])?,
+            outcome: decode::text(&fields[1])?,
+            leader_retained: decode::flag(&fields[2])?,
+            term_retained: decode::flag(&fields[3])?,
+            commit_retained: decode::flag(&fields[4])?,
+            log_retained: decode::flag(&fields[5])?,
         })
     }
 }
@@ -258,11 +255,11 @@ impl Rejection {
     }
 
     pub(super) fn parse(value: &preserves::IOValue) -> crate::error::Result<Self> {
-        let fields = fields(value, "qualification-live-raft-stale-rejection-v1", REJECTION_FIELD_COUNT)?;
+        let fields = decode::fields(value, "qualification-live-raft-stale-rejection-v1", REJECTION_FIELD_COUNT)?;
         Ok(Self {
-            probe: text(&fields[0])?,
-            is_rejected: flag(&fields[1])?,
-            is_responder_term_newer: flag(&fields[2])?,
+            probe: decode::text(&fields[0])?,
+            is_rejected: decode::flag(&fields[1])?,
+            is_responder_term_newer: decode::flag(&fields[2])?,
         })
     }
 }
@@ -274,59 +271,10 @@ pub(super) fn term_value(term: u64) -> preserves::IOValue {
 }
 
 pub(super) fn parse_term(value: &preserves::IOValue) -> crate::error::Result<u64> {
-    let fields = fields(value, "qualification-live-raft-stale-leader-v1", 1)?;
-    number(&fields[0])
+    let fields = decode::fields(value, "qualification-live-raft-stale-leader-v1", 1)?;
+    decode::number(&fields[0])
 }
 
 fn strings(values: &[String]) -> preserves::IOValue {
     crate::preserves_rail::sequence(values.iter().map(crate::preserves_rail::string).collect())
-}
-
-fn fields(
-    value: &preserves::IOValue,
-    label: &str,
-    arity: usize,
-) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
-    fields_of(value, label, arity)
-}
-
-fn fields_of(
-    value: &preserves::Value<preserves::IOValue>,
-    label: &str,
-    arity: usize,
-) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
-    let fields = value
-        .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| super::super::super::invalid("malformed live Raft replica receipt"))?;
-    Ok(fields.iter().collect())
-}
-
-fn text(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<String> {
-    value
-        .as_string()
-        .map(|value| value.into_owned())
-        .ok_or_else(|| super::super::super::invalid("live Raft replica receipt expected a string"))
-}
-
-fn number(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<u64> {
-    value
-        .as_u64()
-        .ok_or_else(|| super::super::super::invalid("live Raft replica receipt expected a number"))?
-        .map_err(|_| super::super::super::invalid("live Raft replica receipt number is out of range"))
-}
-
-fn flag(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<bool> {
-    value
-        .as_boolean()
-        .ok_or_else(|| super::super::super::invalid("live Raft replica receipt expected a boolean"))
-}
-
-fn texts(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Vec<String>> {
-    let members = value
-        .collect_sequence()
-        .ok_or_else(|| super::super::super::invalid("live Raft replica receipt expected a sequence"))?;
-    if members.len() > MAX_RECEIPT_MEMBERS {
-        return Err(super::super::super::invalid("live Raft replica receipt sequence exceeds its bound"));
-    }
-    members.iter().map(|member| text(&member)).collect()
 }

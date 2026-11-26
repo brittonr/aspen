@@ -115,7 +115,8 @@ fn native_execution_admission_denies_authority_that_differs_from_the_admitted_gr
         let mut service = cohort.install()?;
         let failure = service.start(START_TICK).expect_err("mismatched authority must deny execution");
         let detail = format!("{failure:?}");
-        assert!(detail.contains("AuthorityMismatch") && detail.contains(field), "{field}: {detail}");
+        assert!(detail.contains("AuthorityMismatch"), "{field}: {detail}");
+        assert!(detail.contains(field), "{field}: {detail}");
         assert!(service.host().executor().observations().is_empty(), "{field}: no process may start");
     }
     Ok(())
@@ -133,7 +134,8 @@ fn native_execution_admission_denies_a_callback_generation_fenced_after_intent_c
     *values.fence.lock().or_fail("arm generation fence")? = Some(service.host().executor().instance().clone());
 
     let detail = callback_denial(service.ingress(&ingress(GENERATION, cohort.admitted.manifest_ref())?, REQUEST_TICK));
-    assert!(detail.contains("execution request denied") && detail.contains("StaleGeneration"), "{detail}");
+    assert!(detail.contains("execution request denied"), "{detail}");
+    assert!(detail.contains("StaleGeneration"), "{detail}");
     assert_eq!(service.host().executor().observations().len(), observations, "no process may start");
     Ok(())
 }

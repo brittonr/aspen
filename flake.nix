@@ -1449,6 +1449,7 @@
           cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
             "$out/vendor/vm-cohort-core/src/"
           cp ${./src/world_snapshot/chaoscontrol.rs} "$out/src/chaoscontrol.rs"
+          cp -R ${./src/world_snapshot/chaoscontrol} "$out/src/chaoscontrol"
           cp -R ${./src/world_snapshot/vm} "$out/src/vm"
         '';
         worldBenchmarkOctetWorkspace = pkgs.runCommand "molten-world-benchmark-octet-workspace" { } ''
