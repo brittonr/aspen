@@ -32,7 +32,7 @@ fn replay_effect_events(
     replay_effect_log: &[super::schema::EffectLogEntry],
     replay_effect_index: &mut usize,
 ) -> Result<Vec<preserves::IOValue>> {
-    let Some(request) = state.begin_effect_for_step(step) else {
+    let Some(request) = state.begin_effect_for_step(step)? else {
         if !is_dataspace_turn(step) {
             return Ok(state.apply_step(step).iter().map(super::schema::event_value).collect());
         }

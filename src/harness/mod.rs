@@ -125,4 +125,5 @@ mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/parts/mod/tests/m000/p009/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/parts/mod/tests/m000/p010/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/parts/mod/tests/m000/p011/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/parts/mod/tests/m000/p012/body.rs"));
 }

@@ -56,3 +56,31 @@ fn adapters_reuse_sealed_reproduction_and_content_manifest_boundaries() {
     assert_eq!(manifest_member.codec, WorldReplayMemberCodec::ContentManifestV1);
     std::fs::remove_dir_all(root).expect("remove fixture root");
 }
+
+#[test]
+fn the_trace_member_binds_the_trace_to_its_exact_record_bytes() {
+    // r[verify molten.world_commit.replay_sealed_observation_and_full_comparison]
+    let fixture = fixture(WorldReplayProfileKind::Logical);
+    let trace = &fixture.request.trace;
+    let record = canonical_world_transition_trace(trace).expect("trace record");
+    let (member, payload) = world_replay_trace_member(trace, &record).expect("bound trace member");
+    assert_eq!(member.object_ref, trace.trace_ref);
+    assert_eq!(member.roles, vec![WorldReplayCapsuleMemberRole::Trace]);
+    assert_eq!(payload.bytes, record.bytes);
+
+    let mut other = trace.clone();
+    other.steps[0].input.input_ref = digest("another-transition-input");
+    other.trace_ref = identify_world_transition_trace(&other).expect("other trace identity");
+    let other_record = canonical_world_transition_trace(&other).expect("other trace record");
+    let error = world_replay_trace_member(trace, &other_record).expect_err("another trace's record is denied");
+    assert!(error.to_string().contains("do not encode the trace"), "{error}");
+
+    let mut spliced = record.clone();
+    spliced.bytes = other_record.bytes.clone();
+    let error = world_replay_trace_member(trace, &spliced).expect_err("spliced bytes are denied");
+    assert!(error.to_string().contains("do not encode the trace"), "{error}");
+
+    let mut stale = other.clone();
+    stale.trace_ref = trace.trace_ref.clone();
+    world_replay_trace_member(&stale, &record).expect_err("a trace whose ref names another trace is denied");
+}

@@ -106,6 +106,7 @@ fn recorded_effect_response_transition_is_pure_and_validated() {
         .begin_effect_for_step(&Step::Clock {
             actor: "clock-actor".into(),
         })
+        .expect("checked effect sequence")
         .expect("clock effect request");
     let before_clock = state.snapshot();
     let clock_law =
@@ -122,6 +123,7 @@ fn recorded_effect_response_transition_is_pure_and_validated() {
             actor: "random-actor".into(),
             upper: RECORDED_RANDOM_UPPER,
         })
+        .expect("checked effect sequence")
         .expect("random effect request");
     let before_random = state.snapshot();
     let random_law = recorded_effect_response_transition(&before_random, &random_request, RECORDED_RANDOM_VALUE)

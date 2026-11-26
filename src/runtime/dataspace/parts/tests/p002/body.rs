@@ -152,7 +152,7 @@ fn retracting_an_unheld_assertion_rolls_back_before_commit() {
         value: ready,
     });
 
-    assert!(matches!(events.as_slice(), [Event::TurnRolledBack { reason, .. }, Event::TurnCommitted { .. }]
+    assert!(matches!(events.as_slice(), [Event::TurnRolledBack { reason, .. }]
         if reason == "runtime retraction requires a committed assertion"));
     assert_eq!(state.snapshot(), before);
 }

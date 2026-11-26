@@ -50,30 +50,8 @@ impl RuntimeState {
         cause: &super::super::RuntimeTurnCause,
     ) -> Result<(Vec<Event>, Option<PredicateReceipt>)> {
         match step {
-            Step::Clock { actor } => {
-                let sequence = self.next_effect_sequence();
-                let request = Event::EffectRequest {
-                    effect: Effect::Clock,
-                    actor: actor.clone(),
-                    sequence,
-                    upper: None,
-                };
-                let value = self.local_clock_response_value();
-                let response = effect_response(Effect::Clock, actor.clone(), sequence, None, value);
-                Ok((vec![request, response], None))
-            }
-            Step::Random { actor, upper } => {
-                let sequence = self.next_effect_sequence();
-                let request = Event::EffectRequest {
-                    effect: Effect::Random,
-                    actor: actor.clone(),
-                    sequence,
-                    upper: Some(*upper),
-                };
-                let value = self.next_random(*upper);
-                let response = effect_response(Effect::Random, actor.clone(), sequence, Some(*upper), value);
-                Ok((vec![request, response], None))
-            }
+            Step::Clock { actor } => Ok((self.local_clock_events(actor)?, None)),
+            Step::Random { actor, upper } => Ok((self.local_random_events(actor, *upper)?, None)),
             Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => {
                 let turn = self.begin_turn_with_cause(step, cause);
                 let (events, receipt) = self.commit_turn_with_predicate_receipt(turn)?;
@@ -84,36 +62,53 @@ impl RuntimeState {
 
     pub fn apply_step_with_predicate_receipt(&mut self, step: &Step) -> Result<(Vec<Event>, Option<PredicateReceipt>)> {
         match step {
-            Step::Clock { actor } => {
-                let sequence = self.next_effect_sequence();
-                let request = Event::EffectRequest {
-                    effect: Effect::Clock,
-                    actor: actor.clone(),
-                    sequence,
-                    upper: None,
-                };
-                let value = self.local_clock_response_value();
-                let response = effect_response(Effect::Clock, actor.clone(), sequence, None, value);
-                Ok((vec![request, response], None))
-            }
-            Step::Random { actor, upper } => {
-                let sequence = self.next_effect_sequence();
-                let request = Event::EffectRequest {
-                    effect: Effect::Random,
-                    actor: actor.clone(),
-                    sequence,
-                    upper: Some(*upper),
-                };
-                let value = self.next_random(*upper);
-                let response = effect_response(Effect::Random, actor.clone(), sequence, Some(*upper), value);
-                Ok((vec![request, response], None))
-            }
+            Step::Clock { actor } => Ok((self.local_clock_events(actor)?, None)),
+            Step::Random { actor, upper } => Ok((self.local_random_events(actor, *upper)?, None)),
             Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => {
                 let turn = self.begin_turn(step);
                 let (events, receipt) = self.commit_turn_with_predicate_receipt(turn)?;
                 Ok((events, Some(receipt)))
             }
         }
+    }
+
+    /// Answer a live clock effect. The sequence and logical time both advance
+    /// through checked restorable counters before either is written, so an
+    /// exhausted counter fails without a partial state change.
+    fn local_clock_events(&mut self, actor: &str) -> Result<Vec<Event>> {
+        let sequence = self.effect_sequence;
+        let next_sequence = next_restorable_counter(sequence, "effect sequence")?;
+        let value = self.logical_time;
+        let next_logical_time = next_restorable_counter(value, "logical time")?;
+        self.effect_sequence = next_sequence;
+        self.logical_time = next_logical_time;
+        let request = Event::EffectRequest {
+            effect: Effect::Clock,
+            actor: actor.to_string(),
+            sequence,
+            upper: None,
+        };
+        Ok(vec![request, effect_response(Effect::Clock, actor.to_string(), sequence, None, value)])
+    }
+
+    /// Answer a live random effect from the seeded stream. The value range is
+    /// `0..upper`, the same range a recorded response must satisfy, so every
+    /// live answer replays.
+    fn local_random_events(&mut self, actor: &str, upper: u64) -> Result<Vec<Event>> {
+        let sequence = self.effect_sequence;
+        let next_sequence = next_restorable_counter(sequence, "effect sequence")?;
+        let (next_state, value) = deterministic_random_step(self.rng_state, upper);
+        validate_random_value(upper, value)?;
+        self.effect_sequence = next_sequence;
+        // Deterministic xorshift64* profile; not cryptographic and not ambient entropy.
+        self.rng_state = next_state;
+        let request = Event::EffectRequest {
+            effect: Effect::Random,
+            actor: actor.to_string(),
+            sequence,
+            upper: Some(upper),
+        };
+        Ok(vec![request, effect_response(Effect::Random, actor.to_string(), sequence, Some(upper), value)])
     }
 
     pub fn begin_turn(&self, step: &Step) -> PendingTurn {
@@ -147,7 +142,18 @@ impl RuntimeState {
         Ok(events)
     }
 
+    // r[impl molten.runtime_spine.dataspace_determinism_and_rollback_integrity]
+    /// Commit a staged turn, or roll it back when staging already decided the
+    /// turn cannot commit.
+    ///
+    /// A staged rollback (for example a retraction of an assertion the actor
+    /// does not hold) leaves state untouched and returns only the
+    /// `TurnRolledBack` event with a receipt evaluated for the rolled-back
+    /// outcome; it never appends `TurnCommitted` or a committed-outcome receipt.
     pub fn commit_turn_with_predicate_receipt(&mut self, turn: PendingTurn) -> Result<(Vec<Event>, PredicateReceipt)> {
+        if let Some((actor, reason)) = staged_rollback(&turn) {
+            return self.rollback_turn_with_outcome(turn, actor, reason, TurnOutcome::RolledBack);
+        }
         let before = self.snapshot();
         let mut preview = self.clone();
         let events = preview.commit_turn(turn.clone())?;
@@ -174,8 +180,18 @@ impl RuntimeState {
         actor: impl Into<String>,
         reason: impl Into<String>,
     ) -> Result<(Vec<Event>, PredicateReceipt)> {
+        self.rollback_turn_with_outcome(turn, actor, reason, TurnOutcome::Denied)
+    }
+
+    fn rollback_turn_with_outcome(
+        &self,
+        turn: PendingTurn,
+        actor: impl Into<String>,
+        reason: impl Into<String>,
+        outcome: TurnOutcome,
+    ) -> Result<(Vec<Event>, PredicateReceipt)> {
         let before = self.snapshot();
-        let receipt = evaluate_turn_transition(&before, &turn, &before, TurnOutcome::Denied)?;
+        let receipt = evaluate_turn_transition(&before, &turn, &before, outcome)?;
         let events = self.rollback_turn(turn, actor, reason);
         Ok((events, receipt))
     }
@@ -209,34 +225,28 @@ impl RuntimeState {
         })
     }
 
-    pub fn begin_effect_for_step(&mut self, step: &Step) -> Option<Event> {
-        match step {
-            Step::Clock { actor } => Some(Event::EffectRequest {
-                effect: Effect::Clock,
-                actor: actor.clone(),
-                sequence: self.next_effect_sequence(),
-                upper: None,
-            }),
-            Step::Random { actor, upper } => Some(Event::EffectRequest {
-                effect: Effect::Random,
-                actor: actor.clone(),
-                sequence: self.next_effect_sequence(),
-                upper: Some(*upper),
-            }),
-            Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => None,
-        }
+    /// Begin a recorded effect: allocate its sequence through the checked
+    /// restorable counter and return the request, or `None` for a dataspace turn.
+    pub fn begin_effect_for_step(&mut self, step: &Step) -> Result<Option<Event>> {
+        let (effect, actor, upper) = match step {
+            Step::Clock { actor } => (Effect::Clock, actor, None),
+            Step::Random { actor, upper } => (Effect::Random, actor, Some(*upper)),
+            Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => return Ok(None),
+        };
+        let sequence = self.effect_sequence;
+        self.effect_sequence = next_restorable_counter(sequence, "effect sequence")?;
+        Ok(Some(Event::EffectRequest {
+            effect,
+            actor: actor.clone(),
+            sequence,
+            upper,
+        }))
     }
 
     pub fn apply_recorded_effect_response(&mut self, request: &Event, value: u64) -> Result<Event> {
         let transition = recorded_effect_response_transition(&self.snapshot(), request, value)?;
         self.overwrite_from_snapshot(transition.after);
         Ok(transition.response)
-    }
-
-    fn local_clock_response_value(&mut self) -> u64 {
-        let logical_time = self.logical_time;
-        self.logical_time += 1;
-        logical_time
     }
 
     fn overwrite_from_snapshot(&mut self, snapshot: RuntimeSnapshot) {
@@ -249,16 +259,12 @@ impl RuntimeState {
         self.facets = snapshot.facets;
     }
 
-    fn next_effect_sequence(&mut self) -> u64 {
-        let sequence = self.effect_sequence;
-        self.effect_sequence += 1;
-        sequence
-    }
+}
 
-    fn next_random(&mut self, upper: u64) -> u64 {
-        // Deterministic xorshift64* profile; not cryptographic and not ambient entropy.
-        let (next_state, value) = deterministic_random_step(self.rng_state, upper);
-        self.rng_state = next_state;
-        value
-    }
+/// The rollback a turn's staging already decided, if any.
+fn staged_rollback(turn: &PendingTurn) -> Option<(String, String)> {
+    turn.events.iter().find_map(|event| match event {
+        Event::TurnRolledBack { actor, reason } => Some((actor.clone(), reason.clone())),
+        _ => None,
+    })
 }

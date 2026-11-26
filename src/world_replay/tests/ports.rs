@@ -78,11 +78,13 @@ impl WorldReplayAdmissionPort for Admission {
 }
 
 /// A transition executor that consumes its declared observation demands and,
-/// when asked, attempts one original effect.
+/// when asked, attempts one original effect. With `ignore_denials` it models a
+/// faulty transition that drops the error of a denied observation demand.
 pub(super) struct Transitions {
     pub positions: Vec<u64>,
     pub demands: BTreeMap<u64, Vec<ReplayObservationDemand>>,
     pub attempt_effect: Option<String>,
+    pub ignore_denials: bool,
     pub served: Vec<String>,
 }
 
@@ -92,6 +94,7 @@ impl Transitions {
             positions: Vec::new(),
             demands,
             attempt_effect: None,
+            ignore_denials: false,
             served: Vec::new(),
         }
     }
@@ -109,7 +112,11 @@ impl WorldReplayTransitionPort for Transitions {
     ) -> Result<WorldReplayExecutionObservation> {
         self.positions.push(step.position);
         for demand in self.demands.get(&step.position).into_iter().flatten() {
-            self.served.push(observations.observe(demand)?.observation_ref);
+            match observations.observe(demand) {
+                Ok(observation) => self.served.push(observation.observation_ref),
+                Err(_) if self.ignore_denials => {}
+                Err(error) => return Err(error),
+            }
         }
         if let Some(source_id) = &self.attempt_effect {
             observations.attempt_effect(source_id)?;

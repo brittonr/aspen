@@ -9,12 +9,26 @@ use crate::error::Failure;
 use crate::error::Result;
 
 // r[impl molten.world_replay.capsule]
+// r[impl molten.world_commit.replay_sealed_observation_and_full_comparison]
+/// Pair a transition trace with its canonical record bytes as the capsule's
+/// trace member.
+///
+/// The record must be exactly the canonical encoding of `trace`: the trace is
+/// validated (including its `trace_ref` identity) and re-encoded, and the
+/// record's bytes and record ref must match that encoding, so the member's
+/// object ref can never name one trace while carrying another trace's bytes.
 pub fn world_replay_trace_member(
     trace: &WorldTransitionTrace,
     record: &CanonicalWorldReplayRecord,
 ) -> Result<(WorldReplayCapsuleMember, WorldReplayMemberPayload)> {
     if record.kind != WORLD_TRANSITION_TRACE_RECORD {
         return Err(Failure::invalid_harness("world replay trace adapter received the wrong record kind"));
+    }
+    let expected = super::canonical_world_transition_trace(trace)?;
+    if record.bytes != expected.bytes || record.record_ref != expected.record_ref {
+        return Err(Failure::invalid_harness(
+            "world replay trace record bytes do not encode the trace they are paired with",
+        ));
     }
     member_payload(
         trace.trace_ref.clone(),

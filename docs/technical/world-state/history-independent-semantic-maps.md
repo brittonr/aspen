@@ -14,7 +14,7 @@ The standard profile's 256-byte minimum, 1,024-byte target, and 4,096-byte maxim
 
 [boundary_decision](../../../crates/molten-core/src/prolly_map/tree/build.rs) returns a forced split at the maximum encoded size and no split below the minimum. Between those limits it hashes the profile seed, canonical key bytes, and encoded size, derives a bounded score, and compares that score with a size-dependent threshold. No random-number generator or clock participates.
 
-Values influence exact encoded size but are not independent boundary entropy. Therefore changing a value's length can change boundaries even when all keys remain fixed. Leaf construction checks whether appending an entry would exceed the maximum and starts another chunk when needed. Internal construction also observes fanout limits and deterministically rebalances a small final group.
+Values influence exact encoded size but are not independent boundary entropy. Therefore changing a value's length can change boundaries even when all keys remain fixed. Leaf construction checks whether appending an entry would exceed the maximum and starts another chunk when needed. Internal construction also observes fanout limits and deterministically rebalances a small final group. Rebalancing borrows from or merges with the previous group only when the result stays within both `max_fanout` and `max_node_bytes`; a final group split for bytes may stay below `min_fanout`, which readers do not require, rather than produce a node too large to encode.
 
 History independence is thus a property of the whole canonical construction, including grouping and root metadata. It is not established merely by sorting the leaves or hashing each value independently.
 
