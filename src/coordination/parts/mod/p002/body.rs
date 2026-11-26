@@ -1,9 +1,9 @@
 
 pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<CoordinationStateSnapshot> {
-    let fields = simple_record(value, "coordination-state-snapshot-v1", 11)?;
+    let fields = simple_record(value, "coordination-state-snapshot-v2", 12)?;
     require_schema(&fields[0], COORDINATION_STATE_SNAPSHOT_SCHEMA, "coordination state schema")?;
-    let retention_refs = record_ref_sequence(&fields[9], "retention")?;
-    require_check(&parse_checks(&fields[10])?, "deterministic-state-order", "coordination state")?;
+    let retention_refs = record_ref_sequence(&fields[10], "retention")?;
+    require_check(&parse_checks(&fields[11])?, "deterministic-state-order", "coordination state")?;
     Ok(CoordinationStateSnapshot {
         state_ref: canonical_hash(value)?,
         retention_refs,
@@ -12,22 +12,23 @@ pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<Coordination
 }
 
 // r[impl molten.coordination.read_consistency_modes]
-/// v2: `committed-state-bound` passes for `local-committed` assertions; v1 passed it for `linearizable`
-/// assertions the in-process runtime could not back with a read index.
+/// v3 binds the control-plane receipt (Raft commit receipt or registry read receipt) instead of the
+/// coordination receipt, so the coordination receipt can list this assertion's exact ref; v2 receipts
+/// listed a discarded placeholder assertion. `committed-state-bound` passes for `local-committed` assertions.
 pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IoValue> {
     validate_service(input.service)?;
     validate_key(input.key)?;
     validate_read_consistency_mode(input.read_consistency_mode)?;
     validate_ref(input.state_ref, "coordination assertion state ref")?;
-    validate_ref(input.receipt_ref, "coordination assertion receipt ref")?;
-    Ok(record("coordination-status-assertion-v2", vec![
+    validate_ref(input.control_plane_receipt_ref, "coordination assertion control-plane receipt ref")?;
+    Ok(record("coordination-status-assertion-v3", vec![
         string(COORDINATION_STATUS_ASSERTION_SCHEMA),
         record("service", vec![string(input.service)]),
         record("key", vec![string(input.key)]),
         record("read-consistency", vec![string(input.read_consistency_mode)]),
         record("fact", vec![input.fact.clone()]),
         record("state", vec![string(input.state_ref)]),
-        record("receipt", vec![string(input.receipt_ref)]),
+        record("control-plane-receipt", vec![string(input.control_plane_receipt_ref)]),
         checks_value(&[
             ("dataspace-observation-only", "pass"),
             ("read-consistency-declared", "pass"),
@@ -37,13 +38,13 @@ pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> R
 }
 
 pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<CoordinationStatusAssertion> {
-    let fields = simple_record(value, "coordination-status-assertion-v2", 8)?;
+    let fields = simple_record(value, "coordination-status-assertion-v3", 8)?;
     require_schema(&fields[0], COORDINATION_STATUS_ASSERTION_SCHEMA, "coordination assertion schema")?;
     let service = record_string(&fields[1], "service")?;
     let key = record_string(&fields[2], "key")?;
     let read_consistency_mode = record_string(&fields[3], "read-consistency")?;
     let state_ref = record_ref(&fields[5], "state")?;
-    let receipt_ref = record_ref(&fields[6], "receipt")?;
+    let control_plane_receipt_ref = record_ref(&fields[6], "control-plane-receipt")?;
     validate_read_consistency_mode(&read_consistency_mode)?;
     require_check(&parse_checks(&fields[7])?, "dataspace-observation-only", "coordination assertion")?;
     Ok(CoordinationStatusAssertion {
@@ -52,7 +53,7 @@ pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<Coordinati
         key,
         read_consistency_mode,
         state_ref,
-        receipt_ref,
+        control_plane_receipt_ref,
         value: value.clone(),
     })
 }
@@ -206,15 +207,66 @@ fn parse_coordination_transition(value: &Value<IoValue>) -> Result<ParsedReceipt
     })
 }
 
-pub fn new_coordination_runtime(manifest_value: &IoValue) -> Result<CoordinationRuntime> {
+/// Builds a live coordination runtime on the built-in single-process control-registry group, sampling time
+/// from `clock`, which must be a sealed live clock from [`CoordinationClock::live`].
+///
+/// The manifest's `control_group_ref` must name that group's manifest; any other group fails closed
+/// instead of being silently replaced. Use [`new_coordination_runtime_with_control_group`] to bind an
+/// explicit control-registry group manifest.
+pub fn new_coordination_runtime(manifest_value: &IoValue, clock: CoordinationClock) -> Result<CoordinationRuntime> {
+    let control_group_value = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
+    new_coordination_runtime_with_control_group(manifest_value, &control_group_value, clock)
+}
+
+// r[impl molten.coordination.truthful_tokens_assertions_and_expiry]
+/// Builds a live coordination runtime whose in-process control registry runs the supplied group manifest.
+/// The coordination manifest's `control_group_ref` must equal that manifest's canonical ref. `clock` must be a
+/// sealed live clock whose basis matches its provenance, whatever crate features are enabled; deterministic
+/// clocks are accepted only by [`new_coordination_simulation_runtime`].
+pub fn new_coordination_runtime_with_control_group(
+    manifest_value: &IoValue,
+    control_group_manifest_value: &IoValue,
+    clock: CoordinationClock,
+) -> Result<CoordinationRuntime> {
+    clock.verify_live_provenance()?;
+    build_coordination_runtime(manifest_value, control_group_manifest_value, clock)
+}
+
+/// Builds a deterministic simulation runtime on the built-in control-registry group. It accepts only a
+/// deterministic clock (outside tests, `run-fixture` uses one frozen at tick zero, so its leases never expire),
+/// and its clock is never replaced by a live clock transition. It serves simulations, not live coordination.
+pub fn new_coordination_simulation_runtime(manifest_value: &IoValue, clock: CoordinationClock) -> Result<CoordinationRuntime> {
+    if clock.is_live() {
+        return Err(MoltenError::invalid_harness(
+            "coordination simulation runtimes take a deterministic clock; live clocks use new_coordination_runtime",
+        ));
+    }
+    let control_group_value = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
+    build_coordination_runtime(manifest_value, &control_group_value, clock)
+}
+
+fn build_coordination_runtime(
+    manifest_value: &IoValue,
+    control_group_manifest_value: &IoValue,
+    clock: CoordinationClock,
+) -> Result<CoordinationRuntime> {
     let manifest = parse_coordination_service_manifest(manifest_value)?;
-    let raft_manifest = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
-    let raft = crate::raft_control_plane::new_control_registry_model_runtime(&raft_manifest)?;
+    let control_group_ref = canonical_hash(control_group_manifest_value)?;
+    if manifest.control_group_ref != control_group_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "coordination manifest control group {} does not match the bound control-registry group {control_group_ref}",
+            manifest.control_group_ref
+        )));
+    }
+    let raft = crate::raft_control_plane::new_control_registry_model_runtime(control_group_manifest_value)?;
+    let time_basis_ref = clock.time_basis_ref().to_string();
     Ok(CoordinationRuntime {
+        clock,
         manifest,
         raft,
         state: CoordinationState {
             next_fencing_token: 1,
+            time_basis_ref,
             ..CoordinationState::default()
         },
         applied_operations: OrderedMap::new(),
@@ -240,7 +292,10 @@ pub fn apply_coordination_request(
         if request.operation == OP_READ {
             return apply_coordination_read(runtime, request);
         }
-        let transition = primitive_transition(runtime, &request)?;
+        // A clock-port failure is an infrastructure error, not a decision: it returns its fabric failure class
+        // before any receipt or operation is recorded, so a retry with the same operation id samples again.
+        let sample = runtime.clock.sample().map_err(MoltenError::from)?;
+        let transition = primitive_transition(runtime, &request, &sample)?;
         if transition.decision == "pass" {
             return commit_prepared_mutation(runtime, request, current_snapshot, transition);
         }

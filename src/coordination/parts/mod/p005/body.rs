@@ -1,39 +1,101 @@
 
-fn prepare_lock_acquire(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
-    let mut diagnostics = Vec::new();
+// r[impl molten.coordination.truthful_tokens_assertions_and_expiry]
+/// Claims the lock with a lease bounded on the coordination clock. The lock entry is inserted at commit,
+/// carrying the fencing token bound to the commit receipt.
+fn prepare_lock_acquire(
+    runtime: &CoordinationRuntime,
+    request: &CoordinationRequest,
+    now: u64,
+) -> Result<PreparedMutation> {
     if let Some(lock) = runtime.state.locks.get(&request.key) {
-        diagnostics.push_limited(
-            format!("coordination lock {} already held by {}", request.key, lock.owner),
-            MAX_COORDINATION_DIAGNOSTICS,
-            "coordination diagnostics",
-        )?;
+        return Err(MoltenError::invalid_harness(format!(
+            "coordination lock {} already held by {} until clock tick {}",
+            request.key, lock.owner, lock.lease_expires_at
+        )));
     }
-    if diagnostics.is_empty() {
-        let token_number = runtime.state.next_fencing_token;
-        let placeholder = pending_token(&request.key, &request.client_session, token_number)?;
-        let mut state = runtime.state.clone();
-        let next = token_number
-            .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("coordination fencing token overflow"))?;
-        state.next_fencing_token = next;
-        state.locks.insert(request.key.clone(), LockState {
-            owner: request.client_session.clone(),
-            token: token_number,
-            token_ref: placeholder.token_ref.clone(),
-            lease_epoch: token_number,
-        });
-        return Ok(PreparedMutation {
-            state,
-            token: Some(placeholder),
-            status_fact: record("lock-held", vec![
-                string(&request.key),
-                string(&request.client_session),
-                u64_value(token_number),
-            ]),
-            checks: vec![("fencing-token-monotonic", "pass"), ("lock-lease-held", "pass")],
-        });
+    let lease = lease_expiry(request.payload.as_ref(), now)?;
+    let (state, claim) = claim_fencing_token(runtime, request, SERVICE_LOCK, &request.client_session, lease)?;
+    Ok(PreparedMutation {
+        state,
+        status_fact: record("lock-held", vec![
+            string(&request.key),
+            string(&claim.owner),
+            u64_value(claim.token),
+            u64_value(claim.lease_expires_at),
+        ]),
+        token_claim: Some(claim),
+        checks: vec![("fencing-token-monotonic", "pass"), ("lock-lease-held", "pass"), ("lease-bounded", "pass")],
+    })
+}
+
+/// Advances the fencing-token counter for a token-granting transition.
+fn claim_fencing_token(
+    runtime: &CoordinationRuntime,
+    request: &CoordinationRequest,
+    service: &str,
+    owner: &str,
+    lease_expires_at: u64,
+) -> Result<(CoordinationState, CoordinationTokenClaim)> {
+    let token_number = runtime.state.next_fencing_token;
+    let mut state = runtime.state.clone();
+    state.next_fencing_token = token_number
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness("coordination fencing token overflow"))?;
+    let claim = CoordinationTokenClaim {
+        service: service.to_string(),
+        key: request.key.clone(),
+        owner: owner.to_string(),
+        token: token_number,
+        lease_epoch: token_number,
+        lease_expires_at,
+    };
+    Ok((state, claim))
+}
+
+// r[impl molten.coordination.truthful_tokens_assertions_and_expiry]
+/// Removes a lock or leader whose lease expiry the coordination clock sample `now` has reached, so a crashed
+/// holder cannot wedge the key. Requests present no time (an `expire` payload is denied) and other mutations
+/// do not age a lease: only the shell-owned clock does. The holder's fencing token is never reissued.
+fn prepare_lease_expiry(
+    runtime: &CoordinationRuntime,
+    request: &CoordinationRequest,
+    now: u64,
+) -> Result<PreparedMutation> {
+    if request.payload.is_some() {
+        return Err(MoltenError::invalid_harness(
+            "coordination expire takes no payload; time comes only from the coordination clock",
+        ));
     }
-    Err(MoltenError::invalid_harness(diagnostics.join("; ")))
+    let mut state = runtime.state.clone();
+    let (holder, token, expires_at, label) = match request.service.as_str() {
+        SERVICE_LOCK => {
+            let lock = state
+                .locks
+                .remove(&request.key)
+                .ok_or_else(|| MoltenError::invalid_harness("coordination lock is not held"))?;
+            (lock.owner, lock.token, lock.lease_expires_at, "lock-expired")
+        }
+        SERVICE_ELECTION => {
+            let election = state
+                .elections
+                .remove(&request.key)
+                .ok_or_else(|| MoltenError::invalid_harness("coordination election has no leader"))?;
+            (election.leader, election.token, election.lease_expires_at, "leader-expired")
+        }
+        other => return Err(MoltenError::invalid_harness(format!("coordination service {other} has no lease"))),
+    };
+    if now < expires_at {
+        return Err(MoltenError::invalid_harness(format!(
+            "coordination {} lease for {} held by {holder} is unexpired: expires at clock tick {expires_at}, coordination clock reads {now}",
+            request.service, request.key
+        )));
+    }
+    Ok(PreparedMutation {
+        state,
+        token_claim: None,
+        status_fact: record(label, vec![string(&request.key), string(&holder), u64_value(token), u64_value(expires_at)]),
+        checks: vec![("lease-expiry-checked", "pass"), ("shell-clock-sampled", "pass")],
+    })
 }
 
 fn prepare_lock_release(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
@@ -56,7 +118,7 @@ fn prepare_lock_release(runtime: &CoordinationRuntime, request: &CoordinationReq
     state.locks.remove(&request.key);
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("lock-free", vec![string(&request.key), u64_value(token)]),
         checks: vec![("stale-token-checked", "pass"), ("lock-release", "pass")],
     })
@@ -77,7 +139,7 @@ fn prepare_queue_enqueue(runtime: &CoordinationRuntime, request: &CoordinationRe
     queue.push(item.clone());
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("queue-depth", vec![string(&request.key), u64_value(current_len + 1), string(&item)]),
         checks: vec![("fifo-queue", "pass"), ("capacity-checked", "pass")],
     })
@@ -99,7 +161,7 @@ fn prepare_queue_dequeue(runtime: &CoordinationRuntime, request: &CoordinationRe
     let depth = vec_len_u64(remaining)?;
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("queue-depth", vec![string(&request.key), u64_value(depth), string(&item)]),
         checks: vec![("fifo-queue", "pass"), ("dequeue-committed", "pass")],
     })
@@ -119,7 +181,7 @@ fn prepare_semaphore_acquire(runtime: &CoordinationRuntime, request: &Coordinati
     let available = runtime.manifest.semaphore_capacity.saturating_sub(set_len_u64(holders)?);
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("semaphore-available", vec![string(&request.key), u64_value(available)]),
         checks: vec![("semaphore-bounds", "pass"), ("capacity-checked", "pass")],
     })
@@ -135,7 +197,7 @@ fn prepare_semaphore_release(runtime: &CoordinationRuntime, request: &Coordinati
         let available = runtime.manifest.semaphore_capacity.saturating_sub(set_len_u64(holders)?);
         Ok(PreparedMutation {
             state,
-            token: None,
+            token_claim: None,
             status_fact: record("semaphore-available", vec![string(&request.key), u64_value(available)]),
             checks: vec![("semaphore-bounds", "pass"), ("release-committed", "pass")],
         })
@@ -145,7 +207,7 @@ fn prepare_semaphore_release(runtime: &CoordinationRuntime, request: &Coordinati
 }
 
 /// The `rate-limit` service is a per-key acquisition quota for the lifetime of the coordination state.
-/// Coordination state has no admitted logical time source, so nothing resets the count; the wire name
+/// The quota does not consult the coordination clock, so nothing resets the count; the wire name
 /// stays `rate-limit` for manifest and receipt compatibility.
 // r[impl molten.coordination.rate_limit_semaphore]
 fn prepare_rate_acquire(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
@@ -157,7 +219,7 @@ fn prepare_rate_acquire(runtime: &CoordinationRuntime, request: &CoordinationReq
     state.rates.insert(request.key.clone(), used + 1);
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("rate-limit", vec![
             string(&request.key),
             u64_value(used + 1),
@@ -167,33 +229,76 @@ fn prepare_rate_acquire(runtime: &CoordinationRuntime, request: &CoordinationReq
     })
 }
 
-fn prepare_election(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
-    let leader = request
-        .payload
-        .as_ref()
-        .map_or_else(|| Ok(request.client_session.clone()), |payload| simple_payload_text(payload, "candidate"))?;
+fn prepare_election(runtime: &CoordinationRuntime, request: &CoordinationRequest, now: u64) -> Result<PreparedMutation> {
+    let (leader, lease_payload) = election_candidacy(request)?;
     if let Some(existing) = runtime.state.elections.get(&request.key) {
         if existing.leader == leader {
             return Err(MoltenError::invalid_harness("coordination election already has same leader"));
         }
-        return Err(MoltenError::invalid_harness(format!("coordination election already led by {}", existing.leader)));
+        return Err(MoltenError::invalid_harness(format!(
+            "coordination election already led by {} until clock tick {}",
+            existing.leader, existing.lease_expires_at
+        )));
     }
-    let token_number = runtime.state.next_fencing_token;
-    let token = pending_token(&request.key, &leader, token_number)?;
-    let mut state = runtime.state.clone();
-    state.next_fencing_token = token_number
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination election token overflow"))?;
-    state.elections.insert(request.key.clone(), ElectionState {
-        leader: leader.clone(),
-        token: token_number,
-        token_ref: token.token_ref.clone(),
-    });
+    let lease = lease_expiry(lease_payload.as_ref(), now)?;
+    let (state, claim) = claim_fencing_token(runtime, request, SERVICE_ELECTION, &leader, lease)?;
     Ok(PreparedMutation {
         state,
-        token: Some(token),
-        status_fact: record("leader", vec![string(&request.key), string(&leader), u64_value(token_number)]),
-        checks: vec![("election-single-leader", "pass"), ("fencing-token-monotonic", "pass")],
+        status_fact: record("leader", vec![
+            string(&request.key),
+            string(&leader),
+            u64_value(claim.token),
+            u64_value(claim.lease_expires_at),
+        ]),
+        token_claim: Some(claim),
+        checks: vec![("election-single-leader", "pass"), ("fencing-token-monotonic", "pass"), ("lease-bounded", "pass")],
+    })
+}
+
+/// Elect payloads: none (the session stands), `<candidate name>`, `<lease ttl>` (the session stands), or
+/// `<candidate name <lease ttl>>`.
+fn election_candidacy(request: &CoordinationRequest) -> Result<(String, Option<IoValue>)> {
+    let Some(payload) = request.payload.as_ref() else {
+        return Ok((request.client_session.clone(), None));
+    };
+    if payload.collect_simple_record("lease", Some(1)).is_some() {
+        return Ok((request.client_session.clone(), Some(payload.clone())));
+    }
+    if let Some(fields) = payload.collect_simple_record("candidate", Some(2)) {
+        let candidate = required_string(&fields[0], "candidate")?;
+        return Ok((candidate, Some(value_to_iovalue(&fields[1]))));
+    }
+    Ok((simple_payload_text(payload, "candidate")?, None))
+}
+
+// r[impl molten.coordination.truthful_tokens_assertions_and_expiry]
+/// The current leader steps down by presenting its fencing token; any other session is denied.
+fn prepare_election_resign(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
+    let token = payload_token(request)?;
+    let election = runtime
+        .state
+        .elections
+        .get(&request.key)
+        .ok_or_else(|| MoltenError::invalid_harness("coordination election has no leader"))?;
+    if request.client_session != election.leader {
+        return Err(MoltenError::invalid_harness(format!(
+            "coordination election resignation by non-leader {}; leader is {}",
+            request.client_session, election.leader
+        )));
+    }
+    if token != election.token {
+        return Err(MoltenError::invalid_harness(format!(
+            "stale fencing token {token}; current token is {}",
+            election.token
+        )));
+    }
+    let mut state = runtime.state.clone();
+    state.elections.remove(&request.key);
+    Ok(PreparedMutation {
+        state,
+        token_claim: None,
+        status_fact: record("leader-resigned", vec![string(&request.key), string(&election.leader), u64_value(token)]),
+        checks: vec![("stale-token-checked", "pass"), ("election-resign", "pass")],
     })
 }
 
@@ -219,7 +324,7 @@ fn prepare_barrier(runtime: &CoordinationRuntime, request: &CoordinationRequest)
     let status = if barrier.is_released { "released" } else { "waiting" };
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("barrier", vec![string(&request.key), string(status), u64_value(required)]),
         checks: vec![("barrier-deterministic", "pass")],
     })
@@ -234,7 +339,7 @@ fn prepare_registry_register(runtime: &CoordinationRuntime, request: &Coordinati
     });
     Ok(PreparedMutation {
         state,
-        token: None,
+        token_claim: None,
         status_fact: record("service-registered", vec![
             string(&request.key),
             string(&endpoint_ref),
@@ -252,7 +357,7 @@ fn prepare_registry_unregister(
     if state.registry.remove(&request.key).is_some() {
         Ok(PreparedMutation {
             state,
-            token: None,
+            token_claim: None,
             status_fact: record("service-unregistered", vec![string(&request.key)]),
             checks: vec![("service-registry-pointer", "pass")],
         })
@@ -261,19 +366,4 @@ fn prepare_registry_unregister(
     }
 }
 
-fn materialize_token(pending: Option<FencingToken>, commit_receipt_ref: &str) -> Result<Option<FencingToken>> {
-    pending
-        .map(|token| {
-            let value =
-                fencing_token_value(&token.key, &token.owner, token.token, token.lease_epoch, commit_receipt_ref)?;
-            parse_fencing_token(&value)
-        })
-        .transpose()
-}
-
-fn pending_token(key: &str, owner: &str, token: u64) -> Result<FencingToken> {
-    let pending_commit_ref = fixture_ref("pending-coordination-commit");
-    let value = fencing_token_value(key, owner, token, token, &pending_commit_ref)?;
-    parse_fencing_token(&value)
-}
 

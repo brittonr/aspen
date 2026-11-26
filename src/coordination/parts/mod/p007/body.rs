@@ -164,6 +164,7 @@ fn validate_operation(service: &str, operation: &str) -> Result<()> {
         (service, operation),
         (SERVICE_LOCK, OP_ACQUIRE)
             | (SERVICE_LOCK, OP_RELEASE)
+            | (SERVICE_LOCK, OP_EXPIRE)
             | (SERVICE_LOCK, OP_READ)
             | (SERVICE_QUEUE, OP_ENQUEUE)
             | (SERVICE_QUEUE, OP_DEQUEUE)
@@ -174,6 +175,8 @@ fn validate_operation(service: &str, operation: &str) -> Result<()> {
             | (SERVICE_RATE_LIMIT, OP_ACQUIRE)
             | (SERVICE_RATE_LIMIT, OP_READ)
             | (SERVICE_ELECTION, OP_ELECT)
+            | (SERVICE_ELECTION, OP_RESIGN)
+            | (SERVICE_ELECTION, OP_EXPIRE)
             | (SERVICE_ELECTION, OP_READ)
             | (SERVICE_BARRIER, OP_ARRIVE)
             | (SERVICE_BARRIER, OP_READ)

@@ -98,12 +98,12 @@ fn other_coordination_summary(value: &IoValue) -> Result<String> {
     }
     if let Ok(assertion) = parse_coordination_status_assertion(value) {
         return Ok(format!(
-            "coordination assertion service={} key={} read_consistency={} state={} receipt={}",
+            "coordination assertion service={} key={} read_consistency={} state={} control_plane_receipt={}",
             assertion.service,
             assertion.key,
             assertion.read_consistency_mode,
             assertion.state_ref,
-            assertion.receipt_ref
+            assertion.control_plane_receipt_ref
         ));
     }
     Err(MoltenError::invalid_harness("unsupported coordination artifact"))
@@ -126,20 +126,13 @@ fn apply_coordination_read(
     let decision = if read.decision == "pass" { "pass" } else { "deny" };
     let fact = status_fact_for(&runtime.state, &runtime.manifest, &request.service, &request.key)?;
     let fact = engine_status_fact(&runtime.raft.manifest, active_engine_epoch(runtime), &fact);
-    let (assertion_value, diagnostics) = read_assertion_value(ReadAssertionInput {
-        service: &request.service,
-        key: &request.key,
-        fact: &fact,
-        snapshot_ref: &snapshot.state_ref,
-        decision,
-        read_consistency_mode: &request.read_consistency_mode,
-        diagnostics: read.diagnostics.clone(),
-    })?;
-    let assertion = match assertion_value {
-        Some(value) => Some(parse_coordination_status_assertion(&value)?),
-        None => None,
+    let assertions = if decision == "pass" {
+        vec![status_assertion_for(&request, &fact, &snapshot.state_ref, &read.receipt_ref)?]
+    } else {
+        Vec::new()
     };
-    let assertion_refs = assertion.as_ref().map_or_else(Vec::new, |item| vec![item.assertion_ref.clone()]);
+    let diagnostics = read_denial_diagnostics(decision, read.diagnostics.clone())?;
+    let assertion_refs = assertions.iter().map(|assertion| assertion.assertion_ref.clone()).collect::<Vec<_>>();
     let output_refs = transition_output_refs(std::slice::from_ref(&fact))?;
     let receipt_value = coordination_receipt_value(ReceiptValueInput {
         decision,
@@ -164,7 +157,6 @@ fn apply_coordination_read(
         checks: &read_receipt_checks(&request.read_consistency_mode, decision),
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
-    let assertions = corrected_read_assertions(assertion, &fact, &receipt.receipt_ref)?;
     Ok(finish_read(ReadFinishInput {
         runtime,
         request,
@@ -195,57 +187,15 @@ fn read_receipt_checks(read_consistency_mode: &str, decision: &str) -> [(&'stati
     ]
 }
 
-struct ReadAssertionInput<'a> {
-    service: &'a str,
-    key: &'a str,
-    fact: &'a IoValue,
-    snapshot_ref: &'a str,
-    decision: &'a str,
-    read_consistency_mode: &'a str,
-    diagnostics: Vec<String>,
-}
-
-fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IoValue>, Vec<String>)> {
-    let mut diagnostics = input.diagnostics;
-    if input.decision == "pass" {
-        let placeholder_receipt_ref = fixture_ref("coordination-read-placeholder");
-        let value = coordination_status_assertion_value(StatusAssertionInput {
-            service: input.service,
-            key: input.key,
-            read_consistency_mode: input.read_consistency_mode,
-            fact: input.fact,
-            state_ref: input.snapshot_ref,
-            receipt_ref: &placeholder_receipt_ref,
-        })?;
-        return Ok((Some(value), diagnostics));
-    }
-    if diagnostics.is_empty() {
+fn read_denial_diagnostics(decision: &str, mut diagnostics: Vec<String>) -> Result<Vec<String>> {
+    if decision != "pass" && diagnostics.is_empty() {
         diagnostics.push_limited(
             "coordination registry read denied".to_string(),
             MAX_COORDINATION_DIAGNOSTICS,
             "coordination diagnostics",
         )?;
     }
-    Ok((None, diagnostics))
-}
-
-fn corrected_read_assertions(
-    assertion: Option<CoordinationStatusAssertion>,
-    fact: &IoValue,
-    receipt_ref: &str,
-) -> Result<Vec<CoordinationStatusAssertion>> {
-    if let Some(assertion) = assertion {
-        let corrected = coordination_status_assertion_value(StatusAssertionInput {
-            service: &assertion.service,
-            key: &assertion.key,
-            read_consistency_mode: &assertion.read_consistency_mode,
-            fact,
-            state_ref: &assertion.state_ref,
-            receipt_ref,
-        })?;
-        return Ok(vec![parse_coordination_status_assertion(&corrected)?]);
-    }
-    Ok(Vec::new())
+    Ok(diagnostics)
 }
 
 struct ReadFinishInput<'a> {
@@ -283,6 +233,7 @@ fn finish_read(input: ReadFinishInput<'_>) -> CoordinationApplyResult {
         raft_commit_ref: None,
         raft_read_receipt: Some(read),
         evidence_values,
+        time_sample: None,
     };
     runtime.receipts.push(receipt);
     runtime.assertions.extend(assertions);

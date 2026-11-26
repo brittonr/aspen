@@ -2,7 +2,16 @@
 struct ChangeInput<'a> {
     runtime: &'a mut CoordinationRuntime,
     request: &'a CoordinationRequest,
-    snapshot: &'a CoordinationStateSnapshot,
+    intent: &'a CommitIntent,
+}
+
+/// What the control plane commits for a coordination mutation: the request, the before-state, the
+/// prepared after-state without token-claimed entries, and the token claims. The committed state is that
+/// unbound state plus each claimed entry carrying a fencing token bound to the resulting commit receipt.
+struct CommitIntent {
+    intent_ref: String,
+    value: IoValue,
+    unbound_snapshot: CoordinationStateSnapshot,
 }
 
 struct PartsInput<'a> {
@@ -12,8 +21,10 @@ struct PartsInput<'a> {
     engine_manifest: &'a crate::raft_control_plane::RaftGroupManifest,
     engine_epoch: u64,
     before_snapshot: &'a CoordinationStateSnapshot,
+    state: &'a CoordinationState,
     snapshot: &'a CoordinationStateSnapshot,
     proposal_ref: &'a str,
+    token: Option<FencingToken>,
 }
 
 struct PassReceiptInput<'a> {
@@ -36,6 +47,7 @@ struct SuccessParts {
 struct ValuesInput<'a> {
     proposal: &'a Proposal,
     request: &'a CoordinationRequest,
+    intent: &'a CommitIntent,
     receipt: &'a CoordinationReceipt,
     token: Option<&'a FencingToken>,
     snapshot: &'a CoordinationStateSnapshot,
@@ -47,6 +59,6 @@ struct SuccessInput<'a> {
     request: CoordinationRequest,
     before_snapshot: CoordinationStateSnapshot,
     transition: PrimitiveTransitionResult,
-    snapshot: CoordinationStateSnapshot,
+    intent: CommitIntent,
     proposal: Proposal,
 }

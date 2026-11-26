@@ -131,7 +131,10 @@ fn run_apply(manifest: FilePath, requests: Vec<FilePath>, out: FilePath) -> Outc
         return Err(molten::error::Failure::invalid_harness("coordination apply requires at least one --request file"));
     }
     let manifest_value = super::io::read_preserves_file(&manifest)?;
-    let mut runtime = molten::coordination::new_coordination_runtime(&manifest_value)?;
+    let mut runtime = molten::coordination::new_coordination_runtime(
+        &manifest_value,
+        molten::coordination::CoordinationClock::live()?,
+    )?;
     let manifest_ref = runtime.manifest.manifest_ref.clone();
     let mut decision = "pass";
     let mut evidence_values =

@@ -52,7 +52,10 @@ fn prepare<'a>(input: LocalInput<'a>) -> Result<State<'a>> {
     let lease_key = input.lease_key.map(str::to_string).unwrap_or_else(|| format!("lock:job-worker:{request_ref}"));
     let refs = coordination_refs(&input, &request, &request_ref)?;
     let manifest_value = molten::coordination::coordination_fixture_manifest_value()?;
-    let runtime = molten::coordination::new_coordination_runtime(&manifest_value)?;
+    let runtime = molten::coordination::new_coordination_runtime(
+        &manifest_value,
+        molten::coordination::CoordinationClock::live()?,
+    )?;
     let manifest_ref = runtime.manifest.manifest_ref.clone();
     let mut evidence_values =
         Items::new(super::super::COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "job worker schedule evidence");
