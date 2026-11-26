@@ -42,9 +42,9 @@ let metadata | BaselineMetadata = {
   # `uncompiled_marker_files=` output lines; the inherited-tracey-debt check compares each of them.
   # `referenced`: accepted requirements named by any marker (any verb, any scanned root).
   # `covered`: accepted requirements with compiled `impl` and `verify` markers (code-backed coverage).
-  requirements = 3140,
-  referenced = 1167,
-  covered = 679,
+  requirements = 3147,
+  referenced = 1174,
+  covered = 686,
   uncovered = 2461,
   dangling = 0,
   uncompiled_marker_files = 0,
@@ -66,7 +66,9 @@ let metadata | BaselineMetadata = {
   # code-backed coverage change accepted `molten.testing.traceability_code_backed_coverage` (3,140 requirements
   # after the concurrent merges), and it returned to debt with no removals (2,461): the guard that implements
   # it is implemented and verified in `tools/`, which never discharges coverage. Referenced and covered counts
-  # moved with the concurrent CompanionDocs, daemon, and schema de-shard merges.
+  # moved with the concurrent CompanionDocs, daemon, and schema de-shard merges. Archiving
+  # `repair-companion-doc-source-discrepancies` then accepted seven requirements (3,147), all carrying compiled
+  # `impl` and `verify` markers, so covered rose to 686 and the 2,461-entry baseline is unchanged.
   previous_observation = {
     observed_date = "2026-11-13",
     revision = "9842cc6453a00ed943a866549bb4307c8502d575",
