@@ -12,12 +12,13 @@ async fn distinct_context_listeners() -> (
     std::collections::BTreeMap<String, crate::fabric_transport::Listener>,
     std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
 ) {
-    let mut listeners = std::collections::BTreeMap::new();
+    let mut bound = Vec::with_capacity(VOTERS.len());
     for node in VOTERS {
         let context = super::super::tests::test_ref(&format!("distinct-peer-context-{node}"));
         let listener = crate::fabric_transport::cross_process::tests::listener_for_peer(node, context).await;
-        listeners.insert(node.to_string(), listener);
+        bound.push((node.to_string(), listener));
     }
+    let mut listeners = bound.into_iter().collect::<std::collections::BTreeMap<_, _>>();
     let endpoints = listeners
         .iter()
         .map(|(node, listener)| (node.clone(), listener.handoff().clone()))
@@ -40,7 +41,7 @@ async fn distinct_context_listeners() -> (
 
 // r[verify molten.fabric_transport.raft_peer_auth_and_isolation]
 #[tokio::test]
-async fn voters_with_distinct_peer_contexts_elect_a_leader_and_refuse_an_unadmitted_identity() {
+async fn voters_each_with_a_distinct_peer_context_elect_a_leader_and_refuse_an_unadmitted_identity() {
     let group = super::super::tests::active_group();
     let (mut listeners, endpoints) = distinct_context_listeners().await;
     let [listener_a, listener_b, listener_c] = VOTERS.map(|node| listeners.remove(node).expect("voter listener"));
