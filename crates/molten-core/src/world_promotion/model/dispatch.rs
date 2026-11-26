@@ -1,10 +1,9 @@
 use transactional_reconciliation_core::AttemptReservation;
 use transactional_reconciliation_core::PersistenceDecision;
 
+use super::grant::WorldPromotionGrant;
 use super::reference::*;
 use crate::world_commit::WorldCommitRef;
-use crate::world_head::WorldHeadPolicyRef;
-use crate::world_head::WorldHeadState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WorldReleaseState {
@@ -59,13 +58,14 @@ impl WorldReleaseState {
     }
 }
 
+/// Facts the current-facts adapter observes for one promotion. The live branch head and grant
+/// consumption are read by the store inside its write transaction, not here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldPromotionTransactionFacts {
-    pub observed_head: Option<WorldHeadState>,
-    pub authority_ref: WorldPromotionAuthorityRef,
-    pub authority_admitted: bool,
-    pub authority_generation: u64,
-    pub policy_ref: WorldHeadPolicyRef,
+    /// The verified signed grant presented for this promotion.
+    pub grant: WorldPromotionGrant,
+    /// Wall-clock Unix seconds observed by the shell for grant expiry.
+    pub observed_unix_seconds: u64,
     pub intent_closure_complete: bool,
     /// Every plan intent's content-addressed material was read at application time and matches the
     /// plan's semantic, handler, adapter, and release classification exactly.
@@ -178,4 +178,11 @@ pub struct WorldPromotionPersistence {
     pub dispatch_eligible: bool,
     pub mutation_authorized_by_evidence: bool,
     pub non_claims: Vec<String>,
+}
+
+/// One abandonment: the uncertain attempt and its reservation, both moved to `Abandoned`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorldAbandonment {
+    pub attempt: WorldAttemptRecord,
+    pub reservation: super::plan::WorldReleaseReservation,
 }

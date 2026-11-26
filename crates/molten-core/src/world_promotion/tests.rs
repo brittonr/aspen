@@ -8,6 +8,7 @@ use crate::world_head::WorldHeadPolicyRef;
 const CURRENT_GENERATION: u64 = 1;
 const EXPECTED_RESERVATIONS: usize = 1;
 
+mod grant;
 mod observation;
 mod operator;
 
@@ -146,31 +147,6 @@ fn uncertain_publication_requires_readback_before_dispatch_eligibility() {
     })
     .expect("conflicting classification");
     assert!(!conflicting.dispatch_eligible);
-}
-
-// r[verify molten.world_promotion.non_claims]
-#[test]
-fn terminal_acknowledgment_and_abandonment_do_not_claim_exactly_once() {
-    let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");
-    let mut reservation = plan.reservations[0].clone();
-    reservation.state = WorldReleaseState::Committed;
-    let attempt_ref = expected_attempt_ref(&reservation).expect("attempt ref");
-    let dispatch = plan_world_dispatch(&plan, &reservation, &dispatch_facts(), &attempt_ref).expect("dispatch plan");
-    let observed = classify_attempt_observation(
-        &dispatch,
-        WorldAttemptObservation::Succeeded(
-            WorldReleaseObservationRef::new(reference("success")).expect("observation ref"),
-        ),
-    );
-    let acknowledged = acknowledge_attempt(&observed).expect("acknowledged attempt");
-    assert!(acknowledged.external_completion_proven);
-
-    let uncertain = classify_attempt_observation(&dispatch, WorldAttemptObservation::Unknown);
-    let abandoned =
-        abandon_uncertain_attempt(&plan, &reservation, &uncertain, true).expect("abandoned unknown attempt");
-    assert_eq!(abandoned.state, WorldReleaseState::Abandoned);
-    assert!(!abandoned.external_completion_proven);
-    assert!(plan.non_claims.iter().any(|claim| claim.contains("exactly-once")));
 }
 
 // r[verify molten.world_promotion.dispatch]

@@ -1,3 +1,5 @@
+use molten_core::world_head::WorldBranchId;
+use molten_core::world_head::WorldHeadState;
 use molten_core::world_promotion::*;
 use redb::ReadableTable;
 
@@ -8,11 +10,15 @@ use crate::world_head::canonical_world_head_state;
 use crate::world_head::parse_canonical_world_head_state;
 use crate::world_promotion::CanonicalWorldPromotionRecord;
 use crate::world_promotion::StoredPromotionIdentity;
+use crate::world_promotion::WorldOperatorMutation;
 use crate::world_promotion::WorldPromotionBookkeepingPort;
 use crate::world_promotion::WorldPromotionCommitPort;
+use crate::world_promotion::WorldPromotionTransitionPort;
 use crate::world_promotion::parse_reservation;
 
 impl WorldPromotionCommitPort for LocalWorldPromotionStore {
+    // r[impl molten.world_commit.promotion_atomic_dispatch_and_readback]
+    // r[impl molten.world_commit.promotion_authority_action_and_canonical_binding]
     fn commit_promotion(
         &mut self,
         plan: &WorldPromotionPlan,
@@ -20,25 +26,25 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
         reservations: &[CanonicalWorldPromotionRecord],
         facts: &WorldPromotionTransactionFacts,
     ) -> Result<WorldPromotionCommitObservation> {
-        validate_promotion_transaction(plan, facts)
-            .map_err(|issues| Failure::invalid_harness(format!("world promotion transaction denied: {issues:?}")))?;
         let parsed = parse_committed_reservations(plan, reservations)?;
         let canonical_identity = crate::world_promotion::canonical_promotion_identity(&plan.identity)?;
+        let canonical_grant = crate::world_promotion::canonical_promotion_grant(&facts.grant)?;
         let write = self.database().begin_write().map_err(store_error)?;
-        {
+        let is_identity_recorded = {
             let identities = write.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
-            if let Some(existing) = identities
+            let existing = identities
                 .get(plan.operation_ref.as_str())
                 .map_err(store_error)?
-                .map(|guard| guard.value().to_vec())
-            {
-                let stored = crate::world_promotion::parse_promotion_identity(&existing)?;
-                if stored != plan.identity {
+                .map(|guard| guard.value().to_vec());
+            match existing {
+                Some(existing) if crate::world_promotion::parse_promotion_identity(&existing)? != plan.identity => {
                     return Ok(WorldPromotionCommitObservation::Inconsistent);
                 }
+                Some(_) => true,
+                None => false,
             }
-        }
-        let observed = {
+        };
+        let live_head = {
             let heads = write.open_table(WORLD_HEADS_TABLE).map_err(store_error)?;
             heads
                 .get(plan.after.branch_id.as_str())
@@ -46,23 +52,27 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
                 .map(|guard| parse_canonical_world_head_state(guard.value()))
                 .transpose()?
         };
-        if observed.as_ref() == Some(&plan.after) {
-            let is_complete = reservations_match(&write, &parsed)?;
+        if is_identity_recorded {
+            // This operation already committed: report it without writing or consuming authority.
+            let is_complete = live_head.as_ref() == Some(&plan.after) && reservations_match(&write, &parsed)?;
             return Ok(if is_complete {
                 WorldPromotionCommitObservation::Applied
             } else {
                 WorldPromotionCommitObservation::Inconsistent
             });
         }
-        if observed.as_ref() != Some(&plan.before) {
-            return Ok(observed.map_or(WorldPromotionCommitObservation::Inconsistent, |state| {
-                WorldPromotionCommitObservation::NotApplied {
-                    current_head: state.head,
-                    current_generation: state.generation,
-                }
-            }));
-        }
+        let is_nonce_consumed = {
+            let consumed = write.open_table(CONSUMED_GRANTS_TABLE).map_err(store_error)?;
+            consumed.get(facts.grant.nonce.as_str()).map_err(store_error)?.is_some()
+        };
+        let live = WorldPromotionLiveFacts {
+            head: live_head,
+            grant_nonce_consumed: is_nonce_consumed,
+        };
+        validate_promotion_transaction(plan, facts, &live)
+            .map_err(|issues| Failure::invalid_harness(format!("world promotion transaction denied: {issues:?}")))?;
         let (_, state_bytes) = canonical_world_head_state(&plan.after)?;
+        super::outbox::consume_grant(&write, &facts.grant.nonce, &canonical_grant.bytes)?;
         {
             let mut identities = write.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
             identities
@@ -91,6 +101,11 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
         })
     }
 
+    /// Classifies what durable state shows of `plan`. The promotion record, the successor head and
+    /// every planned reservation are written in one transaction, so any partial subset is
+    /// `Corrupt`. Reservations may have left `Committed` since (claimed, attempted, denied, ...):
+    /// only their immutable identity fields are compared, so idempotent replay keeps working.
+    // r[impl molten.world_commit.promotion_atomic_dispatch_and_readback]
     fn read_back_promotion(&self, plan: &WorldPromotionPlan) -> Result<WorldPromotionReadBackObservation> {
         let read = self.database().begin_read().map_err(store_error)?;
         let head = {
@@ -103,6 +118,10 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
         };
         let Ok(head) = head else {
             return Ok(WorldPromotionReadBackObservation::Corrupt);
+        };
+        let is_plan_recorded = {
+            let promotions = read.open_table(PROMOTIONS_TABLE).map_err(store_error)?;
+            promotions.get(plan.plan_ref.as_str()).map_err(store_error)?.is_some()
         };
         let reservations = read.open_table(RESERVATIONS_TABLE).map_err(store_error)?;
         let mut present = 0_usize;
@@ -117,26 +136,14 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
             let Ok(observed) = parse_reservation(&bytes) else {
                 return Ok(WorldPromotionReadBackObservation::Corrupt);
             };
-            if observed.reservation_ref != expected.reservation_ref || observed.state != WorldReleaseState::Committed {
+            if !super::outbox::is_same_reservation_identity(&observed, expected)
+                || observed.state == WorldReleaseState::Planned
+            {
                 return Ok(WorldPromotionReadBackObservation::Corrupt);
             }
             present = present.saturating_add(1);
         }
-        if head.as_ref() == Some(&plan.after) && present == plan.reservations.len() {
-            Ok(WorldPromotionReadBackObservation::Reservation)
-        } else if head.as_ref() == Some(&plan.before) && present == 0 {
-            Ok(WorldPromotionReadBackObservation::Prior {
-                head: plan.before.head.clone(),
-                generation: plan.before.generation,
-            })
-        } else if let Some(head) = head {
-            Ok(WorldPromotionReadBackObservation::Prior {
-                head: head.head,
-                generation: head.generation,
-            })
-        } else {
-            Ok(WorldPromotionReadBackObservation::Missing)
-        }
+        Ok(classify_read_back(plan, head, is_plan_recorded, present))
     }
     fn read_promotion_identity(
         &self,
@@ -165,6 +172,32 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
             }
         }
         Ok(None)
+    }
+}
+
+fn classify_read_back(
+    plan: &WorldPromotionPlan,
+    head: Option<WorldHeadState>,
+    is_plan_recorded: bool,
+    present: usize,
+) -> WorldPromotionReadBackObservation {
+    let is_complete = is_plan_recorded && present == plan.reservations.len();
+    let is_absent = !is_plan_recorded && present == 0;
+    match head {
+        // Applied, possibly superseded by a later promotion of the same branch.
+        Some(head) if is_complete && head.generation >= plan.after.generation => {
+            if head.generation == plan.after.generation && head != plan.after {
+                WorldPromotionReadBackObservation::Corrupt
+            } else {
+                WorldPromotionReadBackObservation::Reservation
+            }
+        }
+        Some(head) if is_absent && head != plan.after => WorldPromotionReadBackObservation::Prior {
+            head: head.head,
+            generation: head.generation,
+        },
+        None if is_absent => WorldPromotionReadBackObservation::Missing,
+        _ => WorldPromotionReadBackObservation::Corrupt,
     }
 }
 
@@ -199,8 +232,30 @@ impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
         super::outbox::read_attempt(self.database(), attempt_ref)
     }
 
-    fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
-        super::outbox::list_attempts_in_progress(self.database())
+    fn list_attempts(&self) -> Result<Vec<WorldAttemptRecord>> {
+        super::outbox::list_attempts(self.database())
+    }
+}
+
+impl WorldPromotionTransitionPort for LocalWorldPromotionStore {
+    fn record_attempt_transition(
+        &mut self,
+        reservation: &WorldReleaseReservation,
+        attempt: &WorldAttemptRecord,
+    ) -> Result<()> {
+        super::outbox::record_attempt_transition(self.database(), reservation, attempt)
+    }
+
+    fn observe_live(
+        &self,
+        branch_id: &WorldBranchId,
+        nonce: &WorldPromotionGrantNonce,
+    ) -> Result<WorldPromotionLiveFacts> {
+        super::outbox::observe_live(self.database(), branch_id, nonce)
+    }
+
+    fn apply_operator_mutation(&mut self, mutation: &WorldOperatorMutation) -> Result<()> {
+        super::outbox::apply_operator_mutation(self.database(), mutation)
     }
 }
 
@@ -218,6 +273,8 @@ fn parse_committed_reservations(
     Ok(parsed)
 }
 
+/// True when every expected reservation is stored with unchanged identity fields. Their states may
+/// have advanced since the promotion committed.
 fn reservations_match(write: &redb::WriteTransaction, expected: &[WorldReleaseReservation]) -> Result<bool> {
     let table = write.open_table(RESERVATIONS_TABLE).map_err(store_error)?;
     for reservation in expected {
@@ -228,7 +285,7 @@ fn reservations_match(write: &redb::WriteTransaction, expected: &[WorldReleaseRe
         else {
             return Ok(false);
         };
-        if parse_reservation(&bytes)? != *reservation {
+        if !super::outbox::is_same_reservation_identity(&parse_reservation(&bytes)?, reservation) {
             return Ok(false);
         }
     }

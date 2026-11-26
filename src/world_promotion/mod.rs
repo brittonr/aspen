@@ -13,6 +13,7 @@ mod operator;
 mod ports;
 mod receipts;
 mod records;
+mod recovery;
 mod service;
 mod store;
 
@@ -22,6 +23,7 @@ pub use operator::*;
 pub use ports::*;
 pub use receipts::*;
 pub use records::*;
+pub use recovery::*;
 pub use service::*;
 pub use store::*;
 

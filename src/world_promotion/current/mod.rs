@@ -1,7 +1,10 @@
 //! Signed local authority and intent-closure facts for one promotion transaction.
 //!
 //! The files are explicit operator inputs. They are verified before use and do
-//! not turn a caller-provided boolean into authority.
+//! not turn a caller-provided boolean into authority. Signatures cover canonical
+//! packed Preserves records, never delimiter-joined text.
+
+mod grant;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -9,8 +12,6 @@ use std::path::Path;
 use ed25519_dalek::Signature;
 use ed25519_dalek::Verifier;
 use ed25519_dalek::VerifyingKey;
-use molten_core::world_head::WorldHeadPolicyRef;
-use molten_core::world_head::WorldHeadState;
 use molten_core::world_promotion::WorldPromotionPlan;
 use molten_core::world_promotion::WorldPromotionTransactionFacts;
 use molten_core::world_promotion::*;
@@ -20,24 +21,35 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::LocalIntentMaterial;
+use super::WORLD_PROMOTION_GRANT_SCHEMA;
+use super::WORLD_PROMOTION_INTENT_CLOSURE_SCHEMA;
 use super::WorldPromotionCurrentPort;
+use super::canonical_intent_closure;
+use super::canonical_promotion_grant;
 use crate::error::Failure;
 use crate::error::Result;
 
-const AUTHORITY_SCHEMA: &str = "molten.world-promotion.authority-grant.v1";
-const CLOSURE_SCHEMA: &str = "molten.world-promotion.intent-closure.v1";
-const AUTHORITY_DOMAIN: &[u8] = b"molten.world-promotion.authority-grant.v1";
-const CLOSURE_DOMAIN: &[u8] = b"molten.world-promotion.intent-closure.v1";
-
+/// The JSON carrier of one signed grant. The signature covers the canonical record of the typed
+/// grant it parses to (`canonical_promotion_grant`); exactly the target fields of `action` must
+/// be present.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SignedPromotionAuthority {
     pub schema: String,
+    pub action: String,
     pub branch_id: String,
     pub authority_ref: String,
     pub policy_ref: String,
     pub generation: u64,
     pub admitted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_head: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt_ref: Option<String>,
+    pub nonce: String,
+    pub expires_at: u64,
     pub signer: String,
     pub signature: String,
 }
@@ -57,11 +69,8 @@ pub struct SignedIntentClosure {
 }
 
 pub struct ObservedPromotionCurrent {
-    pub observed_head: Option<WorldHeadState>,
-    pub authority_ref: WorldPromotionAuthorityRef,
-    pub authority_admitted: bool,
-    pub authority_generation: u64,
-    pub policy_ref: WorldHeadPolicyRef,
+    pub grant: WorldPromotionGrant,
+    pub observed_unix_seconds: u64,
     pub closure: SignedIntentClosure,
     material: LocalIntentMaterial,
 }
@@ -95,11 +104,8 @@ impl WorldPromotionCurrentPort for ObservedPromotionCurrent {
             && self.closure.expected_generation == plan.before.generation
             && expected_intents == closure_intents;
         Ok(WorldPromotionTransactionFacts {
-            observed_head: self.observed_head.clone(),
-            authority_ref: self.authority_ref.clone(),
-            authority_admitted: self.authority_admitted,
-            authority_generation: self.authority_generation,
-            policy_ref: self.policy_ref.clone(),
+            grant: self.grant.clone(),
+            observed_unix_seconds: self.observed_unix_seconds,
             intent_closure_complete: is_closure_complete,
             intent_material_available: self.is_intent_material_available(plan)?,
             reservation_refs: plan.reservations.iter().map(|reservation| reservation.reservation_ref.clone()).collect(),
@@ -107,71 +113,65 @@ impl WorldPromotionCurrentPort for ObservedPromotionCurrent {
     }
 }
 
-pub fn read_observed_current(
-    state_root: &Path,
-    authority_path: &Path,
-    closure_path: &Path,
-    trusted_signer: &str,
-    branch_id: &str,
-) -> Result<ObservedPromotionCurrent> {
-    let authority = read_authority(authority_path, trusted_signer)?;
-    let closure = read_closure(closure_path, trusted_signer)?;
-    if authority.branch_id != branch_id || closure.branch_id != branch_id {
+/// The signed inputs of one promotion and the wall-clock time they are decided at.
+pub struct ObservedCurrentInput<'a> {
+    pub state_root: &'a Path,
+    pub authority_path: &'a Path,
+    pub closure_path: &'a Path,
+    pub trusted_signer: &'a str,
+    pub branch_id: &'a str,
+    pub observed_unix_seconds: u64,
+}
+
+/// Verifies the signed promotion grant and intent closure for `branch_id`. The live branch head
+/// and grant consumption are read later, inside the store's write transaction.
+pub fn read_observed_current(input: ObservedCurrentInput<'_>) -> Result<ObservedPromotionCurrent> {
+    let grant = read_promotion_grant(input.authority_path, input.trusted_signer)?;
+    let closure = read_closure(input.closure_path, input.trusted_signer)?;
+    if grant.branch_id.as_str() != input.branch_id || closure.branch_id != input.branch_id {
         return Err(Failure::invalid_harness("signed promotion input names the wrong branch"));
     }
-    let root = DirectoryRoot::open(state_root)?;
+    let root = DirectoryRoot::open(input.state_root)?;
     let storage = root.namespace(NamespaceKind::Storage)?;
-    let store = crate::world_promotion::LocalWorldPromotionStore::open(&storage)?;
-    let branch = molten_core::world_head::WorldBranchId::new(branch_id.to_string())
-        .map_err(|error| Failure::invalid_harness(format!("invalid branch id: {error}")))?;
-    let observed_head = store
-        .read_head(&branch)
-        .map_err(|error| Failure::invalid_harness(format!("promotion head read failed: {error}")))?;
     Ok(ObservedPromotionCurrent {
-        observed_head,
-        authority_ref: authority.authority_ref()?,
-        authority_admitted: authority.admitted,
-        authority_generation: authority.generation,
-        policy_ref: authority.policy_ref()?,
+        grant,
+        observed_unix_seconds: input.observed_unix_seconds,
         closure,
         material: LocalIntentMaterial::from_storage(storage),
     })
 }
 
-/// Reads and verifies one signed operator authority grant for deny, retry
-/// planning, or abandon. Verification establishes who signed it, not that it is
-/// current: callers decide currentness with `validate_operator_authority`.
-pub fn read_operator_authority(path: &Path, trusted_signer: &str) -> Result<WorldOperatorAuthority> {
-    let authority = read_authority(path, trusted_signer)?;
-    Ok(WorldOperatorAuthority {
-        branch_id: molten_core::world_head::WorldBranchId::new(authority.branch_id.clone())
-            .map_err(|error| Failure::invalid_harness(format!("invalid branch id: {error}")))?,
-        authority_ref: authority.authority_ref()?,
-        policy_ref: authority.policy_ref()?,
-        generation: authority.generation,
-        admitted: authority.admitted,
-    })
+/// Reads and verifies one signed promotion or operator grant. Verification establishes who signed
+/// which exact action, target, nonce and expiry; it does not establish that the grant is current:
+/// the store decides that against the live head and consumed nonces inside its write transaction.
+// r[impl molten.world_commit.promotion_authority_action_and_canonical_binding]
+pub fn read_promotion_grant(path: &Path, trusted_signer: &str) -> Result<WorldPromotionGrant> {
+    let authority: SignedPromotionAuthority = read_json(path)?;
+    verify_promotion_grant(&authority, trusted_signer)
 }
 
-pub(super) fn read_authority(path: &Path, trusted_signer: &str) -> Result<SignedPromotionAuthority> {
-    let authority: SignedPromotionAuthority = read_json(path)?;
-    if authority.schema != AUTHORITY_SCHEMA {
+/// Verifies one parsed grant document against the trusted operator key.
+pub fn verify_promotion_grant(
+    authority: &SignedPromotionAuthority,
+    trusted_signer: &str,
+) -> Result<WorldPromotionGrant> {
+    if authority.schema != WORLD_PROMOTION_GRANT_SCHEMA {
         return Err(Failure::invalid_harness("promotion authority schema is unsupported"));
     }
-    if authority.authority_ref.trim().is_empty()
-        || authority.policy_ref.trim().is_empty()
-        || authority.generation == 0
-        || authority.branch_id.trim().is_empty()
-    {
-        return Err(Failure::invalid_harness("promotion authority is incomplete"));
-    }
-    verify(trusted_signer, &authority.signer, &authority.signature, &authority_message(&authority))?;
-    Ok(authority)
+    let grant = authority.grant()?;
+    let canonical = canonical_promotion_grant(&grant)?;
+    verify(trusted_signer, &authority.signer, &authority.signature, &canonical.bytes)?;
+    Ok(grant)
 }
 
 pub(super) fn read_closure(path: &Path, trusted_signer: &str) -> Result<SignedIntentClosure> {
     let closure: SignedIntentClosure = read_json(path)?;
-    if closure.schema != CLOSURE_SCHEMA {
+    verify_closure(&closure, trusted_signer)?;
+    Ok(closure)
+}
+
+pub(super) fn verify_closure(closure: &SignedIntentClosure, trusted_signer: &str) -> Result<()> {
+    if closure.schema != WORLD_PROMOTION_INTENT_CLOSURE_SCHEMA {
         return Err(Failure::invalid_harness("promotion intent-closure schema is unsupported"));
     }
     if closure.operation_ref.trim().is_empty()
@@ -184,47 +184,8 @@ pub(super) fn read_closure(path: &Path, trusted_signer: &str) -> Result<SignedIn
     if closure.intent_refs.len() > molten_core::world_promotion::MAX_WORLD_PROMOTION_INTENTS {
         return Err(Failure::invalid_harness("promotion intent closure exceeds its bound"));
     }
-    verify(trusted_signer, &closure.signer, &closure.signature, &closure_message(&closure))?;
-    Ok(closure)
-}
-
-impl SignedPromotionAuthority {
-    fn authority_ref(&self) -> Result<WorldPromotionAuthorityRef> {
-        WorldPromotionAuthorityRef::new(self.authority_ref.clone())
-            .map_err(|error| Failure::invalid_harness(format!("invalid authority ref: {error:?}")))
-    }
-
-    fn policy_ref(&self) -> Result<WorldHeadPolicyRef> {
-        WorldHeadPolicyRef::new(self.policy_ref.clone())
-            .map_err(|error| Failure::invalid_harness(format!("invalid policy ref: {error:?}")))
-    }
-}
-
-pub(super) fn authority_message(authority: &SignedPromotionAuthority) -> Vec<u8> {
-    format!(
-        "{}\n{}\n{}\n{}\n{}\n{}",
-        String::from_utf8_lossy(AUTHORITY_DOMAIN),
-        authority.branch_id,
-        authority.authority_ref,
-        authority.policy_ref,
-        authority.generation,
-        authority.admitted
-    )
-    .into_bytes()
-}
-
-pub(super) fn closure_message(closure: &SignedIntentClosure) -> Vec<u8> {
-    format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
-        String::from_utf8_lossy(CLOSURE_DOMAIN),
-        closure.operation_ref,
-        closure.branch_id,
-        closure.candidate_head,
-        closure.expected_generation,
-        closure.complete,
-        closure.intent_refs.join(",")
-    )
-    .into_bytes()
+    let canonical = canonical_intent_closure(closure)?;
+    verify(trusted_signer, &closure.signer, &closure.signature, &canonical.bytes)
 }
 
 fn verify(trusted_signer: &str, signer: &str, signature: &str, message: &[u8]) -> Result<()> {

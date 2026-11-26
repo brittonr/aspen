@@ -77,36 +77,6 @@ pub(super) fn dispatch_facts() -> WorldDispatchFacts {
     }
 }
 
-/// The verified operator grant that is current for the promoted head of `request`.
-pub(super) fn current_operator(request: &WorldPromotionRequest) -> WorldOperatorAuthority {
-    WorldOperatorAuthority {
-        branch_id: request.branch_id.clone(),
-        authority_ref: request.authority.authority_ref.clone(),
-        policy_ref: request.policy_ref.clone(),
-        generation: CURRENT_GENERATION + 1,
-        admitted: true,
-    }
-}
-
-pub(super) struct Current {
-    pub is_admitted: bool,
-}
-
-impl WorldPromotionCurrentPort for Current {
-    fn observe_transaction(&mut self, plan: &WorldPromotionPlan) -> Result<WorldPromotionTransactionFacts> {
-        Ok(WorldPromotionTransactionFacts {
-            observed_head: Some(plan.before.clone()),
-            authority_ref: plan.authority_ref.clone(),
-            authority_admitted: self.is_admitted,
-            authority_generation: plan.before.generation,
-            policy_ref: plan.after.policy_ref.clone(),
-            intent_closure_complete: true,
-            intent_material_available: true,
-            reservation_refs: plan.reservations.iter().map(|reservation| reservation.reservation_ref.clone()).collect(),
-        })
-    }
-}
-
 pub(super) struct Admission {
     pub facts: WorldDispatchFacts,
 }
@@ -211,8 +181,33 @@ impl WorldPromotionBookkeepingPort for UnknownTransaction {
         Ok(None)
     }
 
-    fn list_attempts_in_progress(&self) -> Result<Vec<WorldAttemptRecord>> {
+    fn list_attempts(&self) -> Result<Vec<WorldAttemptRecord>> {
         Ok(Vec::new())
+    }
+}
+
+impl WorldPromotionTransitionPort for UnknownTransaction {
+    fn record_attempt_transition(
+        &mut self,
+        _reservation: &WorldReleaseReservation,
+        _attempt: &WorldAttemptRecord,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn observe_live(
+        &self,
+        _branch_id: &WorldBranchId,
+        _nonce: &WorldPromotionGrantNonce,
+    ) -> Result<WorldPromotionLiveFacts> {
+        Ok(WorldPromotionLiveFacts {
+            head: None,
+            grant_nonce_consumed: false,
+        })
+    }
+
+    fn apply_operator_mutation(&mut self, _mutation: &WorldOperatorMutation) -> Result<()> {
+        Ok(())
     }
 }
 

@@ -3,6 +3,7 @@ use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_promotion::*;
 
 use super::super::*;
+use super::grants::*;
 use super::support::*;
 use crate::deterministic_replay::ConsumedEffect;
 use crate::deterministic_replay::EffectLogEntry;
