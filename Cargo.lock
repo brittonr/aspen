@@ -5000,6 +5000,7 @@ dependencies = [
  "molten-composition-core",
  "molten-core",
  "molten-node-host",
+ "molten-raft-core",
  "molten-reliability-model-core",
  "molten-runtime-admission-core",
  "molten-wasm-policy-core",
@@ -5081,6 +5082,15 @@ dependencies = [
  "cap-tempfile",
  "molten-core",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "molten-raft-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
+ "molten-core",
 ]
 
 [[package]]

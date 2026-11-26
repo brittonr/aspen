@@ -1,6 +1,6 @@
 ---- MODULE AspenRaft ----
 \* Bounded design model of Aspen's production replicated Raft transition
-\* function (src/fabric_consistency/raft/transition*). It starts from the
+\* function (crates/molten-raft-core/src/transition*). It starts from the
 \* empty durable state of a fixed three-voter group: nothing about leaders,
 \* logs or commitment is assumed in Init. Election Safety, Log Matching,
 \* Leader Completeness, State Machine Safety and ReadIndex linearizability are

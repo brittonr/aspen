@@ -94,111 +94,6 @@ pub(super) fn parse_entry(value: &preserves::Value<preserves::IOValue>) -> crate
     })
 }
 
-fn validate_envelope_shape(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
-    crate::preserves_rail::validate_content_ref(&envelope.group_binding_ref)?;
-    validate_identifier(&envelope.from, "Raft wire sender")?;
-    validate_identifier(&envelope.to, "Raft wire recipient")?;
-    if envelope.from == envelope.to {
-        return Err(crate::error::Failure::invalid_harness("Raft wire sender and recipient must differ"));
-    }
-    if envelope.service_generation == 0
-        || (envelope.message.term() == 0
-            && !matches!(envelope.message, Message::RecoveryQuery { .. } | Message::RecoveryReport { .. }))
-        || envelope.message.config_epoch() == 0
-        || envelope.message.fencing_epoch() == 0
-    {
-        return Err(crate::error::Failure::invalid_harness(
-            "Raft wire generation, term, and epochs must be positive",
-        ));
-    }
-    validate_embedded_sender(envelope)?;
-    validate_recovery_envelope(envelope)?;
-    validate_message_entries(&envelope.message)
-}
-
-fn validate_embedded_sender(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
-    let embedded = match &envelope.message {
-        Message::RequestVote { candidate_id, .. } => candidate_id,
-        Message::VoteResponse { voter_id, .. } => voter_id,
-        Message::AppendEntries { leader_id, .. }
-        | Message::ReadProbe { leader_id, .. }
-        | Message::InstallSnapshot { leader_id, .. } => leader_id,
-        Message::AppendResponse { follower_id, .. }
-        | Message::ReadAcknowledgement { follower_id, .. }
-        | Message::SnapshotResponse { follower_id, .. } => follower_id,
-        Message::RecoveryQuery { requester_id, .. } => requester_id,
-        Message::RecoveryReport { peer_id, .. } => peer_id,
-    };
-    if embedded != &envelope.from {
-        return Err(crate::error::Failure::invalid_harness("Raft wire sender does not match the embedded sender"));
-    }
-    Ok(())
-}
-
-fn validate_message_entries(message: &Message) -> crate::error::Result<()> {
-    match message {
-        Message::ReadProbe { request_ref, .. } | Message::ReadAcknowledgement { request_ref, .. } => {
-            return crate::preserves_rail::validate_content_ref(request_ref);
-        }
-        Message::InstallSnapshot { snapshot, .. } => return validate_wire_snapshot(snapshot),
-        _ => {}
-    }
-    let Message::AppendEntries {
-        term,
-        prev_log_index,
-        entries,
-        ..
-    } = message
-    else {
-        return Ok(());
-    };
-    if entries.len() > MAX_REPLICA_MESSAGE_ENTRIES {
-        return Err(crate::error::Failure::invalid_harness("Raft wire entries exceed the message bound"));
-    }
-    let mut expected = prev_log_index
-        .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft wire entry index overflow"))?;
-    for entry in entries {
-        if entry.index != expected || entry.term == 0 || entry.term > *term {
-            return Err(crate::error::Failure::invalid_harness(
-                "Raft wire entries are non-contiguous or use an invalid term",
-            ));
-        }
-        for reference in [&entry.request_ref, &entry.command_ref, &entry.command_schema_ref] {
-            crate::preserves_rail::validate_content_ref(reference)?;
-        }
-        expected = expected
-            .checked_add(NEXT_LOG_INDEX_STEP)
-            .ok_or_else(|| crate::error::Failure::invalid_harness("Raft wire entry index overflow"))?;
-    }
-    Ok(())
-}
-
-fn validate_wire_snapshot(snapshot: &ReplicaSnapshot) -> crate::error::Result<()> {
-    for reference in [
-        &snapshot.snapshot_ref,
-        &snapshot.group_binding_ref,
-        &snapshot.membership_ref,
-        &snapshot.application_state_ref,
-    ] {
-        crate::preserves_rail::validate_content_ref(reference)?;
-    }
-    if snapshot.snapshot_ref != snapshot_ref(snapshot)?
-        || snapshot.last_included_index == INITIAL_COMMIT_INDEX
-        || snapshot.last_included_term == INITIAL_TERM
-        || snapshot.completed_requests.len() > MAX_REPLICA_LOG_ENTRIES
-    {
-        return Err(crate::error::Failure::invalid_harness("Raft wire snapshot identity or boundary is invalid"));
-    }
-    for (request_ref, index) in &snapshot.completed_requests {
-        crate::preserves_rail::validate_content_ref(request_ref)?;
-        if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
-            return Err(crate::error::Failure::invalid_harness("Raft wire snapshot request index is invalid"));
-        }
-    }
-    Ok(())
-}
-
 pub(super) fn required_record(
     value: &preserves::Value<preserves::IOValue>,
     label: &str,
@@ -231,17 +126,5 @@ pub(super) fn required_bool(value: &preserves::Value<preserves::IOValue>, label:
     value
         .as_boolean()
         .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected bool for {label}")))
-}
-
-fn validate_identifier(value: &str, label: &str) -> crate::error::Result<()> {
-    if value.is_empty() || value.len() > MAX_WIRE_IDENTIFIER_BYTES {
-        return Err(crate::error::Failure::invalid_harness(format!(
-            "{label} must be non-empty and at most {MAX_WIRE_IDENTIFIER_BYTES} bytes"
-        )));
-    }
-    if !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')) {
-        return Err(crate::error::Failure::invalid_harness(format!("{label} contains unsupported characters")));
-    }
-    Ok(())
 }
 

@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-raft-core",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-raft-core/crates/molten-reliability-model-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-reliability-model-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0"
+    "molten-reliability-model-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-raft-core/crates/molten-reliability-model-core#0.1.0"
   },
-  "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
-  "inputsHash": "ef210dae6167501f836720330aae5e783aeb9adabf1295a663292633d7685b20",
+  "cargoLockHash": "e48f8eb677837644f43a5bdded12c231350caf6f4f374c3a827b58f5038e0474",
+  "inputsHash": "3d943a0bbcfd963176b69f5d0400c854d2558766a22f6d089816a2fc1c74323c",
   "crates": {
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-raft-core/crates/molten-reliability-model-core#0.1.0": {
       "crateName": "molten-reliability-model-core",
       "version": "0.1.0",
       "edition": "2024",

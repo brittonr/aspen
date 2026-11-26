@@ -797,6 +797,7 @@
           "molten-core"
           "molten-node-host"
           "molten-release-policy"
+          "molten-raft-core"
           "molten-reliability-model-core"
           "molten-runtime-admission-core"
           "molten-wasm-policy-core"
@@ -1014,6 +1015,29 @@
             linkedAllowlist = [ ];
             compileProbeModule = "src/judgment.rs";
             sourceProbeModule = "src/vocabulary.rs";
+          };
+          "molten-raft-core" = {
+            # molten-core (no default features) supplies the pure recovery reconciliation core.
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "artifact-auth-core"
+              "artifact-binding-core"
+              "blake3"
+              "cfg-if"
+              "choregraph-history"
+              "constant_time_eq"
+              "content-identity-core"
+              "cpufeatures"
+              "molten-core"
+              "schema-identity-core"
+              "schema-migration-core"
+              "serde"
+              "serde_core"
+              "transactional-reconciliation-core"
+            ];
+            compileProbeModule = "src/transition.rs";
+            sourceProbeModule = "src/transition/wire.rs";
           };
           "molten-reliability-model-core" = {
             linkedAllowlist = [
@@ -3286,6 +3310,7 @@
             # Full molten-core unit/property tests under the default std feature set.
             molten-core-tests = ws.test.check."molten-core";
             molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-raft-core-no-std = noStdKernelCheck "molten-raft-core";
             molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
             molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
             molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";
