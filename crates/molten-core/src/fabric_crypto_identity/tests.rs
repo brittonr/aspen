@@ -4,6 +4,8 @@ use std::hash::Hasher;
 
 use super::*;
 
+mod spelling;
+
 const SYNTHETIC_REF_CHUNK_HEX_CHARS: usize = 16;
 const SYNTHETIC_REF_CHUNK_REPETITIONS: usize = 4;
 const GENERATION_ONE: u64 = 1;

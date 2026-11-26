@@ -82,3 +82,24 @@ Review fixes (FIX-FIRST, three rounds): the first revision accepted caller-prese
 - `aremote 'cargo clippy -p molten --all-targets -- -D warnings'`: clean.
 - No CLI harness case exercises coordination (`tests/` has no coordination references).
 - `cairn validate --root . --policy …/cairn-policy.json --strict`: valid.
+
+## Verification (2026-11-26, final validation)
+
+Coverage was checked against the code: each defect has positive and negative regressions that fail on the old behavior. No test was missing, so none was added.
+
+1. Stale trap and worker capacity: `reservation_tests::{delayed_enforcement_releases_a_stale_reservation_and_restores_worker_capacity, stale_reservation_without_enforcement_keeps_capacity_and_stays_releasable, released_reservation_denies_duplicate_release_without_double_credit, worker_capacity_is_conserved_across_allocate_release_cycles, capacity_is_conserved_over_every_bounded_command_sequence}`.
+2. Batch atomicity and uncertainty: `a_later_batch_item_failure_keeps_earlier_allocations_committed`, `an_uncertain_batch_allocation_keeps_its_class_and_holds_capacity_until_enforcement`, `a_definite_single_allocation_failure_keeps_its_port_class`, `hegel_owner_conserves_capacity_across_batches_failures_and_releases`. Fenced renew: `fenced_exclusive_renewal_requires_a_current_fencing_token` (allowed current and newer token; denied stale or missing tokens) and `local_observation_renewal_cannot_claim_fencing`.
+3. Pending intents and quarantined slots:
+   - Persistence: `port_observed_pre_effect_failure_aborts_pending_intent_and_the_role_slot_proceeds`, `reopened_intent_without_port_evidence_can_only_reconcile_to_quarantine`, `crashed_effectless_intent_aborts_from_its_persisted_kind_after_reopen`, `post_effect_uncertainty_reconciles_to_quarantine_and_a_fenced_successor`, `observed_effect_reconciles_by_committing_the_exact_pending_transition`, `legacy_quarantined_record_migrates_only_with_exact_authorization`.
+   - Core: `quarantined_predecessor_admits_only_a_reconciled_and_observed_fenced_successor`, `quarantine_succession_derives_fence_strength_from_node_identities`.
+   - Placement step: `refused_activation_aborts_its_intent_and_the_next_step_reads_current`.
+4. Placement and reduction: `higher_preference_unavailable_node_does_not_displace_healthy_nodes`, `degraded_nodes_are_used_only_when_healthy_nodes_are_insufficient`, `degraded_fallback_minimizes_degraded_replicas`, `degraded_fallback_stays_reachable_when_healthy_zones_are_insufficient`, `failure_reduction_is_independent_of_input_order`, `failure_reduction_never_compares_ticks_across_time_bases`.
+5. Coordination (module `orchestration`): `committed_lock_and_election_state_persist_the_issued_commit_bound_token_ref`, `receipt_assertion_refs_bind_the_emitted_status_assertions`, `hostile_mutations_do_not_expire_a_live_lock_but_the_clock_expires_an_idle_one`, `resigned_or_expired_election_admits_a_successor_and_non_holder_resignation_is_denied`, `coordination_runtime_binds_the_callers_control_group`, and the clock-transition tests above.
+
+Commands (leviathan via `aremote`; formatting and Cairn locally):
+- `cargo test -p molten-core --lib`: 823 passed, 0 failed.
+- `cargo test -p molten --lib -- fabric_time fabric_membership orchestration:: coordination addressable_actor::command`: 123 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core -p molten-node-host --all-targets -- -D warnings`: exit 0.
+- `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide, 0 errors. Files this change touched carry 35 of them across 13 files: `coordination/parts/mod/{p000,p002,p004,p005,p016}`, `fabric_membership/{persistence.rs,persistence/codec.rs,ports.rs}` and tests, `fabric_time/parts/tests/p003`, `addressable_actor/command/placement.rs`. They are mostly `excessive_file_length`; the rest are `bool_naming`, `compound_assertion` and `fat_trait`. They are left for OctetSweep.
+- Strict `cairn validate`: valid.
+- **Final task left unchecked:** the Octet source gate is not clean for this change's files (above). Every other requirement is met.

@@ -250,7 +250,7 @@ async fn bind_explicit_endpoint(
         .map_err(error)
 }
 
-async fn write_bounded_frame(
+pub(crate) async fn write_bounded_frame(
     send: &mut iroh::endpoint::SendStream,
     payload: &[u8],
     max_frame_bytes: u64,
@@ -273,7 +273,7 @@ async fn write_bounded_frame(
     send.finish().map_err(error)
 }
 
-async fn read_bounded_frame(
+pub(crate) async fn read_bounded_frame(
     receive: &mut iroh::endpoint::RecvStream,
     max_frame_bytes: u64,
     timeout: std::time::Duration,

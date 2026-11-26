@@ -24,8 +24,6 @@ For a received object, the shell validates the transport envelope, asks the cont
 
 Resolved discrepancy (change `fix-authority-bypasses-and-sandbox-isolation`): the governing DAG document describes obtaining authority and resource observations before each transfer, but `run_dag_sync` previously observed them once before iterating over `plan.requests`. It now re-observes authority and calls `DagResourcePort::confirm` for the original reservation before every object fetch; a revoked authority, a released reservation, or a changed reservation reference fails the sync before the next request, and content verification receives the freshly observed authority reference. Objects verified before the revocation stay in durable progress; the refresh is only as current as the observations each port returns.
 
-This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
-
 ## Worked reasoning example
 
 Consider an illustrative root whose node `A` references `B` and `C`, with both branches referencing `D`. Each node has an associated content reference. A full request includes the reachable metadata and payload objects, with shared objects deduplicated. Suppose two payload references already appear in inventory and one node reference appears in compatible progress. Those three objects are omitted from the new missing set; the graph still participates in reachability and bound validation.

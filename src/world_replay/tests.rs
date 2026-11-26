@@ -4,3 +4,4 @@ mod import;
 mod ports;
 mod run;
 mod sealed;
+mod sealedproperties;

@@ -57,3 +57,50 @@ Task 7 (repository-wide Octet/suite validation) is left to the change owner.
 - Previous round, unchanged code paths: `cargo test -p molten --features spacewasm-pilot --lib -- spacewasm::` — 39 passed, 1 ignored; `cargo test -p molten --features executable-extents --test executable_extent` — 7 passed.
 - `aremote 'cargo test -p molten --lib -- workload::tests::hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle --nocapture'` — passed (78 s); same command from the unmodified main checkout — passed (143 s).
 - `cargo fmt --all` (local); `cairn validate --root . --policy …/cairn-policy.json --strict` — valid (previous round).
+
+## Verification (2026-11-26, final validation)
+
+Coverage was checked against the code: each bypass has positive and negative regressions that fail on the old behavior. No test was missing, so none was added.
+
+1. Native host:
+   - Authority: `native_execution_admission_denies_authority_that_differs_from_the_admitted_grant`, `native_execution_admission_denies_a_callback_generation_fenced_after_intent_commit`.
+   - Output gate: `journal_failure_after_a_routed_effect_is_reported_uncertain`, and `materializing_native_host_rejects_missing_mismatched_and_oversized_effect_values_without_retry`, which now requires `Unknown` with no terminal ref.
+   - Positive: `--test nativesystemextension` admission and replacement cases.
+2. Steel: the `metal::tests` set from `legitimate_script_runs_with_real_metering_and_deterministic_receipt_inputs` through `deeply_nested_source_is_rejected_without_using_the_callers_stack`.
+3. Authority:
+   - Admission: `admit_authority_compares_against_caller_principal_not_context_subject`, `admit_authority_denies_contexts_without_signing_keys`, `admit_authority_denies_any_stale_context_key`, `admit_authority_applies_caller_minimum_epoch`, `gatekeeper_refuses_live_ref_for_other_principal_or_stale_key`.
+   - Cleanup: `cleanup_waits_for_revocation_effective_time`, `cleanup_honors_revocation_target_kind`.
+   - Capability scope: `capability_scope_admission_checks_scope_validity_revocation_and_records_non_claim`.
+4. Crypto adapter: `verify_preserves_mismatched_signer_metadata_and_denies`, `signing_never_pairs_a_handle_with_a_concurrently_rotated_secret`, `concurrent_revocations_serialize_and_keep_every_record`, `a_full_revocation_set_denies_further_revocation_without_breaking_resolution`, `file_key_revocation_does_not_deny_rotated_tpm2_handle`, `revocation_records_accumulate_and_malformed_markers_fail_closed`.
+5. Admission and filesystem gaps:
+   - Envelope: `envelope_wrappers_deserialize_only_through_checked_parsers`, `envelope_core_validation_rechecks_version_and_contents`.
+   - Membership: `commit_rejects_passing_preflight_for_another_request`, `commit_rejects_forged_preflight_digest_and_non_canonical_refs`, `commit_binds_every_evidence_category_of_the_request`, `commit_rejects_a_v1_preflight_without_request_digest`.
+   - Transport shell: `registered_effect_port_denies_replay_of_a_routed_request`.
+   - Context profile: `denies_conflicting_retention_override_but_accepts_identical_one`.
+   - DAG sync: `authority_revoked_mid_transfer_stops_the_next_fetch`, `released_reservation_mid_transfer_stops_the_next_fetch`.
+   - SpaceWasm: `credential_policy_must_be_the_policy_bound_into_current_authority`, `actor_resource_segment_rejects_path_injection`.
+   - Live adapter: `fabric_execution::tests::binding::*` and the unknown-retry case in `tests::stdin`.
+   - Node host: `a_concurrent_writers_active_stage_is_never_unlinked`, `cleanup_never_matches_another_leafs_stage_or_lock`, `a_root_swapped_for_a_symlink_after_the_check_is_never_followed`, `protected_reads_mode_and_bytes_from_one_handle`, `capability_source_refuses_symlinked_and_world_writable_members`, and the lock-file cases.
+
+Docs and Cairn:
+- Four companion articles keep their "Resolved discrepancy" notes, but their "tracked as a defect" lines are removed: envelope admission, DAG exchange, transport replay and context expansion. The matching four entries are removed from the discrepancy list in `docs/technical/README.md`.
+- `python3 scripts/check-doc-links.py`: 320 files, 0 findings.
+- The transport replay article also called the live-loopback framing mismatch unresolved. That is fixed in this validation:
+  - The Iroh loopback adapter (`src/fabric_transport/parts/adapters/p001/body.rs`) now uses the cross-process shell's `write_bounded_frame` and `read_bounded_frame`, made `pub(crate)` in `cross_process/iroh/parts/shell/p002/body.rs`.
+  - New test `fabric_transport::adapters::framing::loopback_echo_accepts_exactly_one_bounded_prefixed_frame`: a full-bound frame echoes; over-bound, zero-length, unprefixed, short and trailing frames are refused.
+  - The test fails against the old `read_to_end` server.
+  - `cargo test -p molten --lib -- fabric_transport`: 27 passed. The article note now reads as resolved.
+- Strict `cairn validate` failed with an unknown requirement reference: the round-6 notes above cited the node-host crate-boundary requirement in marker form, and that requirement is outside this change's delta specs. It is now spelled in prose, and validation passes.
+
+Commands (leviathan via `aremote`; formatting and Cairn locally):
+- `cargo test -p molten --lib -- fabric_execution metal:: steel native_host authority:: delegation:: fabric_crypto_identity:: envelope:: raft_membership_core fabric_transport::tests dag_sync:: context_profile_core live_reliability::authority workload::`: 202 passed, 0 failed, 5 ignored.
+- `cargo test -p molten --test nativesystemextension --test collaborationnative`: 29 passed, 2 ignored; 10 passed, 4 ignored.
+- `cargo test -p molten-node-host`: 16 + 5 passed, 0 failed.
+- `cargo test -p molten --lib --features spacewasm-pilot -- spacewasm::`: 40 passed, 1 ignored. `cargo test -p molten --features executable-extents --test executable_extent`: 7 passed.
+- `cargo clippy -p molten -p molten-core -p molten-node-host --all-targets -- -D warnings`: exit 0.
+- `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide, 0 errors. Files this change touched carry 58 of them across 16 files:
+  - `harness/steel/executor.rs` (20), `raft/membership.rs` (6), `node/state/publication.rs` (5).
+  - `fabric_crypto_identity` adapter and tests, `authority/parts/mod/{p000,p001}`, `runtime/envelope/mod.rs`, `reliability/authority/storage.rs`, `federation/liveproof/setup/dagports.rs`, and two integration test files.
+  - Lints: `excessive_file_length`, `fallible_int_fallback`, `sentinel_fallback`, `unbounded_channel` and others. They are left for OctetSweep.
+- Strict `cairn validate`: valid.
+- **Final task left unchecked:** the Octet source gate is not clean for this change's files (above). Every other requirement is met.

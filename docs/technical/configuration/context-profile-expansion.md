@@ -26,8 +26,6 @@ For a conflicting policy, authority, resource, or retention override, the helper
 
 The [proof workflow](../../proof-workflow.md) describes expansion denials for conflicting overrides in broad terms. The [`merge_refs` implementation](../../../src/operator/context/parts/profile/p000/body.rs) previously diagnosed policy, authority, and resource conflicts but selected a different retention vector without a diagnostic. Change `fix-authority-bypasses-and-sandbox-isolation` adds the retention conflict check, so a different nonempty retention override now denies expansion, while an identical one passes.
 
-This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
-
 A similar distinction applies to diagnostic terminology. Reference validation can report `stale-ref`, but the inspected helper delegates to content-reference validation without retrieving external objects or checking their lifecycle. That diagnostic name is not proof that a remote revocation or freshness check occurred.
 
 ## Worked reasoning: installation context

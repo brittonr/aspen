@@ -109,7 +109,8 @@ pub fn check_publication(
     policy: &ReplicaPolicy,
     observations: &PublicationObservations,
 ) -> Result<PublicationReceipt, PublicationIssue> {
-    if observations.content_ref.is_empty() || !observations.content_ref.starts_with("blake3:") {
+    // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    if !crate::fabric::valid_blake3_ref(&observations.content_ref) {
         return Err(PublicationIssue::InvalidContentRef);
     }
     if observations.operation_id.is_empty() {
