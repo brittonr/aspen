@@ -12,15 +12,15 @@ At the request layer, `AdmissionPolicy::decide_with_capabilities` first checks `
 
 ## The policy evidence chain
 
-`policy_preflight_material` builds a canonical policy snapshot and computes its reference. It derives Nickel source from that policy, hashes the source as a Preserves string, evaluates a JSON export, and hashes the exported string. The Basalt contract envelope binds backend, contract identity and version, normalized source reference, input schema, output schema, and receipt schema. `validate_contract_envelope` supplies an acceptance result; rejection prevents successful preflight construction ([policy material](../../../src/harness/parts/schema/p019/body.rs)).
+`policy_preflight_material` builds a canonical policy snapshot and computes its reference. It derives Nickel source from that policy, hashes the source as a Preserves string, evaluates a JSON export, and hashes the exported string. The Basalt contract envelope binds backend, contract identity and version, normalized source reference, input schema, output schema, and receipt schema. `validate_contract_envelope` supplies an acceptance result; rejection prevents successful preflight construction ([policy material](../../../src/harness/schema/gates/covenant.rs)).
 
 This yields a graph of named values rather than one unexplained success bit: policy snapshot, source, normalized export, contract envelope, and Basalt preflight result. The code records references connecting those values. Its source-evidence parser recomputes source and export hashes and reevaluates the source to compare the actual export with the recorded export. A matching source hash alone would not establish export normalization; both relations matter.
 
-The Nickel operation is an actual interpreter call in the harness, through `nickel_lang::Context`, `eval_deep_for_export`, and `expr_to_json` ([normalization boundary](../../../src/harness/parts/schema/p020/body.rs)). It should not be described as ambient scripting inside `molten-core`. The architectural prohibition on such effects in the pure core remains authoritative.
+The Nickel operation is an actual interpreter call in the harness, through `nickel_lang::Context`, `eval_deep_for_export`, and `expr_to_json` ([normalization boundary](../../../src/harness/schema/gates/evaluator.rs)). It should not be described as ambient scripting inside `molten-core`. The architectural prohibition on such effects in the pure core remains authoritative.
 
 ## Capability evidence is independently bound
 
-The capability gate binds a canonical capability snapshot, authority contract, Basalt authority preflight, and proofset evidence. Parsing checks agreement between the contract's normalized capability reference and the gate, the preflight's capability reference and the gate, the envelope references, and the proofset references. Validation against a suite additionally compares the embedded capabilities' hash and grant references, then reconstructs the expected gate and compares canonical hashes ([capability gate validation](../../../src/harness/parts/schema/p020/body.rs)).
+The capability gate binds a canonical capability snapshot, authority contract, Basalt authority preflight, and proofset evidence. Parsing checks agreement between the contract's normalized capability reference and the gate, the preflight's capability reference and the gate, the envelope references, and the proofset references. Validation against a suite additionally compares the embedded capabilities' hash and grant references, then reconstructs the expected gate and compares canonical hashes ([capability gate validation](../../../src/harness/schema/grants/grants.rs)).
 
 Local fixture handling remains visible. When proofset-derived grant references are absent, parsing can use the authority preflight's grant references. Validation specifically checks local fixture derived grants when UCAN verification receipt references are empty. This is not evidence that a local fixture silently acquired external UCAN authority. The gate requires a `fixture-authority-evidence-only` check, and the [architecture](../../architecture.md) distinguishes fixture preflight from the broader authority integration boundary.
 
@@ -46,7 +46,7 @@ A Basalt contract-envelope acceptance result is not a blanket proof of applicati
 - [Nominal authority references](../../nominal-authority-references.md)
 - [Filesystem authority boundary](../../local-filesystem-authority.md)
 - [Harness ordering](../../../src/harness/parts/runner/p000/body.rs)
-- [Policy preflight material and normalization checks](../../../src/harness/parts/schema/p019/body.rs)
-- [Capability gate and validation](../../../src/harness/parts/schema/p020/body.rs)
+- [Policy preflight material and normalization checks](../../../src/harness/schema/gates/covenant.rs)
+- [Capability gate and validation](../../../src/harness/schema/grants/grants.rs)
 - [Request-time policy composition](../../../src/runtime/admission/mod.rs)
 - [Authority preflight test cases](../../../src/harness/parts/mod/tests/m000/p003/body.rs)

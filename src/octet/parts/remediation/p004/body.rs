@@ -82,6 +82,17 @@ mod tests {
         assert_eq!(classification.decision, DECISION_BLOCKED);
     }
 
+    #[test]
+    fn surface_directory_entries_cover_child_files_only() {
+        assert!(surface_covers("src/harness/schema.rs", "src/harness/schema.rs"));
+        assert!(surface_covers("src/harness/schema/", "src/harness/schema/trace/events.rs"));
+        assert!(!surface_covers("src/harness/schema/", "src/harness/schemata.rs"));
+        assert!(!surface_covers("src/harness/schema.rs", "src/harness/schema.rs.bak"));
+        let harness = SURFACES.iter().find(|surface| surface.name == "harness-and-gates").expect("harness surface");
+        assert!(harness.files.iter().any(|entry| surface_covers(entry, "src/harness/schema/model/intake.rs")));
+        assert!(harness.files.iter().any(|entry| surface_covers(entry, "src/harness/schema.rs")));
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         let path = std::env::temp_dir().join(format!("molten-octet-remediation-{name}-{}", std::process::id()));

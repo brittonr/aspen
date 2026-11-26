@@ -24,7 +24,7 @@ For this example, the explicit policy denial is valid material to describe. It d
 
 ## 3. Follow the policy's normalization bindings
 
-[Policy material construction](../../../src/harness/parts/schema/p019/body.rs) canonicalizes the policy snapshot, generates Nickel source, evaluates its JSON export, and hashes source and export as Preserves strings. The contract envelope binds backend, contract identity/version, normalized source reference, input schema, output schema, and receipt schema. Basalt envelope rejection prevents successful construction.
+[Policy material construction](../../../src/harness/schema/gates/covenant.rs) canonicalizes the policy snapshot, generates Nickel source, evaluates its JSON export, and hashes source and export as Preserves strings. The contract envelope binds backend, contract identity/version, normalized source reference, input schema, output schema, and receipt schema. Basalt envelope rejection prevents successful construction.
 
 The corresponding source-evidence parser checks the recorded source hash, export hash, and equality between a freshly evaluated export and the recorded JSON. These are different edges: correct source addressing alone does not establish that an export came from that source.
 
@@ -32,7 +32,7 @@ The [Nickel cohort contract](../../nickel-toolchain.md) remains the governing to
 
 ## 4. Keep capability preflight independent
 
-The [capability gate implementation](../../../src/harness/parts/schema/p020/body.rs) hashes the capability snapshot and grants, builds its authority contract and preflight evidence, and emits an empty local UCAN proofset. Parsing binds capability, envelope, proofset, and grant references; validation against the suite recomputes the expected gate.
+The [capability gate implementation](../../../src/harness/schema/grants/grants.rs) hashes the capability snapshot and grants, builds its authority contract and preflight evidence, and emits an empty local UCAN proofset. Parsing binds capability, envelope, proofset, and grant references; validation against the suite recomputes the expected gate.
 
 The local gate explicitly requires `fixture-authority-evidence-only`. Do not relabel the fixture grant as a verified external token. A matching canonical reference proves identity of the encoded value, not possession of live authority outside this fixture.
 
@@ -60,5 +60,5 @@ Use the example as a review procedure: retain the original suite and report iden
 - [Exact denied-effect fixture](../../../src/harness/parts/mod/tests/m000/p003/body.rs)
 - [Preparation and request admission](../../../src/harness/parts/runner/p000/body.rs)
 - [Denied-turn dispatch and report assembly](../../../src/harness/parts/runner/p001/body.rs)
-- [Policy normalization](../../../src/harness/parts/schema/p019/body.rs)
-- [Capability evidence binding](../../../src/harness/parts/schema/p020/body.rs)
+- [Policy normalization](../../../src/harness/schema/gates/covenant.rs)
+- [Capability evidence binding](../../../src/harness/schema/grants/grants.rs)

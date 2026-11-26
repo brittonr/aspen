@@ -18,7 +18,7 @@ fn surface_inventory_value(surface: &SurfaceDefinition, metrics: &RunMetrics) ->
     let mut by_lint = Map::new();
     let mut total = 0u64;
     for finding in &metrics.findings {
-        if surface.files.iter().any(|path| *path == finding.file) {
+        if surface.files.iter().any(|path| surface_covers(path, &finding.file)) {
             total = total.saturating_add(finding.count);
             increment_count(&mut by_lint, &finding.lint, finding.count);
         }
@@ -34,6 +34,11 @@ fn surface_inventory_value(surface: &SurfaceDefinition, metrics: &RunMetrics) ->
             MAX_METRIC_ROWS,
         )))]),
     ])
+}
+
+/// A surface entry ending in `/` covers every file below that directory; other entries match exactly.
+fn surface_covers(entry: &str, file: &str) -> bool {
+    file == entry || (entry.ends_with('/') && file.starts_with(entry))
 }
 
 const SURFACES: &[SurfaceDefinition] = &[
@@ -52,6 +57,7 @@ const SURFACES: &[SurfaceDefinition] = &[
         files: &[
             "src/harness/gate.rs",
             "src/harness/schema.rs",
+            "src/harness/schema/",
             "src/harness/runner.rs",
             "src/nixos/vm.rs",
             "src/nixos/tests.rs",
