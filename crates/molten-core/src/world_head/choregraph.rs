@@ -13,6 +13,7 @@ use choregraph_history::model::ParentLink;
 use super::MAX_WORLD_HEAD_LABEL_BYTES;
 use super::MAX_WORLD_HEAD_METADATA_ENTRIES;
 use super::WorldCommitHistoryNode;
+use super::WorldHeadBound;
 use super::WorldHeadBounds;
 use super::WorldHeadIssue;
 use super::WorldHeadPolicyRef;
@@ -44,7 +45,8 @@ pub(crate) fn build_choregraph_history(
     }
 
     let limits = history_limits(bounds).map_err(|issue| vec![issue])?;
-    let mut graph = Graph::new(limits).map_err(|_| vec![WorldHeadIssue::InvalidBounds("choregraph")])?;
+    let mut graph =
+        Graph::new(limits).map_err(|_| vec![WorldHeadIssue::InvalidBounds(WorldHeadBound::ChoregraphLimits)])?;
     let mut events = BTreeMap::new();
     debug_assert!(events.len() <= bounds.max_history_nodes);
     let mut pending = nodes.to_vec();
@@ -134,14 +136,14 @@ fn validate_history_shape(nodes: &[WorldCommitHistoryNode], bounds: &WorldHeadBo
 }
 
 fn history_limits(bounds: &WorldHeadBounds) -> Result<Limits, WorldHeadIssue> {
-    let max_events =
-        u32::try_from(bounds.max_history_nodes).map_err(|_| WorldHeadIssue::InvalidBounds("max_history_nodes"))?;
+    let max_events = u32::try_from(bounds.max_history_nodes)
+        .map_err(|_| WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxHistoryNodes))?;
     let max_parents = u32::try_from(bounds.max_parents_per_commit)
-        .map_err(|_| WorldHeadIssue::InvalidBounds("max_parents_per_commit"))?;
+        .map_err(|_| WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxParentsPerCommit))?;
     let max_metadata = u32::try_from(MAX_WORLD_HEAD_METADATA_ENTRIES)
-        .map_err(|_| WorldHeadIssue::InvalidBounds("max_metadata_entries"))?;
-    let max_label_bytes =
-        u32::try_from(MAX_WORLD_HEAD_LABEL_BYTES).map_err(|_| WorldHeadIssue::InvalidBounds("max_label_bytes"))?;
+        .map_err(|_| WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxMetadataEntries))?;
+    let max_label_bytes = u32::try_from(MAX_WORLD_HEAD_LABEL_BYTES)
+        .map_err(|_| WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxLabelBytes))?;
     Ok(Limits {
         max_events,
         max_parents,
@@ -153,7 +155,9 @@ fn history_limits(bounds: &WorldHeadBounds) -> Result<Limits, WorldHeadIssue> {
 
 pub(crate) fn digest_from_reference(reference: &str) -> Result<Digest, WorldHeadIssue> {
     let digest = reference.strip_prefix(BLAKE3_PREFIX).ok_or(WorldHeadIssue::ChoregraphDenied)?;
-    if digest.len() != BLAKE3_DIGEST_BYTES.saturating_mul(HEX_PAIR_WIDTH) {
+    if digest.len() != BLAKE3_DIGEST_BYTES.saturating_mul(HEX_PAIR_WIDTH)
+        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
         return Err(WorldHeadIssue::ChoregraphDenied);
     }
     let mut bytes = [0_u8; BLAKE3_DIGEST_BYTES];

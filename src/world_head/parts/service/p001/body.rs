@@ -91,7 +91,8 @@ fn transition_receipt(input: TransitionReceiptInput<'_>) -> Result<CanonicalWorl
         authority_ref,
         issues,
     } = input;
-    let issue_codes = issues.iter().map(|issue| format!("{issue:?}")).collect::<Vec<_>>();
+    // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    let issue_codes = issues.iter().map(WorldHeadIssue::code).collect::<Vec<_>>();
     canonical_world_head_transition_receipt(&WorldHeadTransitionReceiptInput {
         decision,
         plan,

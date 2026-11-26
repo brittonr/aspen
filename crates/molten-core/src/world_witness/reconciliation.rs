@@ -98,7 +98,7 @@ fn binding_is_invalid(input: &ReconciliationInput) -> bool {
 
 fn operation_identity(value: &str) -> Option<transactional_reconciliation_core::Identity> {
     let hex = value.strip_prefix("blake3:")?;
-    if hex.len() != 64 {
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return None;
     }
     let mut bytes = [0; 32];

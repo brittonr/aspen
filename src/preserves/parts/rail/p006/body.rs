@@ -210,6 +210,7 @@ fn validate_any_sequence_record(
     ensure_sequence(&record[0], label, spec, schema_ref).map(|_| ())
 }
 
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 fn validate_optional_ref_boundary_record(
     value: &Value<IoValue>,
     field_spec: &BoundaryFieldSpec,
@@ -224,7 +225,7 @@ fn validate_optional_ref_boundary_record(
     if let Some(some) = optional.collect_simple_record("some", Some(FIELD_ARITY_ONE)) {
         return ensure_content_ref(&some[0], field_spec.label, spec, schema_ref);
     }
-    ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)
+    Err(boundary_field_error(spec, field_spec.label, "<none> or <some content-ref>", schema_ref))
 }
 
 fn validate_checks_boundary_record(

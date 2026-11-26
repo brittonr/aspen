@@ -532,10 +532,12 @@ fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<WorldIssue>) 
     }
 }
 
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 pub(crate) fn valid_ref(value: &str) -> bool {
-    value
-        .strip_prefix(BLAKE3_PREFIX)
-        .is_some_and(|hex| hex.len() == BLAKE3_HEX_BYTES && hex.chars().all(|character| character.is_ascii_hexdigit()))
+    value.strip_prefix(BLAKE3_PREFIX).is_some_and(|hex| {
+        hex.len() == BLAKE3_HEX_BYTES
+            && hex.chars().all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase())
+    })
 }
 
 fn validate_identifier(field: &'static str, value: &str, issues: &mut Vec<WorldIssue>) {

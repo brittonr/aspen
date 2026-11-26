@@ -178,3 +178,13 @@
         assert_eq!(references_in_text(&malformed), vec![reference]);
         assert!(references_in_text(&format!("漢字 blake3:{}", "a".repeat(63))).is_empty());
     }
+
+    #[test]
+    fn reference_scanning_ignores_uppercase_digest_spellings() {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        let reference = crate::preserves_rail::content_ref_from_bytes(b"uppercase reference");
+        let uppercase = format!("blake3:{}", reference.trim_start_matches("blake3:").to_ascii_uppercase());
+        assert_ne!(uppercase, reference);
+        assert!(references_in_text(&uppercase).is_empty());
+        assert_eq!(references_in_text(&format!("{uppercase} {reference}")), vec![reference]);
+    }

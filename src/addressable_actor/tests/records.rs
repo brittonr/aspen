@@ -59,3 +59,27 @@ fn status_identity_rejects_mutation_authority() {
     status.authorizes_mutation = true;
     assert!(identify_canonical_status(&status).is_err());
 }
+
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[test]
+fn uppercase_digest_hex_is_rejected() {
+    let lowercase = format!("blake3:{}", blake3::hash(b"actor-reference").to_hex());
+    let uppercase = format!("blake3:{}", lowercase.trim_start_matches("blake3:").to_ascii_uppercase());
+    assert_ne!(uppercase, lowercase, "fixture digest must contain hex letters");
+    assert!(valid_reference(&lowercase));
+    assert!(!valid_reference(&uppercase));
+}
+
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[hegel::test(test_cases = 32)]
+fn hegel_uppercase_digest_letters_are_rejected(tc: hegel::TestCase) {
+    let bytes = tc.draw(hegel::generators::binary().max_size(64));
+    let lowercase = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+    assert!(valid_reference(&lowercase));
+    let position = tc.draw(hegel::generators::integers::<usize>().min_value(0).max_value(63));
+    let letter = tc.draw(hegel::generators::integers::<u8>().min_value(b'A').max_value(b'F'));
+    let mut mutated = lowercase.into_bytes();
+    mutated["blake3:".len() + position] = letter;
+    let mutated = String::from_utf8(mutated).expect("ascii digest");
+    assert!(!valid_reference(&mutated));
+}

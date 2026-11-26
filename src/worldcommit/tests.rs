@@ -213,3 +213,31 @@ fn detached_valence_and_artifact_auth_projections_leave_commit_identity_unchange
         crate::preserves_rail::content_ref_hex(commit.commit_ref.as_str()).expect("commit digest")
     );
 }
+
+#[test]
+fn closure_report_receipt_identity_uses_typed_issue_codes_not_debug_output() {
+    // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    let commit = canonical_fixture();
+    let report = molten_core::world_commit::ClosureReport {
+        commit_ref: commit.commit_ref.clone(),
+        complete: false,
+        first_missing_root: Some(RootKind::Policy),
+        issues: vec![
+            molten_core::world_commit::ClosureIssue::InvalidCore(molten_core::world_commit::CaptureIssue::ZeroBound(
+                "max-closure-objects",
+            )),
+            molten_core::world_commit::ClosureIssue::MissingRootObject(RootKind::Policy),
+        ],
+    };
+    let canonical = canonical_closure_report(&commit.commit_ref, &report).expect("closure report");
+    let text = crate::preserves_rail::to_text(&canonical.value).expect("closure report text");
+    assert!(text.contains("\"invalid-core:zero-bound:max-closure-objects\""));
+    assert!(text.contains("\"missing-root-object:policy\""));
+    assert!(!text.contains("ZeroBound"), "Debug output is not receipt data");
+    assert!(!text.contains("MissingRootObject"), "Debug output is not receipt data");
+    assert_eq!(canonical.report_ref, crate::preserves_rail::content_ref_from_bytes(&canonical.bytes));
+    assert_eq!(
+        canonical_closure_report(&commit.commit_ref, &report).expect("repeat").report_ref,
+        canonical.report_ref
+    );
+}

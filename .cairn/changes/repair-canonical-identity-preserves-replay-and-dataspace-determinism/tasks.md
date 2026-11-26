@@ -1,8 +1,8 @@
 # Tasks
 
-- [ ] [serial] Replace unframed `\0`/`|` hashing in `LiveWorkload::workload_ref` and `failure_fingerprint` (`crates/molten-core/src/fabric_simulation/{live_differential.rs,replay.rs}`) with collision-free canonical framing and domain separation, reject NUL bytes in `valid_ordering_key`, validate `simulated_class` in `evaluate_live_differential`, and compare full choice metadata in `compare_replay`. r[molten.fabric_simulation.collision_free_workload_and_complete_comparison]
-- [ ] [serial] Traverse Preserves `Embedded` values in `src/preserves/parts/rail/p008/body.rs`, enforce unique `<some>`/`<none>` optional refs (`rail/{p003,p006}`, `secrets/p006`), and enforce lowercase-only `blake3:` hex validation across `crates/molten-core` and `src/addressable_actor/ports.rs`. r[molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
-- [ ] [parallel] Replace `serde_json::to_vec` identity hashing (`src/world_snapshot/{chaoscontrol.rs,vm/helpers.rs}`) and `format!("{issue:?}")` receipt hashing (`src/worldcommit/{records.rs,shell.rs}`, `crates/molten-core/src/worldcommit/restore.rs`, `src/world_head/parts/service/p001/body.rs`) with canonical packed Preserves and closed typed issue tags. r[molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+- [x] [serial] Replace unframed `\0`/`|` hashing in `LiveWorkload::workload_ref` and `failure_fingerprint` (`crates/molten-core/src/fabric_simulation/{live_differential.rs,replay.rs}`) with collision-free canonical framing and domain separation, reject NUL bytes in `valid_ordering_key`, validate `simulated_class` in `evaluate_live_differential`, and compare full choice metadata in `compare_replay`. r[molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+- [x] [serial] Traverse Preserves `Embedded` values in `src/preserves/parts/rail/p008/body.rs`, enforce unique `<some>`/`<none>` optional refs (`rail/{p003,p006}`, `secrets/p006`), and enforce lowercase-only `blake3:` hex validation across `crates/molten-core` and `src/addressable_actor/ports.rs`. r[molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+- [x] [parallel] Replace `serde_json::to_vec` identity hashing (`src/world_snapshot/{chaoscontrol.rs,vm/helpers.rs}`) and `format!("{issue:?}")` receipt hashing (`src/worldcommit/{records.rs,shell.rs}`, `crates/molten-core/src/worldcommit/restore.rs`, `src/world_head/parts/service/p001/body.rs`) with canonical packed Preserves and closed typed issue tags. r[molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 - [x] [serial] Fix Runtime Dataspace (`src/runtime/dataspace/parts/state/{p000..p004}/body.rs`): checked monotonic `logical_time`/`effect_sequence`, recorded `Effect::Random` `value < upper` check, honest rollback receipt without `TurnCommitted`, real actor IDs and observer retraction notifications on facet turns/stops, and `ForceRun` precedence over `DependencyGated`. r[molten.runtime_spine.dataspace_determinism_and_rollback_integrity]
 - [x] [parallel] Fix World Replay (`src/world_replay/boundary/sealed.rs` validate-before-pop + violation tracking, `adapters.rs` trace-to-record binding, `crates/molten-core/src/world_replay/comparison.rs` full root/field comparison). r[molten.world_commit.replay_sealed_observation_and_full_comparison]
 - [x] [parallel] Fix Prolly Map `rebalance_last_group` (`crates/molten-core/src/prolly_map/tree/build.rs`) to enforce `max_node_bytes`, and enable `cranelift_nan_canonicalization(true)` plus synchronous single-call enforcement in `src/harness/wasm/parts/executor/p000/body.rs`. r[molten.prolly.rebalance_enforces_max_node_bytes] r[molten.wasm.harness_nan_canonicalization_and_sync_call_limit]
@@ -29,3 +29,50 @@ Commands (run on leviathan through `aremote`, formatting locally):
 - `cairn validate --root . --policy …/cairn-policy.json --strict` (local): valid.
 
 Task 7 (repository-wide Octet/Hegel/strict-validation sweep across all six requirements) is left unchecked for the integrating parent.
+
+## Verification (2026-11-26, tasks 1–3)
+
+Implementation notes:
+
+- Task 1: `workload_ref` and `failure_fingerprint` hash length-framed fields under BLAKE3 `derive_key` domains (`live-workload.v2`, `failure-fingerprint.v2`) via `fabric_simulation/framing.rs`; failed invariants are sorted and deduplicated; `valid_ordering_key` rejects every `char::is_control` character; a simulated `Unsupported` class is `Incomplete` and a simulated class outside `declared.permitted` is `Failure`; `compare_replay` compares selected `kind`/`node_id`/`ready_at_tick` and full eligible metadata (`eligible-metadata`). Molten-core has no `hegeltest` dependency, so its regressions are deterministic tests.
+- Task 2: `container_children` descends into `Embedded` payloads (path segment `embedded`, bounded by depth/node limits). The bare-string `Some` fallback is removed from `optional_content_ref`, `validate_optional_ref_boundary_record`, and secrets `parse_optional_ref`; all in-tree producers already emit `<some ...>`/`<none>`. Lowercase-only hex is enforced in `codec.rs`, `stack.rs`, `fabric_time/mod.rs`, `fabric_time/reservation/batch.rs`, `fabric_simulation/admission.rs`, `world_witness/reconciliation.rs`, `addressable_actor/ports.rs`, and additionally `world_head/choregraph.rs` (its `u8::from_str_radix` also admitted uppercase and a `+` sign). `crates/molten-core/src/preserves_profile.rs` was left untouched because the concurrent modularity change deletes that file (no production callers; its Nickel contract already requires `^blake3:[0-9a-f]{64}$`).
+- Task 3: ChaosControl fact/component identities (domains bumped to `v2`) and VM Cohort plan identities (`vm-cohort-plan.v2`) hash the canonical packed bytes of explicit Preserves projections built in `world_snapshot/chaoscontrol.rs` and `world_snapshot/vm/helpers.rs` (`cohort_plan_value`, `guest_artifact_value`, …). The VM `mechanism_plan_json` handoff payload remains JSON and is not identity material. `CaptureIssue::code`, `ClosureIssue::code`, and `WorldHeadIssue::code` give closed kebab-case tags; `ClosureIssue::InvalidCore` now carries a typed `CaptureIssue` instead of a `Debug` string. `Cargo.toml` and `Cargo.lock` are unchanged. No checked-in fixture pinned the changed identities; `tests/fixtures/fabric-boundary/` is unchanged.
+
+Commands (all on leviathan through `aremote`, worktree `aspen-swarm-canonical-identity`):
+
+- `cargo test -p molten-core --lib fabric_simulation` — 46 passed, 0 failed.
+- `cargo test -p molten-core --lib` — 807 passed, 0 failed.
+- `cargo test -p molten --lib -- embedded optional_ref optional_content serialized_identity actor_references closure_report_receipt chaoscontrol_fact secret_optional` — 18 passed, 0 failed (includes the four new Hegel properties).
+- `cargo test -p molten --lib` — 2220 passed, 2 failed, 11 ignored; the two failures (`fabric_execution::tests::live::adapter_clears_environment_round_trips_input_and_publishes_bounded_output` stdout-teardown timeout and `transforms::tests::hegel_preview_apply_consistency_and_path_stability` Hegel `TooSlow` health check) are load-timing failures in untouched modules; see the rerun below.
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- world_snapshot` — 23 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core --all-targets -- -D warnings` — exit 0.
+- `cargo fmt --all` (local) and `cairn validate --root . --policy …/cairn-policy.json --strict` (local) — valid.
+- Rerun `cargo test -p molten --lib -- fabric_execution::tests::live::adapter_clears_environment transforms::tests::hegel_preview_apply` — 2 passed, 0 failed.
+- `cargo test -p molten --test {worldcommit,worldsnapshot,fabricboundarycompat,fabric_simulation_boundary,worldpromotiondenials,worldpromotioncli}` — 4, 13, 5, 3, 2, 5 passed; 0 failed.
+- `cargo test -p molten --test cliharness -- fabric_simulation repro_export secret world` — 3 passed, 0 failed.
+- Octet was not run for this slice; the final task 7 rail remains with the change owner.
+
+Review fixes (2026-11-26, FIX-FIRST round):
+
+- Superseded in the second review round: the generic serde helper (`canonical_serialized_bytes` with an `OrderedSerde` bound and manual impls on foreign DTOs) was removed, together with its two Hegel properties and the explicit `preserves` `serde` feature. Foreign DTOs are now projected field by field into Preserves records; every struct is destructured without `..` and every enum is matched without a wildcard, so an upstream field, variant, or collection-type change fails to compile instead of silently changing an identity, and every collection is an ordered sequence. Tests: `chaoscontrol_fact_and_component_identities_hash_the_explicit_preserves_projection` and `vm_cohort_plan_ref_hashes_the_explicit_preserves_projection` (`world-snapshot-vm-cohort`) rebuild the expected projection independently from the fixture and match the emitted refs.
+- Remaining uppercase-accepting `blake3:` digest boundaries fixed: `spacewasm::evidence::validate_pins`, `remote` dataspace `references_in_text`, `world_witness` provider `claim_digest`, and recovery `identity`. Generic payload hex decoders (Wasm module bytes, signatures, public keys, git revisions) are not `blake3:` identities and are unchanged. Tests: `authority_pins_reject_uppercase_digest_hex`, `reference_scanning_ignores_uppercase_digest_spellings`.
+- `WorldHeadIssue::InvalidBounds` now carries the closed `WorldHeadBound` enum with kebab-case codes (`max-signers`, `policy-max-conflicts`, `conflict-identity-length`, …); every producer (`admission.rs`, `choregraph.rs`, `conflict.rs`) uses it, and the previously duplicated bounds/policy `max_conflicts` tags are now distinct. Test: `invalid_bounds_denial_receipt_carries_closed_kebab_case_codes` executes a real `execute_world_head_transition` denial and checks the receipt text.
+- `cargo test -p molten-core --lib` — 807 passed, 0 failed.
+- `cargo test -p molten --lib -- codec:: vault:: world_head spacewasm remote world_witness world_snapshot world_commit addressable_actor` — 182 passed, 0 failed.
+- `cargo test -p molten --lib -- invalid_bounds_denial_receipt authority_pins_reject_uppercase reference_scanning_ignores_uppercase hegel_equal_sets_inserted hegel_serialized_identity` — 4 passed, 0 failed (the spacewasm test is feature-gated; see below).
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- world_snapshot` — 23 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core --all-targets -- -D warnings` and `cargo clippy -p molten --lib --features world-snapshot-vm-cohort -- -D warnings` — exit 0.
+- `cargo test -p molten --lib --features spacewasm-pilot -- spacewasm::evidence` — 5 passed, 0 failed; `cargo clippy -p molten --lib --tests --features spacewasm-pilot -- -D warnings` — exit 0.
+
+Second review round (explicit DTO projections):
+
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- world_snapshot codec::` — 58 passed, 0 failed.
+- `cargo test -p molten --lib -- world_snapshot` — 19 passed, 0 failed.
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- hash_the_explicit_preserves_projection plan_ref_hashes_the_explicit` — 2 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core --all-targets -- -D warnings` and `cargo clippy -p molten --lib --tests --features world-snapshot-vm-cohort -- -D warnings` — exit 0.
+
+Octet round: the ChaosControl projections moved to `src/world_snapshot/chaoscontrol/projection.rs` (no behavior change; `chaoscontrol.rs` 284 lines). Test-only Octet findings fixed: the actor digest tests folded into `addressable_actor/tests/records.rs` (`references.rs` removed), the Embedded scan tests moved to rail test shard `tests/m000/p003`, the world-head bounds-denial test moved to `world_head/parts/tests/p002`, and compound assertions split.
+
+- `cargo octet check --artifact-dir target/octet` — status clean, 0 findings.
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- hash_the_explicit_preserves_projection plan_ref_hashes_the_explicit invalid_bounds_denial embedded uppercase_digest closure_report_receipt` — 16 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core --all-targets -- -D warnings` and `cargo clippy -p molten --lib --tests --features world-snapshot-vm-cohort -- -D warnings` — exit 0.

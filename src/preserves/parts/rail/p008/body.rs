@@ -190,7 +190,10 @@ where
     Ok(StructuralNodeOutcome::Children(container_children(value, child_budget)))
 }
 
-/// The labelled items of a sequence or set, or the labelled keys and values of a dictionary, within the budget.
+/// The labelled items of a sequence or set, the labelled keys and values of a dictionary, or the payload of an
+/// `Embedded` value, within the budget. Embedded payloads are scanned like any other child so a wrapped marker or
+/// content ref cannot evade the scan.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 fn container_children(value: &IoValue, child_budget: usize) -> Vec<(String, IoValue)> {
     if value.is_sequence() || value.is_set() {
         value
@@ -211,6 +214,8 @@ fn container_children(value: &IoValue, child_budget: usize) -> Vec<(String, IoVa
             })
             .take(child_budget)
             .collect()
+    } else if let Some(embedded) = value.as_embedded() {
+        std::iter::once(("embedded".to_string(), embedded.into_owned())).take(child_budget).collect()
     } else {
         Vec::new()
     }
@@ -229,4 +234,5 @@ mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/tests/m000/p001/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/tests/m000/p002/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/tests/m000/p003/body.rs"));
 }

@@ -133,7 +133,8 @@ fn validate_pins(trust: &Trust) -> Result<(), String> {
         &trust.probe_blake3,
     ] {
         let digest = pin.strip_prefix("blake3:").or_else(|| pin.strip_prefix("b3:")).unwrap_or(pin);
-        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
             return Err("missing authority-pinned external identity".into());
         }
     }

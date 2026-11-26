@@ -203,5 +203,5 @@ pub(crate) fn valid_reference(value: &str) -> bool {
     let Some(hex) = value.strip_prefix(BLAKE3_REFERENCE_PREFIX) else {
         return false;
     };
-    hex.len() == BLAKE3_HEX_LENGTH && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    hex.len() == BLAKE3_HEX_LENGTH && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }

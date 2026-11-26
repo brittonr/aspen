@@ -519,3 +519,24 @@ fn capacity_is_conserved_over_every_bounded_command_sequence() {
     explore_conservation(&initial, &initial, &commands, &mut Vec::new(), &mut explored);
     assert!(explored > 10_000, "explored {explored} states");
 }
+
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[test]
+fn uppercase_enforcement_digest_is_not_an_admitted_termination_fact() {
+    let lowercase = reference("takeover");
+    let uppercase = format!("blake3:{}", lowercase.trim_start_matches("blake3:").to_ascii_uppercase());
+    assert_ne!(uppercase, lowercase, "fixture digest must contain hex letters");
+    assert!(crate::fabric_time::valid_time_ref(&lowercase));
+    assert!(!crate::fabric_time::valid_time_ref(&uppercase));
+
+    let committed = apply_reservation(&state(), &request("job-a", 2, 2_048)).expect("reservation");
+    let expired = expire_reservation(&committed.next, &ReservationExpiry {
+        job_id: "job-a".to_string(),
+        enforcement: Some(EnforcementFact::FencingTakeover {
+            authority_ref: uppercase,
+        }),
+    })
+    .expect("uppercase enforcement fact keeps capacity counted");
+    assert_eq!(expired.outcome, ExpiryOutcome::StaleCapacityRetained);
+    assert_eq!(expired.next.pool.reserved_units, 2);
+}

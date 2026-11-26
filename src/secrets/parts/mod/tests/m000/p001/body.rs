@@ -74,3 +74,21 @@
         assert_eq!(denied.decision, "deny");
         assert_eq!(admitted.decision, "pass");
     }
+
+    #[test]
+    fn secret_optional_refs_reject_bare_strings_as_some() {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        let reference = fixture_ref("optional");
+        let some = preserves::Value::from(optional_ref_value(Some(&reference)));
+        let none = preserves::Value::from(optional_ref_value(None));
+        let bare = preserves::Value::from(string(&reference));
+        assert_eq!(parse_optional_ref(&some, "optional").expect("some"), Some(reference.clone()));
+        assert_eq!(parse_optional_ref(&none, "optional").expect("none"), None);
+        assert!(parse_optional_ref(&bare, "optional").is_err(), "a bare string is not a canonical Some");
+
+        let bare_record = preserves::Value::from(record("plaintext-ref", vec![string(&reference)]));
+        assert!(record_optional_ref(&bare_record, "plaintext-ref", "plaintext ref").is_err());
+        let wrapped_record =
+            preserves::Value::from(record("plaintext-ref", vec![optional_ref_value(Some(&reference))]));
+        assert_eq!(record_optional_ref(&wrapped_record, "plaintext-ref", "plaintext ref").expect("wrapped"), Some(reference));
+    }

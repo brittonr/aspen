@@ -5,9 +5,11 @@ use molten_core::world_snapshot::CohortFactKind;
 use molten_core::world_snapshot::SnapshotComponentKind;
 use molten_core::world_snapshot::SnapshotDescriptor;
 use molten_core::world_snapshot::SnapshotIssue;
-use serde::Serialize;
+use preserves::IOValue;
 use vm_cohort_core as vm;
 
+use super::super::chaoscontrol::guest_artifact_value;
+use super::super::chaoscontrol::guest_artifacts_value;
 use super::cohort::VM_COHORT_ADAPTER_DOMAIN;
 use super::cohort::VM_COHORT_CONTEXT_DOMAIN;
 use super::cohort::VM_COHORT_PLAN_DOMAIN;
@@ -17,6 +19,10 @@ use super::cohort::VmCohortLimits;
 use super::cohort::VmCohortPlanProjection;
 use crate::error::Failure;
 use crate::error::Result;
+use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
+use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
 
 pub(super) fn project_plan(
     descriptor: &SnapshotDescriptor,
@@ -28,7 +34,7 @@ pub(super) fn project_plan(
     }
     let mechanism_plan_json = serde_json::to_vec(plan)
         .map_err(|error| Failure::invalid_harness(format!("VM Cohort plan serialization failed: {error}")))?;
-    let plan_ref = json_ref("mechanism-plan", plan)?;
+    let plan_ref = canonical_ref("mechanism-plan", &cohort_plan_value(plan))?;
     let mut clones = Vec::with_capacity(plan.clones.len());
     for (index, (child, clone)) in request.children.iter().zip(&plan.clones).enumerate() {
         clones.push(clone_binding(index, child, clone)?);
@@ -135,7 +141,11 @@ pub(super) fn guest_artifact_ref(
         .iter()
         .find(|artifact| artifact.role == role)
         .ok_or_else(|| Failure::invalid_harness("ChaosControl guest artifact is missing"))?;
-    json_ref("guest-artifact", artifact)
+    canonical_ref("guest-artifact", &guest_artifact_value(artifact))
+}
+
+pub(super) fn guest_image_ref(descriptor: &chaos::SnapshotDescriptor) -> Result<String> {
+    canonical_ref("guest-image", &guest_artifacts_value(&descriptor.guest_artifacts))
 }
 
 pub(super) fn context_ref(descriptor: &SnapshotDescriptor, request: &ClonePlanRequest) -> Result<String> {
@@ -157,13 +167,109 @@ pub(super) fn adapter_ref() -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-pub(super) fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
-    let bytes = serde_json::to_vec(value)
-        .map_err(|error| Failure::invalid_harness(format!("VM Cohort identity serialization failed: {error}")))?;
+/// BLAKE3 over the plan domain, the label, and the canonical packed bytes of an explicit Preserves
+/// projection of a VM Cohort or ChaosControl DTO. The JSON mechanism handoff bytes are payload only
+/// and never identity material.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+pub(super) fn canonical_ref(label: &str, value: &IOValue) -> Result<String> {
+    let bytes = crate::preserves_rail::canonical_bytes(value)
+        .map_err(|error| Failure::invalid_harness(format!("VM Cohort identity projection failed: {error}")))?;
     let mut hasher = blake3::Hasher::new_derive_key(VM_COHORT_PLAN_DOMAIN);
     update_text(&mut hasher, label)?;
     update_bytes(&mut hasher, &bytes)?;
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
+}
+
+/// The identity projection of a VM Cohort plan. Every struct is destructured exhaustively (no `..`)
+/// and every enum is matched without a wildcard, so an upstream field or variant change fails to
+/// compile here instead of silently entering or escaping the plan identity. Clones and effects keep
+/// their planned order.
+pub(super) fn cohort_plan_value(plan: &vm::CohortPlan) -> IOValue {
+    let vm::CohortPlan {
+        cohort_ref,
+        checkpoint_ref,
+        policy_ref,
+        reservation,
+        clones,
+        effects,
+    } = plan;
+    let vm::ResourceVector {
+        workers,
+        vcpus,
+        memory_bytes,
+        storage_bytes,
+        mappings,
+        endpoints,
+        in_flight,
+    } = reservation;
+    let reservation = record("resource-vector", vec![
+        u64_value(u64::from(*workers)),
+        u64_value(u64::from(*vcpus)),
+        u64_value(*memory_bytes),
+        u64_value(*storage_bytes),
+        u64_value(u64::from(*mappings)),
+        u64_value(u64::from(*endpoints)),
+        u64_value(u64::from(*in_flight)),
+    ]);
+    let clones = clones
+        .iter()
+        .map(|clone| {
+            let vm::ClonePlan {
+                clone_ref,
+                memory_base_ref,
+                disk_base_ref,
+                surfaces,
+            } = clone;
+            let surfaces = surfaces
+                .iter()
+                .map(|surface| {
+                    let vm::SurfacePlan { kind, resource_ref } = surface;
+                    let kind = match kind {
+                        vm::MutableSurfaceKind::Memory => "memory",
+                        vm::MutableSurfaceKind::Disk => "disk",
+                        vm::MutableSurfaceKind::Device => "device",
+                        vm::MutableSurfaceKind::Endpoint => "endpoint",
+                        vm::MutableSurfaceKind::Output => "output",
+                        vm::MutableSurfaceKind::Lifecycle => "lifecycle",
+                    };
+                    record("surface-plan", vec![string(kind), string(resource_ref.as_str())])
+                })
+                .collect();
+            record("clone-plan", vec![
+                string(clone_ref.as_str()),
+                string(memory_base_ref.as_str()),
+                string(disk_base_ref.as_str()),
+                sequence(surfaces),
+            ])
+        })
+        .collect();
+    let effects = effects
+        .iter()
+        .map(|effect| {
+            let vm::EffectRequest {
+                operation_ref,
+                clone_ref,
+                kind,
+            } = effect;
+            let kind = match kind {
+                vm::EffectKind::PrepareMemory => "prepare-memory",
+                vm::EffectKind::PrepareDisk => "prepare-disk",
+                vm::EffectKind::RestoreVcpu => "restore-vcpu",
+                vm::EffectKind::RestoreDevice => "restore-device",
+                vm::EffectKind::BindEndpoint => "bind-endpoint",
+                vm::EffectKind::Activate => "activate",
+            };
+            record("effect-request", vec![string(operation_ref.as_str()), string(clone_ref.as_str()), string(kind)])
+        })
+        .collect();
+    record("cohort-plan", vec![
+        string(cohort_ref.as_str()),
+        string(checkpoint_ref.as_str()),
+        string(policy_ref.as_str()),
+        reservation,
+        sequence(clones),
+        sequence(effects),
+    ])
 }
 
 fn tagged_ref(identity: &chaos::TaggedDigest) -> Result<String> {

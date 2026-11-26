@@ -279,6 +279,9 @@ pub fn required_content_ref_string(value: &Value<IoValue>, field: &str) -> Resul
     Ok(required_content_ref(value, field)?.into_string())
 }
 
+/// Decodes the single canonical `Option<ContentRef>` encoding: `<none>` or `<some "blake3:...">`. A bare string is a
+/// second encoding of `Some` and is rejected so one logical value has one canonical identity.
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 pub fn optional_content_ref(value: &Value<IoValue>, field: &str) -> Result<Option<ContentRef>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -286,5 +289,7 @@ pub fn optional_content_ref(value: &Value<IoValue>, field: &str) -> Result<Optio
     if let Some(some) = value.collect_simple_record("some", Some(1)) {
         return required_content_ref(&some[0], field).map(Some);
     }
-    required_content_ref(value, field).map(Some)
+    Err(MoltenError::invalid_harness(format!(
+        "{field} must be <none> or <some \"blake3:...\">"
+    )))
 }

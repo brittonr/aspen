@@ -338,3 +338,68 @@ fn evidence_and_authority_observations_do_not_enter_current_admission() {
         class: RootReplayClass::HistoricalEvidenceOnly,
     }));
 }
+
+#[test]
+fn closure_and_capture_issue_codes_are_closed_typed_tags() {
+    // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    let mut request = logical_request();
+    request.bounds.max_closure_objects = 0;
+    let capture = plan_capture(&logical_request()).expect("capture");
+    let commit_ref = identify_world_commit(b"issue-code-closure").expect("commit ref");
+    let mut closure_request = complete_closure(commit_ref, capture.core);
+    closure_request.bounds = request.bounds;
+    let closure = validate_closure(&closure_request);
+    assert_eq!(closure.issues, vec![ClosureIssue::InvalidCore(CaptureIssue::ZeroBound(
+        "max-closure-objects"
+    ))]);
+    assert_eq!(closure.issues.iter().map(ClosureIssue::code).collect::<Vec<_>>(), vec![
+        "invalid-core:zero-bound:max-closure-objects".to_string()
+    ]);
+
+    let golden = [
+        (
+            CaptureIssue::BoundExceeded {
+                field: "root-observations",
+                actual: 3,
+                maximum: 2,
+            }
+            .code(),
+            "bound-exceeded:root-observations:3:2",
+        ),
+        (CaptureIssue::MissingRequiredRoot(RootKind::Schema).code(), "missing-required-root-kind:schema"),
+        (
+            CaptureIssue::RevisionDrift {
+                source_id: "store:a".to_string(),
+                expected: 4,
+                actual: 5,
+            }
+            .code(),
+            "revision-drift:4:5:store:a",
+        ),
+        (ClosureIssue::MissingRootObject(RootKind::Policy).code(), "missing-root-object:policy"),
+    ];
+    for (code, expected) in golden {
+        assert_eq!(code, expected);
+    }
+
+    let split_left = ClosureIssue::DuplicateParentEdge {
+        commit_ref: "a:b".to_string(),
+        parent_ref: "c".to_string(),
+    };
+    let split_right = ClosureIssue::DuplicateParentEdge {
+        commit_ref: "a".to_string(),
+        parent_ref: "b:c".to_string(),
+    };
+    assert_ne!(split_left.code(), split_right.code());
+    let drift_left = CaptureIssue::RevisionDrift {
+        source_id: "1:2".to_string(),
+        expected: 3,
+        actual: 4,
+    };
+    let drift_right = CaptureIssue::RevisionDrift {
+        source_id: "2".to_string(),
+        expected: 3,
+        actual: 4,
+    };
+    assert_ne!(drift_left.code(), drift_right.code());
+}

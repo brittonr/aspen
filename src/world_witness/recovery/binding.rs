@@ -105,7 +105,7 @@ pub fn canonical(binding: &Transaction) -> crate::error::Result<Vec<u8>> {
 pub(super) fn identity(value: &str) -> crate::error::Result<transactional_reconciliation_core::Identity> {
     let hex = value
         .strip_prefix("blake3:")
-        .filter(|hex| hex.len() == 64)
+        .filter(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()))
         .ok_or_else(|| crate::world_witness::store::failure("expected canonical BLAKE3 identity"))?;
     let mut bytes = [0; 32];
     for (index, pair) in hex.as_bytes().chunks_exact(2).enumerate() {
