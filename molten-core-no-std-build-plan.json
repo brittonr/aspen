@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/aspen-swarm/wt/aspen-swarm-core-no-std",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
   "roots": [
-    "path+file:///home/brittonr/aspen-swarm/wt/aspen-swarm-core-no-std/crates/molten-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/aspen-swarm/wt/aspen-swarm-core-no-std/crates/molten-core#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0"
   },
-  "cargoLockHash": "d92257244ab69e628c4060c6e2c76de9c496ff10f490deeb929fe7e1e5bb64b2",
-  "inputsHash": "633757e0df66fe7232937fc9938768e54fd091bfba3e0ded2458c1655b25ba41",
+  "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
+  "inputsHash": "1da573a7423c18ab1dbcd42019c4726872bf03237338259c1ff690810680b6ba",
   "crates": {
     "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0": {
       "crateName": "choregraph-history",
@@ -275,7 +275,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///home/brittonr/aspen-swarm/wt/aspen-swarm-core-no-std/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",

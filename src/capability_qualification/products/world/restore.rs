@@ -84,7 +84,7 @@ fn restorable_world() -> Result<WorldState> {
         .runtime
         .begin_effect_for_step(&RuntimeStep::Clock {
             actor: "producer".into(),
-        })
+        })?
         .ok_or_else(|| super::invalid("clock step did not open an effect request"))?;
     world.history.push(unresolved.to_value());
     world.unresolved_effects.push(unresolved);

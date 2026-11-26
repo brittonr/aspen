@@ -1,6 +1,7 @@
 mod linkage;
 mod published;
 
+pub use molten_wasm_policy_core::component::materialization::Admission;
 pub use published::VerifiedBundle;
 
 pub const MANTLE_COMPONENT_BUNDLE_SCHEMA: &str = "mantle.component-materialization-bundle.v1";
@@ -87,22 +88,6 @@ impl<'a> ArtifactSource<'a> {
             Self::PublishedMantle { materialization, .. } => materialization.wit_bytes(),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Admission {
-    pub evidence_scope: super::super::model::EvidenceScope,
-    pub component_ref: String,
-    pub wit_ref: String,
-    pub bundle_ref: Option<String>,
-    pub consumer: super::super::model::Consumer,
-    pub profile_ref: String,
-    pub mantle_evidence_refs: Vec<String>,
-    pub valence_evidence_refs: Vec<String>,
-    pub cairn_evidence_refs: Vec<String>,
-    pub policy_refs: Vec<String>,
-    pub authority_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
 }
 
 pub fn mantle_bundle_ref(bundle: &MantleBundle) -> String {

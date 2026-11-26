@@ -23,6 +23,7 @@ use crate::fabric_transport::Listener;
 use crate::fabric_transport::ListenerCleanupPolicy;
 use crate::fabric_transport::ListenerDrainReason;
 use crate::fabric_transport::ListenerInput;
+use crate::fabric_transport::ListenerPoll;
 use crate::fabric_transport::ListenerTerminalClass;
 use crate::fabric_transport::Profile;
 use crate::fabric_transport::ProtocolDescriptor;
@@ -40,6 +41,8 @@ const ENDPOINT_FILE: &str = "endpoint.preserves";
 const LISTENER_REPORT_FILE: &str = "listener.preserves";
 const LISTENER_SECRET: [u8; IROH_SECRET_KEY_BYTES] = [0x51; IROH_SECRET_KEY_BYTES];
 const CLIENT_SECRET: [u8; IROH_SECRET_KEY_BYTES] = [0x53; IROH_SECRET_KEY_BYTES];
+/// The admitted-peer id of the producer's fixed client endpoint.
+const CLIENT_PEER_ID: &str = "qualification-client";
 const OTHER_SECRET: [u8; IROH_SECRET_KEY_BYTES] = [0x55; IROH_SECRET_KEY_BYTES];
 const PAYLOAD: &[u8] = b"aspen capability qualification cross-process frame";
 const GENERATION: u64 = 1;
@@ -266,6 +269,15 @@ async fn serve(run_directory: &std::path::Path, withhold: bool) -> crate::error:
         validity: validity(),
         admission: EndpointAdmissionState::fully_active(),
         observed_tick: OBSERVED_TICK,
+        // Exactly the producer's fixed client endpoint is admitted, under this
+        // listener's own peer context; any other authenticated endpoint is refused.
+        admitted_peers: std::collections::BTreeMap::from([(
+            CLIENT_PEER_ID.to_string(),
+            crate::fabric_transport::AdmittedPeer {
+                public_endpoint_identity: public_identity(CLIENT_SECRET),
+                peer_context_ref: reference("qualification expected peer context"),
+            },
+        )]),
     })
     .await?;
     super::peer::write_value(&run_directory.join(ENDPOINT_FILE), &listener.handoff().value)?;
@@ -294,7 +306,10 @@ async fn serve(run_directory: &std::path::Path, withhold: bool) -> crate::error:
         let payload_ref = received.evidence.payload_ref.clone();
         ("delivered", Some(received.evidence), payload_ref)
     };
-    let second = listener.poll_one_derived_frame(&session_ref(), RETRY_WINDOW, |_| Ok(request_ref())).await?;
+    // Any connection inside the window, admitted or refused, would be a retry.
+    let second = listener
+        .poll_one_derived_frame(&session_ref(), RETRY_WINDOW, |_peer_id, _payload| Ok(request_ref()))
+        .await?;
     let cleanup = listener.drain_and_close(ListenerDrainReason::OperatorRequest).await?;
     super::peer::write_value(
         &run_directory.join(LISTENER_REPORT_FILE),
@@ -302,7 +317,7 @@ async fn serve(run_directory: &std::path::Path, withhold: bool) -> crate::error:
             crate::preserves_rail::string(outcome),
             crate::preserves_rail::string(&payload_ref),
             frame.as_ref().map_or_else(|| crate::preserves_rail::sequence(Vec::new()), frame_projection),
-            crate::preserves_rail::bool_value(second.is_some()),
+            crate::preserves_rail::bool_value(!matches!(second, ListenerPoll::Idle)),
             crate::preserves_rail::string(format!("{:?}", cleanup.terminal_class)),
         ]),
     )

@@ -793,9 +793,13 @@
         # package overrides; buildRustCrate does not read Cargo profiles.
         moltenOwnedCrates = [
           "molten"
+          "molten-composition-core"
           "molten-core"
           "molten-node-host"
           "molten-release-policy"
+          "molten-reliability-model-core"
+          "molten-runtime-admission-core"
+          "molten-wasm-policy-core"
         ];
         overflowCheckedCrate = attrs: {
           extraRustcOpts = (attrs.extraRustcOpts or [ ]) ++ [
@@ -999,6 +1003,257 @@
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
+        # r[impl molten.project.tier1_no_std_kernel_crates]
+        # Each extracted no_std kernel resolves its own unit graph (`unit2nix -p <crate>`), so its
+        # dependency features (serde, blake3) are never unified with the std consumers in
+        # build-plan.json. Regenerate with `scripts/no-std-kernel-plans.sh`, which also records the
+        # BLAKE3 of every resolution input (workspace manifest and lock, `.cargo/config.toml`,
+        # `rust-toolchain.toml`, and the manifests of the kernel's path-dependency closure).
+        noStdKernels = {
+          "molten-composition-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/judgment.rs";
+            sourceProbeModule = "src/vocabulary.rs";
+          };
+          "molten-reliability-model-core" = {
+            linkedAllowlist = [
+              "serde"
+              "serde_core"
+            ];
+            compileProbeModule = "src/generator.rs";
+            sourceProbeModule = "src/fault.rs";
+          };
+          "molten-runtime-admission-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/ingress.rs";
+            sourceProbeModule = "src/lib.rs";
+          };
+          "molten-wasm-policy-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+              "serde"
+              "serde_core"
+            ];
+            compileProbeModule = "src/refs.rs";
+            sourceProbeModule = "src/component/model.rs";
+          };
+        };
+        noStdKernelPlanPath = name: ./nix/no-std-kernels + "/${name}.build-plan.json";
+        noStdKernelPlan = name: builtins.fromJSON (builtins.readFile (noStdKernelPlanPath name));
+        noStdKernelManifest = name: builtins.fromTOML (builtins.readFile (./crates + "/${name}/Cargo.toml"));
+        # Crates linked into the kernel library: the normal-dependency closure, without proc macros.
+        noStdKernelLinkedCrates =
+          name:
+          let
+            plan = noStdKernelPlan name;
+            crates = plan.crates;
+            rootId = plan.workspaceMembers.${name};
+            normalDependencyIds =
+              packageId:
+              builtins.map (dep: dep.packageId) (
+                builtins.filter (dep: !(crates.${dep.packageId}.procMacro or false)) (
+                  crates.${packageId}.dependencies or [ ]
+                )
+              );
+            closeOver =
+              packageIds:
+              let
+                next = pkgs.lib.unique (packageIds ++ builtins.concatMap normalDependencyIds packageIds);
+              in
+              if builtins.length next == builtins.length packageIds then packageIds else closeOver next;
+          in
+          builtins.map (packageId: crates.${packageId}) (builtins.filter (id: id != rootId) (closeOver [ rootId ]));
+        # Every linked crate is on the kernel's reviewed allowlist and none enables a `std` feature.
+        # A std-only dependency (tokio, redb, iroh, preserves) is rejected by name even when it has
+        # no feature called `std`.
+        noStdKernelLinkedAdmitted =
+          name: linkedCrates:
+          builtins.all (crate: builtins.elem crate.crateName noStdKernels.${name}.linkedAllowlist) linkedCrates
+          && builtins.filter (crate: builtins.elem "std" crate.features) linkedCrates == [ ];
+        # The plan agrees with the manifest it claims to resolve: the root carries the manifest's
+        # default feature set, and every manifest dependency resolves with the manifest's
+        # default-features choice and requested features.
+        noStdKernelPlanMatches =
+          name: manifest:
+          let
+            plan = noStdKernelPlan name;
+            crates = plan.crates;
+            rootId = plan.workspaceMembers.${name};
+            root = crates.${rootId};
+            resolvedDependencies = builtins.listToAttrs (
+              builtins.map (dep: {
+                name = crates.${dep.packageId}.crateName;
+                value = crates.${dep.packageId};
+              }) root.dependencies
+            );
+            manifestDependencies = manifest.dependencies or { };
+            dependencyMatches =
+              dependencyName: spec:
+              let
+                resolved = resolvedDependencies.${dependencyName} or null;
+                attrs = if builtins.isAttrs spec then spec else { };
+              in
+              resolved != null
+              && (attrs.default-features or true) == builtins.elem "default" resolved.features
+              && builtins.all (feature: builtins.elem feature resolved.features) (attrs.features or [ ]);
+          in
+          plan.roots == [ rootId ]
+          && pkgs.lib.sort builtins.lessThan root.features
+            == pkgs.lib.sort builtins.lessThan (manifest.features.default or [ ])
+          && builtins.attrNames resolvedDependencies == builtins.attrNames manifestDependencies
+          && builtins.all (dependencyName: dependencyMatches dependencyName manifestDependencies.${dependencyName}) (
+            builtins.attrNames manifestDependencies
+          );
+        # A manifest feature flip the checked-in plan no longer describes.
+        noStdKernelFlippedManifest =
+          manifest:
+          if (manifest.dependencies or { }) != { } then
+            manifest
+            // {
+              dependencies = builtins.mapAttrs (
+                _: spec: (if builtins.isAttrs spec then spec else { version = spec; }) // { default-features = true; }
+              ) manifest.dependencies;
+            }
+          else
+            manifest
+            // {
+              features = {
+                default = [ "std" ];
+                std = [ ];
+              };
+            };
+        # Inputs the plan was resolved from: the fixed resolution configuration plus the manifest of
+        # every local package the plan contains (the kernel's path-dependency closure).
+        noStdKernelExpectedInputs =
+          name:
+          pkgs.lib.sort builtins.lessThan (
+            pkgs.lib.unique (
+              [
+                "Cargo.toml"
+                "Cargo.lock"
+                ".cargo/config.toml"
+                "rust-toolchain.toml"
+              ]
+              ++ builtins.map (crate: "${crate.source.path}/Cargo.toml") (
+                builtins.filter (crate: (crate.source.type or null) == "local") (
+                  builtins.attrValues (noStdKernelPlan name).crates
+                )
+              )
+            )
+          );
+        noStdKernelRecordedInputs =
+          name:
+          pkgs.lib.sort builtins.lessThan (
+            builtins.map (line: pkgs.lib.last (pkgs.lib.splitString "  " line)) (
+              builtins.filter (line: line != "") (
+                pkgs.lib.splitString "\n" (builtins.readFile (./nix/no-std-kernels + "/${name}.inputs.b3"))
+              )
+            )
+          );
+        noStdKernelPlanAdmitted =
+          name:
+          let
+            manifest = noStdKernelManifest name;
+            linkedCrates = noStdKernelLinkedCrates name;
+            recorded = noStdKernelRecordedInputs name;
+            expected = noStdKernelExpectedInputs name;
+            std-only = {
+              crateName = "tokio";
+              features = [ "rt" ];
+            };
+          in
+          pkgs.lib.assertMsg (noStdKernelPlanMatches name manifest)
+            "${name}: nix/no-std-kernels/${name}.build-plan.json does not match crates/${name}/Cargo.toml; run scripts/no-std-kernel-plans.sh"
+          && pkgs.lib.assertMsg (!(noStdKernelPlanMatches name (noStdKernelFlippedManifest manifest)))
+            "${name}: the plan/manifest agreement check accepted a flipped manifest feature"
+          && pkgs.lib.assertMsg (noStdKernelLinkedAdmitted name linkedCrates)
+            "${name}: the plan links a crate outside the reviewed no_std allowlist or enables `std`"
+          && pkgs.lib.assertMsg (!(noStdKernelLinkedAdmitted name (linkedCrates ++ [ std-only ])))
+            "${name}: the linked-crate allowlist admitted a std-only dependency without a `std` feature"
+          && pkgs.lib.assertMsg (recorded == expected)
+            "${name}: nix/no-std-kernels/${name}.inputs.b3 does not record exactly the plan's resolution inputs"
+          && pkgs.lib.assertMsg (recorded != [ ] && pkgs.lib.init recorded != expected)
+            "${name}: the recorded-input comparison accepted an input list missing one entry";
+        noStdKernelLibrary =
+          name:
+          (mkUnit2nixWorkspace {
+            enableKache = false;
+            resolvedJson = noStdKernelPlanPath name;
+          }).workspaceMembers.${name}.build;
+        # Inject one ambient-std import into a production module; the no_std build must reject it.
+        noStdKernelCompileProbe =
+          name: probe:
+          pkgs.testers.testBuildFailure (
+            (noStdKernelLibrary name).override (_old: {
+              postPatch = ''
+                test -f ${noStdKernels.${name}.compileProbeModule}
+                printf '\n#[allow(unused_imports)]\n%s\n' ${pkgs.lib.escapeShellArg probe} \
+                  >> ${noStdKernels.${name}.compileProbeModule}
+              '';
+            })
+          );
+        noStdKernelCheck =
+          name:
+          assert noStdKernelPlanAdmitted name;
+          pkgs.runCommand "${name}-no-std"
+            {
+              nativeBuildInputs = [
+                pkgs.b3sum
+                pkgs.python3
+              ];
+              src = sourceForConfigChecks;
+              library = (noStdKernelLibrary name).lib;
+              # Builds and runs the crate's lib unit and Hegel property tests; a failing test fails here.
+              tests = ws.test.check.${name};
+              fsProbe = noStdKernelCompileProbe name "use std::fs::read;";
+              timeProbe = noStdKernelCompileProbe name "use std::time::SystemTime;";
+              envProbe = noStdKernelCompileProbe name "use std::env::var;";
+            }
+            ''
+              set -euo pipefail
+              crate=${name}
+              lib_name=lib$(printf '%s' "$crate" | tr - _)
+              # Positive: the no_std library compiled from its own plan, and the unit tests ran and passed.
+              if ! ls "$library"/lib/"$lib_name"-*.rlib >/dev/null 2>&1; then
+                echo "missing no_std $crate rlib in $library" >&2
+                exit 1
+              fi
+              test -e "$tests"
+              # Negative: every injected ambient-std import fails compilation in the probed module.
+              for probe in "$fsProbe" "$timeProbe" "$envProbe"; do
+                test "$(cat "$probe/testBuildFailure.exit")" != 0
+                if ! grep -F 'unresolved module or unlinked crate `std`' "$probe/testBuildFailure.log" >/dev/null \
+                  || ! grep -F ${noStdKernels.${name}.compileProbeModule} "$probe/testBuildFailure.log" >/dev/null; then
+                  echo "no_std probe failed for a reason other than the injected std import: $probe" >&2
+                  cat "$probe/testBuildFailure.log" >&2
+                  exit 1
+                fi
+              done
+              cd "$src"
+              # The plan was resolved from the current bytes of every recorded resolution input; the
+              # recorded list itself is checked against the plan's closure at evaluation time.
+              b3sum --check --quiet "nix/no-std-kernels/$crate.inputs.b3"
+              # Production sources never link std explicitly; probe a module other than the compile probe.
+              python3 scripts/check-no-std-sources.py "crates/$crate"
+              for injected in 'extern crate std;' 'pub fn leak() -> ::std::time::Instant { ::std::time::Instant::now() }'; do
+                rm -rf "$TMPDIR/source-probe"
+                mkdir -p "$TMPDIR/source-probe"
+                cp -r "crates/$crate" "$TMPDIR/source-probe/"
+                chmod -R u+w "$TMPDIR/source-probe"
+                printf '\n%s\n' "$injected" >> "$TMPDIR/source-probe/$crate/${noStdKernels.${name}.sourceProbeModule}"
+                if python3 scripts/check-no-std-sources.py "$TMPDIR/source-probe/$crate" 2> "$TMPDIR/source-probe.log"; then
+                  echo "explicit std in ${noStdKernels.${name}.sourceProbeModule} was not rejected" >&2
+                  exit 1
+                fi
+                grep -F ${noStdKernels.${name}.sourceProbeModule} "$TMPDIR/source-probe.log" >/dev/null
+              done
+              touch "$out"
+            '';
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
         # Test support is explicit here and removed by workspaceCrateOverrides from non-test builds.
         moltenTestBinaries =
@@ -1712,29 +1967,29 @@
                   set -euo pipefail
                   cd "$src"
                   profile=docs/wasm-component-runtime/profile.ncl
-                  generated=docs/wasm-component-runtime/generated/profile.json
+                  generated=config/wasm-component-runtime/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
                   time_sliced_profile=docs/wasm-component-runtime/time-sliced-profile.ncl
-                  time_sliced_generated=docs/wasm-component-runtime/generated/time-sliced-profile.json
+                  time_sliced_generated=config/wasm-component-runtime/generated/time-sliced-profile.json
                   nickel export "$time_sliced_profile" --format json > "$TMPDIR/time-sliced-profile.json"
                   diff -u "$time_sliced_generated" "$TMPDIR/time-sliced-profile.json"
                   effect_profile=docs/wasm-component-runtime/effect-profile.ncl
-                  effect_profile_generated=docs/wasm-component-runtime/generated/effect-profile.json
+                  effect_profile_generated=config/wasm-component-runtime/generated/effect-profile.json
                   nickel export "$effect_profile" --format json > "$TMPDIR/effect-profile.json"
                   diff -u "$effect_profile_generated" "$TMPDIR/effect-profile.json"
                   nickel export --stdin-format json --format json < "$TMPDIR/effect-profile.json" \
                     > "$TMPDIR/effect-profile-readback.json"
                   diff -u "$effect_profile_generated" "$TMPDIR/effect-profile-readback.json"
                   effect_contract=docs/wasm-component-runtime/effect-contract.ncl
-                  effect_generated=docs/wasm-component-runtime/generated/effect-contract.json
+                  effect_generated=config/wasm-component-runtime/generated/effect-contract.json
                   nickel export "$effect_contract" --format json > "$TMPDIR/effect-contract.json"
                   diff -u "$effect_generated" "$TMPDIR/effect-contract.json"
                   nickel export --stdin-format json --format json < "$TMPDIR/effect-contract.json" \
                     > "$TMPDIR/effect-contract-readback.json"
                   diff -u "$effect_generated" "$TMPDIR/effect-contract-readback.json"
                   host_policy=docs/wasm-component-runtime/host-policy.ncl
-                  host_policy_generated=docs/wasm-component-runtime/generated/host-policy.json
+                  host_policy_generated=config/wasm-component-runtime/generated/host-policy.json
                   nickel export "$host_policy" --format json > "$TMPDIR/host-policy.json"
                   diff -u "$host_policy_generated" "$TMPDIR/host-policy.json"
                   expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
@@ -1779,7 +2034,7 @@
                   set -euo pipefail
                   cd "$src"
                   profile=docs/wasm-component-performance/profile.ncl
-                  generated=docs/wasm-component-performance/generated/profile.json
+                  generated=config/wasm-component-performance/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
                   grep -q 'c18bbe75803a6a610f7ff3b15549c927c6e02667' "$generated"
@@ -3030,6 +3285,10 @@
                 '';
             # Full molten-core unit/property tests under the default std feature set.
             molten-core-tests = ws.test.check."molten-core";
+            molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
+            molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
+            molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";
             clippy = ws.clippy.allWorkspaceMembers;
             executable-extent-consumer =
               assert executableExtentSource != null;
@@ -3751,6 +4010,21 @@
                   cd "$src"
                   rustc --edition=2024 tools/check-license-boundary.rs -o "$TMPDIR/check-license-boundary"
                   "$TMPDIR/check-license-boundary" .
+                  touch "$out"
+                '';
+            # r[impl molten.project.real_module_encapsulation]
+            # Rust embeds (`include_str!`/`include_bytes!`) never read governing docs; data lives under config/.
+            docs-embed-hygiene =
+              pkgs.runCommand "molten-docs-embed-hygiene"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_check_docs_embeds.py
+                  python3 scripts/check-docs-embeds.py --root .
                   touch "$out"
                 '';
             # r[impl molten.project.documentation_links.local_targets]

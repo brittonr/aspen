@@ -103,7 +103,6 @@ fn execution_unknown_after_start() -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
     let mut effect = LiveEffect::new()?;
     evidence.runtime(effect.profile_value());
-    evidence.runtime(effect.request.value.clone());
     let failure = effect.execute(EFFECT_PROGRAM, &effect.resolved(EFFECT_PROGRAM))?;
     evidence.check("effect-child-process-started", effect.child_started());
     evidence.check("post-start-failure-classified-unknown", failure.kind == PortFailureKind::UnknownAfterStart);
@@ -120,7 +119,6 @@ fn execution_unknown_after_start() -> crate::error::Result<super::Evidence> {
 fn execution_prestart_definite() -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
     let mut effect = LiveEffect::new()?;
-    evidence.runtime(effect.request.value.clone());
 
     let mut crossed = effect.resolved(EFFECT_PROGRAM);
     crossed.executable_identity_ref = reference("qualification effect substituted executable measurement");
@@ -431,7 +429,12 @@ impl LiveEffect {
     fn new() -> crate::error::Result<Self> {
         let descriptor = descriptor();
         let profile = crate::fabric_execution::admit_profile(&descriptor)?;
-        let request = execution_request();
+        // The live adapter measures the resolved executable before it spawns
+        // anything, so the admitted identity is the measurement of this host's
+        // `/bin/sh`. That identity is host-specific and therefore never enters
+        // the deterministic observation (only the adapter's typed outcomes do).
+        let executable = std::fs::read(EFFECT_PROGRAM).map_err(crate::error::Failure::from)?;
+        let request = execution_request(crate::preserves_rail::content_ref_from_bytes(&executable));
         let authority = authority(&request);
         let request = crate::fabric_execution::admit_request(&profile, &request, &authority, resources(), GENERATION)?;
         let adapter = Adapter::new(profile, RetainedPublisher::default())
@@ -471,7 +474,7 @@ impl LiveEffect {
             workspace_path: self.workspace.path().to_path_buf(),
             workspace_ref: plan.workspace_ref.clone(),
             stdin_ref: plan.stdin_ref.clone(),
-            stdin_bytes: Some(vec![0_u8; UNCONSUMED_INPUT_BYTES as usize]),
+            stdin_bytes: Some(unconsumed_input()),
         }
     }
 
@@ -555,7 +558,7 @@ fn descriptor() -> ExecutionProfileDescriptor {
     }
 }
 
-fn execution_request() -> ExecutionRequest {
+fn execution_request(executable_identity_ref: String) -> ExecutionRequest {
     ExecutionRequest {
         schema: EXECUTION_REQUEST_SCHEMA.to_string(),
         operation_ref: reference("qualification effect operation"),
@@ -567,7 +570,7 @@ fn execution_request() -> ExecutionRequest {
         generation: GENERATION,
         profile_ref: reference("qualification effect execution profile declaration"),
         executable_artifact_ref: reference("qualification effect executable artifact"),
-        executable_identity_ref: reference("qualification effect executable measurement"),
+        executable_identity_ref,
         arguments: vec!["-c".to_string(), EFFECT_SCRIPT.to_string()],
         environment: vec![EnvironmentEntry {
             name: "ASPEN_QUALIFICATION".to_string(),
@@ -579,7 +582,7 @@ fn execution_request() -> ExecutionRequest {
         executable_resolution: ExecutableResolutionMode::ExactArtifact,
         workspace_ref: reference("qualification effect workspace"),
         workspace_mode: WorkspaceMode::CapabilityRoot,
-        stdin_ref: Some(reference("qualification effect unconsumed input")),
+        stdin_ref: Some(crate::preserves_rail::content_ref_from_bytes(&unconsumed_input())),
         limits: ExecutionRequestLimits {
             timeout_ms: TIMEOUT_MS,
             stdin_max_bytes: UNCONSUMED_INPUT_BYTES,
@@ -597,6 +600,11 @@ fn execution_request() -> ExecutionRequest {
         authority_ref: reference("qualification effect authority"),
         resource_grant_ref: reference("qualification effect resource grant"),
     }
+}
+
+/// Input the child never reads; its admitted stdin ref is the hash of these bytes.
+fn unconsumed_input() -> Vec<u8> {
+    vec![0_u8; UNCONSUMED_INPUT_BYTES as usize]
 }
 
 fn authority(request: &ExecutionRequest) -> ExecutionAuthorityFacts {

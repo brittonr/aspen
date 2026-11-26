@@ -142,7 +142,7 @@ let MatrixContract = {
       target = "src/capability_qualification/products/effect.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario execution-unknown-after-start --out $RUN/execution-unknown-after-start.preserves",
       artifact_refs = ["blake3:e3e21f922250ba236d43b081f0bb1193a5531df1eed1347345a776a6d3fc3a1e"],
-      receipt_ref = "blake3:cb1397849cef15f8374b487d0132c7534baf9bb34e8c3e76ec2898941080fc81",
+      receipt_ref = "blake3:feb69070de0d750bf020015b9bda7b05e53faae3379ae310023be929e4d2ab04",
       caveats = ["a started /bin/sh child that never consumes its input stays unknown and requires reconciliation; one host only"],
     },
     {
@@ -152,7 +152,7 @@ let MatrixContract = {
       target = "src/capability_qualification/products/effect.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario execution-prestart-definite --out $RUN/execution-prestart-definite.preserves",
       artifact_refs = ["blake3:faa27c82a3387133b9483fe333f92ebc75c55f6a894356bf91147773df31e1fa"],
-      receipt_ref = "blake3:c5302ec2ae5449ea820c7fc3341fc3267a40842908e62c856c11ac908fd3a408",
+      receipt_ref = "blake3:a3947ee348ff8b9fd5d67f8415ea2c6848fe63e72166a61c53f132f0c09a3c65",
       caveats = ["crossed resolution and spawn failure are definite pre-start outcomes, never unknown or published; one host only"],
     },
     {

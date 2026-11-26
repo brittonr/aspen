@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "roots": [
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0"
+  ],
+  "workspaceMembers": {
+    "molten-runtime-admission-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0"
+  },
+  "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
+  "inputsHash": "9fb643ea671b47ae0c4d4bdf3dd474774dc99c39987190b1b4cf3620ef6129db",
+  "crates": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0": {
+      "crateName": "molten-runtime-admission-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-runtime-admission-core"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "no_std runtime capability and deny-rule admission for Aspen",
+      "license": "AGPL-3.0-or-later"
+    }
+  }
+}

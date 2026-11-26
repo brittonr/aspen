@@ -4,7 +4,7 @@ use basalt::ucan::TokenSigner;
 use crate::system_extension::NativeCallbackValuePort;
 
 pub(super) const POLICY: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/wasm-component-runtime/generated/host-policy.json",));
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/config/wasm-component-runtime/generated/host-policy.json",));
 
 pub(super) struct Fixture {
     pub(super) workspace: crate::test_support::Workspace,

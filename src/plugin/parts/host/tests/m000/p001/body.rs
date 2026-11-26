@@ -103,7 +103,7 @@
     fn checked_in_nickel_exported_contract_fixtures_validate() {
         let valid_source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/docs/plugin-extension-contracts/storage.contract.preserves"
+            "/config/plugin-extension-contracts/storage.contract.preserves"
         ));
         let valid_value = parse_text(valid_source).expect("parse checked-in contract export");
         let valid_contract = parse_plugin_extension_contract(&valid_value).expect("validate checked-in contract export");
@@ -111,14 +111,14 @@
 
         let invalid_source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/docs/plugin-extension-contracts/storage-missing-schema.contract.preserves"
+            "/config/plugin-extension-contracts/storage-missing-schema.contract.preserves"
         ));
         let invalid_value = parse_text(invalid_source).expect("parse invalid checked-in export");
         assert!(parse_plugin_extension_contract(&invalid_value).is_err());
 
         let valid_grant_source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/docs/plugin-extension-contracts/storage.grant.preserves"
+            "/config/plugin-extension-contracts/storage.grant.preserves"
         ));
         let valid_grant_value = parse_text(valid_grant_source).expect("parse checked-in grant export");
         let valid_grant = parse_plugin_capability_grant(&valid_grant_value).expect("validate checked-in grant export");
@@ -126,7 +126,7 @@
 
         let invalid_grant_source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/docs/plugin-extension-contracts/storage-missing-proof.grant.preserves"
+            "/config/plugin-extension-contracts/storage-missing-proof.grant.preserves"
         ));
         let invalid_grant_value = parse_text(invalid_grant_source).expect("parse invalid checked-in grant export");
         assert!(parse_plugin_capability_grant(&invalid_grant_value).is_err());

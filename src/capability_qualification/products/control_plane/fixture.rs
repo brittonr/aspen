@@ -418,7 +418,29 @@ pub(super) fn listener_input(
         },
         admission: EndpointAdmissionState::fully_active(),
         observed_tick: OBSERVED_TICK,
+        admitted_peers: admitted_peers(node_id)?,
     })
+}
+
+/// The listener of `node_id` admits exactly the fixed client endpoints of the
+/// other static voters, under this listener's own peer context.
+fn admitted_peers(
+    node_id: &str,
+) -> crate::error::Result<std::collections::BTreeMap<String, crate::fabric_transport::AdmittedPeer>> {
+    NODES
+        .into_iter()
+        .filter(|peer_id| *peer_id != node_id)
+        .map(|peer_id| {
+            let client = EndpointCapability::from_secret_bytes(
+                secret(peer_id, "client"),
+                reference(&format!("{peer_id}/client-capability")),
+            )?;
+            Ok((peer_id.to_string(), crate::fabric_transport::AdmittedPeer {
+                public_endpoint_identity: client.public_endpoint_identity(),
+                peer_context_ref: reference("peer-context"),
+            }))
+        })
+        .collect()
 }
 
 /// The admitted client of `node_id` towards one peer's published endpoint.
