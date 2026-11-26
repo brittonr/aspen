@@ -1,6 +1,7 @@
 use molten_core::world_promotion::*;
 use transactional_reconciliation_core::QuarantineStatus;
 
+use super::recovery::record_uncertain_attempt;
 use super::*;
 use crate::error::Failure;
 use crate::error::Result;
@@ -149,6 +150,7 @@ pub struct WorldDispatchOutcome {
 }
 
 // r[impl molten.world_promotion.dispatch]
+// r[impl molten.world_commit.promotion_atomic_dispatch_and_readback]
 pub fn dispatch_world_reservation<T, A, D, R>(
     plan: &WorldPromotionPlan,
     reservation_ref: &WorldReleaseReservationRef,
@@ -172,7 +174,6 @@ where
     };
     let mut attempting_reservation = reservation;
     attempting_reservation.state = WorldReleaseState::Attempting;
-    ports.transaction.update_reservation(&attempting_reservation)?;
     let attempting = WorldAttemptRecord {
         reservation_ref: attempting_reservation.reservation_ref.clone(),
         attempt_ref: dispatch.attempt_ref.clone(),
@@ -181,7 +182,8 @@ where
         outcome: WorldAttemptOutcome::Unknown,
         external_completion_proven: false,
     };
-    ports.transaction.store_attempt(&attempting)?;
+    // The reservation and its attempt become `attempting` together, before the effect.
+    ports.transaction.record_attempt_transition(&attempting_reservation, &attempting)?;
     let observation = match ports.dispatcher.dispatch(&dispatch) {
         Ok(observation) => observation,
         Err(error) => {
@@ -201,10 +203,9 @@ where
         }
     };
     let attempt = classify_attempt_observation(&dispatch, observation);
-    ports.transaction.store_attempt(&attempt)?;
     let mut terminal_reservation = attempting_reservation;
     terminal_reservation.state = attempt.state;
-    ports.transaction.update_reservation(&terminal_reservation)?;
+    ports.transaction.record_attempt_transition(&terminal_reservation, &attempt)?;
     let canonical_receipt = canonical_observation(&attempt)?;
     ports.receipts.publish_promotion_receipt(&canonical_receipt)?;
     Ok(WorldDispatchOutcome {
@@ -214,56 +215,6 @@ where
         issue_codes: Vec::new(),
         canonical_receipt,
     })
-}
-
-/// Classify attempts a previous process left `attempting` (it stopped between storing the attempt
-/// and recording the dispatcher's result) as uncertain, so retry and abandon apply. The local store
-/// is held by one process at a time, so no dispatcher can still own such an attempt.
-// r[impl molten.world_promotion.reconciliation]
-pub fn recover_interrupted_attempts<T, R>(transaction: &mut T, receipts: &mut R) -> Result<Vec<WorldAttemptRecord>>
-where
-    T: WorldPromotionTransactionPort,
-    R: WorldPromotionReceiptPort,
-{
-    let attempts = transaction.list_attempts_in_progress()?;
-    let mut recovered = Vec::with_capacity(attempts.len());
-    for attempt in attempts {
-        let reservation = transaction
-            .read_reservation(&attempt.reservation_ref)?
-            .ok_or_else(|| Failure::invalid_harness("an in-progress world attempt has no reservation"))?;
-        recovered.push(record_uncertain_attempt(&reservation, &attempt.attempt_ref, transaction, receipts)?);
-    }
-    Ok(recovered)
-}
-
-/// The external effect's outcome is unknown: record the attempt and its reservation as uncertain
-/// and publish that observation receipt.
-fn record_uncertain_attempt<T, R>(
-    reservation: &WorldReleaseReservation,
-    attempt_ref: &WorldReleaseAttemptRef,
-    transaction: &mut T,
-    receipts: &mut R,
-) -> Result<WorldAttemptRecord>
-where
-    T: WorldPromotionTransactionPort,
-    R: WorldPromotionReceiptPort,
-{
-    let attempt = WorldAttemptRecord {
-        reservation_ref: reservation.reservation_ref.clone(),
-        attempt_ref: attempt_ref.clone(),
-        state: WorldReleaseState::Uncertain,
-        observation_ref: None,
-        outcome: WorldAttemptOutcome::Unknown,
-        external_completion_proven: false,
-    };
-    transaction.store_attempt(&attempt)?;
-    if reservation.state == WorldReleaseState::Attempting {
-        let mut uncertain = reservation.clone();
-        uncertain.state = WorldReleaseState::Uncertain;
-        transaction.update_reservation(&uncertain)?;
-    }
-    receipts.publish_promotion_receipt(&canonical_observation(&attempt)?)?;
-    Ok(attempt)
 }
 
 fn block_dispatch<T, R>(

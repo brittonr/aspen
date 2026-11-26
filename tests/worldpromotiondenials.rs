@@ -77,3 +77,33 @@ fn missing_or_mismatched_intent_material_leaves_head_and_outbox_unchanged() {
     let stdout = run_promote(temporary.path(), &request_path, &authority_path, &closure_path, &signer_hex);
     assert!(stdout.contains("replayed=false\n"), "stdout={stdout}");
 }
+
+// r[verify molten.world_commit.promotion_authority_action_and_canonical_binding]
+#[test]
+fn operator_or_expired_grants_cannot_promote() {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let root = DirectoryRoot::open(temporary.path()).expect("state root");
+    root.create_layout().expect("layout");
+    let policy_ref = WorldHeadPolicyRef::new(reference("policy")).expect("policy");
+    seed(&root, &policy_ref);
+
+    let (signer_hex, request_path, authority_path, closure_path) = fixtures(temporary.path(), &policy_ref);
+    signed::edit_authority(&authority_path, |authority| {
+        authority.action = "deny-reservation".to_string();
+        authority.candidate_head = None;
+        authority.reservation_ref = Some(reference("reservation"));
+    });
+    let output = run_promote_output(temporary.path(), &request_path, &authority_path, &closure_path, &signer_hex);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("AuthorityActionMismatch"), "stderr={stderr}");
+    head::assert_unchanged(&root);
+
+    let (signer_hex, request_path, authority_path, closure_path) = fixtures(temporary.path(), &policy_ref);
+    signed::edit_authority(&authority_path, |authority| authority.expires_at = 1);
+    let output = run_promote_output(temporary.path(), &request_path, &authority_path, &closure_path, &signer_hex);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("AuthorityExpired"), "stderr={stderr}");
+    head::assert_unchanged(&root);
+}

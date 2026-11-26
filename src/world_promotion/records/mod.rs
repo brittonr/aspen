@@ -1,14 +1,15 @@
+mod grant;
 mod identity;
 mod material;
+mod persistence;
 
+pub use grant::*;
 pub use identity::*;
 pub use material::*;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_promotion::*;
+pub use persistence::*;
 use preserves::IOValue;
-use transactional_reconciliation_core::PersistenceState;
-use transactional_reconciliation_core::QuarantineReason;
-use transactional_reconciliation_core::QuarantineStatus;
 
 use crate::error::Failure;
 use crate::error::Result;
@@ -18,13 +19,11 @@ pub const WORLD_PROMOTION_PLAN_SCHEMA_V1: &str = "molten.world-promotion-plan.v1
 pub const WORLD_RELEASE_RESERVATION_SCHEMA: &str = "molten.world-release-reservation.v1";
 pub const WORLD_RELEASE_ATTEMPT_SCHEMA: &str = "molten.world-release-attempt.v2";
 pub const WORLD_RELEASE_OBSERVATION_SCHEMA: &str = "molten.world-release-observation.v1";
-pub const WORLD_PROMOTION_RECONCILIATION_SCHEMA: &str = "molten.world-promotion-reconciliation.v1";
 
 const PROMOTION_PLAN_RECORD: &str = "world-promotion-plan";
 const RESERVATION_RECORD: &str = "world-release-reservation";
 const ATTEMPT_RECORD: &str = "world-release-attempt";
 const OBSERVATION_RECORD: &str = "world-release-observation";
-const RECONCILIATION_RECORD: &str = "world-promotion-reconciliation";
 const RESERVATION_FIELD_COUNT: u64 = 11;
 const ATTEMPT_FIELD_COUNT: u64 = 8;
 
@@ -165,22 +164,6 @@ pub fn parse_attempt(bytes: &[u8]) -> Result<WorldAttemptRecord> {
     Ok(record)
 }
 
-pub fn canonical_persistence(
-    plan: &WorldPromotionPlan,
-    persistence: &WorldPromotionPersistence,
-) -> Result<CanonicalWorldPromotionRecord> {
-    require_non_claims(&persistence.non_claims)?;
-    canonical(crate::preserves_rail::record(RECONCILIATION_RECORD, vec![
-        crate::preserves_rail::string(WORLD_PROMOTION_RECONCILIATION_SCHEMA),
-        named("plan-ref", string(plan.plan_ref.as_str())),
-        named("state", string(persistence_state(persistence.shared.state()))),
-        named("quarantine", string(quarantine(persistence.shared.quarantine()))),
-        named("dispatch-eligible", boolean(persistence.dispatch_eligible)),
-        named("mutation-authorized-by-evidence", boolean(persistence.mutation_authorized_by_evidence)),
-        non_claims(),
-    ]))
-}
-
 fn canonical(value: IOValue) -> Result<CanonicalWorldPromotionRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     Ok(CanonicalWorldPromotionRecord {
@@ -238,26 +221,6 @@ fn named_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserv
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} VALUE>")))?;
     Ok(fields[0].clone())
-}
-
-fn persistence_state(state: PersistenceState) -> &'static str {
-    match state {
-        PersistenceState::NotPublished => "not-published",
-        PersistenceState::Published => "published",
-        PersistenceState::PublicationUnknown => "publication-unknown",
-        PersistenceState::Conflicting => "conflicting",
-    }
-}
-
-fn quarantine(status: QuarantineStatus) -> &'static str {
-    match status {
-        QuarantineStatus::Clear => "clear",
-        QuarantineStatus::Quarantined(QuarantineReason::CommitOutcomeUnknown) => "commit-outcome-unknown",
-        QuarantineStatus::Quarantined(QuarantineReason::RepairReported) => "repair-reported",
-        QuarantineStatus::Quarantined(QuarantineReason::Corrupt) => "corrupt",
-        QuarantineStatus::Quarantined(QuarantineReason::Missing) => "missing",
-        QuarantineStatus::Quarantined(QuarantineReason::Inconsistent) => "inconsistent",
-    }
 }
 
 fn named(label: &'static str, value: IOValue) -> IOValue {

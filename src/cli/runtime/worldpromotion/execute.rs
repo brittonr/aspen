@@ -12,22 +12,24 @@ pub(super) fn promote(
 ) -> Result<()> {
     let request = super::read_request(request_path)?;
     let branch_id = request.branch_id.as_str().to_string();
-    let mut current = molten::world_promotion::read_observed_current(
+    let mut current = molten::world_promotion::read_observed_current(molten::world_promotion::ObservedCurrentInput {
         state_root,
         authority_path,
         closure_path,
         trusted_signer,
-        &branch_id,
-    )?;
+        branch_id: &branch_id,
+        observed_unix_seconds: super::observed_unix_seconds()?,
+    })?;
     let mut request = request;
-    if request.authority.authority_ref != current.authority_ref || request.authority.policy_ref != current.policy_ref {
+    let grant = &current.grant;
+    if request.authority.authority_ref != grant.authority_ref || request.authority.policy_ref != grant.policy_ref {
         return Err(Failure::invalid_harness("promotion request authority does not match the signed authority grant"));
     }
-    request.authority.authority_ref = current.authority_ref.clone();
-    request.authority.policy_ref = current.policy_ref.clone();
-    request.authority.observed_generation = current.authority_generation;
-    request.authority.admitted = current.authority_admitted;
-    request.policy_ref = current.policy_ref.clone();
+    request.authority.authority_ref = grant.authority_ref.clone();
+    request.authority.policy_ref = grant.policy_ref.clone();
+    request.authority.observed_generation = grant.generation;
+    request.authority.admitted = grant.admitted;
+    request.policy_ref = grant.policy_ref.clone();
     request.intent_closure_complete = current.closure.complete;
     let mut store = super::open_store(state_root)?;
     let mut receipts = molten::world_promotion::LocalPromotionReceipts::open(state_root)?;

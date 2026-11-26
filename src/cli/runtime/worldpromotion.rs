@@ -275,6 +275,11 @@ pub(super) fn read_request(path: &Path) -> Result<WorldPromotionRequest> {
     })
 }
 
+/// The admitted live wall clock's Unix seconds, against which signed grant expiry is decided.
+pub(super) fn observed_unix_seconds() -> Result<u64> {
+    molten::world_witness::WallClock::unix_seconds(&mut molten::world_witness::live_clock()?)
+}
+
 pub(super) fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> {
     let root = DirectoryRoot::open_existing(state_root)?;
     let storage = root.namespace(NamespaceKind::Storage)?;

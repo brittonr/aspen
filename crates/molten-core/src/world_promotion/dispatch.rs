@@ -123,13 +123,19 @@ pub fn acknowledge_attempt(record: &WorldAttemptRecord) -> Result<WorldAttemptRe
     Ok(acknowledged)
 }
 
+/// Abandons one uncertain attempt and its uncertain reservation together, so the reservation
+/// leaves `Uncertain` in the same transition as its attempt.
+// r[impl molten.world_commit.promotion_atomic_dispatch_and_readback]
 pub fn abandon_uncertain_attempt(
     plan: &WorldPromotionPlan,
     reservation: &WorldReleaseReservation,
     record: &WorldAttemptRecord,
     is_unknown_outcome_acknowledged: bool,
-) -> Result<WorldAttemptRecord, Vec<WorldPromotionIssue>> {
-    if record.state != WorldReleaseState::Uncertain || record.reservation_ref != reservation.reservation_ref {
+) -> Result<WorldAbandonment, Vec<WorldPromotionIssue>> {
+    if record.state != WorldReleaseState::Uncertain
+        || record.reservation_ref != reservation.reservation_ref
+        || reservation.state != WorldReleaseState::Uncertain
+    {
         return Err(vec![WorldPromotionIssue::ReservationNotCommitted]);
     }
     let shared = shared_release_operation(plan, &reservation.reservation_ref)?;
@@ -142,10 +148,22 @@ pub fn abandon_uncertain_attempt(
         },
     )
     .map_err(transaction_error)?;
-    let mut abandoned = record.clone();
-    abandoned.state = WorldReleaseState::Abandoned;
-    abandoned.external_completion_proven = false;
-    Ok(abandoned)
+    let mut attempt = record.clone();
+    attempt.state = WorldReleaseState::Abandoned;
+    attempt.external_completion_proven = false;
+    let mut abandoned_reservation = reservation.clone();
+    abandoned_reservation.state = WorldReleaseState::Abandoned;
+    Ok(WorldAbandonment {
+        attempt,
+        reservation: abandoned_reservation,
+    })
+}
+
+/// The attempt identity a reservation's first dispatch must use.
+pub fn initial_attempt_ref(
+    reservation: &WorldReleaseReservation,
+) -> Result<WorldReleaseAttemptRef, Vec<WorldPromotionIssue>> {
+    expected_attempt_ref(reservation)
 }
 
 pub fn blocked_reservation(reservation: &WorldReleaseReservation) -> WorldReleaseReservation {

@@ -4,3 +4,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/s
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/service/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/service/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/service/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/service/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/world_promotion/tests/parts/service/p007/body.rs"));
