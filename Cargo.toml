@@ -3,6 +3,7 @@ members = [
   ".",
   "crates/molten-composition-core",
   "crates/molten-core",
+  "crates/molten-fastpath-core",
   "crates/molten-node-host",
   "crates/molten-release-policy",
   "crates/molten-reliability-model-core",
@@ -24,6 +25,8 @@ default_scope = [
   "molten-node-host",
   "-p",
   "molten-composition-core",
+  "-p",
+  "molten-fastpath-core",
   "-p",
   "molten-reliability-model-core",
   "-p",
@@ -156,6 +159,7 @@ mantle-wasm-consumer-verifier = { git = "https://github.com/OnixResearch/mantle.
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 molten-composition-core = { path = "crates/molten-composition-core" }
+molten-fastpath-core = { path = "crates/molten-fastpath-core" }
 molten-reliability-model-core = { path = "crates/molten-reliability-model-core" }
 molten-runtime-admission-core = { path = "crates/molten-runtime-admission-core" }
 molten-wasm-policy-core = { path = "crates/molten-wasm-policy-core" }
@@ -254,6 +258,9 @@ overflow-checks = true
 [profile.dev.package.blake3]
 opt-level = 3
 [profile.release.package.molten-composition-core]
+overflow-checks = true
+
+[profile.release.package.molten-fastpath-core]
 overflow-checks = true
 
 [profile.release.package.molten-reliability-model-core]

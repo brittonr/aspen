@@ -1,8 +1,9 @@
 # Aspen consensus fast-path model checks
 
 `verification/tla/ConsensusFastPath.tla` is the authoritative **finite design
-model** of the **blocked** fast-path acceleration package
-(`src/fabric_consistency/fastpath/`), not a proof of Aspen's implementation
+model** of the **blocked** fast-path acceleration package (the `no_std`
+[`molten-fastpath-core`](../crates/molten-fastpath-core/src/lib.rs) crate,
+re-exported at `fabric_consistency::fastpath`), not a proof of Aspen's implementation
 and not production Raft verification. The fast path is not wired into
 `fabric_consistency::raft` or any live service; production Raft has its own
 checked model, described in [production Raft model](raft-tla.md). The internal
@@ -65,16 +66,50 @@ restated its own invariants. The model now carries:
 
 The model requires, as part of a compatible promise, that the order-preserving
 active proposer has itself acknowledged the fast-committed command at the same
-position. The Rust API does **not** enforce this: `validate_promises` checks
-only that every active proposer's promise matches the views and has
-`proposal_order_preserved`, and `conflict_free` is supplied by the caller.
-This condition is a **model assumption**. Without it, the non-derived
-four-replica exercise violates `CommittedOrderAgreement` (a superquorum
-smaller than the replica set need not include the proposer, whose original
-engine can then decide a different command at that position). It is tracked
-as an open task of the `align-formal-models-architecture-and-governance-toolchains`
-change: either the Rust admission adds the check, or the base-ordering
-assumptions (`receive_order_preserved`) are shown to imply it.
+position. Until 2026-11-26 the Rust API did **not** enforce this:
+`validate_promises` checked only that every active proposer's promise matched
+the views and had `proposal_order_preserved`, and `conflict_free` is supplied
+by the caller.
+
+**Resolved (2026-11-26) by enforcing it in Rust admission.** The other
+resolution, deriving the condition from the profile's base-ordering
+assumptions, does not hold. `receive_order_preserved` constrains the order in
+which a replica accepts requests. It does not make a superquorum contain the
+proposer. Whenever the superquorum is smaller than the replica set,
+which includes the derived five-replica profile (superquorum 4 of 5) and the
+non-derived four-replica exercise, a superquorum can omit the proposer. Then
+the proposer's original engine can decide a different command at that position.
+`ConsensusFastPathMissingPromise.cfg` shows exactly this `CommittedOrderAgreement`
+counterexample in all three checkers, so the condition stays in the model.
+
+[`evaluate_stable_view`](../crates/molten-fastpath-core/src/quorate.rs) now
+falls back with `MissingProposerAcknowledgement` unless every active proposer
+is among the same-view acknowledgers. It falls back with
+`OriginalPathUnavailable` when the original path is down. The acknowledgers
+are the admitted replicas whose acknowledgements match the attempt's views and
+operation. Under `conflict_free` that operation is the Rust abstraction of the
+model's "same prefix". An active proposer outside the admitted replicas can
+therefore never satisfy the guard. The check follows the promise checks, so a
+missing, mixed-view or reordering promise keeps its own reason. Evidence:
+
+- **Unit tests in `molten-fastpath-core`.** With five replicas, a 4-of-5
+  superquorum without the proposer falls back, and the same size with the
+  proposer fast-commits. An active proposer outside the admitted replicas also
+  falls back. With two active proposers, a superquorum that omits one of them
+  falls back and one that contains both fast-commits.
+- **An exhaustive five-replica unit test.** It enumerates all 32 acknowledger
+  subsets against all 31 non-empty active-proposer sets, which covers every one
+  of the 160 single-proposer combinations and all two-proposer ones. Fast
+  admission holds exactly when a superquorum acknowledged and contains every
+  active proposer.
+- **A bounded Hegel property.** It samples the same rule over seven replicas,
+  with a superquorum of 6.
+- **The Quint lane.** The replay driver uses five admitted replicas and the
+  derived 4-of-5 superquorum. Its `unacknowledged` promise mode drops the
+  admitted proposer `r0` from an otherwise complete superquorum, which is the
+  TLA+ counterexample shape. The `proposerAcknowledgementTest` run replays it
+  against the real API, followed by the same command with the proposer
+  included.
 
 ## Hazard-to-property mapping
 
@@ -217,15 +252,17 @@ The dev-only Nix cohort in `nix/consensus-fastpath-quint.nix` pins:
   separately downloaded Rust evaluator; that unpinned download is not allowed.
 
 Missing/drifting Quint fails rather than skipping. The test campaign uses seed
-5, 64 traces and 48 steps, plus deterministic recovery/duplicate/empty-recovery
-and mixed-view fixtures. The six Quint property names above are checked by
+5, 64 traces and 48 steps, plus deterministic recovery/duplicate/empty-recovery,
+mixed-view and proposer-acknowledgement fixtures. The six Quint property names above are checked by
 `quint run --invariant inv`; replay separately checks Rust state equality.
 This is trace-based conformance, not proof of TLA+/Quint equivalence.
 
 The real Rust guard mutant is
 `verification/tla/mutants/mixed-view-guard.patch`. Apply it **only to an
 isolated source copy**, using the Nix module's `mutateSource` function. It
-removes the actual acceleration-view comparison in `same_view_acknowledgers`;
+removes the actual acceleration-view comparison in `same_view_acknowledgers`
+(`crates/molten-fastpath-core/src/quorate.rs`, which the mutated workspace
+rebuilds as `molten`'s path dependency);
 there is no alternate test implementation. Build normal and mutated
 `fastpathquint` test executables from the same pinned dependencies, then run:
 
@@ -237,7 +274,7 @@ node verification/tla/quint-campaign.mjs \
 ```
 
 The campaign retains generated ITF traces, normal and mutant replay logs and
-durations. It requires all four normal replay tests and a mutant failure
+durations. It requires all five normal replay tests and a mutant failure
 containing `State invariant failed`. The authored
 `fixtures/mixed-view-guard.json` describes the causal minimum: initialization
 plus one mixed-view admission input. It is **not** a fabricated observed ITF;
@@ -298,7 +335,9 @@ checked, on:
 
 Mutant counts are identical across the checkers here but remain observations.
 The Quint API model, `tests/fastpathquint.rs` and the Quint campaign mirror the
-Rust API rather than this TLA+ state shape and are unchanged.
+Rust API rather than this TLA+ state shape and were unchanged by that rewrite;
+the later proposer-acknowledgement resolution (above) added one promise mode
+and one replay test to them.
 
 The evidence below describes the **earlier centralized model** and is retained
 as history; its `NoMissingPromise` certificate invariant no longer exists.

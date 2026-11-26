@@ -795,6 +795,7 @@
           "molten"
           "molten-composition-core"
           "molten-core"
+          "molten-fastpath-core"
           "molten-node-host"
           "molten-release-policy"
           "molten-reliability-model-core"
@@ -931,6 +932,8 @@
           inherit pkgs rustToolchain releasePolicyPkg;
         };
         fastpathQuint = import ./nix/consensus-fastpath-quint.nix { inherit pkgs; };
+        # The guard mutant patches `crates/molten-fastpath-core/src/quorate.rs`; the mutated workspace
+        # rebuilds that path dependency, so the `fastpathquint` tests link the mutated admission guard.
         fastpathMutantWs = mkUnit2nixWorkspace {
           src = fastpathQuint.mutateSource sourceForConfigChecks;
         };
@@ -1014,6 +1017,11 @@
             linkedAllowlist = [ ];
             compileProbeModule = "src/judgment.rs";
             sourceProbeModule = "src/vocabulary.rs";
+          };
+          "molten-fastpath-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/quorate.rs";
+            sourceProbeModule = "src/succession.rs";
           };
           "molten-reliability-model-core" = {
             linkedAllowlist = [
@@ -3286,6 +3294,7 @@
             # Full molten-core unit/property tests under the default std feature set.
             molten-core-tests = ws.test.check."molten-core";
             molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-fastpath-core-no-std = noStdKernelCheck "molten-fastpath-core";
             molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
             molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
             molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";
@@ -4598,7 +4607,8 @@
                     fi
                   done
 
-                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' src/fabric_consistency/fastpath; then
+                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' \
+                    crates/molten-fastpath-core/src src/fabric_consistency/fastpath; then
                     echo "pure fast-path model contains an ambient shell dependency" >&2
                     exit 1
                   fi

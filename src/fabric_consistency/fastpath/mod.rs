@@ -1,34 +1,24 @@
-#![allow(
-    tigerstyle::borrowed_argument_types,
-    reason = "pure model validators borrow bounded immutable profiles and traces"
-)]
-#![allow(
-    tigerstyle::non_trait_imports,
-    reason = "the bounded model keeps deterministic collection and sibling component types explicit within this isolated module"
-)]
-#![allow(
-    tigerstyle::path_segment_repetition,
-    reason = "public fast-path model types retain domain names that remain clear outside the module"
-)]
-#![allow(
-    tigerstyle::unbounded_collection_growth,
-    reason = "profile admission and fault-corpus constants impose finite model bounds before exploration"
-)]
-#![allow(
-    tigerstyle::usize_in_public_api,
-    reason = "model-only collection counts and sequence indexes use the host collection index type and never cross a wire boundary"
-)]
+//! Shell over the no_std fast-path design model (`molten_fastpath_core`).
+//!
+//! The model is re-exported at its historical facade path. Each typed core rejection becomes a
+//! classified `Failure` here, at the outer boundary, so callers branch on the class and keep the
+//! typed reason in the message.
 
-mod conflict;
-mod evidence;
-mod fault;
-mod profile;
-mod recovery;
-mod stable;
+pub use molten_fastpath_core::Rejection;
+pub use molten_fastpath_core::commute::*;
+pub use molten_fastpath_core::envelope::*;
+pub use molten_fastpath_core::hazard::*;
+pub use molten_fastpath_core::quorate::*;
+pub use molten_fastpath_core::succession::*;
+pub use molten_fastpath_core::witness::*;
 
-pub use conflict::*;
-pub use evidence::*;
-pub use fault::*;
-pub use profile::*;
-pub use recovery::*;
-pub use stable::*;
+/// A rejected fast-path model input is a malformed observation: the core refused a transition,
+/// retry, profile, contract, or scenario as given, and resubmitting the same input fails again.
+// r[impl molten.consensus.no_std_raft_and_reliability_kernels]
+pub fn failure(rejection: impl Into<Rejection>) -> crate::error::Failure {
+    let rejection = rejection.into();
+    crate::error::Failure::classified(
+        crate::error::FailureClass::MalformedObservation,
+        format!("fast-path model rejected input: {rejection}"),
+    )
+}

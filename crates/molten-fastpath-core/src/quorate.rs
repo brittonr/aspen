@@ -1,25 +1,22 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use super::profile::DerivedQuorums;
+//! Stable-view fast admission and session-keyed exactly-once convergence.
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OperationIdentity {
-    pub command_ref: String,
-    pub session_ref: String,
+    pub command_ref: alloc::string::String,
+    pub session_ref: alloc::string::String,
     pub session_sequence: u64,
-    pub group_ref: String,
+    pub group_ref: alloc::string::String,
     pub extension_generation: u64,
-    pub application_schema_ref: String,
-    pub policy_ref: String,
-    pub authority_ref: String,
-    pub resource_ref: String,
+    pub application_schema_ref: alloc::string::String,
+    pub policy_ref: alloc::string::String,
+    pub authority_ref: alloc::string::String,
+    pub resource_ref: alloc::string::String,
     pub engine_epoch: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FastAcknowledgement {
-    pub replica_id: String,
+    pub replica_id: alloc::string::String,
     pub acceleration_view: u64,
     pub base_view: u64,
     pub operation: OperationIdentity,
@@ -27,7 +24,7 @@ pub struct FastAcknowledgement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProposerPromise {
-    pub proposer_id: String,
+    pub proposer_id: alloc::string::String,
     pub acceleration_view: u64,
     pub base_view: u64,
     pub proposal_order_preserved: bool,
@@ -41,18 +38,23 @@ pub struct StableViewAttempt {
     pub base_view: u64,
     pub conflict_free: bool,
     /// Admitted replica set of the view; acknowledgements from other ids are ignored.
-    pub replicas: BTreeSet<String>,
-    pub acknowledgements: Vec<FastAcknowledgement>,
-    pub promises: Vec<ProposerPromise>,
-    pub active_proposers: BTreeSet<String>,
+    pub replicas: alloc::collections::BTreeSet<alloc::string::String>,
+    pub acknowledgements: alloc::vec::Vec<FastAcknowledgement>,
+    pub promises: alloc::vec::Vec<ProposerPromise>,
+    /// Order-preserving active proposers. Each must promise and must itself acknowledge the
+    /// attempt.
+    pub active_proposers: alloc::collections::BTreeSet<alloc::string::String>,
     pub original_path_available: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FallbackReason {
     Conflict,
     IdentityMismatch,
     InsufficientAcknowledgements,
+    /// An active proposer promised but is not among the same-view acknowledgers, so the
+    /// superquorum need not contain the replica whose original engine orders the position.
+    MissingProposerAcknowledgement,
     MissingProposerPromise,
     MixedView,
     OriginalPathUnavailable,
@@ -71,7 +73,7 @@ pub enum StableViewDecision {
 /// must carry its original identity.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ApplicationLedger {
-    session_operations: BTreeMap<(String, u64), OperationIdentity>,
+    session_operations: alloc::collections::BTreeMap<(alloc::string::String, u64), OperationIdentity>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,9 +89,22 @@ pub enum LedgerIssue {
     ConflictingSessionRetry,
 }
 
+impl core::fmt::Display for LedgerIssue {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(match self {
+            Self::ConflictingSessionRetry => "conflicting-session-retry",
+        })
+    }
+}
+
+impl core::error::Error for LedgerIssue {}
+
 // r[impl molten.consensus.fast_path_model.stable_view]
 // r[impl molten.consensus.fast_path_model.fallback_identity]
-pub fn evaluate_stable_view(attempt: &StableViewAttempt, quorums: DerivedQuorums) -> StableViewDecision {
+pub fn evaluate_stable_view(
+    attempt: &StableViewAttempt,
+    quorums: crate::envelope::DerivedQuorums,
+) -> StableViewDecision {
     if attempt.operation != attempt.original_operation {
         return fallback(attempt, FallbackReason::IdentityMismatch);
     }
@@ -102,7 +117,7 @@ pub fn evaluate_stable_view(attempt: &StableViewAttempt, quorums: DerivedQuorums
     if acknowledged.len() < quorums.superquorum {
         return fallback(attempt, FallbackReason::InsufficientAcknowledgements);
     }
-    match validate_promises(attempt) {
+    match validate_promises(attempt, &acknowledged) {
         Ok(()) => StableViewDecision::FastCommitted,
         Err(reason) => fallback(attempt, reason),
     }
@@ -118,25 +133,33 @@ fn fallback(attempt: &StableViewAttempt, reason: FallbackReason) -> StableViewDe
 
 /// Distinct admitted replicas that acknowledged this exact attempt; `None` when an admitted
 /// replica acknowledged another view or operation. Ids outside the admitted set never count.
-fn same_view_acknowledgers(attempt: &StableViewAttempt) -> Option<BTreeSet<String>> {
-    let mut replicas = BTreeSet::new();
-    for acknowledgement in &attempt.acknowledgements {
-        if !attempt.replicas.contains(&acknowledgement.replica_id) {
-            continue;
-        }
+fn same_view_acknowledgers(attempt: &StableViewAttempt) -> Option<alloc::collections::BTreeSet<alloc::string::String>> {
+    let members = attempt
+        .acknowledgements
+        .iter()
+        .filter(|acknowledgement| attempt.replicas.contains(&acknowledgement.replica_id));
+    for acknowledgement in members.clone() {
         if acknowledgement.acceleration_view != attempt.acceleration_view
             || acknowledgement.base_view != attempt.base_view
             || acknowledgement.operation != attempt.operation
         {
             return None;
         }
-        replicas.insert(acknowledgement.replica_id.clone());
     }
-    Some(replicas)
+    Some(members.map(|acknowledgement| acknowledgement.replica_id.clone()).collect())
 }
 
-fn validate_promises(attempt: &StableViewAttempt) -> Result<(), FallbackReason> {
-    let mut promised = BTreeSet::new();
+/// Every active proposer promises in this view to preserve its proposal order and has itself
+/// acknowledged the attempt. The acknowledgement is what makes the promise compatible: the
+/// original engine orders the position from the proposer's own acceptance order, so a
+/// superquorum smaller than the replica set that omits the proposer can fast-commit a command
+/// the original engine later decides differently (`ConsensusFastPath.tla`,
+/// `CommittedOrderAgreement`).
+// r[impl molten.consensus.fast_path_model.stable_view]
+fn validate_promises(
+    attempt: &StableViewAttempt,
+    acknowledged: &alloc::collections::BTreeSet<alloc::string::String>,
+) -> Result<(), FallbackReason> {
     for promise in &attempt.promises {
         if promise.acceleration_view != attempt.acceleration_view || promise.base_view != attempt.base_view {
             return Err(FallbackReason::MixedView);
@@ -144,10 +167,14 @@ fn validate_promises(attempt: &StableViewAttempt) -> Result<(), FallbackReason> 
         if !promise.proposal_order_preserved {
             return Err(FallbackReason::ReorderingProposer);
         }
-        promised.insert(promise.proposer_id.clone());
     }
+    let promised: alloc::collections::BTreeSet<alloc::string::String> =
+        attempt.promises.iter().map(|promise| promise.proposer_id.clone()).collect();
     if promised != attempt.active_proposers {
         return Err(FallbackReason::MissingProposerPromise);
+    }
+    if !attempt.active_proposers.is_subset(acknowledged) {
+        return Err(FallbackReason::MissingProposerAcknowledgement);
     }
     Ok(())
 }
@@ -155,7 +182,7 @@ fn validate_promises(attempt: &StableViewAttempt) -> Result<(), FallbackReason> 
 impl ApplicationLedger {
     pub fn new() -> Self {
         Self {
-            session_operations: BTreeMap::new(),
+            session_operations: alloc::collections::BTreeMap::new(),
         }
     }
 
@@ -182,7 +209,8 @@ impl ApplicationLedger {
         })
     }
 
-    pub fn applied_count(&self) -> usize {
-        self.session_operations.len()
+    /// The applied session operations, in `(session_ref, session_sequence)` order.
+    pub fn applied_operations(&self) -> impl Iterator<Item = &OperationIdentity> {
+        self.session_operations.values()
     }
 }

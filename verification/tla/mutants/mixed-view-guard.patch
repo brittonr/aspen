@@ -1,10 +1,10 @@
-diff --git a/src/fabric_consistency/fastpath/stable.rs b/src/fabric_consistency/fastpath/stable.rs
---- a/src/fabric_consistency/fastpath/stable.rs
-+++ b/src/fabric_consistency/fastpath/stable.rs
-@@ -124,8 +124,7 @@
-         if !attempt.replicas.contains(&acknowledgement.replica_id) {
-             continue;
-         }
+diff --git a/crates/molten-fastpath-core/src/quorate.rs b/crates/molten-fastpath-core/src/quorate.rs
+--- a/crates/molten-fastpath-core/src/quorate.rs
++++ b/crates/molten-fastpath-core/src/quorate.rs
+@@ -139,8 +139,7 @@
+         .iter()
+         .filter(|acknowledgement| attempt.replicas.contains(&acknowledgement.replica_id));
+     for acknowledgement in members.clone() {
 -        if acknowledgement.acceleration_view != attempt.acceleration_view
 -            || acknowledgement.base_view != attempt.base_view
 +        if acknowledgement.base_view != attempt.base_view
