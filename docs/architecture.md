@@ -237,6 +237,8 @@ Required properties:
 - Core validation is deterministic and side-effect free.
 - Runtime playback identity includes artifact ids, dependency closure hash, initial state hash, schema refs, policy refs, handler profile id, seed or recorded effect-log hash, and relevant runtime/tool versions.
 
+r[impl molten.runtime_spine.no_std_preserves_packed_kernel] The canonical packed Preserves law lives in the `#![no_std]` + `alloc` crate [`molten-preserves-core`](../crates/molten-preserves-core/src/lib.rs): the `PackedValue` model, the canonical encoder (`0x80..0xB7`, byte-identical to `preserves::PackedWriter` without annotations), the strict bounded decoder that accepts exactly canonical encodings (minimal lengths and integers, binary64 floats, sorted unique set elements and dictionary keys, no annotations or trailing bytes, explicit byte/depth/node/width ceilings), the allocation-free shape preflight, lowercase-only `blake3:` content references, domain-separated BLAKE3 derivation, the single `<none>`/`<some "blake3:...">` optional-reference encoding, and the `Embedded`-aware bounded structural walker. `src/preserves/` is a thin `std` bridge: it keeps Preserves text syntax and converts between `preserves::IOValue` and `PackedValue` with explicit stacks, and Hegel differential properties check its bytes, digests, and strict-decode decisions against `preserves = "5.0.0-rc.10"`. The kernel establishes byte-level wire determinism only; it grants no authority and does not replace Preserves schema authoring.
+
 Communication surfaces that need canonical Preserves representations include:
 
 - actor and dataspace messages,

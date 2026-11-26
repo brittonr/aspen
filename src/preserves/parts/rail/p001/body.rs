@@ -118,9 +118,7 @@ pub const OCTET_REVIEW_MANIFEST_SCHEMA: &str = "molten.octet.review-manifest.v1"
 pub const OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA: &str = "molten.octet.source-gate-requirement.v1";
 pub const OCTET_SOURCE_GATE_VALIDATION_SCHEMA: &str = "molten.octet.source-gate-validation.v1";
 pub const OCTET_REMEDIATION_PLAN_SCHEMA: &str = "molten.octet.remediation-plan.v1";
-pub const HASH_ALGORITHM: &str = "blake3-preserves-packed-v1";
-const BLAKE3_REF_PREFIX: &str = "blake3:";
-const BLAKE3_HEX_LEN: usize = 64;
+pub const HASH_ALGORITHM: &str = molten_preserves_core::identity::HASH_ALGORITHM;
 
 // r[impl molten.runtime_spine.canonical_content_refs.shape]
 // r[impl molten.runtime_spine.canonical_content_refs.negative_tests]
@@ -179,6 +177,12 @@ impl TryFrom<String> for ContentRef {
     }
 }
 
+impl From<molten_preserves_core::identity::ContentRef> for ContentRef {
+    fn from(reference: molten_preserves_core::identity::ContentRef) -> Self {
+        Self(reference.into_string())
+    }
+}
+
 impl serde::Serialize for ContentRef {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -198,46 +202,25 @@ impl<'de> serde::Deserialize<'de> for ContentRef {
     }
 }
 
+// r[impl molten.runtime_spine.no_std_preserves_packed_kernel]
 pub fn validate_content_ref(value: &str) -> Result<()> {
-    let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
-        return Err(MoltenError::invalid_harness(format!(
-            "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
-        )));
-    };
-    validate_content_ref_hex(value, hex)
+    molten_preserves_core::identity::validate_ref(value).map_err(|error| identity_bridge::ref_failure(value, error))
 }
 
 pub fn content_ref_has_prefix(value: &str) -> bool {
-    value.starts_with(BLAKE3_REF_PREFIX)
+    molten_preserves_core::identity::has_ref_prefix(value)
 }
 
 pub fn content_ref_hex(value: &str) -> Result<&str> {
-    let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
-        return Err(MoltenError::invalid_harness(format!(
-            "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
-        )));
-    };
-    validate_content_ref_hex(value, hex)?;
-    Ok(hex)
+    molten_preserves_core::identity::ref_digest(value).map_err(|error| identity_bridge::ref_failure(value, error))
 }
 
 // r[impl molten.runtime_spine.canonical_content_refs.filename_readback]
 pub fn content_ref_from_hex(hex: &str) -> Result<String> {
-    let reference = format!("{BLAKE3_REF_PREFIX}{hex}");
-    validate_content_ref_hex(&reference, hex)?;
-    Ok(reference)
-}
-
-fn validate_content_ref_hex(value: &str, hex: &str) -> Result<()> {
-    if hex.len() != BLAKE3_HEX_LEN {
-        return Err(MoltenError::invalid_harness(format!(
-            "content ref must be {BLAKE3_REF_PREFIX}<64 lowercase hex chars>, got {value}"
-        )));
-    }
-    if !hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
-        return Err(MoltenError::invalid_harness(format!("content ref must use lowercase hex chars, got {value}")));
-    }
-    Ok(())
+    let reference = format!("{}{hex}", molten_preserves_core::identity::BLAKE3_REF_PREFIX);
+    molten_preserves_core::identity::ContentRef::from_hex(hex)
+        .map(molten_preserves_core::identity::ContentRef::into_string)
+        .map_err(|error| identity_bridge::ref_failure(&reference, error))
 }
 
 pub fn parse_text(source: &str) -> Result<IoValue> {
@@ -248,8 +231,9 @@ pub fn to_text(value: &IoValue) -> Result<String> {
     preserves::write_iovalue_text(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
+/// Canonical packed bytes of `value`, without annotations, from the kernel's borrowed encoder.
 pub fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
-    preserves::write_iovalue_packed(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
+    stream_bridge::encode_iovalue(value)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,17 +246,27 @@ pub struct StrictCanonicalDecode {
 // r[impl molten.preserves_canonical_bytes.strict_decode]
 // r[impl molten.preserves_canonical_bytes.noncanonical_denial]
 pub fn strict_canonical_decode(bytes: &[u8]) -> Result<StrictCanonicalDecode> {
-    let value = preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))?;
-    let canonical = canonical_bytes(&value)?;
-    if canonical.as_slice() != bytes {
-        return Err(MoltenError::invalid_harness(
-            "strict canonical Preserves decode failed: input bytes differ from canonical re-encoding",
-        ));
-    }
-    let value_ref = ContentRef::parse(content_ref_from_bytes(&canonical))?;
+    let limits = molten_preserves_core::reader::DecodeLimits::IN_MEMORY;
+    let packed = molten_preserves_core::reader::decode_canonical(bytes, &limits).map_err(strict_decode_failure)?;
     Ok(StrictCanonicalDecode {
-        value,
-        canonical_bytes: canonical,
-        value_ref,
+        value: value_bridge::iovalue_from_packed(&packed)?,
+        canonical_bytes: bytes.to_vec(),
+        value_ref: ContentRef::from(molten_preserves_core::identity::ContentRef::of_bytes(bytes)),
     })
+}
+
+/// Keeps the established failure classes: bytes no Preserves reader accepts are `Preserves`
+/// errors; parseable bytes that are not the canonical encoding of their value are denials.
+fn strict_decode_failure(error: molten_preserves_core::reader::failure::DecodeError) -> MoltenError {
+    match error.class() {
+        molten_preserves_core::reader::failure::DecodeErrorClass::Malformed => {
+            MoltenError::Preserves(format!("malformed packed Preserves input: {error}"))
+        }
+        molten_preserves_core::reader::failure::DecodeErrorClass::NonCanonical => MoltenError::invalid_harness(format!(
+            "strict canonical Preserves decode failed: input bytes differ from canonical re-encoding: {error}"
+        )),
+        molten_preserves_core::reader::failure::DecodeErrorClass::Limit => {
+            MoltenError::invalid_harness(format!("strict canonical Preserves decode failed: {error}"))
+        }
+    }
 }

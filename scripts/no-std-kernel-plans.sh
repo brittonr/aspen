@@ -18,6 +18,7 @@ root="${MOLTEN_ROOT:-$(git rev-parse --show-toplevel)}"
 plans="nix/no-std-kernels"
 kernels=(
   molten-composition-core
+  molten-preserves-core
   molten-reliability-model-core
   molten-runtime-admission-core
   molten-wasm-policy-core

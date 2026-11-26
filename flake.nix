@@ -796,6 +796,7 @@
           "molten-composition-core"
           "molten-core"
           "molten-node-host"
+          "molten-preserves-core"
           "molten-release-policy"
           "molten-reliability-model-core"
           "molten-runtime-admission-core"
@@ -1014,6 +1015,19 @@
             linkedAllowlist = [ ];
             compileProbeModule = "src/judgment.rs";
             sourceProbeModule = "src/vocabulary.rs";
+          };
+          # r[impl molten.project.molten_preserves_core_no_std_gate]
+          "molten-preserves-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+            ];
+            compileProbeModule = "src/writer.rs";
+            sourceProbeModule = "src/identity.rs";
           };
           "molten-reliability-model-core" = {
             linkedAllowlist = [
@@ -3286,6 +3300,7 @@
             # Full molten-core unit/property tests under the default std feature set.
             molten-core-tests = ws.test.check."molten-core";
             molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-preserves-core-no-std = noStdKernelCheck "molten-preserves-core";
             molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
             molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
             molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";

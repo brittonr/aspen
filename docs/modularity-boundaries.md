@@ -46,7 +46,7 @@ Cargo dependency classes for the current root crate:
 | Class | Dependencies | Boundary rule |
 | --- | --- | --- |
 | Core | `molten-core`, `blake3` for identity-only helpers | Pure functions over in-memory values; no filesystem, process, network, clock, Redb, Wasmtime, Steel execution, Nickel runtime, Iroh, or CLI shells. |
-| Codec | `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. |
+| Codec | `molten-preserves-core` (no_std canonical packed encoding, strict decoding, identity, traversal), `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. The canonical byte law is owned by `molten-preserves-core`; `preserves` supplies text syntax and `IOValue` interop through the `src/preserves/` bridge. |
 | Policy/evidence | `basalt`, `cairn`, `octet`, `trellis`, `nickel-lang` as authoring or evidence inputs | Constructs and verifies evidence-only values; does not grant authority or runtime trust by itself. |
 | Runtime | `syndicate`, `tokio`, `n0-future`, `tracing` | Produces deterministic state transitions and planned effects after admission; shells execute effects. |
 | Adapter | `iroh`, `iroh-blobs`, `iroh-docs`, `iroh-gossip`, `redb`, `wasmtime`, `wasmtime-wasi`, `wit-bindgen`, `wasmparser`, `steel-core` | Owns filesystem, transport, store, executor, and hostcall mechanics. Adapter availability is never trust. |
