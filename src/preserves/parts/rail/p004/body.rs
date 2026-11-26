@@ -9,7 +9,7 @@ pub fn required_sequence_field<'a>(
 ) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| MoltenError::from(ViewError::ExpectedSequence { field: field.to_owned() }))
 }
 
 pub fn record_string_field(value: &Value<IoValue>, record_name: &str, field: &str) -> Result<String> {
@@ -38,7 +38,7 @@ pub fn record_content_ref_sequence(
     let value = value_to_iovalue(value);
     let record = simple_record_fields(&value, record_name, 1)?;
     let values = required_sequence_field(&record[0], field)?;
-    ensure_toolkit_count_at_most(values.len(), maximum, field)?;
+    crate::bounded::ensure_count_at_most(values.len(), maximum, field)?;
     let mut refs = Vec::with_capacity(values.len());
     for item in values.iter() {
         refs.push(required_content_ref(item, field)?);
@@ -70,8 +70,9 @@ pub fn refs_sequence(refs: &[String]) -> IoValue {
 
 // r[impl molten.preserves_rail_toolkit.check_sets]
 pub fn checks_value(checks: &[(&str, &str)]) -> IoValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    let check = molten_preserves_core::build::CHECK_LABEL;
+    record(molten_preserves_core::build::CHECKS_LABEL, vec![sequence(
+        checks.iter().map(|(name, status)| record(check, vec![string(name), string(status)])).collect(),
     )])
 }
 
@@ -82,45 +83,43 @@ pub fn parse_checks_record(
 ) -> Result<Vec<ParsedCheck>> {
     let maximum = crate::bounded::usize_from_u64(maximum, "checks")?;
     let value = value_to_iovalue(value);
-    let record = simple_record_fields(&value, "checks", 1)?;
+    let record = simple_record_fields(&value, molten_preserves_core::build::CHECKS_LABEL, 1)?;
     let values = required_sequence_field(&record[0], "checks")?;
-    ensure_toolkit_count_at_most(values.len(), maximum, "checks")?;
+    crate::bounded::ensure_count_at_most(values.len(), maximum, "checks")?;
     let mut checks = Vec::with_capacity(values.len());
     let mut seen = std::collections::BTreeSet::new();
     for item in values.iter() {
-        let item = value_to_iovalue(item);
-        let check = simple_record_fields(&item, "check", 2)?;
-        let name = required_string_field(&check[0], "check name")?;
-        let status = required_string_field(&check[1], "check status")?;
-        if !matches!(status.as_str(), "pass" | "fail" | "deny") {
-            return Err(MoltenError::invalid_harness(format!("unsupported {context} check status {status}")));
+        let check = parse_check(item, context)?;
+        if !seen.insert(check.name.clone()) {
+            return Err(MoltenError::from(ViewError::DuplicateCheck {
+                context: context.to_owned(),
+                name: check.name,
+            }));
         }
-        if !seen.insert(name.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate {context} check {name}")));
-        }
-        checks.push(ParsedCheck { name, status });
+        checks.push(check);
     }
     Ok(checks)
+}
+
+fn parse_check(item: &Value<IoValue>, context: &str) -> Result<ParsedCheck> {
+    let item = value_to_iovalue(item);
+    let check = simple_record_fields(&item, molten_preserves_core::build::CHECK_LABEL, 2)?;
+    let name = required_string_field(&check[0], "check name")?;
+    let status = required_string_field(&check[1], "check status")?;
+    if !molten_preserves_core::view::ADMITTED_CHECK_STATUSES.contains(&status.as_str()) {
+        return Err(MoltenError::from(ViewError::UnsupportedContextCheckStatus {
+            context: context.to_owned(),
+            status,
+        }));
+    }
+    Ok(ParsedCheck { name, status })
 }
 
 /// Requires check names only: this establishes record shape, not verification. Statuses, including a
 /// constant `pass` on a denial label, are producer-described; admission uses the decision and bound refs.
 // r[impl molten.preserves_rail_toolkit.check_sets]
 pub fn require_checks_present(checks: &[ParsedCheck], expected: &[&str], context: &str) -> Result<()> {
-    for expected in expected {
-        if !checks.iter().any(|check| check.name == *expected) {
-            return Err(MoltenError::invalid_harness(format!("missing {context} check {expected}")));
-        }
-    }
-    Ok(())
-}
-
-fn ensure_toolkit_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count <= maximum {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
-    }
+    Ok(molten_preserves_core::view::require_checks_present(checks, expected, context)?)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

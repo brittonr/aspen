@@ -98,7 +98,7 @@ fn validate_hostcall_descriptor_boundary_record(
     })?;
     let operation_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_OPERATION_INDEX], "operation", FIELD_ARITY_ONE, spec, schema_ref)?;
     let operation = ensure_string(&operation_record[0], "operation", spec, schema_ref)?;
-    OperationId::parse(operation.as_ref()).map_err(|error| {
+    OperationId::parse(operation.as_ref()).map_err(MoltenError::from).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "{} schema validation deny: hostcall operation expected operation id using schema {}: {error}",
             spec.family, schema_ref
@@ -113,7 +113,7 @@ fn validate_hostcall_descriptor_boundary_record(
     validate_ref_sequence_record_with_contract(RefSequenceContractInput { value: &fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], label: "effects", spec, schema_ref, require_non_empty: true, require_unique: true })?;
     let replay_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", FIELD_ARITY_ONE, spec, schema_ref)?;
     let replay = ensure_string(&replay_record[0], "replay", spec, schema_ref)?;
-    ReplayClass::parse(replay.as_ref()).map_err(|error| {
+    ReplayClass::parse(replay.as_ref()).map_err(MoltenError::from).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "{} schema validation deny: hostcall replay class unsupported using schema {}: {error}",
             spec.family, schema_ref

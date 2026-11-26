@@ -1,4 +1,6 @@
 const REQUIRED_PRODUCTION_DEPENDENCIES: [&str; 3] = ["cap-fs-ext", "cap-std", "molten-core"];
+/// Optional `no_std` kernels whose typed errors `Failure` converts from (`src/error/convert.rs`).
+const ADMITTED_KERNEL_DEPENDENCIES: [&str; 1] = ["molten-preserves-core"];
 
 fn production_dependencies(source: &str) -> Result<std::collections::BTreeSet<String>, String> {
     let manifest = source.parse::<toml::Table>().map_err(|error| error.to_string())?;
@@ -14,7 +16,9 @@ fn validate_production_dependencies(source: &str) -> Result<(), Vec<String>> {
     let required = REQUIRED_PRODUCTION_DEPENDENCIES.into_iter().collect::<std::collections::BTreeSet<_>>();
     let mut diagnostics = dependencies
         .iter()
-        .filter(|dependency| !required.contains(dependency.as_str()))
+        .filter(|dependency| {
+            !required.contains(dependency.as_str()) && !ADMITTED_KERNEL_DEPENDENCIES.contains(&dependency.as_str())
+        })
         .map(|dependency| format!("forbidden node-host dependency: {dependency}"))
         .collect::<Vec<_>>();
     diagnostics.extend(

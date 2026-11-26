@@ -1,5 +1,4 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p000/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p004/body.rs"));
@@ -21,6 +20,9 @@ mod stream_bridge;
 mod value_bridge;
 
 #[cfg(test)]
+#[path = "bridge/tests/buildparity.rs"]
+mod builder_parity;
+#[cfg(test)]
 #[path = "bridge/tests/denials.rs"]
 mod denial_tests;
 #[cfg(test)]
@@ -29,3 +31,6 @@ mod differential_tests;
 #[cfg(test)]
 #[path = "bridge/tests/throughput.rs"]
 mod encoding_throughput;
+#[cfg(test)]
+#[path = "bridge/tests/viewparity.rs"]
+mod reader_parity;

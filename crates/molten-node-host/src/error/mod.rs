@@ -1,3 +1,5 @@
+mod convert;
+
 pub type Result<T> = std::result::Result<T, Failure>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

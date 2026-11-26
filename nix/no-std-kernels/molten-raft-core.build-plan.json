@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
-    "molten-raft-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
+    "molten-raft-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0"
   },
-  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
-  "inputsHash": "9cc55d2625f9e534ae73356e482899f6d0478fce26cb1dd82ab79e0dd8142eec",
+  "cargoLockHash": "78a999dad872b47323d1489cec075b28685bf2008bc74c49c3db4dc5d15d6e3e",
+  "inputsHash": "59fc2a96559a006adc94a00b831357d363126b32d6b8e2f7a97cb46fc5173317",
   "crates": {
     "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0": {
       "crateName": "choregraph-history",
@@ -244,7 +244,7 @@
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -300,7 +300,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0": {
       "crateName": "molten-raft-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -312,7 +312,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],

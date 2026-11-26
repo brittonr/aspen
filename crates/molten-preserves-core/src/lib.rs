@@ -12,7 +12,11 @@
 //! - `bounds`: the allocation-free shape preflight used before any decoding;
 //! - `identity`: lowercase-only `blake3:` content references, domain-separated hashing, and the
 //!   single `<none>` / `<some "blake3:...">` optional-reference encoding;
-//! - `inspect`: `Embedded`-aware bounded structural traversal for marker and reference detection.
+//! - `inspect`: `Embedded`-aware bounded structural traversal for marker and reference detection;
+//! - `schema`: the schema-id constants carried in Aspen's canonical records;
+//! - `build` and `view`: `PackedValue` record builders and readers that mirror the `molten` rail;
+//! - `bounded`: deny-before-mutate collection growth and checked count conversions;
+//! - `fault`: the typed, class-preserving error convention every kernel on this crate follows.
 //!
 //! Text syntax and `preserves::IOValue` interop stay in the `molten` shell (`src/preserves/`).
 // r[impl molten.runtime_spine.no_std_preserves_packed_kernel]
@@ -20,13 +24,19 @@
 
 extern crate alloc;
 
+pub mod bounded;
 pub mod bounds;
+pub mod build;
+pub mod fault;
 pub mod identity;
 pub mod incremental;
 pub mod inspect;
 pub mod model;
 pub mod reader;
+pub mod schema;
+mod shape;
 pub mod tags;
+pub mod view;
 pub mod writer;
 
 #[cfg(test)]

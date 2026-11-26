@@ -1,68 +1,35 @@
-pub(crate) trait VecSink<T> {
-    fn item_count(&self) -> usize;
-    fn reserve_items(&mut self, additional: usize);
-    fn push_item(&mut self, value: T);
-    fn extend_cloned_items(&mut self, incoming: &[T])
-    where T: Clone;
-    fn extend_items(&mut self, incoming: impl IntoIterator<Item = T>);
-}
+//! Bounded collection growth for the shell, delegating to `molten_preserves_core::bounded`.
+//!
+//! The kernel owns the deny-before-mutate rules and the messages; these wrappers keep the
+//! `crate::error::Result` signatures existing callers use, converting each `BoundError` into the
+//! same `Failure::InvalidHarness` message through `From<BoundError> for Failure`.
 
-impl<T> VecSink<T> for Vec<T> {
-    fn item_count(&self) -> usize {
-        self.len()
-    }
-
-    fn reserve_items(&mut self, additional: usize) {
-        self.reserve(additional);
-    }
-
-    fn push_item(&mut self, value: T) {
-        self.push(value);
-    }
-
-    fn extend_cloned_items(&mut self, incoming: &[T])
-    where T: Clone {
-        self.extend(incoming.iter().cloned());
-    }
-
-    fn extend_items(&mut self, incoming: impl IntoIterator<Item = T>) {
-        self.extend(incoming);
-    }
-}
+use molten_preserves_core::bounded::Count;
+pub(crate) use molten_preserves_core::bounded::VecSink;
 
 pub(crate) fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> crate::error::Result<()> {
-    if count <= maximum {
-        return Ok(());
-    }
-    Err(crate::error::Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+    Ok(molten_preserves_core::bounded::ensure_count_at_most(count, maximum, label)?)
 }
 
 pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> crate::error::Result<usize> {
-    let total = left
-        .checked_add(right)
-        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} count overflow")))?;
-    ensure_count_at_most(total, maximum, label)?;
-    Ok(total)
+    let total = molten_preserves_core::bounded::checked_count_sum(left, right, maximum, label)?;
+    Ok(total.to_usize(label)?)
 }
 
 /// Converts a public `u64` bound or count into the host `usize`, denying values the platform cannot
 /// index.
 pub(crate) fn usize_from_u64(value: u64, label: &str) -> crate::error::Result<usize> {
-    usize::try_from(value)
-        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} {value} does not fit usize")))
+    Ok(value.to_usize(label)?)
 }
 
 /// Converts a host `usize` count into the public `u64` representation, denying a count that does
 /// not fit.
 pub(crate) fn u64_from_usize(value: usize, label: &str) -> crate::error::Result<u64> {
-    u64::try_from(value)
-        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} {value} does not fit u64")))
+    Ok(value.to_u64(label)?)
 }
 
 pub(crate) fn push<T>(values: &mut impl VecSink<T>, value: T, maximum: usize, label: &str) -> crate::error::Result<()> {
-    checked_count_sum(values.item_count(), 1, maximum, label)?;
-    values.push_item(value);
-    Ok(())
+    Ok(molten_preserves_core::bounded::push(values, value, maximum, label)?)
 }
 
 pub(crate) fn extend<T>(
@@ -74,10 +41,7 @@ pub(crate) fn extend<T>(
 where
     T: Clone,
 {
-    checked_count_sum(values.item_count(), incoming.len(), maximum, label)?;
-    values.reserve_items(incoming.len());
-    values.extend_cloned_items(incoming);
-    Ok(())
+    Ok(molten_preserves_core::bounded::extend(values, incoming, maximum, label)?)
 }
 
 pub(crate) trait PushLimited<T>: VecSink<T> {
@@ -92,72 +56,47 @@ where S: VecSink<T>
     }
 }
 
-pub(crate) struct DiagnosticSink<'a, S> {
-    sink: &'a mut S,
-    maximum: usize,
-    label: &'a str,
-}
+pub(crate) struct DiagnosticSink<'a, S>(molten_preserves_core::bounded::DiagnosticSink<'a, S, usize>);
 
 impl<'a, S> DiagnosticSink<'a, S>
 where S: VecSink<String>
 {
     pub(crate) fn new(sink: &'a mut S, maximum: usize, label: &'a str) -> Self {
-        Self { sink, maximum, label }
+        Self(molten_preserves_core::bounded::DiagnosticSink::new(sink, maximum, label))
     }
 
     pub(crate) fn push(&mut self, diagnostic: impl Into<String>) -> crate::error::Result<()> {
-        push(self.sink, diagnostic.into(), self.maximum, self.label)
+        Ok(self.0.push(diagnostic)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     const TEST_LIMIT: usize = 2;
-    const TEST_OVERFLOW_LEFT: usize = usize::MAX;
-    const TEST_ONE: usize = 1;
 
+    /// The kernel's denial reaches shell callers as the same `InvalidHarness` failure as before.
+    // r[verify molten.runtime_spine.no_std_preserves_packed_kernel]
     #[test]
-    fn push_allows_exact_limit_and_denies_one_past_without_mutation() {
-        let mut values = Vec::new();
-        push(&mut values, "first", TEST_LIMIT, "test values").expect("first push");
-        push(&mut values, "second", TEST_LIMIT, "test values").expect("second push");
-        assert_eq!(values, vec!["first", "second"]);
+    fn shell_wrappers_keep_the_failure_class_and_message() {
+        let mut values = vec!["first", "second"];
+        let error = super::push(&mut values, "third", TEST_LIMIT, "test values").expect_err("one past limit");
+        assert_eq!(error, crate::error::Failure::invalid_harness("test values count 3 exceeds maximum 2"));
+        assert_eq!(values, ["first", "second"]);
 
-        let before = values.clone();
-        let error = push(&mut values, "third", TEST_LIMIT, "test values").expect_err("one-past-limit push denies");
-        assert!(error.to_string().contains("test values count 3 exceeds maximum 2"));
-        assert_eq!(values, before);
+        let overflow = super::checked_count_sum(usize::MAX, 1, usize::MAX, "overflow values").expect_err("overflow");
+        assert_eq!(overflow, crate::error::Failure::invalid_harness("overflow values count overflow"));
     }
 
     #[test]
-    fn checked_count_sum_denies_arithmetic_overflow() {
-        let error = checked_count_sum(TEST_OVERFLOW_LEFT, TEST_ONE, TEST_OVERFLOW_LEFT, "overflow values")
-            .expect_err("overflow denies");
-        assert!(error.to_string().contains("overflow values count overflow"));
-    }
-
-    #[test]
-    fn extend_denies_before_appending_any_item() {
-        let mut values = vec!["existing".to_string()];
-        let incoming = vec!["first".to_string(), "second".to_string()];
-        let before = values.clone();
-        let error = extend(&mut values, &incoming, TEST_LIMIT, "extend values").expect_err("extend over limit denies");
-        assert!(error.to_string().contains("extend values count 3 exceeds maximum 2"));
-        assert_eq!(values, before);
-    }
-
-    #[test]
-    fn diagnostic_sink_uses_push_behavior() {
-        let mut diagnostics = Vec::new();
-        {
-            let mut sink = DiagnosticSink::new(&mut diagnostics, TEST_LIMIT, "diagnostics");
-            sink.push("first").expect("first diagnostic");
-            sink.push("second").expect("second diagnostic");
-            let error = sink.push("third").expect_err("diagnostic overflow denies");
-            assert!(error.to_string().contains("diagnostics count 3 exceeds maximum 2"));
-        }
-        assert_eq!(diagnostics, vec!["first".to_string(), "second".to_string()]);
+    fn shell_sinks_delegate_to_the_kernel_bounds() {
+        let mut diagnostics: Vec<String> = Vec::new();
+        let mut sink = super::DiagnosticSink::new(&mut diagnostics, 1, "diagnostics");
+        sink.push("first").expect("first diagnostic");
+        let error = sink.push("second").expect_err("past the limit");
+        assert_eq!(error.to_string(), "invalid harness artifact: diagnostics count 2 exceeds maximum 1");
+        let mut values = vec![1_u8];
+        super::PushLimited::push_limited(&mut values, 2, TEST_LIMIT, "values").expect("within limit");
+        assert!(super::extend(&mut values, &[3], TEST_LIMIT, "values").is_err());
+        assert_eq!(super::ensure_count_at_most(TEST_LIMIT, TEST_LIMIT, "values"), Ok(()));
     }
 }

@@ -89,7 +89,7 @@ fn validate_decision_record(
 ) -> Result<()> {
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let text = ensure_string(&record[0], label, spec, schema_ref)?;
-    Decision::parse(text.as_ref()).map(|_| ()).map_err(|error| {
+    Decision::parse(text.as_ref()).map(|_| ()).map_err(MoltenError::from).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "{} schema validation deny: field {label} expected decision using schema {}: {error}",
             spec.family, schema_ref
@@ -227,10 +227,13 @@ fn validate_optional_ref_boundary_record(
         Err(identity_bridge::OptionalRefIssue::NotString) => {
             Err(boundary_field_error(spec, label, "canonical content ref string", schema_ref))
         }
-        Err(identity_bridge::OptionalRefIssue::InvalidRef(error)) => Err(MoltenError::invalid_harness(format!(
-            "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
-            spec.family, schema_ref
-        ))),
+        Err(identity_bridge::OptionalRefIssue::InvalidRef { value, error }) => {
+            let error = identity_bridge::ref_failure(&value, error);
+            Err(MoltenError::invalid_harness(format!(
+                "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
+                spec.family, schema_ref
+            )))
+        }
         Err(identity_bridge::OptionalRefIssue::Conversion(error)) => Err(error),
     }
 }
@@ -257,7 +260,7 @@ fn validate_checks_boundary_record(
                 spec.family, schema_ref
             )));
         }
-        CheckStatus::parse(status.as_ref()).map_err(|error| {
+        CheckStatus::parse(status.as_ref()).map_err(MoltenError::from).map_err(|error| {
             MoltenError::invalid_harness(format!(
                 "{} schema validation deny: unsupported check status using schema {}: {error}",
                 spec.family, schema_ref
