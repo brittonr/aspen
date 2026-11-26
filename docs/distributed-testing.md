@@ -95,6 +95,42 @@ whole-runtime-correctness, production-readiness, or performance evidence.
 
 The local multiprocess harness model has a pure planner that validates node identities, state-root handles, transport handles, command-plan refs, expected receipt refs, and cleanup policy. The shell may spawn processes and collect artifacts, but the plan denies state-root collisions, transport collisions, stale tickets, missing receipts, child timeouts, orphaned children, or missing cleanup before accepting local pass evidence. `local-multiprocess-executable-run-v1` binds the shell observations to the pure plan and local run receipt. Local multiprocess receipts are local integration evidence only; they do not replace NixOS VM, WAN/live, authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness evidence.
 
+## Native capability qualification producers
+
+`molten evidence qualify --source-root <root> --scenario <id> --out <file>` runs one fixed scenario of a reviewed
+capability in `config/capability-report/capabilities.json` and writes a `capability-runtime-execution-v1` receipt.
+The receipt binds the exact subject (source, build, dependency closure, compiled features, execution profile, adapter,
+platform, environment), the current signed-source validation, the fixed scenario plan and the runtime artifact. Source
+admission runs before any execution; without an independently admitted signed output nothing executes.
+
+Each product scenario is bound to exactly one requirement, one family and one coverage kind, and drives the actual
+runtime path:
+
+| Capability | Environment / profile | Runtime path |
+| --- | --- | --- |
+| `durable-state-recovery` | same-process / `native-host-redb-v1` | Redb durable-state adapter: append and checkpoint, close and reopen, admitted recovery and content-verified restore; mismatched snapshot identity, corrupted payload (quarantine on reopen) and stale generation deny |
+| `effect-uncertainty` | distinct-process / `native-process` | live bounded-execution adapter running a `/bin/sh` child that first creates a start marker in its workspace, then exits without reading its input: the started effect has no definitive completion (unknown, reconciliation required, never published); crossed resolution and spawn failure start no child and stay definite pre-start outcomes. **Partial** for `native_effect_uncertainty`: the capability-rooted service host, driven by a producer-owned runtime port around that child effect (not the native supervisor), reports the typed uncertain outcome and keeps delivered durable work `unknown` across host reopen, never readmitting, redelivering or repeating it |
+| `cross-process-transport` | distinct-process / `iroh-cross-process-v1` | a listener peer process hands off its canonical endpoint descriptor; the producer imports it against an independently derived listener identity and exchanges one bounded Iroh frame; tampered descriptor refs, an unexpected identity and a stale generation deny before dial; a listener that reads the submitted frame (payload ref equal to the client's frame ref) and withholds the acknowledgement leaves it undelivered without automatic retry, while an accept timeout is reported as a distinct no-frame outcome |
+| `world-replay-promotion-restore` | same-process / `runtime-spine-committed-turn-v1` | world replay, logical restore and branch activation under current admission, with stale or revoked facts denied before execution or activation |
+| `control-plane-failover` | distinct-process / `live-raft-static-v1` | three replica peer processes over the live Raft transport: commit survives crash and durable restart, a stale leader is fenced, and observed quorum evidence validates while forged quorum evidence is denied |
+
+Distinct-process peers are the same admitted executable started as `molten evidence qualify-peer --role <role>
+--run-directory <dir>`; a peer emits no evidence and the producer kills and reaps it on every exit path. Each product
+run reduces what it observed to a deterministic `capability-product-observation-v1` record: named invariant checks
+(all must hold) plus the canonical receipts the runtime emitted. Scratch paths, ports, process ids, wall-clock time,
+error text and elected leader identities never enter it, so the admitted binary's independent re-execution
+(`--scenario readback`) reproduces the same bytes; `tools/capability-report.rs` accepts a passing receipt only when it
+equals that re-execution, so edited observations, flipped checks, relabelled scenarios, swapped plans or widened
+environments fail closed. A runtime error is retained as a canonical failure and never promoted.
+
+`tests/evidence-matrix.ncl` binds each scenario row to the canonical refs of its plan and of its subject-independent
+runtime artifact; `capability_qualification` tests re-execute every scenario and require those exact refs.
+`scripts/qualify-capability-report.py` qualifies each capability under its own subject. This is one-host evidence.
+These families stay **unqualified** (no producer): `post-effect-uncertainty-same-process`, every `*-nixos-vm` and
+`*-cross-host` family, and `cross-host-transport`. Nothing here establishes NixOS VM, cross-host, production or
+release qualification. Each scenario's unit test runs it once and must reproduce its checked-in matrix ref; world
+and control-plane scenario tests carry a reviewed nextest budget (`.config/nextest.toml`).
+
 ## Outside-in fault track
 
 r[impl molten.outside_in.observation] The outside-in tier (`tests/outside_in/`, nextest profile `outside-in`) runs ordinary node processes through public entry points over the real Iroh transport and a real local Redb store. The receiver is a node state root driven by `molten node init`, `run`, `live-peer-admit`, and `serve --live-iroh`. The client is a separate `molten node control-ingress-live-send` process. The scenario reads histories through `molten node control-history`. The live control path's Redb store is the receiver's delivery idempotency store, `control/idempotency/delivery-idempotency.redb`.

@@ -8,6 +8,7 @@ pub fn build(matrix: &Matrix, mapping: &Mapping, input: &Input, observed: &BTree
     if matrix.schema != "molten.testing.evidence-matrix.v1" || mapping.schema != "molten.capability-mapping.v1"
         || input.schema != "molten.capability-report.v2" { return Err("unsupported matrix, mapping or input schema".into()); }
     validate_subject(&input.subject)?;
+    validate_matrix(matrix)?;
     unique(input.capabilities.iter().map(|entry| entry.id.as_str()), "input capability")?;
     unique(mapping.capabilities.iter().map(|entry| entry.id.as_str()), "mapping capability")?;
     let mut capabilities = Vec::new();
@@ -91,6 +92,26 @@ pub fn validate_subject(subject: &Subject) -> Result<(), String> {
     }
     unique(subject.feature_set.iter().map(String::as_str), "feature")?;
     unique(subject.adapter_refs.iter().map(String::as_str), "adapter")?; Ok(())
+}
+
+// Placeholder digests and one command aliased across rows are not exact
+// requirement-bound evidence; the whole matrix is denied, not silently filtered.
+// r[impl molten.testing.evidence_matrix_native_producers]
+pub fn validate_matrix(matrix: &Matrix) -> Result<(), String> {
+    unique(matrix.entries.iter().map(|entry| entry.command.as_str()), "matrix command (aliased evidence)")?;
+    for entry in &matrix.entries {
+        for reference in entry.artifact_refs.iter().chain(std::iter::once(&entry.receipt_ref)) {
+            if !super::artifacts::reference(reference) || molten::hardening_core::is_placeholder_ref(reference) {
+                return Err(format!("placeholder or malformed matrix ref for {}: {reference}", entry.requirement_id));
+            }
+        }
+    }
+    for exemption in &matrix.exemptions {
+        if !super::artifacts::reference(&exemption.evidence_ref) || molten::hardening_core::is_placeholder_ref(&exemption.evidence_ref) {
+            return Err(format!("placeholder or malformed exemption evidence for {}", exemption.requirement_id));
+        }
+    }
+    Ok(())
 }
 
 fn unique<'a>(values: impl Iterator<Item = &'a str>, label: &str) -> Result<(), String> {

@@ -233,6 +233,22 @@ fn validate_ref(reference: &str, label: &str) -> Result<()> {
         .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
+/// An invented digest is not the identity of any real artifact: a sequential
+/// placeholder (at least 128 leading zero bits, e.g. `blake3:000…0101`) or a
+/// single repeated nibble (e.g. `blake3:aaaa…`). Malformed refs are reported
+/// separately as stale refs.
+// r[impl molten.testing.evidence_matrix_native_producers]
+pub fn is_placeholder_ref(reference: &str) -> bool {
+    const PLACEHOLDER_ZERO_PREFIX: &str = "00000000000000000000000000000000";
+    let Some(hex) = reference.strip_prefix("blake3:") else {
+        return false;
+    };
+    let Some(first) = hex.bytes().next() else {
+        return false;
+    };
+    hex.starts_with(PLACEHOLDER_ZERO_PREFIX) || hex.bytes().all(|byte| byte == first)
+}
+
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
         Err(MoltenError::invalid_harness(format!("{label} must not be empty")))

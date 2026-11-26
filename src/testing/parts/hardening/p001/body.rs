@@ -77,6 +77,7 @@ pub fn build_evidence_matrix_manifest(input: &EvidenceMatrixInput) -> Result<Evi
     let requirement_map = requirement_map(&input.requirements)?;
     let mut diagnostics = Vec::new();
     let mut duplicate_keys = OrderedSet::new();
+    let mut commands = OrderedSet::new();
     let mut positive = OrderedSet::new();
     let mut negative = OrderedSet::new();
     diagnostics.reserve(input.entries.len());
@@ -85,6 +86,11 @@ pub fn build_evidence_matrix_manifest(input: &EvidenceMatrixInput) -> Result<Evi
         let key = format!("{}|{}|{}|{}", entry.requirement_id, entry.coverage_kind, entry.evidence_scope, entry.target);
         if !duplicate_keys.insert(key.clone()) {
             diagnostics.push(format!("duplicate-entry:{key}"));
+        }
+        // One executed command is evidence for one row; reusing it across
+        // rows (or across positive and negative) aliases unrelated claims.
+        if !commands.insert(entry.command.clone()) {
+            diagnostics.push(format!("aliased-command:{}", entry.command));
         }
         match entry.coverage_kind.as_str() {
             "positive" => {

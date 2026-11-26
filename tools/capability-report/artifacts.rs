@@ -56,7 +56,8 @@ pub fn inspect(evidence: &Evidence, root: &Path, subject: &Subject, source: Opti
                 result.validated = true;
                 result.exact_subject_bound = declarations_match && scope_matches;
                 if !scope_matches { result.diagnostics.push("native requirement/family/scenario/coverage binding mismatch".into()); }
-                result.diagnostics.push("finite native harness simulation only; not live transport, durability, cross-host or release qualification".into());
+                result.diagnostics.push(format!("native {:?} execution of family {} on one host only; not nixos-vm, cross-host, production or release qualification",
+                    native.subject.environment, native.family));
                 return result;
             }
             Err(error) => result.diagnostics.push(format!("native exact-subject validation denied: {error}")),

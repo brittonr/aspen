@@ -118,6 +118,14 @@ pub(crate) enum Evidence {
         #[arg(long)]
         out: std::path::PathBuf,
     },
+    /// Internal peer process of a distinct-process product producer.
+    #[command(hide = true)]
+    QualifyPeer {
+        #[arg(long)]
+        role: String,
+        #[arg(long)]
+        run_directory: std::path::PathBuf,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]

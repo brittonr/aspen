@@ -260,6 +260,11 @@ fn validate_matrix_entry(
     if let Some(reference) = entry.receipt_ref.as_ref() {
         validate_ref_with_diagnostics(reference, "matrix receipt", diagnostics);
     }
+    for reference in entry.artifact_refs.iter().chain(entry.receipt_ref.as_ref()) {
+        if is_placeholder_ref(reference) {
+            diagnostics.push_item(format!("placeholder-ref:{}:{reference}", entry.requirement_id));
+        }
+    }
     for caveat in &entry.caveats {
         validate_text("matrix caveat", caveat)?;
     }
@@ -277,6 +282,9 @@ fn validate_matrix_exemption(
     }
     validate_text("matrix exemption reason", &exemption.reason)?;
     validate_ref_with_diagnostics(&exemption.evidence_ref, "matrix exemption evidence", diagnostics);
+    if is_placeholder_ref(&exemption.evidence_ref) {
+        diagnostics.push_item(format!("placeholder-ref:{}:{}", exemption.requirement_id, exemption.evidence_ref));
+    }
     validate_text("matrix exemption scope", &exemption.scope)?;
     validate_text("matrix exemption review note", &exemption.review_note)
 }
