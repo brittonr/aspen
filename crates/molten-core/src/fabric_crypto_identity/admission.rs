@@ -235,7 +235,7 @@ pub fn evaluate_verification(profile: &CryptoAdapterProfile, request: &Verificat
             actual: request.observed.generation,
         });
     }
-    if !request.signer_currentness.permits_signing() {
+    if !request.signer_currentness.permits_verification() {
         issues.push(CryptoIdentityIssue::HandleNotCurrent(request.signer_currentness));
     }
     if request.observed.signature_bytes == 0 || request.observed.signature_bytes > profile.max_signature_bytes {
@@ -274,6 +274,7 @@ pub fn admit_profile_for_production(profile: &CryptoAdapterProfile) -> Result<()
 }
 
 // r[impl molten.crypto_identity.redaction]
+// r[impl molten.crypto_identity.status_handle_reference]
 pub fn redact_adapter_status(
     input: &AdapterDiagnosticInput,
 ) -> Result<RedactedAdapterStatus, Vec<CryptoIdentityIssue>> {
@@ -281,6 +282,9 @@ pub fn redact_adapter_status(
     validate_ref("status-profile-ref", &input.profile_ref, &mut issues);
     if let Some(public_key_ref) = input.public_key_ref.as_deref() {
         validate_ref("status-public-key-ref", public_key_ref, &mut issues);
+    }
+    if let Some(handle_ref) = input.handle_ref.as_deref() {
+        validate_ref("status-handle-ref", handle_ref, &mut issues);
     }
     if input.receipt_refs.len() > MAX_CRYPTO_COLLECTION_ITEMS {
         issues.push(CryptoIdentityIssue::CollectionLimitExceeded("status-receipt-refs"));
@@ -302,6 +306,7 @@ pub fn redact_adapter_status(
         permission_status: input.permission_status,
         backend_class: input.backend_class,
         public_key_ref: input.public_key_ref.clone(),
+        handle_ref: input.handle_ref.clone(),
         receipt_refs: input.receipt_refs.clone(),
         has_redacted_backend_locator: input.backend_locator.is_some(),
         has_redacted_error: input.raw_error.is_some(),

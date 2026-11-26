@@ -16,7 +16,11 @@ pub(crate) struct Entry {
 }
 
 pub(crate) fn entries() -> Vec<Entry> {
-    let mut entries = Vec::new();
+    let rows = MATRIX
+        .lines()
+        .filter(|line| line.trim().split_once(" = ").is_some_and(|(key, _)| key == "requirement_id"))
+        .count();
+    let mut entries = Vec::with_capacity(rows);
     let mut current: Option<Entry> = None;
     for line in MATRIX.lines().map(str::trim) {
         let Some((key, value)) = line.split_once(" = ") else {

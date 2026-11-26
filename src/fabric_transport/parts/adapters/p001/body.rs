@@ -133,8 +133,6 @@ async fn run_iroh_loopback(
     payload: &[u8],
     max_frame_bytes: u64,
 ) -> crate::error::Result<(Vec<u8>, String)> {
-    let read_limit = usize::try_from(max_frame_bytes)
-        .map_err(|_| crate::error::Failure::invalid_harness("Iroh read bound does not fit usize"))?;
     let timeout = std::time::Duration::from_secs(LIVE_LOOPBACK_TIMEOUT_SECONDS);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let alpn_bytes = alpn.as_bytes().to_vec();
@@ -143,7 +141,7 @@ async fn run_iroh_loopback(
     lookup.add_endpoint_info(server.addr());
     lookup.add_endpoint_info(client.addr());
 
-    let server_task = tokio::spawn(echo_one_stream(server.clone(), timeout, read_limit));
+    let server_task = tokio::spawn(echo_one_stream(server.clone(), timeout, max_frame_bytes));
 
     let client_result = async {
         let connection = tokio::time::timeout(timeout, client.connect(server.addr(), &alpn_bytes))
@@ -154,15 +152,12 @@ async fn run_iroh_loopback(
             .await
             .map_err(|_| crate::error::Failure::invalid_harness("live Iroh stream open timed out"))?
             .map_err(iroh_error)?;
-        tokio::time::timeout(timeout, send.write_all(payload))
+        write_bounded_frame(&mut send, payload, max_frame_bytes, timeout)
             .await
-            .map_err(|_| crate::error::Failure::invalid_harness("live Iroh frame write timed out"))?
-            .map_err(iroh_error)?;
-        send.finish().map_err(iroh_error)?;
-        let echoed = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
+            .map_err(|failure| in_loopback_phase("client write", failure))?;
+        let echoed = read_bounded_frame(&mut receive, max_frame_bytes, timeout)
             .await
-            .map_err(|_| crate::error::Failure::invalid_harness("live Iroh echo read timed out"))?
-            .map_err(iroh_error)?;
+            .map_err(|failure| in_loopback_phase("client echo read", failure))?;
         connection.close(IROH_CLOSE_CODE.into(), IROH_CLOSE_REASON);
         Ok::<_, crate::error::Failure>(echoed)
     }
@@ -194,12 +189,14 @@ async fn bind_loopback_endpoint(
         .map_err(iroh_error)
 }
 
-/// Accepts one connection and one bidirectional stream, echoes the bounded frame, and waits for the
-/// peer to close.
+/// Accepts one connection and one bidirectional stream, echoes the length-prefixed bounded frame,
+/// and waits for the peer to close. Framing is the cross-process shell's: an over-bound or zero
+/// length is refused before allocation, and a short or trailing payload is refused.
+// r[impl molten.fabric_transport.flow_control]
 async fn echo_one_stream(
     server_endpoint: iroh::Endpoint,
     timeout: std::time::Duration,
-    read_limit: usize,
+    max_frame_bytes: u64,
 ) -> crate::error::Result<(Vec<u8>, String)> {
     let incoming = tokio::time::timeout(timeout, server_endpoint.accept())
         .await
@@ -214,19 +211,24 @@ async fn echo_one_stream(
         .await
         .map_err(|_| crate::error::Failure::invalid_harness("live Iroh stream accept timed out"))?
         .map_err(iroh_error)?;
-    let received = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
+    let received = read_bounded_frame(&mut receive, max_frame_bytes, timeout)
         .await
-        .map_err(|_| crate::error::Failure::invalid_harness("live Iroh bounded frame read timed out"))?
-        .map_err(iroh_error)?;
-    tokio::time::timeout(timeout, send.write_all(&received))
+        .map_err(|failure| in_loopback_phase("server read", failure))?;
+    write_bounded_frame(&mut send, &received, max_frame_bytes, timeout)
         .await
-        .map_err(|_| crate::error::Failure::invalid_harness("live Iroh echo write timed out"))?
-        .map_err(iroh_error)?;
-    send.finish().map_err(iroh_error)?;
+        .map_err(|failure| in_loopback_phase("server echo write", failure))?;
     tokio::time::timeout(timeout, connection.closed())
         .await
         .map_err(|_| crate::error::Failure::invalid_harness("live Iroh peer close timed out"))?;
     Ok((received, remote_transport_identity_ref))
+}
+
+/// Name the loopback phase on a shared frame-helper failure, keeping its failure class.
+fn in_loopback_phase(phase: &str, failure: crate::error::Failure) -> crate::error::Failure {
+    if let crate::error::Failure::InvalidHarness(message) = &failure {
+        return crate::error::Failure::invalid_harness(format!("live loopback {phase}: {message}"));
+    }
+    failure
 }
 
 fn command_session_id(command: &TransportCommand) -> Option<&ScopedTransportId> {

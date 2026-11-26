@@ -5,9 +5,9 @@
     /// The scanned inventory measured for fixture receipts; every fixture finding path is part of it.
     const SCANNED_SOURCES: &[ContentSource<'static>] = &[
         ContentSource { path: "src/cli/evidence/gate/io.rs", bytes: b"fn gate_io() {}\n" },
-        ContentSource { path: "src/chunk/parts/store/p001/body.rs", bytes: b"fn store() {}\n" },
+        ContentSource { path: "src/chunk/store/local/ingest.rs", bytes: b"fn store() {}\n" },
         ContentSource { path: "src/cli/runtime/repro/bundle.rs", bytes: b"fn bundle() {}\n" },
-        ContentSource { path: "src/node/parts/daemon/p020/body.rs", bytes: b"fn daemon() {}\n" },
+        ContentSource { path: "src/node/daemon/live/inbound.rs", bytes: b"fn daemon() {}\n" },
         ContentSource { path: "src/plugin/host.rs", bytes: b"fn host() {}\n" },
     ];
     const STALE_RULE_BUNDLE_REF: &str = "blake3:3333333333333333333333333333333333333333333333333333333333333333";
@@ -113,7 +113,7 @@
             .iter()
             .find(|surface| surface.id == "node-state-adapters")
             .expect("node-state-adapters surface");
-        assert!(node_state.scan_scopes.iter().any(|scope| scope == "src/node/parts/daemon/p*/body.rs"));
+        assert!(node_state.scan_scopes.iter().any(|scope| scope == "src/node/daemon/**/*.rs"));
         for scope in profile.surfaces.iter().flat_map(|surface| &surface.scan_scopes) {
             assert!(!scope.contains(' '), "scan scope {scope:?} must be a path or glob, not prose");
         }
@@ -139,7 +139,7 @@
         let receipt = build_audit_receipt(scan_input(profile, rule_bundle_hash, vec![finding(
             "node-state-root-reacquisition",
             "node-state-adapters",
-            "src/node/parts/daemon/p020/body.rs",
+            "src/node/daemon/live/inbound.rs",
         )]));
 
         assert!(!receipt.valid());

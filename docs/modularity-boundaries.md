@@ -46,7 +46,7 @@ Cargo dependency classes for the current root crate:
 | Class | Dependencies | Boundary rule |
 | --- | --- | --- |
 | Core | `molten-core`, `blake3` for identity-only helpers | Pure functions over in-memory values; no filesystem, process, network, clock, Redb, Wasmtime, Steel execution, Nickel runtime, Iroh, or CLI shells. |
-| Codec | `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. |
+| Codec | `molten-preserves-core` (no_std canonical packed encoding, strict decoding, identity, traversal), `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. The canonical byte law is owned by `molten-preserves-core`; `preserves` supplies text syntax and `IOValue` interop through the `src/preserves/` bridge. |
 | Policy/evidence | `basalt`, `cairn`, `octet`, `trellis`, `nickel-lang` as authoring or evidence inputs | Constructs and verifies evidence-only values; does not grant authority or runtime trust by itself. |
 | Runtime | `syndicate`, `tokio`, `n0-future`, `tracing` | Produces deterministic state transitions and planned effects after admission; shells execute effects. |
 | Adapter | `iroh`, `iroh-blobs`, `iroh-docs`, `iroh-gossip`, `redb`, `wasmtime`, `wasmtime-wasi`, `wit-bindgen`, `wasmparser`, `steel-core` | Owns filesystem, transport, store, executor, and hostcall mechanics. Adapter availability is never trust. |
@@ -59,7 +59,7 @@ Dependency-direction rules are authored as Nickel data in `docs/dependency-bound
 
 `molten-core` contains no `std::fs` calls. The root crate is not uniformly pure. `std::fs::` appears at 781 call sites across 236 files under `src/`. They concentrate in CLI shells (`src/cli/`), node state and daemon shells (`src/node/`), the cluster harness, component RPC, Wasm tooling, and Raft durability. Ongoing node I/O is meant to go through `NodeStateRoot` and typed store roots. See [node-state filesystem authority](node-state-filesystem-authority.md). A `std::fs` call outside those roots is a review finding, not an approved pattern.
 
-Only the harness schema evaluates Nickel in-process: its policy, budget, and capability source checks call `nickel_export_json` in `src/harness/parts/schema/p020/body.rs`, which uses `nickel-lang`. Job-graph construction lowering under the `job-dag-construction` feature (`src/job/authoring/construction*.rs`) does not evaluate in-process. It admits captured modules through `nickel-eval` and runs them in the separate `molten-nickel-eval-worker` process, launched only through `nickel_eval::captured::evaluate_isolated` with an explicitly selected path.
+Only the harness schema evaluates Nickel in-process: its policy, budget, and capability source checks call `nickel_export_json` in `src/harness/schema/gates/evaluator.rs`, which uses `nickel-lang`. Job-graph construction lowering under the `job-dag-construction` feature (`src/job/authoring/construction*.rs`) does not evaluate in-process. It admits captured modules through `nickel-eval` and runs them in the separate `molten-nickel-eval-worker` process, launched only through `nickel_eval::captured::evaluate_isolated` with an explicitly selected path.
 
 Fixture tests may also run the `nickel` CLI. Policy source (`cairn-policy/default.ncl`, `cairn-policy/contracts.ncl`, and docs contracts) is authored in Nickel and exported to checked JSON. The `contract-export-drift-gate` flake check re-exports `cairn-policy/default.ncl` and fails on any difference from `cairn-policy/generated/cairn-policy.json`. Runtime admission may consume checked exports, canonical refs, or policy-gate receipts; it must not treat Nickel evaluation, Cairn policy export, or policy tooling availability as live authority. An earlier `molten_core::policy` freshness validator duplicated that drift gate without a caller and was removed.
 
@@ -91,28 +91,68 @@ The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and ou
 
 ## Semantic module layout
 
-The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), harness schema (`src/harness/schema.rs`), and node daemon (`src/node/daemon.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. Converting them into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
+Retention (`src/retention/mod.rs`) and job DAG (`src/job/dag.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. The node daemon (`src/node/daemon.rs`) is converted; see [Node daemon layout](#node-daemon-layout). The harness schema and the chunk store are converted as described below. Converting the rest into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
 
-- re-export every public item explicitly from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths;
+- re-export every public item from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths (explicitly where the list fits the file limit; the node daemon uses one glob per submodule, see below);
 - reference other modules by qualified owner path, because Octet's `non_trait_imports` rejects non-trait `use`, and replace shared-scope aliases (`type Result<T>`, forwarding wrappers around `preserves_rail`) with their owner paths;
 - name modules so that no contained item repeats a module word (`path_segment_repetition`), and keep each file within 300 lines and each directory within seven Rust files;
 - start every item private and raise its visibility only where another module uses it;
 - leave `src/job/selected/` and `src/job/authoring/` textually included and unedited. Their source text is hashed into selected-stage signatures (`selected_stage_signature`) and job-lowering provenance refs. Editing them would change canonical job identities, so the job DAG conversion must keep the names they use resolvable in the `workload` scope.
 
-The internal root names (`blocks`, `custody`, `workload`, `daemon_core`, and `testbed::format`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names.
+The internal root names (`blocks`, `custody`, `workload`, and `daemon_core`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names. The chunk store keeps `#[doc(hidden)] pub mod blocks`, because separately compiled consumers name `molten::blocks::*`, and keeps its `chunk_store` alias, which callers in 52 files use. A doc test in `src/chunk/store.rs` names former shard items through `molten::blocks::`.
+
+The internal root names (`blocks`, `custody`, `workload`, and `daemon_core`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names.
+
+The harness schema (`src/harness/schema.rs`) is converted. It is the real `testbed::schema` module; the former internal name `format` and its `schema` alias module are gone, because no item name repeats `schema` once three private names were renamed (`POLICY_INPUT_ID`, `CAPABILITY_INPUT_ID`, `parse_budget_limits_record`). `schema.rs` declares 50 private child modules with `#[path]`. They are grouped into ten directories under `src/harness/schema/`: `model`, `trace`, `gates`, `grants`, `checks`, `receipts`, `repro`, `redaction`, `preflight`, and `executors`. Each child module owns one responsibility, such as `intake` (suite parsing), `tape` (effect logs), `covenant` (policy preflight material), `evaluator` (in-process Nickel), or `scrub` (bounded redaction traversal). Siblings call each other through `super::<module>::<item>`, and those items are `pub(super)`. Other items stay private. Items used by other harness modules are `pub` and re-exported with `pub use` from `schema.rs`, so `super::schema::*` and `molten::harness::*` paths resolve as before. Their effective visibility is still bounded by the private `schema` module. The shared aliases (`IoValue`, `Result`, `MoltenError`, and others) and the `preserves_rail` forwarding wrappers were replaced by owner paths. Child modules import nothing except the `preserves::ValueImpl` trait, and only where its methods are called. `effect_log_value` is re-exported under `#[cfg(test)]` because only the harness tests call it from outside the module. No schema text, fixture, or source file of this module is hashed into an identity, and canonical encodings are unchanged.
+
+The chunk store (`src/chunk/store.rs`) is converted. The entrypoint mounts each submodule under `src/chunk/store/` with `#[path]`, because a file that `src/lib.rs` loads through `#[path]` resolves nested modules relative to its own directory. It re-exports every public item by name and defines the two crate-visible helpers that other domains call, `hash_chunk` and `read_verified_chunk`. The submodules are:
+
+- `model`: public DTOs;
+- `limits`: count and byte bounds;
+- `layout`: content paths and immutable writes;
+- `integrity`: chunk and blob verification;
+- `wire/`: the Preserves codec (`encode`, `decode`, `fields`, `outcome`, `policy`);
+- `local/`: put, read, range read, pins, listings, and availability;
+- `registry/`: the Redb index (`update`, `survey`);
+- `retire/`: GC;
+- `history/`: lineage;
+- `exchange/`: sync and the Iroh adapter;
+- `planner` and `outboard`: traversal plans and remote range readback.
+
+Cross-module references use `crate::blocks::` owner paths. The former local aliases and wrappers now use the owner paths `crate::preserves_rail::`, `crate::bounded::`, `crate::error::`, `preserves::`, and `redb::`. Only trait imports (`redb::Readable*`) remain as `use`. Unit tests live in `store/tests/` and call the public API through `crate::chunk_store::`. Chunk, manifest, and receipt refs, Redb table names, and the on-disk layout are unchanged. No chunk-store source file is hashed into an identity.
 
 Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
+
+### Node daemon layout
+
+`src/node/daemon.rs` mounts the internal root `daemon_core` (public alias `node_daemon`) as a real module tree. Its 61 production shards and 24 test shards under `src/node/parts/daemon/` are gone.
+
+- **Submodules.** The entrypoint declares 81 flat submodules with `#[path]`, one responsibility each, plus the existing `ingress` and `source_binding` modules. Physical directories under `src/node/daemon/` group them, each with at most seven files:
+  - `vocabulary/`: limits and public request and outcome records.
+  - `access/` and `trust/`: grants, tickets, peer admission, and delegation.
+  - `workflow/` and `protocol/`: live workflow bundles and the protocol gate.
+  - `records/`: Preserves field readers, validators, receipt parsers, and lifecycle inspection.
+  - `encoding/` and `stamping/`: receipt values and summaries.
+  - `lifecycle/`, `service/`, and `dispatch/`: local lifecycle, the control service, and dispatch.
+  - `live/`, `listen/`, and `preflight/`: live Iroh ingress, sends, listeners, and profiles.
+  - `state/`: state-root storage, paths, locks, and current-run tracking.
+- **References.** Siblings refer to each other by qualified path, such as `super::storage::read_preserves`. The only `use` items are trait imports (`n0_future::StreamExt`). The former shared aliases (`Result`, `IoValue`, `Path`, `PathBuf`, `MoltenError`, `Ipv4Addr`) are replaced by their owner paths, in `ingress/` as well.
+- **Visibility.** Items, fields, and methods stay private unless another daemon submodule or test uses them; those get `pub(super)`. Public items keep `pub`.
+- **Re-exports.** The entrypoint has one `pub use self::<module>::*;` for each submodule that holds a public item. An explicit per-item list (about 190 lines) plus the `#[path]` declarations would exceed the 300-line file limit. Outside `daemon_core`, the globs expose only `pub` items.
+- **Tests.** `src/node/daemon/tests/` uses the same layout: 30 flat modules under `daemon_core::tests`. The `cfg(test)` helpers that used to sit in the production shards moved to `tests/mod.rs`: the `fs` wrappers, the `Path`/`PathBuf` `NodeStateAuthority` impls, and the test authority refs.
+- **ast-grep rules.** The host-path helpers (`config_path`, `startup_path`, `shutdown_path`, `diagnostic_node_state_path`) live in `state/ambient.rs`. It is the only daemon file the node-state ambient-filesystem rule ignores. The root-reacquisition rule lists the modules that now hold the items of the shards it used to list.
+- **Alias.** `daemon_core` stays the internal root and `node_daemon` stays its alias. 184 call sites use `node_daemon`. Promoting the alias would repeat `node` in 22 item names, 7 of them public (for example `NodeLifecycleState`).
 
 ## Chunk store semantic boundary
 
 | Area | Owner | Boundary |
 | --- | --- | --- |
-| model and codec | `ChunkRef`, `ChunkManifest`, receipt DTOs, Preserves constructors/parsers | In-memory DTOs, canonical bytes, and BLAKE3 refs. |
-| verify | manifest/chunk/receipt checks | Validation over parsed values. |
-| fs_store and index | file writes, Redb tables | Shell and Redb adapter. |
-| exchange | peer sync, Iroh publish/fetch, remote range readback | Transport adapter shell. |
-| retention | pin/unpin/GC admission | Decisions before deletes. |
-| lineage | manifest lineage and receipt chains | Evidence-only summaries. |
+| model and codec | `store/model.rs` DTOs; `store/wire/` Preserves constructors and parsers | In-memory DTOs, canonical bytes, and BLAKE3 refs. |
+| verify | `store/integrity.rs`, `store/wire/decode.rs`, `store/wire/policy.rs` | Validation over parsed values. |
+| fs_store and index | `store/layout.rs` file writes, `store/local/` operations, `store/registry/` Redb tables | Shell and Redb adapter. |
+| exchange | `store/exchange/` peer sync and Iroh publish/fetch, `store/planner.rs`, `store/outboard.rs` remote range readback | Transport adapter shell. |
+| retention | `store/local/hold.rs` pin/unpin, `store/retire/` GC admission | Decisions before deletes. |
+| lineage | `store/history/` manifest lineage and receipt chains | Evidence-only summaries. |
 
 `molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. `gc_with_root` deletes only targets whose retention evidence and apply refs pass, and writes a receipt either way.
 

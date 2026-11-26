@@ -795,8 +795,11 @@
           "molten"
           "molten-composition-core"
           "molten-core"
+          "molten-fastpath-core"
           "molten-node-host"
+          "molten-preserves-core"
           "molten-release-policy"
+          "molten-raft-core"
           "molten-reliability-model-core"
           "molten-runtime-admission-core"
           "molten-wasm-policy-core"
@@ -931,6 +934,8 @@
           inherit pkgs rustToolchain releasePolicyPkg;
         };
         fastpathQuint = import ./nix/consensus-fastpath-quint.nix { inherit pkgs; };
+        # The guard mutant patches `crates/molten-fastpath-core/src/quorate.rs`; the mutated workspace
+        # rebuilds that path dependency, so the `fastpathquint` tests link the mutated admission guard.
         fastpathMutantWs = mkUnit2nixWorkspace {
           src = fastpathQuint.mutateSource sourceForConfigChecks;
         };
@@ -1014,6 +1019,47 @@
             linkedAllowlist = [ ];
             compileProbeModule = "src/judgment.rs";
             sourceProbeModule = "src/vocabulary.rs";
+          };
+          "molten-fastpath-core" = {
+            linkedAllowlist = [ ];
+            compileProbeModule = "src/quorate.rs";
+            sourceProbeModule = "src/succession.rs";
+          };
+          # r[impl molten.project.molten_preserves_core_no_std_gate]
+          "molten-preserves-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+            ];
+            compileProbeModule = "src/writer.rs";
+            sourceProbeModule = "src/identity.rs";
+          };
+          "molten-raft-core" = {
+            # molten-core (no default features) supplies the pure recovery reconciliation core.
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "artifact-auth-core"
+              "artifact-binding-core"
+              "blake3"
+              "cfg-if"
+              "choregraph-history"
+              "constant_time_eq"
+              "content-identity-core"
+              "cpufeatures"
+              "molten-core"
+              "schema-identity-core"
+              "schema-migration-core"
+              "serde"
+              "serde_core"
+              "transactional-reconciliation-core"
+            ];
+            compileProbeModule = "src/transition.rs";
+            sourceProbeModule = "src/transition/wire.rs";
           };
           "molten-reliability-model-core" = {
             linkedAllowlist = [
@@ -1449,6 +1495,7 @@
           cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
             "$out/vendor/vm-cohort-core/src/"
           cp ${./src/world_snapshot/chaoscontrol.rs} "$out/src/chaoscontrol.rs"
+          cp -R ${./src/world_snapshot/chaoscontrol} "$out/src/chaoscontrol"
           cp -R ${./src/world_snapshot/vm} "$out/src/vm"
         '';
         worldBenchmarkOctetWorkspace = pkgs.runCommand "molten-world-benchmark-octet-workspace" { } ''
@@ -1788,7 +1835,8 @@
                     > "$TMPDIR/negative.json"
                   ast-grep scan --rule "$rule" --json=compact \
                     src/artifacts/parts/mod \
-                    src/chunk/parts/store \
+                    src/chunk/store.rs \
+                    src/chunk/store \
                     src/retention/parts/mod \
                     src/remote/parts/dataspace \
                     src/iroh/parts/exchange \
@@ -1820,16 +1868,17 @@
                     src/test/parts/support/p002/body.rs \
                     src/main/tests/ops/helpers.rs \
                     src/local_store/tests.rs \
-                    src/chunk/parts/store/tests/m000/p002/body.rs \
+                    src/chunk/store/tests/mod.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
                     src/retention/parts/mod/tests/m000/p009/body.rs \
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \
                     src/iroh/parts/exchange/tests/m000/p001/body.rs \
                     src/evidence/parts/chain/tests/m000/p003/body.rs \
-                    src/node/parts/daemon/tests/m000/p000/body.rs \
-                    src/node/parts/daemon/tests/m000/p015/body.rs \
-                    src/node/parts/daemon/tests/m000/p010/body.rs \
-                    src/node/parts/daemon/tests/m000/p022/body.rs \
+                    src/node/daemon/tests/lifecycle/startup.rs \
+                    src/node/daemon/tests/lifecycle/mailbox.rs \
+                    src/node/daemon/tests/lifecycle/looping.rs \
+                    src/node/daemon/tests/services/loopbacks.rs \
+                    src/node/daemon/tests/services/supervisors.rs \
                     tests/parts/cliharness/p000/body.rs \
                     tests/parts/cliharness/p013/body.rs \
                     > "$TMPDIR/converted.json"
@@ -1902,7 +1951,8 @@
                     tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs \
                     > "$TMPDIR/reacquisition-negative.json"
                   ast-grep scan --rule "$ambient_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon.rs \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
@@ -1912,7 +1962,7 @@
                     src/job/parts/dag/p033/body.rs \
                     > "$TMPDIR/ambient-converted.json"
                   ast-grep scan --rule "$reacquisition_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
@@ -3334,6 +3384,9 @@
             # Full molten-core unit/property tests under the default std feature set.
             molten-core-tests = ws.test.check."molten-core";
             molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
+            molten-fastpath-core-no-std = noStdKernelCheck "molten-fastpath-core";
+            molten-preserves-core-no-std = noStdKernelCheck "molten-preserves-core";
+            molten-raft-core-no-std = noStdKernelCheck "molten-raft-core";
             molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
             molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";
             molten-wasm-policy-core-no-std = noStdKernelCheck "molten-wasm-policy-core";
@@ -4646,7 +4699,8 @@
                     fi
                   done
 
-                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' src/fabric_consistency/fastpath; then
+                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' \
+                    crates/molten-fastpath-core/src src/fabric_consistency/fastpath; then
                     echo "pure fast-path model contains an ambient shell dependency" >&2
                     exit 1
                   fi

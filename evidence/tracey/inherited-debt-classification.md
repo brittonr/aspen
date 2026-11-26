@@ -7,7 +7,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | Count | Specification |
 | ---: | --- |
 | 421 | `.cairn/specs/runtime-spine/spec.md` |
-| 366 | `.cairn/specs/testing-harness/spec.md` |
+| 367 | `.cairn/specs/testing-harness/spec.md` |
 | 206 | `.cairn/specs/evidence-gates/spec.md` |
 | 132 | `.cairn/specs/project/spec.md` |
 | 74 | `.cairn/specs/node-runtime/spec.md` |
@@ -92,7 +92,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 
 | Count | Source area |
 | ---: | --- |
-| 337 | `testing` |
+| 338 | `testing` |
 | 142 | `runtime_spine` |
 | 111 | `evidence` |
 | 88 | `project` |

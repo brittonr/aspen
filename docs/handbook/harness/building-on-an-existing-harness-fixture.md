@@ -52,7 +52,7 @@ Present the positive and negative cases together with their expected boundary, a
 - [Distributed testing evidence](../../distributed-testing.md)
 - [Capability admission theory](../../technical/capabilities/capability-context-admission.md)
 - [Two-actor fixture](../../../examples/two-actor.preserves)
-- [Suite parser and explicit-fixture markers](../../../src/harness/parts/schema/p001/body.rs)
+- [Suite parser and explicit-fixture markers](../../../src/harness/schema/model/intake.rs)
 - [Policy rollback and missing-send tests](../../../src/harness/parts/mod/tests/m000/p001/body.rs)
 - [Authorized-send and denied-effect tests](../../../src/harness/parts/mod/tests/m000/p002/body.rs)
 - [Executor registry](../../../src/harness/executor.rs)

@@ -1,16 +1,16 @@
 pub(super) fn observed_ack(
     received: &crate::fabric_consistency::raft::iroh::ReceivedReplicaEvent,
-    state: &crate::fabric_consistency::raft::model::ReplicaState,
-    pending: &crate::fabric_consistency::raft::model::PendingReplicaRead,
+    state: &crate::fabric_consistency::raft::ReplicaState,
+    pending: &crate::fabric_consistency::raft::PendingReplicaRead,
 ) -> preserves::IOValue {
-    let crate::fabric_consistency::raft::model::ReplicaEvent::Message {
+    let crate::fabric_consistency::raft::ReplicaEvent::Message {
         envelope:
-            crate::fabric_consistency::raft::model::ReplicaMessageEnvelope {
+            crate::fabric_consistency::raft::ReplicaMessageEnvelope {
                 from,
                 to,
                 group_binding_ref,
                 message:
-                    crate::fabric_consistency::raft::model::Message::ReadAcknowledgement {
+                    crate::fabric_consistency::raft::Message::ReadAcknowledgement {
                         term,
                         follower_id,
                         request_ref,
@@ -76,7 +76,7 @@ pub(super) fn observed_proposal(
         panic!("expected a proposal channel observation with an index for {expected_request}");
     };
     assert_eq!(request_ref, expected_request);
-    assert_eq!(disposition, crate::fabric_consistency::raft::model::ProposalDisposition::Committed);
+    assert_eq!(disposition, crate::fabric_consistency::raft::ProposalDisposition::Committed);
     assert_eq!(applied.next.completed_requests.get(&request_ref), Some(&index));
     let value = crate::codec::record("proposal-outcome", vec![
         crate::codec::string(request_ref),
@@ -91,7 +91,7 @@ pub(super) fn observed_read(
     node: &mut crate::fabric_consistency::raft::live_cluster::Node,
     applied: &crate::fabric_consistency::raft::executor::ExecutedReplicaTransition,
     expected_request: &str,
-    expected_disposition: crate::fabric_consistency::raft::model::ReadDisposition,
+    expected_disposition: crate::fabric_consistency::raft::ReadDisposition,
 ) -> (u64, preserves::IOValue) {
     let observation =
         observed_outcome(node, applied, crate::fabric_consistency::raft::executor::ReplicaEffectKind::ReadOutcome);

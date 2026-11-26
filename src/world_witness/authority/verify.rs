@@ -34,7 +34,7 @@ pub(super) fn authenticate(
         signature_bytes: credential.artifact_signature.clone(),
         key_generation: trust.key_generation,
     };
-    let mut operator = OperatorSignerAuthority { trust, role };
+    let mut operator = OperatorSigner { trust, role };
     let result = crate::world_head::evaluate_world_head_authentication(claim, &policy, &[carrier], &mut operator)?;
     // The signer must hold the trust record's role with port-admitted authority; a valid signature
     // by a key whose trusted key id names another role (or none) is not operator authority.
@@ -58,12 +58,12 @@ pub(super) fn authenticate(
 
 /// Signer authority from the current operator trust record, consulted only after the invocation
 /// credential has been authorized: the trusted key holds authority solely in its declared role.
-struct OperatorSignerAuthority<'a> {
+struct OperatorSigner<'a> {
     trust: &'a super::wire::Trust,
     role: molten_core::world_head::WorldHeadSignerRole,
 }
 
-impl crate::world_head::WorldHeadSignerAuthorityPort for OperatorSignerAuthority<'_> {
+impl crate::world_head::WorldHeadSignerAuthorityPort for OperatorSigner<'_> {
     fn signer_authority(
         &mut self,
         _claim: &molten_core::world_head::WorldHeadClaim,
@@ -79,35 +79,22 @@ impl crate::world_head::WorldHeadSignerAuthorityPort for OperatorSignerAuthority
 
 #[cfg(test)]
 mod tests {
-    use molten_core::world_commit::WorldCommitRef;
-    use molten_core::world_head::WorldBranchClass;
-    use molten_core::world_head::WorldBranchId;
-    use molten_core::world_head::WorldHeadClaim;
-    use molten_core::world_head::WorldHeadPolicyRef;
-    use molten_core::world_head::WorldHeadPurpose;
-    use molten_core::world_head::WorldHeadSignerRole;
-    use molten_node_host::node_state::DirectoryRoot;
-
-    use crate::world_head::LocalWorldHeadSigningAdapter;
-    use crate::world_head::SignerIdentity;
-    use crate::world_head::sign_world_head_claim;
-
     const KEY_WIDTH: usize = 32;
 
     fn reference(label: &str) -> String {
         format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
     }
 
-    fn claim() -> WorldHeadClaim {
-        WorldHeadClaim {
-            branch_id: WorldBranchId::new("main").expect("branch"),
-            branch_class: WorldBranchClass::Local,
+    fn claim() -> molten_core::world_head::WorldHeadClaim {
+        molten_core::world_head::WorldHeadClaim {
+            branch_id: molten_core::world_head::WorldBranchId::new("main").expect("branch"),
+            branch_class: molten_core::world_head::WorldBranchClass::Local,
             expected_head: None,
-            successor_head: WorldCommitRef::new(reference("root")).expect("commit ref"),
+            successor_head: molten_core::world_commit::WorldCommitRef::new(reference("root")).expect("commit ref"),
             expected_generation: 0,
             successor_generation: 1,
-            purpose: WorldHeadPurpose::Create,
-            policy_ref: WorldHeadPolicyRef::new(reference("head-policy")).expect("policy ref"),
+            purpose: molten_core::world_head::WorldHeadPurpose::Create,
+            policy_ref: molten_core::world_head::WorldHeadPolicyRef::new(reference("head-policy")).expect("policy ref"),
             source_heads: Vec::new(),
         }
     }
@@ -147,26 +134,39 @@ mod tests {
     fn operator_signer_must_hold_the_trusted_role() {
         // r[verify molten.world_commit.world_head_truthful_receipts_and_verified_signers]
         let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-        let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+        let root =
+            molten_node_host::node_state::DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
         root.create_layout().expect("node state layout");
         let secrets = root.secrets().expect("secrets namespace");
-        let mut signer = LocalWorldHeadSigningAdapter::new(&secrets, SignerIdentity {
-            profile_ref: reference("crypto-profile"),
-            entropy_profile_ref: reference("entropy-profile"),
-            backend_ref: reference("crypto-backend"),
-            producer_id: "molten".to_string(),
-            allow_generation: true,
-        })
-        .expect("signing adapter");
+        let mut signer =
+            crate::world_head::LocalWorldHeadSigningAdapter::new(&secrets, crate::world_head::SignerIdentity {
+                profile_ref: reference("crypto-profile"),
+                entropy_profile_ref: reference("entropy-profile"),
+                backend_ref: reference("crypto-backend"),
+                producer_id: "molten".to_string(),
+                allow_generation: true,
+            })
+            .expect("signing adapter");
         let claim = claim();
-        let (canonical, maintainer, _) =
-            sign_world_head_claim(&mut signer, &claim, WorldHeadSignerRole::Maintainer).expect("maintainer signature");
-        let (_, recovery, _) =
-            sign_world_head_claim(&mut signer, &claim, WorldHeadSignerRole::Recovery).expect("recovery signature");
+        let (canonical, maintainer, _) = crate::world_head::sign_world_head_claim(
+            &mut signer,
+            &claim,
+            molten_core::world_head::WorldHeadSignerRole::Maintainer,
+        )
+        .expect("maintainer signature");
+        let (_, recovery, _) = crate::world_head::sign_world_head_claim(
+            &mut signer,
+            &claim,
+            molten_core::world_head::WorldHeadSignerRole::Recovery,
+        )
+        .expect("recovery signature");
 
         let admitted = super::authenticate(&canonical, &trust(&maintainer, "maintainer"), &credential(&maintainer))
             .expect("maintainer key under maintainer trust");
-        assert_eq!(admitted.observation.signers[0].role, Some(WorldHeadSignerRole::Maintainer));
+        assert_eq!(
+            admitted.observation.signers[0].role,
+            Some(molten_core::world_head::WorldHeadSignerRole::Maintainer)
+        );
         assert!(admitted.observation.signers[0].authority_admitted);
 
         // Valid signatures whose trusted key id names a different role than the trust record.

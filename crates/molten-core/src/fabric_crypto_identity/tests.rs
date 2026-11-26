@@ -4,6 +4,8 @@ use std::hash::Hasher;
 
 use super::*;
 
+mod spelling;
+
 const SYNTHETIC_REF_CHUNK_HEX_CHARS: usize = 16;
 const SYNTHETIC_REF_CHUNK_REPETITIONS: usize = 4;
 const GENERATION_ONE: u64 = 1;
@@ -297,6 +299,7 @@ fn redaction_keeps_public_status_and_denies_private_material() {
         permission_status: AdapterPermissionStatus::Restricted,
         backend_class: KeyBackendClass::ManagedSecret,
         public_key_ref: Some(test_ref("authority-public")),
+        handle_ref: Some(test_ref("authority-handle")),
         receipt_refs: vec![test_ref("status-receipt")],
         backend_locator: Some("vault://sensitive/path".to_string()),
         raw_error: Some("backend token leaked in raw error".to_string()),
@@ -314,6 +317,35 @@ fn redaction_keeps_public_status_and_denies_private_material() {
     leaking.private_material_present = true;
     let issues = redact_adapter_status(&leaking).expect_err("private material denied");
     assert!(issues.contains(&CryptoIdentityIssue::DiagnosticSecretLeak));
+}
+
+// r[verify molten.crypto_identity.status_handle_reference]
+#[test]
+fn redacted_status_keeps_the_opaque_handle_ref_and_rejects_non_ref_values() {
+    let profile = production_profile();
+    let current = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    let input = AdapterDiagnosticInput {
+        profile_ref: profile.profile_ref,
+        purpose: current.purpose,
+        generation: Some(current.generation),
+        currentness: Some(current.currentness),
+        permission_status: AdapterPermissionStatus::Restricted,
+        backend_class: current.backend_class,
+        public_key_ref: Some(current.public_key_ref.clone()),
+        handle_ref: Some(current.handle_ref.clone()),
+        receipt_refs: Vec::new(),
+        backend_locator: None,
+        raw_error: None,
+        bearer_token: None,
+        private_material_present: false,
+    };
+    let redacted = redact_adapter_status(&input).expect("redacted status");
+    assert_eq!(redacted.handle_ref, Some(current.handle_ref));
+
+    let mut raw_handle = input;
+    raw_handle.handle_ref = Some("ed25519-secret:0123456789abcdef".to_string());
+    let issues = redact_adapter_status(&raw_handle).expect_err("non-ref handle denied");
+    assert!(issues.contains(&CryptoIdentityIssue::MalformedRef("status-handle-ref")));
 }
 
 // r[verify molten.artifact_auth_adoption.authority]
@@ -513,4 +545,66 @@ fn artifact_auth_blocks_profile_context_generation_and_key_drift() {
     });
     assert!(superseded_report.compatibility.case_explained);
     assert!(superseded_report.compatibility.mapped_failure_causes.contains(&"currentness".to_string()));
+}
+
+fn overlap_rotation_request(profile: &CryptoAdapterProfile, current: &OpaqueKeyHandle) -> KeyRotationRequest {
+    KeyRotationRequest {
+        operation_id: "rotate-evidence-signing".to_string(),
+        profile_ref: profile.profile_ref.clone(),
+        purpose: current.purpose,
+        backend_class: current.backend_class,
+        backend_ref: current.backend_ref.clone(),
+        old_handle_ref: current.handle_ref.clone(),
+        old_public_key_ref: current.public_key_ref.clone(),
+        old_generation: current.generation,
+        new_generation: current.generation + 1,
+        policy_ref: test_ref("rotation-policy"),
+        activation_boundary_ref: test_ref("rotation-activation"),
+        overlap: RotationOverlapPolicy::VerifyOnly,
+        revocation_evidence_ref: None,
+    }
+}
+
+// r[verify molten.crypto_identity.overlap_verification_only]
+#[test]
+fn overlap_key_is_denied_signing_with_typed_currentness_diagnostic() {
+    let profile = production_profile();
+    let current = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    plan_sign(&profile, &sign_request(&current)).expect("current generation signs");
+
+    let plan = plan_key_rotation(&profile, &current, &overlap_rotation_request(&profile, &current))
+        .expect("verify-only overlap rotation planned");
+    assert_eq!(plan.old_key_next_currentness, KeyCurrentness::Overlap);
+
+    let overlap = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, plan.old_key_next_currentness);
+    let issues = plan_sign(&profile, &sign_request(&overlap)).expect_err("overlap signing denied");
+    assert_eq!(issues, vec![CryptoIdentityIssue::HandleNotCurrent(KeyCurrentness::Overlap)]);
+    assert!(!KeyCurrentness::Overlap.permits_signing());
+    assert!(KeyCurrentness::Current.permits_signing());
+}
+
+// r[verify molten.crypto_identity.overlap_verification_only]
+#[test]
+fn overlap_key_still_verifies_pre_rotation_signatures() {
+    let profile = production_profile();
+    let overlap = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Overlap);
+    let accepted = evaluate_verification(&profile, &verification_request(&profile, &overlap));
+    assert_eq!(accepted.kind, VerificationDecisionKind::Accept);
+    assert!(accepted.issues.is_empty());
+    assert!(KeyCurrentness::Overlap.permits_verification());
+
+    let superseded = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Superseded);
+    let denied = evaluate_verification(&profile, &verification_request(&profile, &superseded));
+    assert_eq!(denied.kind, VerificationDecisionKind::Deny);
+    assert!(denied.issues.contains(&CryptoIdentityIssue::HandleNotCurrent(KeyCurrentness::Superseded)));
+}
+
+// r[verify molten.crypto_identity.overlap_verification_only]
+#[test]
+fn overlap_key_cannot_start_another_rotation() {
+    let profile = production_profile();
+    let overlap = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Overlap);
+    let issues = plan_key_rotation(&profile, &overlap, &overlap_rotation_request(&profile, &overlap))
+        .expect_err("overlap key cannot rotate");
+    assert!(issues.contains(&CryptoIdentityIssue::HandleNotCurrent(KeyCurrentness::Overlap)));
 }

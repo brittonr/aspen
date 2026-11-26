@@ -160,7 +160,7 @@ mod protected_tests {
 
     // r[verify molten.runtime_spine.admission_and_capability_hardening]
     #[test]
-    fn protected_reads_mode_and_bytes_from_one_handle() {
+    fn reads_mode_and_bytes_from_one_handle() {
         use std::os::unix::fs::PermissionsExt;
 
         let workspace = crate::test_support::process_workspace("reliability-protected-swap").expect("workspace");

@@ -14,7 +14,6 @@ mod transport;
 mod world;
 
 pub use peer::Launcher;
-pub(crate) use peer::run_peer;
 use preserves::ValueImpl as _;
 
 const MAX_CHECKS: usize = 64;
@@ -86,21 +85,29 @@ pub(super) fn plan(scenario: super::Scenario) -> preserves::IOValue {
 
 /// Execute the actual runtime path. An error is a canonical failure, never a pass.
 pub(super) fn execute(scenario: super::Scenario, programs: &Programs) -> crate::error::Result<preserves::IOValue> {
-    let capability = scenario.definition().capability;
-    let evidence = if capability == super::model::DURABLE_STATE_RECOVERY {
-        durable::run(scenario)?
-    } else if capability == super::model::EFFECT_UNCERTAINTY {
-        effect::run(scenario, &programs.effect_shell)?
-    } else if capability == super::model::CROSS_PROCESS_TRANSPORT {
-        transport::run(scenario, &programs.peer)?
-    } else if capability == super::model::WORLD_REPLAY_PROMOTION_RESTORE {
-        world::run(scenario)?
-    } else if capability == super::model::CONTROL_PLANE_FAILOVER {
-        control_plane::run(scenario, &programs.peer)?
-    } else {
-        return Err(super::invalid("scenario has no native product producer"));
-    };
+    let evidence = run(scenario, programs)?;
     observation(scenario, &evidence)
+}
+
+/// Dispatch one scenario to the native producer of its reviewed capability.
+fn run(scenario: super::Scenario, programs: &Programs) -> crate::error::Result<Evidence> {
+    let capability = scenario.definition().capability;
+    if capability == super::model::DURABLE_STATE_RECOVERY {
+        return durable::run(scenario);
+    }
+    if capability == super::model::EFFECT_UNCERTAINTY {
+        return effect::run(scenario, &programs.effect_shell);
+    }
+    if capability == super::model::CROSS_PROCESS_TRANSPORT {
+        return transport::run(scenario, &programs.peer);
+    }
+    if capability == super::model::WORLD_REPLAY_PROMOTION_RESTORE {
+        return world::run(scenario);
+    }
+    if capability == super::model::CONTROL_PLANE_FAILOVER {
+        return control_plane::run(scenario, &programs.peer);
+    }
+    Err(super::invalid("scenario has no native product producer"))
 }
 
 pub(super) fn observation(scenario: super::Scenario, evidence: &Evidence) -> crate::error::Result<preserves::IOValue> {

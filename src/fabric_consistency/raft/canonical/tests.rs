@@ -258,34 +258,39 @@ fn recovery_rejects_malformed_pages_on_encode_and_decode() {
     assert!(replica_message(&normal).is_err(), "term zero remains forbidden for normal Raft");
 }
 
+/// The recovery corpus identity a replica reports for its own state.
+fn observation_ref(state: &ReplicaState) -> crate::error::Result<String> {
+    canonical::recovery_corpus_ref(state.current_term, state.commit_index, &state.log, state.snapshot.as_ref())
+}
+
 #[test]
 fn recovery_observation_binds_durable_corpus_not_transient_state() {
     let mut state = super::tests::committed_leader();
-    let original = canonical::recovery_observation_ref(&state).expect("observation");
+    let original = observation_ref(&state).expect("observation");
     state.active_election_timer_ref = super::tests::test_ref("different-recovery-timer");
     state.leader_id = None;
     state.pending_reads.clear();
-    assert_eq!(original, canonical::recovery_observation_ref(&state).expect("same durable corpus"));
+    assert_eq!(original, observation_ref(&state).expect("same durable corpus"));
     let mut changed = state.clone();
     changed.current_term += 1;
-    assert_ne!(original, canonical::recovery_observation_ref(&changed).expect("term observation"));
+    assert_ne!(original, observation_ref(&changed).expect("term observation"));
     changed = state.clone();
     changed.commit_index = 0;
-    assert_ne!(original, canonical::recovery_observation_ref(&changed).expect("commit observation"));
+    assert_ne!(original, observation_ref(&changed).expect("commit observation"));
     changed = state.clone();
     let before_entry = canonical::entry_identity_ref(&changed.log[0]).expect("entry identity");
     changed.log[0].command_ref = super::tests::test_ref("different-recovery-command");
     assert_ne!(before_entry, canonical::entry_identity_ref(&changed.log[0]).expect("changed entry identity"));
-    assert_ne!(original, canonical::recovery_observation_ref(&changed).expect("log observation"));
+    assert_ne!(original, observation_ref(&changed).expect("log observation"));
     let compacted = apply_replica_event(&super::tests::committed_leader(), ReplicaEvent::CreateSnapshot {
         application_state_ref: super::tests::test_ref("observation-snapshot"),
     })
     .expect("snapshot transition")
     .next;
-    let compacted_ref = canonical::recovery_observation_ref(&compacted).expect("snapshot observation");
+    let compacted_ref = observation_ref(&compacted).expect("snapshot observation");
     let mut without_snapshot = compacted;
     without_snapshot.snapshot = None;
-    assert_ne!(compacted_ref, canonical::recovery_observation_ref(&without_snapshot).expect("without snapshot"));
+    assert_ne!(compacted_ref, observation_ref(&without_snapshot).expect("without snapshot"));
 }
 
 include!("helpers.rs");

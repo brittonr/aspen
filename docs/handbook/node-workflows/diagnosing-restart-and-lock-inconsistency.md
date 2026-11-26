@@ -45,7 +45,7 @@ Record configuration, identity receipt, startup, shutdown, and active-lock prese
 
 **Discriminating evidence:** admission denial and effect failure have different consequences. Denial returns before executing a shutdown plan and writes control-denial evidence. An admitted plan can publish adapter, node shutdown, control and exact run-completion evidence before removing the lock. An I/O error can follow earlier completed writes. A later denied repeat stop does not invalidate successful completion: status/restart resolve the immutable control receipt named by that completion, not the mutable latest stop-control file.
 
-**Safe next action:** inspect the decision and referenced results in `stop-control-receipt.preserves`; inventory individual adapter and node shutdown artifacts. The [shutdown regression cases](../../../src/node/parts/daemon/tests/m000/p014/body.rs) distinguish preservation on denial from effect errors and reverse adapter shutdown order.
+**Safe next action:** inspect the decision and referenced results in `stop-control-receipt.preserves`; inventory individual adapter and node shutdown artifacts. The [shutdown regression cases](../../../src/node/daemon/tests/shutdown/halts.rs) distinguish preservation on denial from effect errors and reverse adapter shutdown order.
 
 **Stop condition:** do not interpret an unsuccessful command as proof that nothing happened. Do not retry uncertain effects unconditionally or delete partial evidence to make the directory look consistent.
 
@@ -60,9 +60,9 @@ Preserve both run contexts and their original receipts. If an old completion is 
 - [Handbook](../README.md)
 - [Production operator runbooks](../../production-operator-runbooks.md)
 - [Lifecycle companion](../../technical/operations/node-lifecycle-and-recovery.md)
-- [Restart and classification](../../../src/node/parts/daemon/p036/body.rs)
-- [Lock validation](../../../src/node/parts/daemon/p034/body.rs)
-- [Status and shutdown ordering](../../../src/node/parts/daemon/p018/body.rs)
-- [Shutdown regression cases](../../../src/node/parts/daemon/tests/m000/p014/body.rs)
-- [Current-run observations](../../../src/node/parts/daemon/p058/body.rs)
-- [Run-bound regression cases](../../../src/node/parts/daemon/tests/m000/p023/body.rs)
+- [Restart and classification](../../../src/node/daemon/records/inspection.rs)
+- [Lock validation](../../../src/node/daemon/state/leases.rs)
+- [Status and shutdown ordering](../../../src/node/daemon/lifecycle/running.rs)
+- [Shutdown regression cases](../../../src/node/daemon/tests/shutdown/halts.rs)
+- [Current-run observations](../../../src/node/daemon/state/tracking.rs)
+- [Run-bound regression cases](../../../src/node/daemon/tests/shutdown/succession.rs)

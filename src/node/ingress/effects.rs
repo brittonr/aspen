@@ -8,14 +8,14 @@ pub(super) struct Publication {
 struct QueuePublication {
     path: crate::node_state::RelativePath,
     location_ref: String,
-    prior: Option<IoValue>,
+    prior: Option<preserves::IOValue>,
 }
 
 pub(super) fn write_new(
     root: &crate::node_state::DirectoryRoot,
     path: &crate::node_state::RelativePath,
-    value: &IoValue,
-) -> Result<()> {
+    value: &preserves::IOValue,
+) -> crate::error::Result<()> {
     let text = crate::preserves_rail::to_text(value)?;
     root.write_new(path, text.as_bytes())
 }
@@ -24,11 +24,11 @@ fn observe_inbox(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     path: &crate::node_state::RelativePath,
-) -> Result<bool> {
+) -> crate::error::Result<bool> {
     if let Some(value) = observations::read_optional(root, path)? {
         let prior = crate::node_runtime::parse_control_request(&value)?;
         if prior.request_ref != request.request_ref || prior.operation != request.operation {
-            return Err(MoltenError::invalid_harness("existing inbox conflicts with exact control request"));
+            return Err(crate::error::Failure::invalid_harness("existing inbox conflicts with exact control request"));
         }
         return Ok(true);
     }
@@ -38,9 +38,12 @@ fn observe_inbox(
 fn observe_queue(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
-) -> Result<QueuePublication> {
-    let path = queue_receipt_path(&request.request_ref)?;
-    let location_ref = local_ref("node-control-inbox-path", &control_inbox_path(&request.request_ref)?.display())?;
+) -> crate::error::Result<QueuePublication> {
+    let path = super::super::paths::queue_receipt_path(&request.request_ref)?;
+    let location_ref = super::super::storage::local_ref(
+        "node-control-inbox-path",
+        &super::super::paths::control_inbox_path(&request.request_ref)?.display(),
+    )?;
     let prior = observations::read_optional(root, &path)?;
     if let Some(value) = &prior {
         let receipt = parse_control_queue_receipt(value)?;
@@ -49,7 +52,9 @@ fn observe_queue(
             || receipt.operation != request.operation
             || receipt.location_ref != location_ref
         {
-            return Err(MoltenError::invalid_harness("existing queue evidence conflicts with exact publication"));
+            return Err(crate::error::Failure::invalid_harness(
+                "existing queue evidence conflicts with exact publication",
+            ));
         }
     }
     Ok(QueuePublication {
@@ -63,7 +68,7 @@ pub(super) fn publish_queue(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     phase: &'static str,
-) -> Result<ControlSubmit> {
+) -> crate::error::Result<ControlSubmit> {
     let publication = observe_queue(root, request)?;
     write_queue(root, request, phase, publication)
 }
@@ -73,26 +78,27 @@ fn write_queue(
     request: &crate::node_runtime::ControlRequest,
     phase: &'static str,
     publication: QueuePublication,
-) -> Result<ControlSubmit> {
+) -> crate::error::Result<ControlSubmit> {
     let receipt_value = match publication.prior {
         Some(value) => value,
         None => {
-            let value = queue_receipt_value(&QueueReceiptValueInput {
-                decision: "pass",
-                phase,
-                operation: &request.operation,
-                request_ref: &request.request_ref,
-                location_ref: &publication.location_ref,
-                diagnostics: &[],
-            })?;
+            let value =
+                super::super::operations::queue_receipt_value(&super::super::operations::QueueReceiptValueInput {
+                    decision: "pass",
+                    phase,
+                    operation: &request.operation,
+                    request_ref: &request.request_ref,
+                    location_ref: &publication.location_ref,
+                    diagnostics: &[],
+                })?;
             write_new(root, &publication.path, &value)?;
             value
         }
     };
-    let queue_receipt_ref = import_artifact(root, &receipt_value)?;
+    let queue_receipt_ref = super::super::storage::import_artifact(root, &receipt_value)?;
     Ok(ControlSubmit {
         request_ref: request.request_ref.clone(),
-        inbox_entry: control_inbox_entry_name(&request.request_ref),
+        inbox_entry: super::super::paths::control_inbox_entry_name(&request.request_ref),
         queue_receipt_ref,
         queue_receipt_value: receipt_value,
     })
@@ -102,12 +108,12 @@ pub(super) fn publish_request(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
-) -> Result<Publication> {
-    let inbox_path = control_inbox_path(&request.request_ref)?;
+) -> crate::error::Result<Publication> {
+    let inbox_path = super::super::paths::control_inbox_path(&request.request_ref)?;
     let has_inbox = observe_inbox(root, request, &inbox_path)?;
     let queue = observe_queue(root, request)?;
-    let result: Result<Publication> = (|| {
-        import_artifact(root, &request.value)?;
+    let result: crate::error::Result<Publication> = (|| {
+        super::super::storage::import_artifact(root, &request.value)?;
         if !has_inbox {
             write_new(root, &inbox_path, &request.value)?;
         }
@@ -127,11 +133,11 @@ pub(super) fn observe_dispatch(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     control: &crate::node_runtime::ControlReceipt,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     if control.request_ref != request.request_ref {
-        return Err(MoltenError::invalid_harness("dispatch observation conflicts with exact request"));
+        return Err(crate::error::Failure::invalid_harness("dispatch observation conflicts with exact request"));
     }
-    let value = queue_receipt_value(&QueueReceiptValueInput {
+    let value = super::super::operations::queue_receipt_value(&super::super::operations::QueueReceiptValueInput {
         decision: "pass",
         phase: "dispatch-observed",
         operation: &request.operation,
@@ -140,5 +146,5 @@ pub(super) fn observe_dispatch(
         diagnostics: &[],
     })?;
     // A new observation references the immutable result. It is not an original enqueue receipt.
-    import_artifact(root, &value)
+    super::super::storage::import_artifact(root, &value)
 }

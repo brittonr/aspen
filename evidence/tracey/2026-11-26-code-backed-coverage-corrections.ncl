@@ -69,6 +69,10 @@ let corrections | Corrections = {
       reason = "implementation marker in crates/molten-core/src/lib.rs, but %{no_std_gate}",
     },
     { requirement_id = "molten.testing.molten_core_no_std_ci_gate", reason = no_std_gate },
+    {
+      requirement_id = "molten.testing.traceability_code_backed_coverage",
+      reason = "the inherited-debt guard that implements this requirement is implemented and verified in tools/, which never discharges coverage; the inherited-tracey-debt flake check verifies it",
+    },
   ],
   non_claims = [
     "original-manifests-rewritten",

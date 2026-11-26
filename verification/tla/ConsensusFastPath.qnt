@@ -92,6 +92,8 @@ module ConsensusFastPath {
     else if (promise_mode == "mixed") "MixedView"
     else if (promise_mode == "reorder") "ReorderingProposer"
     else if (promise_mode == "missing") "MissingProposerPromise"
+    // The admitted proposer is missing from a 4-of-5 same-view superquorum.
+    else if (promise_mode == "unacknowledged") "MissingProposerAcknowledgement"
     else "FastCommitted"
 
   action fastCommitWith(command: str, ack_mode: str, promise_mode: str, conflict_free: bool): bool = {
@@ -111,7 +113,7 @@ module ConsensusFastPath {
   action fastCommit = {
     nondet command = COMMANDS.oneOf()
     nondet ack_mode = Set("same", "mixed", "short", "identity").oneOf()
-    nondet promise_mode = Set("all", "missing", "mixed", "reorder").oneOf()
+    nondet promise_mode = Set("all", "missing", "mixed", "reorder", "unacknowledged").oneOf()
     nondet conflict_free = Set(true, false).oneOf()
     fastCommitWith(command, ack_mode, promise_mode, conflict_free)
   }
@@ -171,4 +173,10 @@ module ConsensusFastPath {
   run emptyRecoveryTest = init.then(beginViewChangeWith(2))
     .then(agreeRecoverySetWith(Set())).then(commitRecoveryMarkerWith(true))
     .then(resumeNormalViewWith(2)).expect(inv and state.acceleration_view == 2)
+  // A 4-of-5 same-view superquorum that omits the admitted active proposer (the TLA+
+  // missing-promise counterexample shape), then the same command with the proposer included.
+  run proposerAcknowledgementTest = init.then(fastCommitWith("c1", "same", "unacknowledged", true))
+    .expect(state.last_decision == "MissingProposerAcknowledgement" and state.commit_order.length() == 0)
+    .then(fastCommitWith("c1", "same", "all", true))
+    .expect(inv and state.last_decision == "FastCommitted" and state.commit_order == List("c1"))
 }

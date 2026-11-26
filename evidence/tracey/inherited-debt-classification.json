@@ -1,11 +1,11 @@
 {
   "baseline": {
-    "blake3": "c46db3de2b17f02e0aa8ef5622ce97ea21bce2e393c119484a451b3408d1a3d3",
-    "entries": 2460,
+    "blake3": "ebaf9c6f57491231ec185c3d8a7fdbc683decf0929ce03fb64e8568323ec2b50",
+    "entries": 2461,
     "path": "evidence/tracey/inherited-debt-baseline.txt"
   },
   "classes": {
-    "accepted_implementation_unestablished": 2460,
+    "accepted_implementation_unestablished": 2461,
     "implemented_missing_marker": 0,
     "obsolete_or_invalid": 0,
     "renamed_or_replaced": 0
@@ -30,12 +30,12 @@
     }
   ],
   "inventory": {
-    "blake3": "8633653b9f9de1a9f83c61f5ab1b612dae08eb2b85c38738a7aa8c587ba5ab4e",
-    "entries": 2460,
+    "blake3": "b6fcc29fb0ebf10e7f3fbec57beb6b60505c0b256e388ca4c0d96dbf72b03a28",
+    "entries": 2461,
     "path": "evidence/tracey/inherited-debt-classification.tsv",
     "source_area_groups": 201,
     "specification_groups": 81,
-    "summary_blake3": "f754baafbaa9bfec6e9e55111dec1ce629800d274b4a2e24c03e366bd7a35458",
+    "summary_blake3": "7d4a85e5b84359f5f8469a51825db64140198251f7a2c79585bc7f815d538a33",
     "summary_path": "evidence/tracey/inherited-debt-classification.md"
   },
   "non_claims": [

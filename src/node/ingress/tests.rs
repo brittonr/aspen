@@ -18,10 +18,10 @@ impl Case {
             node_id: "node:recovery",
         })
         .expect("initialize receiver");
-        let authority = [local_ref("authority", "recovery").expect("authority")];
-        let policy = [local_ref("policy", "recovery").expect("policy")];
-        let resource = [local_ref("resource", "recovery").expect("resource")];
-        let bootstrap = [local_ref("bootstrap", "recovery").expect("bootstrap")];
+        let authority = [super::super::storage::local_ref("authority", "recovery").expect("authority")];
+        let policy = [super::super::storage::local_ref("policy", "recovery").expect("policy")];
+        let resource = [super::super::storage::local_ref("resource", "recovery").expect("resource")];
+        let bootstrap = [super::super::storage::local_ref("bootstrap", "recovery").expect("bootstrap")];
         let request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
@@ -67,7 +67,7 @@ impl Case {
         let delivery = root.delivery_store().expect("delivery store");
         let scope = crate::delivery_idempotency::remote_topic_scope_ref(&self.envelope.topic, &self.envelope.to_node)
             .expect("scope");
-        let evidence = ingress_idempotency_evidence_refs(&self.envelope);
+        let evidence = super::super::mandates::ingress_idempotency_evidence_refs(&self.envelope);
         crate::delivery_idempotency::check_with_root(crate::delivery_idempotency::CapabilityCheckInput {
             root: &delivery,
             request: crate::delivery_idempotency::CheckRequest {
@@ -97,7 +97,7 @@ impl Case {
         decision
     }
 
-    fn set_metadata(&self, metadata: &IoValue) {
+    fn set_metadata(&self, metadata: &preserves::IOValue) {
         let root = self.reopen();
         let delivery = root.delivery_store().expect("delivery store");
         let mut store = crate::delivery_idempotency::PublicationStore::open(&delivery).expect("journal");
@@ -114,9 +114,9 @@ impl Case {
 
     fn write_inbox(&self) {
         let root = self.reopen();
-        write_preserves(
+        super::super::storage::write_preserves(
             &root,
-            &control_inbox_path(&self.envelope.request.request_ref).expect("inbox path"),
+            &super::super::paths::control_inbox_path(&self.envelope.request.request_ref).expect("inbox path"),
             &self.envelope.request.value,
         )
         .expect("persist exact inbox before receipt");
@@ -131,10 +131,10 @@ impl Case {
         .expect("reopen and reconcile delivery")
     }
 
-    fn dispatch(&self) -> Result<ControlDispatch> {
+    fn dispatch(&self) -> crate::error::Result<ControlDispatch> {
         dispatch_control_request_with_root(
             &self.reopen(),
-            Some(&control_inbox_entry_name(&self.envelope.request.request_ref)),
+            Some(&super::super::paths::control_inbox_entry_name(&self.envelope.request.request_ref)),
         )
     }
 
@@ -150,15 +150,15 @@ impl Case {
     fn facts(&self) -> Vec<Option<Vec<u8>>> {
         let request = &self.envelope.request.request_ref;
         [
-            control_inbox_path(request).expect("inbox"),
-            queue_receipt_path(request).expect("queue"),
-            control_outbox_request_path(request).expect("archive"),
-            control_outbox_receipt_path(request).expect("result"),
-            dispatch_receipt_path(request).expect("dispatch"),
-            control_operation_receipt_path(request).expect("operation result"),
-            fixed_node_path(HEALTH_FILE).expect("health"),
-            fixed_node_path(CONTROL_STATUS_FILE).expect("status effect"),
-            fixed_node_path(CONTROL_LOCK_FILE).expect("active lock"),
+            super::super::paths::control_inbox_path(request).expect("inbox"),
+            super::super::paths::queue_receipt_path(request).expect("queue"),
+            super::super::paths::control_outbox_request_path(request).expect("archive"),
+            super::super::paths::control_outbox_receipt_path(request).expect("result"),
+            super::super::paths::dispatch_receipt_path(request).expect("dispatch"),
+            super::super::paths::control_operation_receipt_path(request).expect("operation result"),
+            super::super::storage::fixed_node_path(HEALTH_FILE).expect("health"),
+            super::super::storage::fixed_node_path(CONTROL_STATUS_FILE).expect("status effect"),
+            super::super::storage::fixed_node_path(CONTROL_LOCK_FILE).expect("active lock"),
         ]
         .iter()
         .map(|path| self.read(path))
@@ -185,13 +185,13 @@ impl Case {
     }
 
     fn assert_no_pending(&self) {
-        assert!(next_pending_control_request(&self.reopen()).expect("pending scan").is_none());
+        assert!(super::super::leases::next_pending_control_request(&self.reopen()).expect("pending scan").is_none());
     }
 
     fn queue(&self) -> ControlQueueReceipt {
-        let value = read_preserves(
+        let value = super::super::storage::read_preserves(
             &self.reopen(),
-            &queue_receipt_path(&self.envelope.request.request_ref).expect("queue path"),
+            &super::super::paths::queue_receipt_path(&self.envelope.request.request_ref).expect("queue path"),
         )
         .expect("persisted queue receipt");
         parse_control_queue_receipt(&value).expect("queue receipt")

@@ -10,7 +10,7 @@ pub struct InMemory {
     pub fail_commit: bool,
 }
 
-impl crate::fabric_membership::AssignmentPersistence for InMemory {
+impl crate::fabric_membership::AssignmentLog for InMemory {
     fn initialize(&mut self, proposal: &crate::fabric_membership::AssignmentProposal) -> crate::fabric::FabricPortResult<crate::fabric_membership::CurrentAssignment> {
         self.initialize_slot(proposal, None)
     }
@@ -65,7 +65,9 @@ impl crate::fabric_membership::AssignmentPersistence for InMemory {
         self.commits.push(resolution.value.clone());
         Ok(resolution.value)
     }
+}
 
+impl crate::fabric_membership::PendingIntentRecovery for InMemory {
     fn inspect_pending(&self, assignment_id: &str) -> crate::fabric::FabricPortResult<Option<crate::fabric_membership::PendingAssignmentIntent>> {
         let Some(record) = self.assignments.get(assignment_id) else {
             return Ok(None);
@@ -92,7 +94,9 @@ impl crate::fabric_membership::AssignmentPersistence for InMemory {
     ) -> crate::fabric::FabricPortResult<crate::fabric_membership::ReconciledAssignment> {
         self.recover(assignment_id, |record| record.reconcile(intent_ref, reconciliation))
     }
+}
 
+impl crate::fabric_membership::QuarantineRecovery for InMemory {
     fn quarantine_reconciliation(&self, assignment_id: &str) -> crate::fabric::FabricPortResult<Option<crate::fabric_membership::QuarantineReconciliation>> {
         self.quarantine_reconciliation_record(assignment_id)
     }

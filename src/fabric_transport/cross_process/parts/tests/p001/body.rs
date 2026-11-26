@@ -101,6 +101,8 @@ fn public_shell_surface_contains_no_runtime_handle_accessor_or_ambient_fallback(
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p001/body.rs")),
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p002/body.rs")),
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p003/body.rs")),
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p004/body.rs")),
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p005/body.rs")),
     );
     for forbidden in [
         "pub fn endpoint(",

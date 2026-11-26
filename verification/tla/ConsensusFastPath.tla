@@ -1,6 +1,6 @@
 ---- MODULE ConsensusFastPath ----
 \* Bounded finite design model of the blocked fast-path acceleration package
-\* (src/fabric_consistency/fastpath), not a live-engine proof. Every replica
+\* (crates/molten-fastpath-core), not a live-engine proof. Every replica
 \* keeps its own acceptance log; client requests reach replicas in any order;
 \* fast admission counts real per-replica acknowledgements against
 \* SuperQuorumSize; view-change recovery sees only the logs of a
@@ -17,13 +17,13 @@
 \* engine is the separately model-checked production Raft (AspenRaft.tla);
 \* here it is an abstract durable commit log fed by the active proposer.
 \*
-\* MODEL ASSUMPTION NOT ENFORCED BY THE RUST API: a compatible promise is
-\* modeled as the order-preserving active proposer having itself acknowledged
-\* the command at that position. Rust validate_promises checks only promise
-\* views and proposal_order_preserved, with conflict_free supplied by the
-\* caller. Without this conjunct the four-replica baseline violates
-\* CommittedOrderAgreement. Tracked as a source discrepancy in
-\* docs/consensus-fastpath-tla.md and this change's tasks.
+\* A compatible promise is modeled as the order-preserving active proposer
+\* having itself acknowledged the command at that position. Rust
+\* evaluate_stable_view enforces it (FallbackReason::MissingProposerAcknowledgement:
+\* every active proposer must be among the same-view acknowledgers, with
+\* conflict_free standing for the equal prefix). Without this conjunct the
+\* four-replica baseline violates CommittedOrderAgreement; see the resolved
+\* source discrepancy in docs/consensus-fastpath-tla.md.
 \* r[impl molten.consensus.production_raft_formal_model]
 EXTENDS Naturals, FiniteSets, Sequences
 
@@ -117,7 +117,7 @@ Accept(r, c) ==
 \* same-view acknowledgements of one command at one position (all commands
 \* conflict, so equal prefixes are the conflict-free condition), and a
 \* compatible promise from the active proposer: it preserves its proposal
-\* order for the view and (model assumption, see header) has itself
+\* order for the view and (enforced in Rust, see header) has itself
 \* acknowledged this command at this position.
 FastCommit(r0, k) ==
     /\ phase = "normal"

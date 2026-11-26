@@ -1,5 +1,4 @@
 use alloc::collections::BTreeMap;
-use alloc::collections::BTreeSet;
 
 use super::ClosureIssue;
 use super::ClosureReport;
@@ -15,7 +14,8 @@ use super::WorldCommitRef;
 use super::root_for_kind;
 
 const TERMINAL_RESTORE_STEP_COUNT: usize = 2;
-const WALK_EVENT_FACTOR: usize = 2;
+
+mod graph;
 
 // r[impl molten.world_commit.restore]
 pub fn validate_closure(request: &ClosureRequest) -> ClosureReport {
@@ -222,63 +222,12 @@ fn validate_parent_graph(request: &ClosureRequest, core: &WorldCommitCore, issue
     }
     // Every supplied observation must belong to the subject's ancestry, and cycle detection
     // starts from every node so a detached `X -> Y -> X` component cannot hide from the walk.
-    for unreachable in unreachable_observations(&request.commit_ref, &graph) {
+    for unreachable in graph::unreachable_observations(&request.commit_ref, &graph) {
         issues.push(ClosureIssue::UnreachableParentObservation(unreachable.as_str().to_string()));
     }
-    if let Some(cycle) = first_cycle(&request.commit_ref, &graph) {
+    if let Some(cycle) = graph::first_cycle(&request.commit_ref, &graph) {
         issues.push(ClosureIssue::ParentCycle(cycle.as_str().to_string()));
     }
-}
-
-fn unreachable_observations<'a>(
-    root: &WorldCommitRef,
-    graph: &'a BTreeMap<WorldCommitRef, Vec<WorldCommitRef>>,
-) -> Vec<&'a WorldCommitRef> {
-    let mut reachable = BTreeSet::new();
-    let mut stack = Vec::with_capacity(graph.len());
-    stack.push(root);
-    while let Some(node) = stack.pop() {
-        if !reachable.insert(node) {
-            continue;
-        }
-        if let Some(parents) = graph.get(node) {
-            stack.extend(parents.iter().filter(|parent| !reachable.contains(parent)));
-        }
-    }
-    graph.keys().filter(|commit_ref| !reachable.contains(commit_ref)).collect()
-}
-
-fn first_cycle(root: &WorldCommitRef, graph: &BTreeMap<WorldCommitRef, Vec<WorldCommitRef>>) -> Option<WorldCommitRef> {
-    let capacity = graph.len().saturating_mul(WALK_EVENT_FACTOR);
-    let mut stack = Vec::with_capacity(capacity);
-    let mut visiting = BTreeSet::new();
-    let mut visited = BTreeSet::new();
-    for start in core::iter::once(root).chain(graph.keys()) {
-        if visited.contains(start) {
-            continue;
-        }
-        stack.push((start.clone(), false));
-        while let Some((node, is_exit)) = stack.pop() {
-            if is_exit {
-                visiting.remove(&node);
-                visited.insert(node);
-                continue;
-            }
-            if visited.contains(&node) {
-                continue;
-            }
-            if !visiting.insert(node.clone()) {
-                return Some(node);
-            }
-            stack.push((node.clone(), true));
-            if let Some(parents) = graph.get(&node) {
-                for parent in parents.iter().rev() {
-                    stack.push((parent.clone(), false));
-                }
-            }
-        }
-    }
-    None
 }
 
 fn push_root_step(

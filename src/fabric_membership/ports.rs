@@ -98,7 +98,14 @@ pub struct ReconciledAssignment {
     pub current: CurrentAssignment,
 }
 
-pub trait AssignmentPersistence {
+/// The complete assignment persistence owner: the committed assignment log plus the recovery
+/// routes for pending intents and quarantined role slots.
+pub trait AssignmentPersistence: AssignmentLog + PendingIntentRecovery + QuarantineRecovery {}
+
+impl<T: AssignmentLog + PendingIntentRecovery + QuarantineRecovery + ?Sized> AssignmentPersistence for T {}
+
+/// Committed role ownership and its strict intent/commit protocol.
+pub trait AssignmentLog {
     /// Insert pure Proposed state without replacing an ID. A role successor must bind its exact
     /// released predecessor and advance the durable role-slot epoch and fencing token.
     fn initialize(&mut self, proposal: &AssignmentProposal) -> FabricPortResult<CurrentAssignment>;
@@ -119,7 +126,10 @@ pub trait AssignmentPersistence {
         intent_ref: &str,
         role_effect_ref: Option<&str>,
     ) -> FabricPortResult<String>;
+}
 
+/// Recovery of an intent recorded but not committed, without replaying its role effect.
+pub trait PendingIntentRecovery {
     /// Read the unresolved intent for an assignment, if any. Never replays its role effect.
     // r[impl molten.fabric_membership.recoverable_pending_and_quarantined_slots]
     fn inspect_pending(&self, assignment_id: &str) -> FabricPortResult<Option<PendingAssignmentIntent>>;
@@ -146,7 +156,10 @@ pub trait AssignmentPersistence {
         intent_ref: &str,
         reconciliation: PendingIntentReconciliation<'_>,
     ) -> FabricPortResult<ReconciledAssignment>;
+}
 
+/// Reconciliation and fenced succession of quarantined role slots.
+pub trait QuarantineRecovery {
     /// Read the reconciliation record this owner persisted when the assignment was quarantined.
     // r[impl molten.fabric_membership.recoverable_pending_and_quarantined_slots]
     fn quarantine_reconciliation(&self, assignment_id: &str) -> FabricPortResult<Option<QuarantineReconciliation>>;

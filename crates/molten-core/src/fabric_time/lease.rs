@@ -152,6 +152,7 @@ pub fn evaluate_deadline(
     })
 }
 
+// r[impl molten.fabric_time.retry_deadline_domain]
 pub fn plan_retry(
     profile: &AdmittedTimeProfile,
     active_generation: u64,
@@ -174,6 +175,7 @@ pub fn plan_retry(
         });
     }
     validate_time_value(profile, now).map_err(DeadlineLeaseError::Arithmetic)?;
+    validate_deadline_domain(now.domain())?;
     if attempt >= policy.maximum_attempts {
         return Err(DeadlineLeaseError::RetryExhausted {
             attempt,

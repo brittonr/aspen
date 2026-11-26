@@ -42,7 +42,7 @@
             snapshot
                 .receipts
                 .iter()
-                .any(|receipt| receipt.predicate == "molten.trellis-runtime.snapshot-authority.v1")
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.snapshot-authority.v2")
         );
         assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == crate::runtime::PredicateDecision::Pass));
         assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == crate::runtime::PredicateDecision::Deny));

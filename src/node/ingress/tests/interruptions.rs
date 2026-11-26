@@ -13,8 +13,11 @@ fn before_result_publication_blocks_replay_of_executed_status_effect() {
     let status = status_local_node_with_request(&case.reopen(), &case.envelope.request).expect("actual status effect");
     assert_eq!(status.status, "running");
     assert!(
-        case.read(&control_outbox_receipt_path(&case.envelope.request.request_ref).expect("result path"))
-            .is_none()
+        case.read(
+            &super::super::super::paths::control_outbox_receipt_path(&case.envelope.request.request_ref)
+                .expect("result path")
+        )
+        .is_none()
     );
     let before = case.facts();
     assert_eq!(case.assert_denied().phase, "outcome-unknown");
@@ -30,11 +33,14 @@ fn observes_result_before_dispatch_receipt_without_executing_again() {
     case.start_fixture();
     case.deliver();
     case.set_phase(crate::core_api::node_ingress::PublicationPhase::Dispatching);
-    let dispatched =
-        dispatch_status_request(&case.reopen(), &case.envelope.request).expect("actual result publication");
+    let dispatched = super::super::super::handlers::dispatch_status_request(&case.reopen(), &case.envelope.request)
+        .expect("actual result publication");
     assert!(
-        case.read(&dispatch_receipt_path(&case.envelope.request.request_ref).expect("dispatch path"))
-            .is_none()
+        case.read(
+            &super::super::super::paths::dispatch_receipt_path(&case.envelope.request.request_ref)
+                .expect("dispatch path")
+        )
+        .is_none()
     );
     let before = case.facts();
     let delivered = case.deliver();
@@ -115,7 +121,8 @@ fn durable_quarantine_blocks_enqueue_and_control_dispatch() {
 fn unavailable_observation_is_not_absence_or_permission_to_enqueue() {
     let case = Case::new("ingress_unavailable_observation");
     let reservation = case.reserve();
-    let queue_path = queue_receipt_path(&case.envelope.request.request_ref).expect("queue path");
+    let queue_path =
+        super::super::super::paths::queue_receipt_path(&case.envelope.request.request_ref).expect("queue path");
     case.reopen().create_dir_all(&queue_path).expect("unreadable non-file observation fixture");
     case.assert_denied();
     assert_eq!(
@@ -124,11 +131,14 @@ fn unavailable_observation_is_not_absence_or_permission_to_enqueue() {
     );
     case.assert_no_pending();
     assert!(
-        case.read(&control_outbox_receipt_path(&case.envelope.request.request_ref).expect("result path"))
-            .is_none()
+        case.read(
+            &super::super::super::paths::control_outbox_receipt_path(&case.envelope.request.request_ref)
+                .expect("result path")
+        )
+        .is_none()
     );
     case.assert_dedup_preserved(&reservation);
-    let other = status_request().expect("independent request");
+    let other = super::super::super::running::status_request().expect("independent request");
     let submitted = super::super::submit(&case.reopen(), &other.value).expect("unaffected submission");
     let receipt = parse_control_queue_receipt(&submitted.queue_receipt_value).expect("independent queue receipt");
     assert_eq!(receipt.decision, "pass");

@@ -59,7 +59,7 @@ try {
     throw new Error("generated causal trace does not match the authored two-state fixture");
   }
   const replay = run("normal-replay", normal, ["--nocapture", "--test-threads=1"]);
-  if (!replay.includes("test result: ok. 4 passed; 0 failed")) throw new Error("normal replay test inventory mismatch");
+  if (!replay.includes("test result: ok. 5 passed; 0 failed")) throw new Error("normal replay test inventory mismatch");
   run("mutated-guard-replay", mutant, ["--exact", "mixed_view_guard_replay", "--nocapture"], true);
   report.status = "passed";
   report.scope = "bounded API conformance, not TLA+/Quint equivalence or live-engine proof";

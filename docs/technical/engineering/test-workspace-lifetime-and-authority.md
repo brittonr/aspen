@@ -24,9 +24,7 @@ Existing command-line programs consume paths, so `ProcessPathBridge::plan` verif
 
 The plan itself contains a `PathBuf` and label, not an `Arc<WorkspaceInner>`. Retaining a cloned plan therefore does not independently retain cleanup ownership. `ProcessWorkspace` addresses path-oriented compatibility by retaining a `Workspace` alongside the plan. For direct bridge usage, reviewers should ensure a workspace or root guard outlives the child operation rather than infer lifetime from the plan's name.
 
-The inspected Unix helper resolves `/proc/self/fd/<descriptor>` with `std::fs::read_link`. Non-Unix builds explicitly return `Unsupported`. There is a scoped discrepancy with the governing guide's broader wording that hosts without the descriptor bridge return `Unsupported`: on a Unix host lacking usable `/proc/self/fd`, this implementation propagates the filesystem error instead. This article does not claim uniform error classification or portability across all Unix hosts.
-
-This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+The Unix helper resolves `/proc/self/fd/<descriptor>` with `std::fs::read_link`; non-Unix builds return `Unsupported`. As the governing guide states, a host without the descriptor bridge returns `Unsupported` on Unix too: when the bridge entry is missing (`NotFound` or `NotADirectory`) or unreadable (`PermissionDenied`), the helper maps the error to `Unsupported`, because callers branch on the failure class and a missing bridge is a capability gap, not a transient filesystem fault. Every other I/O error keeps its class. Uniform classification is not portability: `Workspace::new` derives its diagnostic path through this helper, so a host without the bridge still cannot create a workspace.
 
 ## Worked export and substitution scenario
 

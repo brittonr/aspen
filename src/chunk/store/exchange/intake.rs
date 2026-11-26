@@ -1,0 +1,295 @@
+//! Iroh fetch admission: ticket shape and manifest binding, manifest blob verification, and
+//! missing-chunk planning.
+
+pub(super) fn claim_manifest(
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    ticket: &str,
+    expected_manifest_ref: Option<&str>,
+) -> crate::error::Result<String> {
+    let advertised_manifest_ref = match ticket.strip_prefix("iroh-local-chunk:") {
+        Some(manifest_ref) => manifest_ref,
+        None => {
+            let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                "iroh-fetch",
+                None,
+                &[],
+                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
+                vec![("ticket-shape", "fail"), ("deny-unsupported-ticket", "pass")],
+            );
+            crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+            return Err(crate::error::Failure::invalid_harness(
+                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
+            ));
+        }
+    };
+    if let Some(expected) = expected_manifest_ref
+        && expected != advertised_manifest_ref
+    {
+        let message = format!("Iroh chunk ticket advertises manifest {advertised_manifest_ref}, expected {expected}");
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "iroh-fetch",
+            Some(advertised_manifest_ref),
+            &[],
+            &message,
+            vec![("ticket-manifest-binding", "fail"), ("deny-wrong-manifest", "pass")],
+        );
+        crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    Ok(advertised_manifest_ref.to_string())
+}
+
+pub(super) fn loaded_ticket(
+    iroh_root: &crate::blocks::CapabilityChunkRoot,
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    advertised_manifest_ref: &str,
+) -> crate::error::Result<crate::blocks::exchange::token::IrohChunkTicket> {
+    let ticket_value = match crate::blocks::exchange::token::read_iroh_ticket(iroh_root, advertised_manifest_ref) {
+        Ok(ticket_value) => ticket_value,
+        Err(error) => {
+            let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                "iroh-fetch",
+                Some(advertised_manifest_ref),
+                &[],
+                error.to_string(),
+                vec![
+                    ("ticket-availability", "fail"),
+                    ("deny-missing-or-invalid-ticket", "pass"),
+                ],
+            );
+            crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    let parsed_ticket = match crate::blocks::exchange::token::parse_iroh_ticket_value(&ticket_value) {
+        Ok(parsed_ticket) => parsed_ticket,
+        Err(error) => {
+            let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                "iroh-fetch",
+                Some(advertised_manifest_ref),
+                &[],
+                error.to_string(),
+                vec![("ticket-shape", "fail"), ("deny-missing-or-invalid-ticket", "pass")],
+            );
+            crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    if parsed_ticket.manifest_ref != advertised_manifest_ref {
+        let message = format!(
+            "Iroh ticket manifest {} does not match advertised manifest {advertised_manifest_ref}",
+            parsed_ticket.manifest_ref
+        );
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "iroh-fetch",
+            Some(advertised_manifest_ref),
+            &[],
+            &message,
+            vec![("ticket-manifest-binding", "fail"), ("deny-wrong-manifest", "pass")],
+        );
+        crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    Ok(parsed_ticket)
+}
+
+pub(super) fn received_manifest(
+    iroh_root: &crate::blocks::CapabilityChunkRoot,
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    parsed_ticket: &crate::blocks::exchange::token::IrohChunkTicket,
+) -> crate::error::Result<crate::blocks::ChunkManifest> {
+    let manifest_bytes =
+        match crate::blocks::exchange::token::read_iroh_blob(iroh_root, &parsed_ticket.manifest_blob_ref) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                    "iroh-fetch",
+                    Some(&parsed_ticket.manifest_ref),
+                    &[],
+                    error.to_string(),
+                    vec![
+                        ("manifest-blob-availability", "fail"),
+                        ("deny-missing-manifest-blob", "pass"),
+                    ],
+                );
+                crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+                return Err(error);
+            }
+        };
+    if crate::blocks::integrity::hash_blob_bytes(&manifest_bytes) != parsed_ticket.manifest_blob_ref {
+        let message = format!("Iroh manifest blob {} failed blob hash verification", parsed_ticket.manifest_blob_ref);
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "iroh-fetch",
+            Some(&parsed_ticket.manifest_ref),
+            &[],
+            &message,
+            vec![
+                ("manifest-blob-verification", "fail"),
+                ("deny-corrupt-manifest-blob", "pass"),
+            ],
+        );
+        crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    let manifest_value = crate::preserves_rail::parse_canonical_bytes(&manifest_bytes)?;
+    let manifest_ref = crate::preserves_rail::canonical_hash(&manifest_value)?;
+    if manifest_ref != parsed_ticket.manifest_ref {
+        let message = format!("Iroh manifest blob hashes to {manifest_ref}, expected {}", parsed_ticket.manifest_ref);
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "iroh-fetch",
+            Some(&parsed_ticket.manifest_ref),
+            &[],
+            &message,
+            vec![
+                ("manifest-identity-preserved", "fail"),
+                ("transport-does-not-grant-trust", "pass"),
+            ],
+        );
+        crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    crate::blocks::layout::write_immutable_bytes(
+        dest_root,
+        &crate::blocks::layout::manifest_path(&manifest_ref)?,
+        &manifest_bytes,
+        &manifest_ref,
+        crate::preserves_rail::parse_canonical_bytes,
+    )?;
+    crate::blocks::parse_manifest_value(&manifest_value, Some(&manifest_ref))
+}
+
+pub(super) fn ticket_parts(
+    parsed_ticket: &crate::blocks::exchange::token::IrohChunkTicket,
+) -> std::collections::BTreeMap<String, crate::blocks::exchange::token::IrohChunkBlob> {
+    parsed_ticket.chunks.iter().map(|chunk| (chunk.chunk_ref.clone(), chunk.clone())).collect()
+}
+
+fn require_part(
+    parts: &std::collections::BTreeMap<String, crate::blocks::exchange::token::IrohChunkBlob>,
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    manifest: &crate::blocks::ChunkManifest,
+    refs: &[String],
+    part_ref: &str,
+) -> crate::error::Result<()> {
+    if parts.contains_key(part_ref) {
+        return Ok(());
+    }
+    let message = format!("Iroh ticket lacks blob mapping for chunk {part_ref}");
+    let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+        "iroh-fetch",
+        Some(&manifest.manifest_ref),
+        refs,
+        &message,
+        vec![("ticket-chunk-map", "fail"), ("deny-incomplete-ticket", "pass")],
+    );
+    crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+    Err(crate::error::Failure::invalid_harness(message))
+}
+
+fn available_ref(
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    manifest: &crate::blocks::ChunkManifest,
+    refs: &[String],
+    part: &crate::blocks::ChunkRef,
+    part_size: usize,
+) -> crate::error::Result<Option<String>> {
+    let dest_chunk_path = crate::blocks::layout::chunk_path(&part.chunk_ref)?;
+    if !dest_root.root().try_exists(&dest_chunk_path)? {
+        return Ok(None);
+    }
+    match crate::blocks::read_verified_chunk(dest_root, part, part_size) {
+        Ok(_) => Ok(Some(part.chunk_ref.clone())),
+        Err(error) => {
+            let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                "iroh-fetch",
+                Some(&manifest.manifest_ref),
+                refs,
+                error.to_string(),
+                vec![
+                    ("existing-chunk-verification", "fail"),
+                    ("deny-corrupt-dedup-source", "pass"),
+                ],
+            );
+            crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+            Err(error)
+        }
+    }
+}
+
+pub(super) fn plan_incoming(
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    manifest: &crate::blocks::ChunkManifest,
+    refs: &[String],
+    parts: &std::collections::BTreeMap<String, crate::blocks::exchange::token::IrohChunkBlob>,
+    part_size: usize,
+) -> crate::error::Result<crate::blocks::exchange::mirror::Scan> {
+    let mut missing_before = Vec::new();
+    let mut already_available = Vec::new();
+    for part in &manifest.chunks {
+        require_part(parts, dest_root, manifest, refs, &part.chunk_ref)?;
+        if let Some(part_ref) = available_ref(dest_root, manifest, refs, part, part_size)? {
+            crate::bounded::push(
+                &mut already_available,
+                part_ref,
+                crate::blocks::limits::MAX_CHUNK_STORE_CHUNKS,
+                "chunk store already available chunks",
+            )?;
+        } else {
+            crate::bounded::push(
+                &mut missing_before,
+                part.chunk_ref.clone(),
+                crate::blocks::limits::MAX_CHUNK_STORE_CHUNKS,
+                "chunk store missing-before chunks",
+            )?;
+        }
+    }
+    Ok(crate::blocks::exchange::mirror::Scan {
+        missing_before,
+        already_available,
+    })
+}
+
+pub(super) fn part_for<'a>(
+    manifest: &'a crate::blocks::ChunkManifest,
+    part_ref: &str,
+) -> crate::error::Result<&'a crate::blocks::ChunkRef> {
+    manifest
+        .chunks
+        .iter()
+        .find(|candidate| candidate.chunk_ref == part_ref)
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("manifest missing expected chunk {part_ref}")))
+}
+
+pub(super) fn blob_for<'a>(
+    parts: &'a std::collections::BTreeMap<String, crate::blocks::exchange::token::IrohChunkBlob>,
+    part_ref: &str,
+) -> crate::error::Result<&'a crate::blocks::exchange::token::IrohChunkBlob> {
+    parts.get(part_ref).ok_or_else(|| {
+        crate::error::Failure::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {part_ref}"))
+    })
+}
+
+pub(super) fn require_blob_len(
+    dest_root: &crate::blocks::CapabilityChunkRoot,
+    manifest: &crate::blocks::ChunkManifest,
+    refs: &[String],
+    part: &crate::blocks::ChunkRef,
+    blob: &crate::blocks::exchange::token::IrohChunkBlob,
+) -> crate::error::Result<()> {
+    if blob.length == part.length {
+        return Ok(());
+    }
+    let message = format!(
+        "Iroh ticket length {} for chunk {} does not match manifest length {}",
+        blob.length, part.chunk_ref, part.length
+    );
+    let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+        "iroh-fetch",
+        Some(&manifest.manifest_ref),
+        refs,
+        &message,
+        vec![("ticket-chunk-map", "fail"), ("deny-incomplete-ticket", "pass")],
+    );
+    crate::blocks::registry::receipt(dest_root, &receipt_value)?;
+    Err(crate::error::Failure::invalid_harness(message))
+}

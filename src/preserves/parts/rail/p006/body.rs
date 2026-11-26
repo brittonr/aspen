@@ -218,14 +218,21 @@ fn validate_optional_ref_boundary_record(
     schema_ref: &ContentRef,
 ) -> Result<()> {
     let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
-    let optional = value_to_iovalue(&record[0]);
-    if optional.collect_simple_record("none", Some(FIELD_ARITY_ZERO)).is_some() {
-        return Ok(());
+    let label = field_spec.label;
+    match identity_bridge::decode_optional_ref(&value_to_iovalue(&record[0])) {
+        Ok(_) => Ok(()),
+        Err(identity_bridge::OptionalRefIssue::Shape) => {
+            Err(boundary_field_error(spec, label, "<none> or <some content-ref>", schema_ref))
+        }
+        Err(identity_bridge::OptionalRefIssue::NotString) => {
+            Err(boundary_field_error(spec, label, "canonical content ref string", schema_ref))
+        }
+        Err(identity_bridge::OptionalRefIssue::InvalidRef(error)) => Err(MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
+            spec.family, schema_ref
+        ))),
+        Err(identity_bridge::OptionalRefIssue::Conversion(error)) => Err(error),
     }
-    if let Some(some) = optional.collect_simple_record("some", Some(FIELD_ARITY_ONE)) {
-        return ensure_content_ref(&some[0], field_spec.label, spec, schema_ref);
-    }
-    Err(boundary_field_error(spec, field_spec.label, "<none> or <some content-ref>", schema_ref))
 }
 
 fn validate_checks_boundary_record(

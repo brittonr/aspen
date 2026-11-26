@@ -22,6 +22,7 @@
 //! identical for the CLI and the unit-test binary.
 
 mod activation;
+mod fixture;
 mod replay;
 mod restore;
 mod runtime;
@@ -36,7 +37,24 @@ pub(super) fn run(scenario: super::super::Scenario) -> crate::error::Result<supe
         super::super::Scenario::WorldRestoreStaleAdmissionDenied => restore::stale_admission_denied(true),
         super::super::Scenario::WorldActivationCurrentFacts => activation::current_facts(),
         super::super::Scenario::WorldActivationRevokedDenied => activation::revoked_denied(true),
-        _ => Err(invalid("scenario is not a world replay, restore or activation scenario")),
+        super::super::Scenario::GrantedSend
+        | super::super::Scenario::DeniedSend
+        | super::super::Scenario::DurableRestartRecovery
+        | super::super::Scenario::DurableCorruptSnapshotDenied
+        | super::super::Scenario::ExecutionUnknownAfterStart
+        | super::super::Scenario::ExecutionPreStartDefinite
+        | super::super::Scenario::NativeWorkUnknownAfterEffect
+        | super::super::Scenario::NativeUncertainWorkNotReadmitted
+        | super::super::Scenario::TransportEndpointImport
+        | super::super::Scenario::TransportEndpointTamperDenied
+        | super::super::Scenario::TransportSessionAcknowledged
+        | super::super::Scenario::TransportSessionLostAcknowledgement
+        | super::super::Scenario::RaftFailoverCommitSurvives
+        | super::super::Scenario::RaftStaleLeaderFenced
+        | super::super::Scenario::RaftFinalQuorumEvidence
+        | super::super::Scenario::RaftFalseQuorumDenied => {
+            Err(invalid("scenario is not a world replay, restore or activation scenario"))
+        }
     }
 }
 

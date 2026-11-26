@@ -22,8 +22,6 @@ The shell-supplied facts carry the signed grant, which must authorize exactly `p
 
 Operator mutations follow the same rule. Deny, retry planning, and abandon decide their action- and target-bound grant against the live head and nonce, then `apply_operator_mutation` rechecks that head and nonce in the write transaction that writes the reservation and attempt changes and consumes the nonce. Abandonment moves both the uncertain attempt and its reservation to `abandoned` in that transaction. `update_reservation` and every combined transition reject changes to a reservation's promotion, operation, candidate, intent, semantic, handler, or adapter reference or its generation.
 
-This discrepancy is tracked as a defect by the Cairn change [`harden-world-promotion-head-and-merge-semantics`](../../../.cairn/changes/harden-world-promotion-head-and-merge-semantics/proposal.md).
-
 ## Unknown publication is a distinct result
 
 A failure returned by the final Redb commit maps to `OutcomeUnknown`, not to definite non-publication. This is an epistemic distinction: an error reporting publication does not necessarily identify the durable state that a later observer will find.

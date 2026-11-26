@@ -99,4 +99,24 @@ mod tests {
         });
         assert_eq!((random.action, random.value, random.upper), (super::AdmissionAction::Random, None, Some(6)));
     }
+
+    #[test]
+    fn default_runtime_capability_context_denies_and_an_explicit_grant_admits() {
+        // r[verify molten.runtime_spine.capability_context_deny_by_default]
+        let value = crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value");
+        let request = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Assert {
+            actor: "producer".into(),
+            value: value.clone(),
+        });
+        let policy = super::AdmissionPolicy::allow_all();
+        let denied = policy.decide_with_capabilities(&super::CapabilityContext::default(), &request);
+        assert_eq!(denied.reason(), "missing capability grant");
+        let explicit = super::CapabilityContext::from_grants(vec![super::CapabilityGrant {
+            actor: Some("producer".to_string()),
+            action: Some(super::AdmissionAction::Assert),
+            target: None,
+            value: Some(value),
+        }]);
+        assert!(policy.decide_with_capabilities(&explicit, &request).is_allowed());
+    }
 }

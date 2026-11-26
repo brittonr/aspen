@@ -4,7 +4,7 @@
         // r[verify aspen.ast_grep_runtime_authority_audits.validation]
         // r[verify molten.evidence_gates.static_audit_content_bound_hashes]
         let daemon = ContentSource {
-            path: "src/node/parts/daemon/p020/body.rs",
+            path: "src/node/daemon/live/inbound.rs",
             bytes: b"fn carried(root: &DirectoryRoot) {}\n",
         };
         let ingress = ContentSource {
@@ -21,7 +21,7 @@
         };
         assert_ne!(scan_scope_hash(&[edited, ingress]).expect("edited scan scope"), baseline);
         let renamed = ContentSource {
-            path: "src/node/parts/daemon/p021/body.rs",
+            path: "src/node/daemon/live/handoff.rs",
             ..daemon
         };
         assert_ne!(scan_scope_hash(&[renamed, ingress]).expect("renamed scan scope"), baseline);
@@ -168,7 +168,7 @@
         let receipt = build_audit_receipt(scan_input(profile, rule_bundle_hash, vec![finding(
             "store-ambient-filesystem-call",
             "local-store-adapters",
-            "src/chunk/parts/store/p001/body.rs",
+            "src/chunk/store/local/ingest.rs",
         )]));
 
         assert!(!receipt.valid());

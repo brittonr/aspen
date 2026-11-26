@@ -1,8 +1,6 @@
-use molten::live_reliability::protocol;
-
 pub(super) fn run(request: std::path::PathBuf, response: std::path::PathBuf,
     authority_root: std::path::PathBuf, client_key: std::path::PathBuf) -> molten::error::Result<()> {
-    let mut request: protocol::Request = super::read(&request)?;
+    let mut request: molten::live_reliability::protocol::Request = super::read(&request)?;
     if request.authorization.is_some() { return Err(denied("adapter will not replace supplied request authorization")); }
     let root = molten::node_state::DirectoryRoot::open_existing(&authority_root)?;
     let grant = molten::live_reliability::authority::load(&root)?;
@@ -18,7 +16,8 @@ pub(super) fn run(request: std::path::PathBuf, response: std::path::PathBuf,
         match fence_term(&request) {
             Some(term) => term,
             None => {
-                let unavailable = protocol::response(&request, protocol::Outcome::Fail, serde_json::Value::Null,
+                let unavailable = molten::live_reliability::protocol::response(&request,
+                    molten::live_reliability::protocol::Outcome::Fail, serde_json::Value::Null,
                     Some("write-fence-term-unavailable".into()));
                 return super::write(&response, &unavailable);
             }
@@ -34,18 +33,18 @@ pub(super) fn run(request: std::path::PathBuf, response: std::path::PathBuf,
     super::write(&response, &result)
 }
 
-fn is_write(request: &protocol::Request) -> bool {
-    request.phase == protocol::Phase::Invoke
+fn is_write(request: &molten::live_reliability::protocol::Request) -> bool {
+    request.phase == molten::live_reliability::protocol::Phase::Invoke
         && request.operation.as_ref().and_then(|value| value.get("function")).and_then(|value| value.as_str())
             == Some("write")
 }
 
 /// The endpoint's current Raft term from an unchallenged probe, for a write's signed fence. The
 /// unsigned answer is advisory: a wrong term only makes the leader deny the write before any effect.
-fn fence_term(request: &protocol::Request) -> Option<u64> {
-    let probe = protocol::Request {
+fn fence_term(request: &molten::live_reliability::protocol::Request) -> Option<u64> {
+    let probe = molten::live_reliability::protocol::Request {
         schema: request.schema.clone(),
-        phase: protocol::Phase::Probe,
+        phase: molten::live_reliability::protocol::Phase::Probe,
         run_id: request.run_id.clone(),
         endpoint: request.endpoint.clone(),
         operation: None,
@@ -55,7 +54,7 @@ fn fence_term(request: &protocol::Request) -> Option<u64> {
         probe: None,
     };
     let answer = molten::live_reliability::client::execute(&probe);
-    if answer.outcome != protocol::Outcome::Ok { return None; }
+    if answer.outcome != molten::live_reliability::protocol::Outcome::Ok { return None; }
     answer.fence_term
 }
 

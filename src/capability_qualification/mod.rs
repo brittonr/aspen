@@ -13,9 +13,9 @@ mod source;
 mod tests;
 
 pub use model::CAPABILITIES;
-pub use model::Capability;
 pub use model::Definition;
 pub use model::Environment;
+pub use model::NativeProducer;
 pub use model::ObservedReadback;
 pub use model::ObservedSubject;
 pub use model::Produced;
@@ -58,11 +58,10 @@ pub fn observe_subject(root: &crate::node_state::DirectoryRoot) -> crate::error:
 pub fn observe_runs(root: &crate::node_state::DirectoryRoot) -> crate::error::Result<ObservedReadback> {
     let admitted = source::current(root)?;
     let programs = Programs::current()?;
-    let mut receipt_refs = std::collections::BTreeMap::new();
-    for scenario in Scenario::ALL {
-        let (id, receipt_ref) = observed_receipt(&admitted, scenario, &programs)?;
-        receipt_refs.insert(id, receipt_ref);
-    }
+    let receipt_refs = Scenario::ALL
+        .into_iter()
+        .map(|scenario| observed_receipt(&admitted, scenario, &programs))
+        .collect::<crate::error::Result<std::collections::BTreeMap<_, _>>>()?;
     Ok(ObservedReadback {
         subjects: admitted.source.observed_subjects,
         binding_ref: admitted.source.binding_ref,
@@ -116,7 +115,7 @@ pub fn produce(root: &crate::node_state::DirectoryRoot, scenario: Scenario) -> c
 
 /// Entry for a distinct-process peer started by a product producer.
 pub fn run_peer(role: &str, run_directory: &std::path::Path) -> crate::error::Result<()> {
-    products::run_peer(role, run_directory)
+    products::peer::run(role, run_directory)
 }
 
 fn execute(

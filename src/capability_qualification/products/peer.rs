@@ -10,7 +10,10 @@ pub(in crate::capability_qualification) const PEER_ROLE_ENV: &str = "MOLTEN_QUAL
 #[cfg(test)]
 pub(in crate::capability_qualification) const PEER_RUN_DIRECTORY_ENV: &str = "MOLTEN_QUALIFICATION_PEER_RUN_DIRECTORY";
 #[cfg(test)]
-const PEER_TEST_FILTER: &str = "capability_qualification::tests::qualification_peer_entry";
+const PEER_TEST_FILTER: &str = "capability_qualification::tests::peer_entry";
+
+#[cfg(test)]
+mod harness;
 
 /// How the producer starts a peer of itself.
 #[derive(Debug, Clone)]
@@ -30,14 +33,7 @@ impl Launcher {
         })
     }
 
-    #[cfg(test)]
-    pub(in crate::capability_qualification) fn test_harness() -> Self {
-        Self::TestHarness {
-            program: std::env::current_exe().expect("current unit-test executable"),
-        }
-    }
-
-    pub(super) fn spawn(&self, role: &str, run_directory: &std::path::Path) -> crate::error::Result<Peer> {
+    pub(super) fn spawn(&self, role: &str, run_directory: &std::path::Path) -> crate::error::Result<Process> {
         let mut command = match self {
             Self::Cli { program } => {
                 let mut command = std::process::Command::new(program);
@@ -63,16 +59,16 @@ impl Launcher {
             .stderr(error_log)
             .spawn()
             .map_err(crate::error::Failure::from)?;
-        Ok(Peer { child: Some(child) })
+        Ok(Process { child: Some(child) })
     }
 }
 
 /// An owned peer process; dropped peers are killed and reaped.
-pub(super) struct Peer {
+pub(super) struct Process {
     child: Option<std::process::Child>,
 }
 
-impl Peer {
+impl Process {
     pub(super) fn id(&self) -> Option<u32> {
         self.child.as_ref().map(std::process::Child::id)
     }
@@ -91,26 +87,20 @@ impl Peer {
         let Some(child) = self.child.as_mut() else {
             return Err(super::super::invalid("peer was already reaped"));
         };
-        let deadline = std::time::Instant::now() + timeout;
-        loop {
-            if let Some(status) = child.try_wait().map_err(crate::error::Failure::from)? {
-                self.child = None;
-                return if status.success() {
-                    Ok(())
-                } else {
-                    Err(super::super::invalid("qualification peer exited unsuccessfully"))
-                };
-            }
-            if std::time::Instant::now() >= deadline {
-                self.kill()?;
-                return Err(super::super::invalid("qualification peer did not exit within its bound"));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(PEER_POLL_MILLISECONDS));
+        let Some(status) = poll(timeout, || child.try_wait().map_err(crate::error::Failure::from))? else {
+            self.kill()?;
+            return Err(super::super::invalid("qualification peer did not exit within its bound"));
+        };
+        self.child = None;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(super::super::invalid("qualification peer exited unsuccessfully"))
         }
     }
 }
 
-impl Drop for Peer {
+impl Drop for Process {
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
@@ -131,25 +121,46 @@ pub(super) fn wait_value(
     path: &std::path::Path,
     timeout: std::time::Duration,
 ) -> crate::error::Result<preserves::IOValue> {
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        if path.is_file() {
-            let metadata = std::fs::metadata(path).map_err(crate::error::Failure::from)?;
-            if metadata.len() > PEER_FILE_MAX_BYTES {
-                return Err(super::super::invalid("peer value exceeds its byte bound"));
-            }
-            let bytes = std::fs::read(path).map_err(crate::error::Failure::from)?;
-            return Ok(crate::preserves_rail::strict_canonical_decode(&bytes)?.value);
+    let value = poll(timeout, || {
+        if !path.is_file() {
+            return Ok(None);
         }
-        if std::time::Instant::now() >= deadline {
-            return Err(super::super::invalid("timed out waiting for a qualification peer value"));
+        let metadata = std::fs::metadata(path).map_err(crate::error::Failure::from)?;
+        if metadata.len() > PEER_FILE_MAX_BYTES {
+            return Err(super::super::invalid("peer value exceeds its byte bound"));
+        }
+        let bytes = std::fs::read(path).map_err(crate::error::Failure::from)?;
+        Ok(Some(crate::preserves_rail::strict_canonical_decode(&bytes)?.value))
+    })?;
+    value.ok_or_else(|| super::super::invalid("timed out waiting for a qualification peer value"))
+}
+
+/// Probe until it yields a value, sleeping one poll interval between probes,
+/// until the monotonic deadline `timeout` expires (also capped at the number
+/// of intervals that fit in `timeout`), with one final probe at the bound.
+fn poll<T>(
+    timeout: std::time::Duration,
+    mut probe: impl FnMut() -> crate::error::Result<Option<T>>,
+) -> crate::error::Result<Option<T>> {
+    let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout)?;
+    let attempts = timeout.as_millis().div_ceil(u128::from(PEER_POLL_MILLISECONDS));
+    for _ in 0..attempts {
+        if let Some(value) = probe()? {
+            return Ok(Some(value));
+        }
+        if deadline.is_expired()? {
+            return Ok(None);
         }
         std::thread::sleep(std::time::Duration::from_millis(PEER_POLL_MILLISECONDS));
     }
+    probe()
 }
 
 /// Entry for a peer process: dispatch one fixed role.
-pub(crate) fn run_peer(role: &str, run_directory: &std::path::Path) -> crate::error::Result<()> {
+pub(in crate::capability_qualification) fn run(
+    role: &str,
+    run_directory: &std::path::Path,
+) -> crate::error::Result<()> {
     if !run_directory.is_dir() {
         return Err(super::super::invalid("qualification peer requires an existing run directory"));
     }

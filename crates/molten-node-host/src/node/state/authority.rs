@@ -1,61 +1,9 @@
 use cap_fs_ext::DirExt;
 
-const NODE_STATE_NAMESPACE_COUNT: usize = 14;
+#[path = "authority/layout.rs"]
+mod layout;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum NamespaceKind {
-    Identity,
-    Secrets,
-    Ledger,
-    ControlInbox,
-    ControlOutbox,
-    ControlIngress,
-    ControlIdempotency,
-    ControlService,
-    Services,
-    Receipts,
-    Registry,
-    Chunks,
-    Storage,
-    Ingress,
-}
-
-impl NamespaceKind {
-    pub const ALL: [Self; NODE_STATE_NAMESPACE_COUNT] = [
-        Self::Identity,
-        Self::Secrets,
-        Self::Ledger,
-        Self::ControlInbox,
-        Self::ControlOutbox,
-        Self::ControlIngress,
-        Self::ControlIdempotency,
-        Self::ControlService,
-        Self::Services,
-        Self::Receipts,
-        Self::Registry,
-        Self::Chunks,
-        Self::Storage,
-        Self::Ingress,
-    ];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Identity | Self::Secrets => "identity",
-            Self::Ledger => "ledger",
-            Self::ControlInbox => "control/inbox",
-            Self::ControlOutbox => "control/outbox",
-            Self::ControlIngress => "control/iroh-ingress",
-            Self::ControlIdempotency => "control/idempotency",
-            Self::ControlService => "control/service",
-            Self::Services => "services",
-            Self::Receipts => "receipts",
-            Self::Registry => "registry",
-            Self::Chunks => "chunks",
-            Self::Storage => "storage",
-            Self::Ingress => "control/iroh-ingress",
-        }
-    }
-}
+pub use layout::NamespaceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -334,50 +282,5 @@ mod open_seam {
 }
 
 #[cfg(all(test, unix))]
-mod open_existing_tests {
-    const MARKER: &str = "root-marker";
-
-    /// A test-owned directory under the system temporary directory; only this exact path is
-    /// removed.
-    struct OwnedTemp(std::path::PathBuf);
-
-    impl OwnedTemp {
-        fn new(label: &str) -> Self {
-            static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!("molten-node-host-{label}-{}-{sequence}", std::process::id()));
-            std::fs::create_dir(&path).expect("test-owned temporary directory");
-            Self(path)
-        }
-    }
-
-    impl Drop for OwnedTemp {
-        fn drop(&mut self) {
-            let _removed = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    // r[verify molten.runtime_spine.admission_and_capability_hardening]
-    #[test]
-    fn a_root_swapped_for_a_symlink_after_the_check_is_never_followed() {
-        let temp = OwnedTemp::new("root-swap");
-        let real = temp.0.join("state");
-        let evil = temp.0.join("evil");
-        std::fs::create_dir(&real).expect("real root");
-        std::fs::write(real.join(MARKER), b"real").expect("real marker");
-        std::fs::create_dir(&evil).expect("evil target");
-        std::fs::write(evil.join(MARKER), b"evil").expect("evil marker");
-
-        let opened = super::DirectoryRoot::open(&real).expect("positive control");
-        assert_eq!(opened.inner.dir.read(MARKER).expect("marker"), b"real");
-
-        // The check sees the real directory; the root is then replaced by a symlink before the open.
-        let (swap_real, swap_evil) = (real.clone(), evil.clone());
-        super::open_seam::set_after_bootstrap_check(move || {
-            std::fs::rename(&swap_real, swap_real.with_extension("parked")).expect("park real root");
-            std::os::unix::fs::symlink(&swap_evil, &swap_real).expect("swap in symlink");
-        });
-        let refused = super::DirectoryRoot::open_existing(&real).expect_err("a swapped root must deny");
-        assert!(refused.to_string().contains("must not be a symlink"), "{refused}");
-    }
-}
+#[path = "authority/tests.rs"]
+mod open_existing_tests;

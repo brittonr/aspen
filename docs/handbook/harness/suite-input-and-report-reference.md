@@ -10,13 +10,13 @@ The suite parser recognizes `harness-suite-v1`, with schema string `molten.harne
 
 | Input | Actual fields or shape | Owner and operational meaning |
 | --- | --- | --- |
-| Suite header | Schema, name, seed | `parse_suite` in schema p001; original source value is retained for suite identity |
-| `budget-v1` input | Schema plus `<limits steps effects events report-bytes>` | Schema p029; required explicitly by runner preparation |
-| `actor-registry-v1` | Schema plus actor sequence | Schema p022; duplicate actor IDs are rejected |
-| `actor` | ID, kind, optional executor record | Schema p022; an actor entry has two or three fields |
-| `capabilities-v1` | Schema plus grant sequence | Schema p034; explicit empty sequence represents no grants |
-| `grant` | Actor, action, target, value | Schema p034; optional constraints, not live credentials |
-| `policy-v1` | Policy fixture | Suite parser p001; independent from the capability fixture |
+| Suite header | Schema, name, seed | `parse_suite` in [`schema/model/intake.rs`](../../../src/harness/schema/model/intake.rs); original source value is retained for suite identity |
+| `budget-v1` input | Schema plus `<limits steps effects events report-bytes>` | `parse_budget_limits` in [`schema/gates/allowance.rs`](../../../src/harness/schema/gates/allowance.rs); required explicitly by runner preparation |
+| `actor-registry-v1` | Schema plus actor sequence | `parse_actor_registry` in [`schema/preflight/roster.rs`](../../../src/harness/schema/preflight/roster.rs); duplicate actor IDs are rejected |
+| `actor` | ID, kind, optional executor record | `parse_actor_registry` in `schema/preflight/roster.rs`, executor records in [`schema/preflight/setup.rs`](../../../src/harness/schema/preflight/setup.rs); an actor entry has two or three fields |
+| `capabilities-v1` | Schema plus grant sequence | `parse_capabilities` in [`schema/grants/grants.rs`](../../../src/harness/schema/grants/grants.rs); explicit empty sequence represents no grants |
+| `grant` | Actor, action, target, value | `parse_capabilities` in `schema/grants/grants.rs`; optional constraints, not live credentials |
+| `policy-v1` | Policy fixture | Suite parser in `schema/model/intake.rs`, which calls `parse_policy` in [`schema/gates/rules.rs`](../../../src/harness/schema/gates/rules.rs); independent from the capability fixture |
 | Step sequence | Ordered modeled operations | Runner p000; determines observation order and step references |
 
 The [two-actor example](../../../examples/two-actor.preserves) uses limits `64 16 256 65536`, native actors, six grants, and six steps. These are fixture values, not system-wide recommended limits. Its clock and random requests are deterministic local harness operations, not evidence of reads from the host clock or entropy source.
@@ -38,7 +38,7 @@ The current `report_value` builder emits a 17-field `harness-report-v1` record. 
 | 15 | Effect log | Supply recorded request-response pairs for replay |
 | 16 | Budget limits and usage | Check actual counted usage against declared bounds |
 
-The builder lives in [schema p004](../../../src/harness/parts/schema/p004/body.rs). A report's canonical reference is calculated from the report value; the `Report.report_ref` Rust field is not an extra serialized field in this table. The report parser recognizes historical arities too, but parser acceptance alone does not establish the evidence required by current validation.
+The builder lives in [the report outcome module](../../../src/harness/schema/trace/outcome.rs). A report's canonical reference is calculated from the report value; the `Report.report_ref` Rust field is not an extra serialized field in this table. The report parser recognizes historical arities too, but parser acceptance alone does not establish the evidence required by current validation.
 
 Each observation binds an index, step reference, before-state hash, after-state hash, and events. Events include admission, actor input, hostcall request/decision, runtime outcomes, actor output, and a turn journal. The journal binds policy/capability/budget refs plus event, effect, and receipt refs. A receipt is review evidence, not fresh authorization.
 
@@ -66,8 +66,9 @@ Budget usage also needs interpretation: events count evidence records, effects c
 - [Handbook](../README.md)
 - [Distributed testing evidence](../../distributed-testing.md)
 - [Deterministic playback theory](../../technical/foundations/deterministic-playback-contract.md)
-- [Suite structures](../../../src/harness/parts/schema/p000/body.rs)
-- [Suite parsing](../../../src/harness/parts/schema/p001/body.rs)
-- [Report construction](../../../src/harness/parts/schema/p004/body.rs)
-- [Budget and effect-log parsing](../../../src/harness/parts/schema/p029/body.rs)
+- [Suite structures](../../../src/harness/schema/model/model.rs)
+- [Suite parsing](../../../src/harness/schema/model/intake.rs)
+- [Report construction](../../../src/harness/schema/trace/outcome.rs)
+- [Budget parsing](../../../src/harness/schema/gates/allowance.rs)
+- [Effect-log parsing](../../../src/harness/schema/trace/tape.rs)
 - [Report validation and replay](../../../src/harness/replay.rs)

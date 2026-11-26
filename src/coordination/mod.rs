@@ -6,17 +6,23 @@
 //! with Raft/control-registry evidence before dataspace facts are reflected.
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p017/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p002/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p018/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p011/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p012/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p021/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p013/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p022/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p016/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p019/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p020/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p014/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p008/body.rs"));
