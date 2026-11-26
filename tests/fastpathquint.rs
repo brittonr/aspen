@@ -85,10 +85,17 @@ impl FastPathDriver {
         }
     }
 
-    fn fast_commit(&mut self, command: String, ack_mode: String, promise_mode: String, conflict_free: bool) {
+    fn fast_commit(
+        &mut self,
+        command: String,
+        ack_mode: String,
+        promise_mode: String,
+        conflict_free: bool,
+    ) -> quint_connect::Result {
         let attempt = attempt(&command, &ack_mode, &promise_mode, conflict_free, &self.recovery);
         // The derived five-replica quorums: superquorum 4, so a superquorum can omit the proposer.
-        let quorums = molten::fabric_consistency::fastpath::derive_quorums(5).expect("five-replica quorums");
+        let quorums = molten::fabric_consistency::fastpath::derive_quorums(5)
+            .ok_or_else(|| std::io::Error::other("five replicas must derive fast-path quorums"))?;
         let decision = molten::fabric_consistency::fastpath::evaluate_stable_view(&attempt, quorums);
         self.conflict_free = conflict_free;
         self.decision = match decision {
@@ -102,6 +109,7 @@ impl FastPathDriver {
             molten::fabric_consistency::fastpath::StableViewDecision::OriginalOnly => "OriginalOnly".to_owned(),
             molten::fabric_consistency::fastpath::StableViewDecision::Fallback(reason) => format!("{reason:?}"),
         };
+        Ok(())
     }
 
     fn converge(&mut self, command: String) -> quint_connect::Result {
@@ -178,7 +186,7 @@ impl Driver for FastPathDriver {
                 pick(step, "ack_mode")?,
                 pick(step, "promise_mode")?,
                 pick(step, "conflict_free")?,
-            ),
+            )?,
             "Converge" => self.converge(pick(step, "command")?)?,
             other => return Err(std::io::Error::other(format!("unknown Quint action {other}")).into()),
         }
