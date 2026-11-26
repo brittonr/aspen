@@ -61,7 +61,10 @@ pub struct ExpiryTransition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpiryIssue {
     UnknownJob(String),
-    NotStale(String),
+    /// The reservation already released its capacity; a second release would double-credit.
+    AlreadyReleased(String),
+    /// The reservation names a worker absent from the authoritative worker set.
+    UnknownWorker(String),
     CapacityInvariantViolated,
 }
 
@@ -138,7 +141,13 @@ pub fn admit_batch(state: &ReservationState_, request: &BatchRequest) -> Result<
 
 /// Marks an expired lease stale and releases its capacity only with an
 /// enforcement or termination fact.
+///
+/// A `Committed` or already `Stale` reservation accepts a later admitted
+/// enforcement fact, so delayed `ObservedStop` or `FencingTakeover` evidence
+/// always moves `Stale -> Released`. Release restores both the pool and the
+/// assigned worker's units and bytes. A `Released` reservation fails closed.
 // r[impl molten.reservation_command.expiry_not_release]
+// r[impl molten.fabric_time.reservation_stale_release_and_worker_conservation]
 pub fn expire_reservation(
     state: &ReservationState_,
     expiry: &ReservationExpiry,
@@ -146,22 +155,19 @@ pub fn expire_reservation(
     let Some(index) = state.reservations.iter().position(|record| record.job_id == expiry.job_id) else {
         return Err(ExpiryIssue::UnknownJob(expiry.job_id.clone()));
     };
-    if state.reservations[index].state != ReservationState::Committed {
-        return Err(ExpiryIssue::NotStale(expiry.job_id.clone()));
+    if state.reservations[index].state == ReservationState::Released {
+        return Err(ExpiryIssue::AlreadyReleased(expiry.job_id.clone()));
     }
     let mut next = state.clone();
-    next.reservations[index].state = ReservationState::Stale;
     let outcome = match expiry.enforcement.as_ref().filter(|fact| fact_is_admitted(fact)) {
         Some(_) => {
-            let record = next.reservations[index].clone();
-            next.reservations[index].state = ReservationState::Released;
-            next.pool.reserved_units = next.pool.reserved_units.saturating_sub(record.requirements.units);
-            next.pool.reserved_bytes = next.pool.reserved_bytes.saturating_sub(record.requirements.bytes);
-            next.pool.allocated_units = next.pool.allocated_units.saturating_sub(record.requirements.units);
-            next.pool.allocated_bytes = next.pool.allocated_bytes.saturating_sub(record.requirements.bytes);
+            release_held_capacity(&mut next, index)?;
             ExpiryOutcome::Released
         }
-        None => ExpiryOutcome::StaleCapacityRetained,
+        None => {
+            next.reservations[index].state = ReservationState::Stale;
+            ExpiryOutcome::StaleCapacityRetained
+        }
     };
     if !capacity_invariant_holds(&next) {
         return Err(ExpiryIssue::CapacityInvariantViolated);
@@ -171,6 +177,28 @@ pub fn expire_reservation(
         outcome,
         issue: None,
     })
+}
+
+/// Returns one held reservation's capacity to the pool and its assigned worker.
+fn release_held_capacity(next: &mut ReservationState_, index: usize) -> Result<(), ExpiryIssue> {
+    let record = next.reservations[index].clone();
+    let requirements = record.requirements;
+    let Some(worker) = next.workers.iter_mut().find(|worker| worker.worker_id == record.worker_id) else {
+        return Err(ExpiryIssue::UnknownWorker(record.worker_id));
+    };
+    worker.units = worker.units.checked_add(requirements.units).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    worker.bytes = worker.bytes.checked_add(requirements.bytes).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    let pool = &mut next.pool;
+    pool.reserved_units =
+        pool.reserved_units.checked_sub(requirements.units).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    pool.reserved_bytes =
+        pool.reserved_bytes.checked_sub(requirements.bytes).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    pool.allocated_units =
+        pool.allocated_units.checked_sub(requirements.units).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    pool.allocated_bytes =
+        pool.allocated_bytes.checked_sub(requirements.bytes).ok_or(ExpiryIssue::CapacityInvariantViolated)?;
+    next.reservations[index].state = ReservationState::Released;
+    Ok(())
 }
 
 /// The operator-visible capacity status, including the shortfall behind stale

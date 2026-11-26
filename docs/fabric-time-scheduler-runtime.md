@@ -189,9 +189,9 @@ Capacity accounting keeps three quantities distinct: total admitted, reserved ag
 
 Batches are bounded before evaluation. A batch declares an item count, a byte count, and a maximum waiting time; a batch that exceeds any limit is rejected whole with a typed reason and no item commits. Inside an admitted batch each item is its own atomic command with its own identity and result, so one invalid item neither fails nor admits its neighbours, and batching never enlarges the set of operations that commit together.
 
-Lease expiry changes bookkeeping only. Expiring a lease marks its reservation stale. The capacity behind it becomes reusable only through a transition whose precondition carries an enforcement or termination fact: an observed stop, a fencing takeover with termination authority, or a contract that declares the work non-external. Without such a fact the capacity stays counted against the stale reservation and the shortfall is visible in operator status. Expiry does not stop an external job.
+Lease expiry changes bookkeeping only. Expiring a lease marks its reservation stale. The capacity behind it becomes reusable only through a transition whose precondition carries an enforcement or termination fact: an observed stop, a fencing takeover with termination authority, or a contract that declares the work non-external. Without such a fact the capacity stays counted against the stale reservation and the shortfall is visible in operator status. A stale reservation stays releasable: a later admitted fact moves it from stale to released. Release returns the requirements to both the pool and the assigned worker, and the pool's reserved and allocated quantities must equal the sum of reservations still holding capacity. A released reservation denies a second release instead of crediting capacity twice. Expiry does not stop an external job.
 
-The shell executes only decided effects. A rejected command performs no allocation, dispatch, or capacity effect.
+The shell executes only decided effects. A rejected command performs no allocation, dispatch, or capacity effect. A batch commits each item to authoritative state as soon as its allocation succeeds, so a later item's failure never reverts capacity that an earlier item already holds externally. The first allocation failure stops the batch and is returned with its port failure class preserved. A definite failure commits nothing for that item; an uncertain outcome keeps the item's reservation committed, because the allocation may have happened, until an enforcement fact releases it.
 
 ## Entropy
 
@@ -230,7 +230,7 @@ Missing, extra, altered, or historical wrapped events produce a `retry replay di
 The function borrows the recorded events and never rewrites them.
 Its fixture generation and subject remain fixed. It does not authenticate the historical inputs or replay a live timer.
 
-Lease decisions are local observations unless the request names a reviewed fenced consistency profile and a fresh fencing token. Without both, an exclusive action is denied. Even a passing local decision does not prove global time, synchronized clocks, remote deadline agreement, partition absence, or distributed lease exclusivity.
+Lease decisions are local observations unless the request names a reviewed fenced consistency profile and a fresh fencing token. Without both, an exclusive action is denied. A fenced exclusive renewal must present its fencing token and the lease's current fence (`previous_fencing_token`); a missing token or fence is denied without fencing, and a token below the fence is denied as stale. A local-observation renewal carries no fencing tokens and only extends a local observation. Even a passing local decision does not prove global time, synchronized clocks, remote deadline agreement, partition absence, or distributed lease exclusivity.
 
 ## System-extension integration
 

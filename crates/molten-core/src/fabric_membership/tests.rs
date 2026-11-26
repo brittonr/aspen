@@ -765,3 +765,454 @@ fn placement_set_search_matches_the_ordering_search_on_small_views() {
     }
     assert!(compared > 500, "compared {compared} cases");
 }
+
+fn four_zone_admitted() -> AdmittedMembershipView {
+    let profile = profile(MembershipProviderKind::Static);
+    let descriptors = vec![
+        descriptor("node-a", "zone-a", "descriptor-node-a"),
+        descriptor("node-b", "zone-b", "descriptor-node-b"),
+        descriptor("node-c", "zone-c", "descriptor-node-c"),
+        descriptor("node-d", "zone-d", "descriptor-node-d"),
+    ];
+    let view = view(&profile, &descriptors);
+    validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+        .expect("admitted membership view")
+}
+
+const HEALTHY_PREFERENCE: u32 = 10;
+const DEGRADED_EXTRA_PREFERENCE: u32 = 90;
+
+/// node-a scores 100 but is `Unavailable`; every other node is healthy and scores 10.
+fn degraded_preference_request(admitted: &AdmittedMembershipView, replicas: u32) -> PlacementRequest {
+    let mut request = placement_request_with(admitted, replicas);
+    request.requirements.allow_degraded = true;
+    request.requirements.preferred_labels = vec![
+        PreferredLabel {
+            key: "region".to_string(),
+            value: "east".to_string(),
+            minimum_authority: LabelAuthority::OperatorDeclared,
+            weight: HEALTHY_PREFERENCE,
+        },
+        PreferredLabel {
+            key: "zone".to_string(),
+            value: "zone-a".to_string(),
+            minimum_authority: LabelAuthority::Authoritative,
+            weight: DEGRADED_EXTRA_PREFERENCE,
+        },
+    ];
+    request.failure_observations = vec![observation(
+        "node-a",
+        FailureObservationClass::Unavailable,
+        "unavailable-node-a",
+    )];
+    request
+}
+
+fn planned(outcome: Result<PlacementOutcome, Vec<MembershipIssue>>) -> PlacementPlan {
+    match outcome.expect("placement outcome") {
+        PlacementOutcome::Planned(plan) => plan,
+        PlacementOutcome::Unsatisfied(unsatisfied) => panic!("expected a plan, got {unsatisfied:?}"),
+    }
+}
+
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn higher_preference_unavailable_node_does_not_displace_healthy_nodes() {
+    let admitted = four_zone_admitted();
+    for replicas in [1_u32, 2, 3] {
+        let request = degraded_preference_request(&admitted, replicas);
+        for outcome in [
+            plan_placement(&admitted, &request),
+            plan_placement_by_orderings(&admitted, &request),
+        ] {
+            let plan = planned(outcome);
+            assert!(!plan.degraded, "replicas={replicas}: healthy nodes suffice");
+            assert!(plan.roles.iter().all(|role| role.node_id != "node-a"), "replicas={replicas}: {plan:?}");
+            assert!(plan.roles.iter().all(|role| role.preference_score == u64::from(HEALTHY_PREFERENCE)));
+        }
+    }
+}
+
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn degraded_nodes_are_used_only_when_healthy_nodes_are_insufficient() {
+    let admitted = four_zone_admitted();
+    let request = degraded_preference_request(&admitted, 4);
+    let plan = planned(plan_placement(&admitted, &request));
+    assert!(plan.degraded, "a fourth replica needs the unavailable node");
+    let degraded_roles = plan.roles.iter().filter(|role| role.node_id == "node-a").count();
+    assert_eq!(degraded_roles, 1);
+    assert_eq!(plan_placement_by_orderings(&admitted, &request).map(|outcome| planned(Ok(outcome))), Ok(plan));
+
+    let mut denied = request;
+    denied.requirements.allow_degraded = false;
+    let PlacementOutcome::Unsatisfied(unsatisfied) = plan_placement(&admitted, &denied).expect("outcome") else {
+        panic!("degraded fallback requires allow_degraded")
+    };
+    assert!(
+        unsatisfied
+            .constraints
+            .iter()
+            .any(|constraint| constraint.kind == UnsatisfiedConstraintKind::FailurePolicy)
+    );
+}
+
+/// The first plan found uses the fewest degraded replicas even when a lexicographically earlier
+/// candidate set would mix a healthy node with a degraded one.
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn degraded_fallback_minimizes_degraded_replicas() {
+    let profile = profile(MembershipProviderKind::Static);
+    // node-a conflicts with node-b on `rack` and with node-c on `zone`; node-b and node-c are
+    // compatible; node-d is degraded and compatible with node-a.
+    let rack = |mut descriptor: NodeDescriptor, value: &str| {
+        let evidence = format!("rack-{}", descriptor.node_id);
+        descriptor.labels.insert(0, label("rack", value, LabelAuthority::Authoritative, &evidence));
+        descriptor
+    };
+    let descriptors = vec![
+        rack(descriptor("node-a", "zone-a", "descriptor-node-a"), "rack-1"),
+        rack(descriptor("node-b", "zone-b", "descriptor-node-b"), "rack-1"),
+        rack(descriptor("node-c", "zone-a", "descriptor-node-c"), "rack-2"),
+        rack(descriptor("node-d", "zone-d", "descriptor-node-d"), "rack-3"),
+    ];
+    let view = view(&profile, &descriptors);
+    let admitted = validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+        .expect("admitted membership view");
+    let mut request = placement_request_with(&admitted, 2);
+    request.requirements.allow_degraded = true;
+    request.requirements.anti_affinity_label_keys = vec!["rack".to_string(), "zone".to_string()];
+    request.failure_observations = vec![observation(
+        "node-d",
+        FailureObservationClass::Suspected,
+        "suspected-node-d",
+    )];
+    // node-a ranks first among healthy nodes; {node-a, node-d} would be found before {node-b, node-c}.
+    let plan = planned(plan_placement(&admitted, &request));
+    assert!(!plan.degraded, "{plan:?}");
+    let nodes = plan.roles.iter().map(|role| role.node_id.as_str()).collect::<Vec<_>>();
+    assert!(!nodes.contains(&"node-d"), "{nodes:?}");
+    assert_eq!(planned(plan_placement_by_orderings(&admitted, &request)), plan);
+}
+
+fn detector(profile_label: &str, basis_label: &str) -> FailureDetectorProfile {
+    FailureDetectorProfile {
+        profile_id: format!("detector-{profile_label}"),
+        profile_ref: test_ref(profile_label),
+        time_basis_ref: test_ref(basis_label),
+        ..detector_profile()
+    }
+}
+
+fn timed_observation(
+    node_id: &str,
+    class: FailureObservationClass,
+    detector_label: &str,
+    observed_at_ticks: u64,
+) -> FailureObservation {
+    FailureObservation {
+        detector_profile_ref: test_ref(detector_label),
+        observed_at_ticks,
+        ..observation(node_id, class, &format!("{detector_label}-{node_id}-{observed_at_ticks}"))
+    }
+}
+
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn failure_reduction_is_independent_of_input_order() {
+    let admitted = admitted();
+    let profiles = vec![
+        detector("detector-one", "basis-shared"),
+        detector("detector-two", "basis-shared"),
+    ];
+    let observations = vec![
+        timed_observation("node-a", FailureObservationClass::Suspected, "detector-one", OBSERVED_AT),
+        timed_observation("node-a", FailureObservationClass::Suspected, "detector-two", OBSERVED_AT),
+        timed_observation("node-b", FailureObservationClass::Unavailable, "detector-one", OBSERVED_AT - 5),
+        timed_observation("node-b", FailureObservationClass::Reachable, "detector-two", OBSERVED_AT),
+    ];
+    let forward = reduce_failure_observations(&admitted, &profiles, &observations, NOW).expect("forward");
+    let mut reversed_input = observations.clone();
+    reversed_input.reverse();
+    let reversed = reduce_failure_observations(&admitted, &profiles, &reversed_input, NOW).expect("reversed");
+    assert_eq!(forward, reversed);
+    let expected_tie_winner = test_ref("detector-one").max(test_ref("detector-two"));
+    assert_eq!(forward["node-a"].detector_profile_ref, expected_tie_winner);
+    assert_eq!(forward["node-b"].class, FailureObservationClass::Reachable, "same basis: latest wins");
+    assert_eq!(forward["node-b"].observed_at_ticks, OBSERVED_AT);
+}
+
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn failure_reduction_never_compares_ticks_across_time_bases() {
+    let admitted = admitted();
+    let profiles = vec![
+        detector("detector-basis-a", "basis-a"),
+        detector("detector-basis-b", "basis-b"),
+    ];
+    // Raw ticks would say node-a recovered (95 > 80), but the ticks belong to unrelated bases.
+    let observations = vec![
+        timed_observation("node-a", FailureObservationClass::Unavailable, "detector-basis-a", OBSERVED_AT - 10),
+        timed_observation("node-a", FailureObservationClass::Reachable, "detector-basis-b", OBSERVED_AT + 5),
+    ];
+    for input in [
+        observations.clone(),
+        observations.iter().rev().cloned().collect::<Vec<_>>(),
+    ] {
+        let reduced = reduce_failure_observations(&admitted, &profiles, &input, NOW).expect("reduction");
+        assert_eq!(reduced["node-a"].class, FailureObservationClass::Unavailable);
+        assert_eq!(reduced["node-a"].detector_profile_ref, test_ref("detector-basis-a"));
+    }
+
+    // Within one shared basis the later Reachable observation does supersede the earlier one.
+    let shared = vec![
+        detector("detector-basis-a", "basis-a"),
+        detector("detector-basis-b", "basis-a"),
+    ];
+    let reduced = reduce_failure_observations(&admitted, &shared, &observations, NOW).expect("shared basis");
+    assert_eq!(reduced["node-a"].class, FailureObservationClass::Reachable);
+}
+
+fn observed_fence(epoch: u64, token: u64, enforcement: FencingEnforcement) -> FenceObservation {
+    FenceObservation {
+        fencing_profile: FencingProfile {
+            schema: FENCING_PROFILE_SCHEMA.to_string(),
+            profile_id: "observed-fence-v1".to_string(),
+            profile_ref: test_ref("fencing-profile"),
+            authority_ref: test_ref("assignment-authority"),
+            effect_port_ref: test_ref("fenced-effect-port"),
+            enforcement,
+        },
+        enforced_assignment_epoch: epoch,
+        enforced_fencing_token: token,
+    }
+}
+
+fn quarantine_clearance() -> QuarantineClearance {
+    QuarantineClearance {
+        quarantined_assignment_ref: test_ref("predecessor-assignment"),
+        reconciliation_ref: test_ref("quarantine-reconciliation"),
+    }
+}
+
+fn persisted_reconciliation(quarantined: &RoleAssignment) -> QuarantineReconciliation {
+    QuarantineReconciliation {
+        assignment_id: quarantined.assignment_id.clone(),
+        quarantined_assignment_ref: test_ref("predecessor-assignment"),
+        basis: QuarantineReconciliationBasis::CommittedEffect {
+            intent_ref: test_ref("quarantine-intent"),
+        },
+        evidence_ref: test_ref("quarantine-effect"),
+        reconcile_ref: test_ref("quarantine-reconciliation"),
+    }
+}
+
+// r[verify molten.fabric_membership.recoverable_pending_and_quarantined_slots]
+#[test]
+fn quarantined_predecessor_admits_only_a_reconciled_and_observed_fenced_successor() {
+    let active = active_assignment();
+    let quarantined =
+        apply_assignment_command(&active, &command(&active, AssignmentCommandKind::Quarantine, "quarantine"))
+            .expect("quarantine")
+            .next;
+    assert_eq!(quarantined.state, AssignmentState::Quarantined);
+    let predecessor_ref = test_ref("predecessor-assignment");
+    // The successor runs on node-b while the quarantined owner may still run on node-a.
+    let successor = propose_assignment(&proposal(true)).expect("successor");
+    assert_ne!(successor.node_id, quarantined.node_id);
+    let record = persisted_reconciliation(&quarantined);
+    let fence = observed_fence(SUCCESSOR_EPOCH, SUCCESSOR_TOKEN, FencingEnforcement::QuorumOrdered);
+    let validate = |predecessor: &RoleAssignment,
+                    successor: &RoleAssignment,
+                    clearance: &QuarantineClearance,
+                    record: Option<&QuarantineReconciliation>,
+                    fence: &FenceObservation| {
+        validate_quarantined_successor(predecessor, &predecessor_ref, successor, clearance, record, fence)
+    };
+
+    // The released-predecessor rule alone never admits a quarantined slot.
+    assert!(
+        validate_assignment_successor(&quarantined, &predecessor_ref, &successor)
+            .contains(&AssignmentIssue::AssignmentNotReleased(AssignmentState::Quarantined))
+    );
+    assert_eq!(validate(&quarantined, &successor, &quarantine_clearance(), Some(&record), &fence), Vec::new());
+
+    // A clearance citing a reconciliation the owner never persisted is denied.
+    let mut fabricated = quarantine_clearance();
+    fabricated.reconciliation_ref = test_ref("fabricated-reconciliation");
+    assert!(
+        validate(&quarantined, &successor, &fabricated, Some(&record), &fence)
+            .contains(&AssignmentIssue::QuarantineReconciliationMismatch)
+    );
+    assert!(
+        validate(&quarantined, &successor, &quarantine_clearance(), None, &fence)
+            .contains(&AssignmentIssue::QuarantineReconciliationMissing)
+    );
+    let mut other_assignment_record = record.clone();
+    other_assignment_record.quarantined_assignment_ref = test_ref("other-quarantined-assignment");
+    assert!(
+        validate(&quarantined, &successor, &quarantine_clearance(), Some(&other_assignment_record), &fence)
+            .contains(&AssignmentIssue::QuarantineReconciliationMismatch)
+    );
+    // A migrated legacy record must bind the quarantined assignment's own quarantine transition.
+    let mut legacy = record.clone();
+    legacy.basis = QuarantineReconciliationBasis::LegacyRecord {
+        transition_ref: quarantined.transition_refs.last().expect("quarantine transition").clone(),
+    };
+    assert_eq!(validate(&quarantined, &successor, &quarantine_clearance(), Some(&legacy), &fence), Vec::new());
+    legacy.basis = QuarantineReconciliationBasis::LegacyRecord {
+        transition_ref: test_ref("other-transition"),
+    };
+    assert!(
+        validate(&quarantined, &successor, &quarantine_clearance(), Some(&legacy), &fence)
+            .contains(&AssignmentIssue::QuarantineReconciliationMismatch)
+    );
+    let mut wrong_predecessor = quarantine_clearance();
+    wrong_predecessor.quarantined_assignment_ref = test_ref("other-assignment");
+    assert!(
+        validate(&quarantined, &successor, &wrong_predecessor, Some(&record), &fence)
+            .contains(&AssignmentIssue::QuarantineClearanceMismatch)
+    );
+
+    // The observed fence, not a caller assertion, must already enforce the successor.
+    let unadvanced = observed_fence(ASSIGNMENT_EPOCH, FENCING_TOKEN, FencingEnforcement::QuorumOrdered);
+    assert!(validate(&quarantined, &successor, &quarantine_clearance(), Some(&record), &unadvanced).contains(
+        &AssignmentIssue::StaleFencingToken {
+            expected: FENCING_TOKEN,
+            actual: SUCCESSOR_TOKEN,
+        }
+    ));
+
+    let mut stale_successor = successor.clone();
+    stale_successor.fencing_token = FENCING_TOKEN;
+    assert!(
+        validate(&quarantined, &stale_successor, &quarantine_clearance(), Some(&record), &fence)
+            .iter()
+            .any(|issue| matches!(issue, AssignmentIssue::StaleFencingToken { .. }))
+    );
+    assert!(
+        validate(&active, &successor, &quarantine_clearance(), Some(&record), &fence)
+            .contains(&AssignmentIssue::AssignmentNotQuarantined(AssignmentState::Active))
+    );
+}
+
+// r[verify molten.fabric_membership.recoverable_pending_and_quarantined_slots]
+#[test]
+fn quarantine_succession_derives_fence_strength_from_node_identities() {
+    let active = active_assignment();
+    let quarantined =
+        apply_assignment_command(&active, &command(&active, AssignmentCommandKind::Quarantine, "quarantine"))
+            .expect("quarantine")
+            .next;
+    let predecessor_ref = test_ref("predecessor-assignment");
+    let record = persisted_reconciliation(&quarantined);
+    let cross_node = propose_assignment(&proposal(true)).expect("cross-node successor");
+    let mut same_node = cross_node.clone();
+    same_node.node_id = quarantined.node_id.clone();
+    assert_eq!(
+        minimum_quarantine_succession_enforcement(&quarantined, &cross_node),
+        FencingEnforcement::QuorumOrdered
+    );
+    assert_eq!(
+        minimum_quarantine_succession_enforcement(&quarantined, &same_node),
+        FencingEnforcement::NodeLocalDurable
+    );
+    let validate = |successor: &RoleAssignment, enforcement: FencingEnforcement| {
+        validate_quarantined_successor(
+            &quarantined,
+            &predecessor_ref,
+            successor,
+            &quarantine_clearance(),
+            Some(&record),
+            &observed_fence(SUCCESSOR_EPOCH, SUCCESSOR_TOKEN, enforcement),
+        )
+    };
+    // A node-local fence cannot exclude an old owner on another node.
+    assert!(validate(&cross_node, FencingEnforcement::NodeLocalDurable).contains(
+        &AssignmentIssue::FencingStrengthInsufficient {
+            available: FencingEnforcement::NodeLocalDurable,
+            required: FencingEnforcement::QuorumOrdered,
+        }
+    ));
+    assert!(validate(&cross_node, FencingEnforcement::ProcessLocal).contains(
+        &AssignmentIssue::FencingStrengthInsufficient {
+            available: FencingEnforcement::ProcessLocal,
+            required: FencingEnforcement::QuorumOrdered,
+        }
+    ));
+    assert_eq!(validate(&cross_node, FencingEnforcement::ExternallyEnforced), Vec::new());
+    assert_eq!(validate(&same_node, FencingEnforcement::NodeLocalDurable), Vec::new());
+    assert!(validate(&same_node, FencingEnforcement::ProcessLocal).contains(
+        &AssignmentIssue::FencingStrengthInsufficient {
+            available: FencingEnforcement::ProcessLocal,
+            required: FencingEnforcement::NodeLocalDurable,
+        }
+    ));
+}
+
+/// Four anti-affine replicas over 27 healthy nodes in each of three zones plus one degraded node
+/// in a fourth zone: the zero-degraded pass is infeasible and must not consume the step bound
+/// before the degraded fallback runs.
+// r[verify molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
+#[test]
+fn degraded_fallback_stays_reachable_when_healthy_zones_are_insufficient() {
+    const HEALTHY_PER_ZONE: usize = 27;
+    const HEALTHY_ZONES: usize = 3;
+    let profile = profile(MembershipProviderKind::Static);
+    let mut descriptors = (0..HEALTHY_PER_ZONE * HEALTHY_ZONES)
+        .map(|i| {
+            descriptor(&format!("node-{i:04}"), &format!("zone-{}", i % HEALTHY_ZONES), &format!("descriptor-{i}"))
+        })
+        .collect::<Vec<_>>();
+    let degraded_index = descriptors.len();
+    let degraded_node = format!("node-{degraded_index:04}");
+    descriptors.push(descriptor(&degraded_node, "zone-3", &format!("descriptor-{degraded_index}")));
+    let view = view(&profile, &descriptors);
+    let admitted = validate_membership_view(&profile, &view, &descriptors, NOW, &test_ref("compatibility-v1"))
+        .expect("admitted membership view");
+    let mut request = placement_request_with(&admitted, 4);
+    request.requirements.allow_degraded = true;
+    request.failure_observations = vec![observation(
+        &degraded_node,
+        FailureObservationClass::Unavailable,
+        "unavailable-fourth-zone",
+    )];
+
+    let plan = planned(plan_placement(&admitted, &request));
+    assert!(plan.degraded);
+    assert_eq!(plan.roles.len(), 4);
+    assert_eq!(plan.roles.iter().filter(|role| role.node_id == degraded_node).count(), 1);
+    let zones = plan
+        .roles
+        .iter()
+        .map(|role| admitted.descriptors[&role.node_id].label("zone").expect("zone").value.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(zones.len(), 4, "every replica lands in a distinct zone");
+
+    // Without the degraded fallback the request is unsatisfied, not a search-limit failure.
+    request.requirements.allow_degraded = false;
+    let PlacementOutcome::Unsatisfied(unsatisfied) = plan_placement(&admitted, &request).expect("bounded outcome")
+    else {
+        panic!("three healthy zones cannot host four anti-affine replicas")
+    };
+    assert!(
+        unsatisfied
+            .constraints
+            .iter()
+            .any(|constraint| constraint.kind == UnsatisfiedConstraintKind::AntiAffinity)
+    );
+}
+
+// r[verify molten.fabric_membership.recoverable_pending_and_quarantined_slots]
+#[test]
+fn quarantine_may_record_an_uncertain_old_owner() {
+    let active = active_assignment();
+    let mut quarantine = command(&active, AssignmentCommandKind::Quarantine, "uncertain-quarantine");
+    quarantine.uncertain_old_owner = true;
+    let quarantined = apply_assignment_command(&active, &quarantine).expect("uncertain quarantine").next;
+    assert_eq!(quarantined.state, AssignmentState::Quarantined);
+    assert!(quarantined.uncertain_old_owner);
+    let mut drain = command(&active, AssignmentCommandKind::BeginDrain, "uncertain-drain");
+    drain.uncertain_old_owner = true;
+    assert!(apply_assignment_command(&active, &drain).is_err(), "other commands still cannot claim uncertainty");
+}
