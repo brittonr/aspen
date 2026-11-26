@@ -30,6 +30,10 @@ pub(super) fn list_entries(
             .to_str()
             .ok_or_else(|| super::invalid("node state entry name must be valid UTF-8"))?
             .to_string();
+        // Publication stages and locks are internal artifacts, never namespace entries.
+        if super::publication::is_stage(&name) {
+            continue;
+        }
         let path = super::locator::RelativePath::parse(&name)?;
         entries.push(super::namespace::Entry {
             root: std::sync::Arc::clone(root),

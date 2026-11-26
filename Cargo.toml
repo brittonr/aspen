@@ -208,6 +208,8 @@ zstd = "0.13"
 [dev-dependencies]
 cap-tempfile = "3"
 molten = { path = ".", features = ["test-fixtures"] }
+# Dev-only lock-boundary seams for deterministic concurrency regressions; no new crate.
+molten-node-host = { path = "crates/molten-node-host", features = ["test-seams"] }
 schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
 quint-connect = { git = "https://github.com/quint-co/quint-connect.git", rev = "4f018f54fc7dd4cef341d10111427bab59d3b307", version = "=0.1.2" }

@@ -32,7 +32,7 @@
     "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
   "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
-  "inputsHash": "9fe7c0a042da460485ea00f137252ebdd5b8cd9591fc4ef4242b7201c0ac6f70",
+  "inputsHash": "cd924e03f24308e2a74953526231c7087a8819b0d8432070c525b9b7c57d2969",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -2458,7 +2458,9 @@
         "type": "local",
         "path": "crates/molten-node-host"
       },
-      "features": [],
+      "features": [
+        "test-seams"
+      ],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-fs-ext@3.4.5",

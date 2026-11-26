@@ -9,6 +9,8 @@ pub enum SourceError {
     Io(std::io::Error),
     /// Input exceeded its explicit byte bound.
     BoundExceeded,
+    /// An opened member is not a regular file or is writable by other accounts.
+    UnsafeMember,
 }
 
 /// Reads exact immutable members relative to an already authorized root.

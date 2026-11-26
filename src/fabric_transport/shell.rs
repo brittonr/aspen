@@ -7,6 +7,7 @@
 )]
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::*;
 use crate::error::Failure;
@@ -21,6 +22,8 @@ pub struct RegisteredTransportEffectPort<A: TransportCommandShell> {
     context: ExtensionContext,
     profile: Profile,
     requests: BTreeMap<String, TransportCommand>,
+    /// Registered requests already handed to the adapter; each executes at most once.
+    consumed_requests: BTreeSet<String>,
 }
 
 impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
@@ -33,6 +36,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
             context,
             profile,
             requests: BTreeMap::new(),
+            consumed_requests: BTreeSet::new(),
         })
     }
 
@@ -80,6 +84,9 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
                 return Err(FabricPortError::malformed("ambient effect cannot route through a transport port"));
             }
         }
+        if self.consumed_requests.contains(&effect.request_ref) {
+            return Err(FabricPortError::malformed("transport effect request replay denied"));
+        }
         let command = self.registered_command(&effect.request_ref)?.clone();
         self.context
             .admit_command(&self.profile, &command, effect.accounted_bytes)
@@ -89,6 +96,9 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
                 "transport effect generation does not match its registered command",
             ));
         }
+        // Consume before the adapter effect: a lost result never authorizes a second execution.
+        // r[impl molten.runtime_spine.admission_and_capability_hardening]
+        self.consumed_requests.insert(effect.request_ref.clone());
         let transition = self.adapter.execute_command(&command)?;
         Ok((command, transition))
     }

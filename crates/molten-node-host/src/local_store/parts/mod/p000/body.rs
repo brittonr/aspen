@@ -57,6 +57,15 @@ impl Locator {
         for component in path.components() {
             match component {
                 std::path::Component::Normal(value) => {
+                    // Every local-store write, publish, rename, create and remove takes a `Locator`,
+                    // so rejecting the reserved publication-artifact prefix here stops any of them from
+                    // touching an internal stage or lock before a filesystem effect.
+                    // r[impl molten.runtime_spine.admission_and_capability_hardening]
+                    if value.to_str().is_some_and(crate::node_state::publication::is_reserved_artifact_name) {
+                        return Err(MoltenError::invalid_harness(format!(
+                            "local store path {input} uses the reserved publication-artifact prefix .stage."
+                        )));
+                    }
                     component_count = checked_component_count(component_count)?;
                     relative.push(value);
                 }

@@ -160,6 +160,10 @@ impl DagResourcePort for DagResources {
             admitted: true,
         })
     }
+
+    fn confirm(&mut self, plan: &DagSyncPlan, _reservation_ref: &str) -> Result<DagResourceObservation> {
+        self.reserve(plan)
+    }
 }
 
 struct Progress {

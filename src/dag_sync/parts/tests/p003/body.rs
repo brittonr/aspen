@@ -38,4 +38,8 @@ impl DagResourcePort for DeniedResources {
             admitted: false,
         })
     }
+
+    fn confirm(&mut self, plan: &DagSyncPlan, _reservation_ref: &str) -> Result<DagResourceObservation> {
+        self.reserve(plan)
+    }
 }

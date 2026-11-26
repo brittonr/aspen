@@ -240,6 +240,10 @@ fn merge_refs(
     if !overrides.resource_refs.is_empty() && !same_ref_set(&profile.refs.resource_refs, &overrides.resource_refs) {
         diagnostics.push_item("conflicting-resource-override".to_string());
     }
+    // r[impl molten.runtime_spine.admission_and_capability_hardening]
+    if !overrides.retention_refs.is_empty() && !same_ref_set(&profile.refs.retention_refs, &overrides.retention_refs) {
+        diagnostics.push_item("conflicting-retention-override".to_string());
+    }
     Ok(RefSet {
         policy_refs: merge_same_or(&profile.refs.policy_refs, &overrides.policy_refs),
         capability_refs: profile.refs.capability_refs.clone(),

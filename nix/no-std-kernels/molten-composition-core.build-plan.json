@@ -8,7 +8,7 @@
     "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0"
   },
   "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
-  "inputsHash": "cce716ea6736e55b54191bac7686ff241af2e8c407acd30ea59d43910a9a2d2e",
+  "inputsHash": "10d84bc6d99228cdc7b8a4a8674dea5c67d201f9fd5706cd21a4d6430d22168a",
   "crates": {
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0": {
       "crateName": "molten-composition-core",

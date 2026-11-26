@@ -2,3 +2,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/tests/p000/bod
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/tests/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/tests/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/tests/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/tests/p004/body.rs"));

@@ -8,7 +8,7 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0"
   },
   "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
-  "inputsHash": "1da573a7423c18ab1dbcd42019c4726872bf03237338259c1ff690810680b6ba",
+  "inputsHash": "c499a5c6fdb8b5cae1952e81744ec3272b8a5bb2110a3eaf6ef78fc8ba7234d6",
   "crates": {
     "git+https://github.com/OnixResearch/choregraph.git?rev=318d4932d743fe4a583691efb54c070e351b0c1b#choregraph-history@0.1.0": {
       "crateName": "choregraph-history",

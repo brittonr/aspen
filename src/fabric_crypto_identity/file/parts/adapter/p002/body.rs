@@ -32,26 +32,27 @@ impl<'a> IrohEd25519<'a> {
         purpose: KeyPurpose,
         receipt_refs: Vec<String>,
     ) -> crate::error::Result<StatusReadback> {
-        let currentness = if is_revoked(self.namespace, purpose)? {
+        let Some(observed) = self.observe_record(&key_path(purpose)?)? else {
+            return Err(crate::error::Failure::invalid_harness("production key status is unavailable"));
+        };
+        let resolved = self.resolved_key(purpose, &observed.record, false, observed.permission_status)?;
+        let revocations = read_key_revocations(self.namespace, purpose)?;
+        let currentness = if key_revocation_matches(&revocations, KeyRevocationSubject::of(&resolved.handle.handle)) {
             KeyCurrentness::Revoked
         } else {
             KeyCurrentness::Current
         };
-        self.status_from_record(purpose, currentness, receipt_refs)
+        self.status_from_record(purpose, &observed.record, observed.permission_status, currentness, receipt_refs)
     }
 
     fn status_from_record(
         &self,
         purpose: KeyPurpose,
+        record: &KeyRecord,
+        permission_status: KeyPermissionStatus,
         currentness: KeyCurrentness,
         receipt_refs: Vec<String>,
     ) -> crate::error::Result<StatusReadback> {
-        let path = key_path(purpose)?;
-        let crate::node_state::FileObservation::Regular(file) = self.namespace.observe_file(&path)? else {
-            return Err(crate::error::Failure::invalid_harness("production key status is unavailable"));
-        };
-        let permission_status = permission_status(&file);
-        let record = decode_key_record(&file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?)?;
         status(&AdapterDiagnosticInput {
             profile_ref: self.profile.profile.profile_ref.clone(),
             purpose,
@@ -74,27 +75,17 @@ impl<'a> IrohEd25519<'a> {
                 "only transport-purpose handles may configure an Iroh endpoint",
             ));
         }
-        let current = self.resolve_or_generate(
+        let current = self.current_key(
             KeyPurpose::TransportEndpoint,
             &crate::preserves_rail::content_ref_from_bytes(b"transport-endpoint-load-policy"),
             false,
         )?;
-        if current.handle.handle.handle_ref != handle.handle_ref
-            || current.handle.handle.generation != handle.generation
+        if current.resolved.handle.handle.handle_ref != handle.handle_ref
+            || current.resolved.handle.handle.generation != handle.generation
         {
             return Err(crate::error::Failure::invalid_harness("stale transport key handle denied"));
         }
-        Ok(self.load_current_record(KeyPurpose::TransportEndpoint)?.secret_key)
-    }
-
-    fn load_current_record(&self, purpose: KeyPurpose) -> crate::error::Result<KeyRecord> {
-        let path = key_path(purpose)?;
-        let observation = self.namespace.observe_file(&path)?;
-        let crate::node_state::FileObservation::Regular(file) = observation else {
-            return Err(crate::error::Failure::invalid_harness("current production key is unavailable"));
-        };
-        require_restricted_permission(permission_status(&file))?;
-        decode_key_record(&file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?)
+        Ok(current.record.secret_key)
     }
 }
 
@@ -205,7 +196,6 @@ pub(crate) fn load_transport_secret_for(
     expected_handle_ref: &str,
     backend_ref: &str,
 ) -> crate::error::Result<iroh::SecretKey> {
-    require_not_revoked(namespace, KeyPurpose::TransportEndpoint)?;
     let observation = namespace.observe_file(&transport_key_path()?)?;
     let crate::node_state::FileObservation::Regular(file) = observation else {
         return Err(crate::error::Failure::invalid_harness("persisted transport key is unavailable"));
@@ -218,14 +208,22 @@ pub(crate) fn load_transport_secret_for(
             "persisted transport key does not match admitted node identity",
         ));
     }
-    Ok(decode_key_record(&bytes)?.secret_key)
+    let record = decode_key_record(&bytes)?;
+    let public_key_ref = crate::preserves_rail::content_ref_from_bytes(record.secret_key.public().as_bytes());
+    require_key_not_revoked(namespace, KeyRevocationSubject {
+        purpose: KeyPurpose::TransportEndpoint,
+        handle_ref: &material.handle_ref,
+        public_key_ref: &public_key_ref,
+        generation: material.generation,
+    })?;
+    Ok(record.secret_key)
 }
 
 fn key_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::RelativePath> {
     crate::node_state::RelativePath::parse(key_name(purpose))
 }
 
-fn revocation_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::RelativePath> {
+pub(super) fn revocation_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::RelativePath> {
     let path = format!("{}{REVOCATION_MARKER_SUFFIX}", key_name(purpose));
     crate::node_state::RelativePath::parse(&path)
 }
@@ -240,16 +238,21 @@ const fn key_name(purpose: KeyPurpose) -> &'static str {
     }
 }
 
-fn is_revoked(namespace: &crate::node_state::Scope, purpose: KeyPurpose) -> crate::error::Result<bool> {
+/// Revocation records persisted for one key purpose. A record names one exact key handle and
+/// generation (and the public key it exposed); it never denies every key of that purpose.
+pub(super) fn read_key_revocations(
+    namespace: &crate::node_state::Scope,
+    purpose: KeyPurpose,
+) -> crate::error::Result<Vec<KeyRevocation>> {
     match namespace.observe_file(&revocation_path(purpose)?)? {
-        crate::node_state::FileObservation::Missing => Ok(false),
+        crate::node_state::FileObservation::Missing => Ok(Vec::new()),
         crate::node_state::FileObservation::Regular(file) => {
             require_restricted_permission(permission_status(&file))?;
             let marker = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
             if marker.is_empty() {
                 return Err(crate::error::Failure::invalid_harness("cryptographic key revocation marker is empty"));
             }
-            Ok(true)
+            parse_key_revocations(&crate::preserves_rail::parse_canonical_bytes(&marker)?)
         }
         crate::node_state::FileObservation::NonRegular(kind) => {
             Err(crate::error::Failure::invalid_harness(format!(
@@ -259,12 +262,88 @@ fn is_revoked(namespace: &crate::node_state::Scope, purpose: KeyPurpose) -> crat
     }
 }
 
-pub(super) fn require_not_revoked(
+fn key_revocation_value(revocation: &KeyRevocation) -> preserves::IOValue {
+    crate::preserves_rail::record(KEY_REVOCATION_LABEL, vec![
+        crate::preserves_rail::string(&revocation.handle_ref),
+        crate::preserves_rail::string(&revocation.public_key_ref),
+        crate::preserves_rail::u64_value(revocation.generation),
+        crate::preserves_rail::string(&revocation.evidence_ref),
+        crate::preserves_rail::string(&revocation.policy_ref),
+    ])
+}
+
+pub(super) fn key_revocations_value(revocations: &[KeyRevocation]) -> preserves::IOValue {
+    crate::preserves_rail::record(KEY_REVOCATIONS_LABEL, vec![crate::preserves_rail::sequence(
+        revocations.iter().map(key_revocation_value).collect(),
+    )])
+}
+
+/// Accepts the revocation-set marker and the earlier single-record marker; anything else fails closed.
+fn parse_key_revocations(value: &preserves::IOValue) -> crate::error::Result<Vec<KeyRevocation>> {
+    if value.collect_simple_record(KEY_REVOCATION_LABEL, Some(KEY_REVOCATION_ARITY)).is_some() {
+        return Ok(vec![parse_key_revocation(value)?]);
+    }
+    let fields = value
+        .collect_simple_record(KEY_REVOCATIONS_LABEL, Some(1))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cryptographic key revocation marker is malformed"))?;
+    let entries = fields[0]
+        .collect_sequence()
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cryptographic key revocation set is malformed"))?;
+    if entries.is_empty() || entries.len() > MAX_KEY_REVOCATIONS {
+        return Err(crate::error::Failure::invalid_harness(format!(
+            "cryptographic key revocation set must hold 1..={MAX_KEY_REVOCATIONS} records"
+        )));
+    }
+    entries
+        .iter()
+        .map(|entry| parse_key_revocation(&crate::preserves_rail::value_to_iovalue(entry)))
+        .collect()
+}
+
+fn parse_key_revocation(value: &preserves::IOValue) -> crate::error::Result<KeyRevocation> {
+    let fields = value
+        .collect_simple_record(KEY_REVOCATION_LABEL, Some(KEY_REVOCATION_ARITY))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cryptographic key revocation record is malformed"))?;
+    let text = |index: usize, label: &str| {
+        fields[index].as_string().map(|value| value.into_owned()).ok_or_else(|| {
+            crate::error::Failure::invalid_harness(format!("cryptographic key revocation {label} is malformed"))
+        })
+    };
+    let revocation = KeyRevocation {
+        handle_ref: text(0, "handle ref")?,
+        public_key_ref: text(1, "public key ref")?,
+        generation: fields[2]
+            .as_u64()
+            .and_then(|generation| generation.ok())
+            .ok_or_else(|| crate::error::Failure::invalid_harness("cryptographic key revocation generation is malformed"))?,
+        evidence_ref: text(3, "evidence ref")?,
+        policy_ref: text(4, "policy ref")?,
+    };
+    require_blake3_ref("revoked key handle", &revocation.handle_ref)?;
+    require_blake3_ref("revoked public key", &revocation.public_key_ref)?;
+    Ok(revocation)
+}
+
+/// A revocation applies to the exact revoked handle at its generation, and to any handle that exposes
+/// the same revoked public key; a successor key under another handle or backend stays usable.
+fn key_revocation_matches(revocations: &[KeyRevocation], subject: KeyRevocationSubject<'_>) -> bool {
+    revocations.iter().any(|revocation| {
+        (revocation.handle_ref == subject.handle_ref && revocation.generation == subject.generation)
+            || revocation.public_key_ref == subject.public_key_ref
+    })
+}
+
+fn revoked_key_error(purpose: KeyPurpose) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{} key is revoked", purpose.as_str()))
+}
+
+// r[impl molten.authority.crypto_adapter_exact_verification_and_scoped_revocation]
+pub(super) fn require_key_not_revoked(
     namespace: &crate::node_state::Scope,
-    purpose: KeyPurpose,
+    subject: KeyRevocationSubject<'_>,
 ) -> crate::error::Result<()> {
-    if is_revoked(namespace, purpose)? {
-        return Err(crate::error::Failure::invalid_harness(format!("{} key is revoked", purpose.as_str())));
+    if key_revocation_matches(&read_key_revocations(namespace, subject.purpose)?, subject) {
+        return Err(revoked_key_error(subject.purpose));
     }
     Ok(())
 }

@@ -156,7 +156,7 @@ pub fn admit(request: Request<'_>) -> Result<Plan, Vec<Blocker>> {
 }
 
 fn check_current(request: &Request<'_>, blockers: &mut Vec<Blocker>) {
-    if request.actor.is_empty()
+    if !is_nominal_actor(request.actor)
         || request.actor != request.current.actor
         || request.generation != request.current.generation
         || !is_ref(request.authority_ref)
@@ -173,6 +173,33 @@ fn is_ref(value: &str) -> bool {
     value.strip_prefix("blake3:").is_some_and(|digest| {
         digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     })
+}
+
+const MAX_ACTOR_BYTES: usize = 128;
+
+/// An actor names exactly one resource path segment: no separators, dot segments or other
+/// characters that could splice another actor's `molten://spacewasm/<actor>/<generation>` resource.
+// r[impl molten.runtime_spine.admission_and_capability_hardening]
+fn is_nominal_actor(actor: &str) -> bool {
+    !actor.is_empty()
+        && actor.len() <= MAX_ACTOR_BYTES
+        && actor != "."
+        && actor != ".."
+        && actor.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+}
+
+/// The authority identity a scheduler binds into `authority_ref`: trusted issuer, expected holder,
+/// the exact Basalt policy text and the actor resource. Only the isolated fixture issues SpaceWasm
+/// authority today, so the identity carries its non-production marker.
+pub(crate) fn authority_ref(issuer: &str, holder: &str, policy_json: &str, resource: &str) -> Result<String, String> {
+    crate::codec::canonical_hash(&crate::codec::record("spacewasm-isolated-fixture-authority-v1", vec![
+        crate::codec::string(issuer),
+        crate::codec::string(holder),
+        crate::codec::string(policy_json),
+        crate::codec::string(resource),
+        crate::codec::string("not-production-authority"),
+    ]))
+    .map_err(|error| error.to_string())
 }
 
 pub struct Current<'a> {
@@ -199,6 +226,9 @@ pub fn verify_authority<'a>(
     if credentials.len() > 2 || !is_ref(current.authority_ref) || !is_ref(current.resource_ref) {
         return Err("invalid current authority envelope".into());
     }
+    if !is_nominal_actor(current.actor) {
+        return Err("SpaceWasm actor must be one nominal resource segment".into());
+    }
     let resource = format!("molten://spacewasm/{}/{}", current.actor, current.generation);
     let mut allowed_hostcalls = Vec::new();
     for credential in credentials {
@@ -207,6 +237,12 @@ pub fn verify_authority<'a>(
             || credential.policy_json.len() > 65536
         {
             return Err("invalid bounded hostcall credential".into());
+        }
+        // r[impl molten.runtime_spine.admission_and_capability_hardening]
+        if authority_ref(current.expected_issuer, current.expected_holder, credential.policy_json, &resource)?
+            != current.authority_ref
+        {
+            return Err("credential policy is not the policy bound into the current authority".into());
         }
         let verified = basalt::ucan::verify_compact_token_str_with_resolvers_and_revocations(
             credential.token,

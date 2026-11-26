@@ -9,7 +9,7 @@
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0"
   },
   "cargoLockHash": "d00da105ac69c967de801c428b4a2bad2874ace2f38c5b519d1b11a63003b734",
-  "inputsHash": "4a5e05864059fb19ff90f80ffb32832ab9002bdf8d87052212e66c2d574bd6cd",
+  "inputsHash": "1b681673d34f811182db1130566b0686e0a9ae2f55c75b8af197d50d5a603e80",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
