@@ -3,8 +3,6 @@ mod barrier;
 #[path = "wasm/executor.rs"]
 mod component;
 pub mod composition;
-#[path = "schema.rs"]
-mod format;
 #[path = "steel/executor.rs"]
 mod metal;
 #[path = "core.rs"]
@@ -14,6 +12,7 @@ mod performer;
 #[path = "replay.rs"]
 mod playback;
 mod runner;
+mod schema;
 
 mod core {
     pub(crate) use super::nucleus::*;
@@ -23,9 +22,6 @@ mod executor {
 }
 mod replay {
     pub(crate) use super::playback::*;
-}
-mod schema {
-    pub(crate) use super::format::*;
 }
 mod steel_executor {
     pub(crate) use super::metal::*;
@@ -48,57 +44,6 @@ pub use barrier::repro_bundle_value_with_export_profile;
 pub use barrier::repro_verify_receipt_summary;
 pub use barrier::repro_verify_receipt_value;
 pub use barrier::sealed_repro_bundle_value_with_command;
-pub use format::ActorDecl;
-pub use format::ActorExecutorConfig;
-pub use format::ActorKind;
-pub use format::AdapterExecutorConfig;
-pub use format::Budget;
-pub use format::CapabilityGateEvidence;
-pub use format::Failure;
-pub use format::RemoteProxyExecutorConfig;
-pub use format::ReproBundle;
-pub use format::ReproBundleKind;
-pub use format::ReproExportProfile;
-pub use format::SteelExecutorConfig;
-pub use format::Suite;
-pub use format::WasmExecutorConfig;
-pub use format::actor_registry_value;
-pub use format::boundary_coverage_value;
-pub use format::budget_gate_value;
-pub use format::budget_limits_value;
-pub use format::capabilities_value;
-pub use format::capability_gate_value;
-pub use format::deterministic_multipeer_receipt_value;
-pub use format::executor_preflights_value;
-pub use format::failure_repro_bundle_value;
-pub use format::failure_repro_bundle_value_with_command;
-pub use format::failure_summary;
-pub use format::failure_value;
-pub use format::golden_trace_update_receipt_value;
-pub use format::parse_budget_gate;
-pub use format::parse_capabilities;
-pub use format::parse_capability_gate;
-pub use format::parse_executor_preflights;
-pub use format::parse_failure;
-pub use format::parse_policy;
-pub use format::parse_policy_gate;
-pub use format::parse_repro_bundle;
-pub use format::parse_suite;
-pub use format::policy_gate_value;
-pub use format::policy_value;
-pub use format::report_failure_value;
-pub use format::report_suite_value;
-pub use format::repro_bundle_report_value;
-pub use format::repro_bundle_summary;
-pub use format::repro_bundle_value;
-pub use format::repro_bundle_value_with_command;
-pub use format::run_receipt_value;
-pub use format::suite_failure_value;
-pub use format::upgrade_replay_receipt_value;
-pub use format::validate_deterministic_multipeer_receipt;
-pub use format::validate_golden_trace_update_receipt;
-pub use format::validate_harness_run_receipt;
-pub use format::validate_upgrade_replay_receipt;
 pub use performer::ActorExecutorDecl;
 pub use performer::ActorExecutorKind;
 pub use performer::actor_executor_registry;
@@ -110,6 +55,57 @@ pub use playback::validate_report_value;
 pub use runner::HarnessRun;
 pub use runner::run_suite;
 pub use runner::run_suite_value;
+pub use schema::ActorDecl;
+pub use schema::ActorExecutorConfig;
+pub use schema::ActorKind;
+pub use schema::AdapterExecutorConfig;
+pub use schema::Budget;
+pub use schema::CapabilityGateEvidence;
+pub use schema::Failure;
+pub use schema::RemoteProxyExecutorConfig;
+pub use schema::ReproBundle;
+pub use schema::ReproBundleKind;
+pub use schema::ReproExportProfile;
+pub use schema::SteelExecutorConfig;
+pub use schema::Suite;
+pub use schema::WasmExecutorConfig;
+pub use schema::actor_registry_value;
+pub use schema::boundary_coverage_value;
+pub use schema::budget_gate_value;
+pub use schema::budget_limits_value;
+pub use schema::capabilities_value;
+pub use schema::capability_gate_value;
+pub use schema::deterministic_multipeer_receipt_value;
+pub use schema::executor_preflights_value;
+pub use schema::failure_repro_bundle_value;
+pub use schema::failure_repro_bundle_value_with_command;
+pub use schema::failure_summary;
+pub use schema::failure_value;
+pub use schema::golden_trace_update_receipt_value;
+pub use schema::parse_budget_gate;
+pub use schema::parse_capabilities;
+pub use schema::parse_capability_gate;
+pub use schema::parse_executor_preflights;
+pub use schema::parse_failure;
+pub use schema::parse_policy;
+pub use schema::parse_policy_gate;
+pub use schema::parse_repro_bundle;
+pub use schema::parse_suite;
+pub use schema::policy_gate_value;
+pub use schema::policy_value;
+pub use schema::report_failure_value;
+pub use schema::report_suite_value;
+pub use schema::repro_bundle_report_value;
+pub use schema::repro_bundle_summary;
+pub use schema::repro_bundle_value;
+pub use schema::repro_bundle_value_with_command;
+pub use schema::run_receipt_value;
+pub use schema::suite_failure_value;
+pub use schema::upgrade_replay_receipt_value;
+pub use schema::validate_deterministic_multipeer_receipt;
+pub use schema::validate_golden_trace_update_receipt;
+pub use schema::validate_harness_run_receipt;
+pub use schema::validate_upgrade_replay_receipt;
 
 #[cfg(test)]
 mod tests {

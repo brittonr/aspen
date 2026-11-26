@@ -75,6 +75,6 @@ Suppose a context and token both record expiry `8`. The currentness helper denie
 - [Effect manifest contract](../../effect-manifest-profiles.md)
 - [Authority input declarations](../../../src/authority/parts/mod/p000/body.rs)
 - [Capability input declarations](../../../src/capability/parts/tokens/p000/body.rs)
-- [Policy material producer and parser](../../../src/harness/parts/schema/p019/body.rs)
-- [Capability gate producer and parser](../../../src/harness/parts/schema/p020/body.rs)
+- [Policy material producer and parser](../../../src/harness/schema/gates/covenant.rs)
+- [Capability gate producer and parser](../../../src/harness/schema/grants/grants.rs)
 - [Effect request admission](../../../src/effects/parts/mod/p002/body.rs)
