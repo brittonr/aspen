@@ -10,8 +10,6 @@ At the DTO boundary, `Envelope::from_dto` rejects an unsupported envelope versio
 
 Construction-path qualification, resolved by change `fix-authority-bypasses-and-sandbox-isolation`: the local actor, capability, and evidence wrappers now deserialize only through their checked `parse` constructors, like the shared `ContentRef`, so an empty or oversized actor or capability, or a malformed evidence reference, fails Serde decoding. `validate_core` revalidates the envelope version, reference-list lengths, sender, every capability, and every blob and evidence reference before calculating the boundary. Previously the wrappers derived transparent deserialization and `validate_core` checked only list lengths. These are still envelope-local token checks; they do not establish the nominal-domain grammar, canonical subject/body bytes, or authorization.
 
-This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
-
 ## Representation and schema checks are distinct
 
 For packed input, the shared rail supplies `strict_canonical_decode`: parse, re-encode, compare bytes. `validate_boundary_bytes` uses strict decoding and then validates the value against a supplied `BoundarySchemaSpec`. These are generic boundary facilities; their existence does not establish that `Envelope::from_dto`, a textual DTO conversion, invokes them.

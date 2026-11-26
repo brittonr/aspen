@@ -188,8 +188,10 @@ fn map_statement_and_policy(
     Ok((policy, scope, statement))
 }
 
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 fn artifact_ref(profile: &str, value: &str, field: &str) -> Result<ArtifactRef, Vec<String>> {
-    let Some(digest_hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
+    let digest_hex = value.strip_prefix(BLAKE3_REF_PREFIX).filter(|_| crate::fabric::valid_blake3_ref(value));
+    let Some(digest_hex) = digest_hex else {
         return Err(vec![format!("{field}:expected-blake3-ref")]);
     };
     Ok(ArtifactRef {

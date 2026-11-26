@@ -76,3 +76,54 @@ Octet round: the ChaosControl projections moved to `src/world_snapshot/chaoscont
 - `cargo octet check --artifact-dir target/octet` — status clean, 0 findings.
 - `cargo test -p molten --lib --features world-snapshot-vm-cohort -- hash_the_explicit_preserves_projection plan_ref_hashes_the_explicit invalid_bounds_denial embedded uppercase_digest closure_report_receipt` — 16 passed, 0 failed.
 - `cargo clippy -p molten -p molten-core --all-targets -- -D warnings` and `cargo clippy -p molten --lib --tests --features world-snapshot-vm-cohort -- -D warnings` — exit 0.
+
+## Verification (2026-11-26, final validation)
+
+Coverage was checked against the code: each defect has positive and negative regressions that fail on the old behavior. Hegel properties were missing for the recorded-response, demand-precedence and sealed-observation defects in the root crate. They are added in new files (below), with no change to existing tests. `molten-core` has no `hegeltest` dependency, so its defects (framing, comparison, Prolly) keep deterministic and exhaustive-case tests.
+
+1. Workload and fingerprint framing: `live_workload_ref_frames_fields_so_a_forged_ordering_key_cannot_collide` (rebuilds the legacy unframed material to show the old collision), `live_workload_rejects_nul_and_control_bytes_in_ordering_keys`, `live_workload_ref_distinguishes_absent_and_present_ordering_keys_and_permitted_lists`, `failure_fingerprints_frame_invariants_so_joined_ids_cannot_collide`, `live_differential_rejects_unsupported_or_unpermitted_simulated_classes`, `replay_comparison_detects_selected_and_eligible_choice_metadata_divergence`.
+2. Embedded scans: `structural_scan_descends_into_embedded_values`, `structural_scan_counts_embedded_layers_against_the_depth_bound`, `hegel_embedded_markers_and_refs_never_evade_structural_scans`.
+3. Identity encoding: `chaoscontrol_fact_and_component_identities_hash_the_explicit_preserves_projection`, `vm_cohort_plan_ref_hashes_the_explicit_preserves_projection` (feature `world-snapshot-vm-cohort`), `closure_report_receipt_identity_uses_typed_issue_codes_not_debug_output`, `closure_and_capture_issue_codes_are_closed_typed_tags`, `world_head_issue_codes_are_closed_kebab_tags`, `invalid_bounds_denial_receipt_carries_closed_kebab_case_codes`.
+4. Optional refs and lowercase hex:
+   - Optional refs: `optional_content_refs_have_one_canonical_encoding`, `hegel_optional_content_refs_reject_bare_and_uppercase_digests`, `secret_optional_refs_reject_bare_strings_as_some`.
+   - Lowercase hex: `domain_codec_facade_rejects_uppercase_digest_hex`, `simulation_refs_reject_uppercase_digest_hex`, `stack_evidence_refs_reject_uppercase_digest_hex`, `uppercase_enforcement_digest_is_not_an_admitted_termination_fact`, `uppercase_operation_digest_does_not_bind_the_reconciliation_identity`, `choregraph_digests_accept_only_lowercase_hex_pairs`, `uppercase_digest_hex_is_rejected`, `hegel_uppercase_digest_letters_are_rejected`, `reference_scanning_ignores_uppercase_digest_spellings`, `authority_pins_reject_uppercase_digest_hex` (feature `spacewasm-pilot`).
+5. Dataspace: `recorded_clock_regression_and_exhaustion_are_denied`, `recorded_random_value_must_lie_below_its_upper_bound`, `live_counters_never_reach_an_unrestorable_maximum`, `rolled_back_retraction_returns_only_a_rollback_receipt` (plus the updated `hegel_mixed_turn_commit_and_rollback_trace_preserves_transition_laws`), `facet_turns_are_attributed_to_the_owning_actor`, `facet_stop_notifies_observers_when_the_last_owner_retracts`, `force_run_demand_outranks_dependency_gated_in_any_order`.
+   - New Hegel properties (`src/runtime/dataspace/parts/tests/p006/body.rs`, module `engine::dataspace::tests`):
+     - `hegel_recorded_clock_responses_never_regress_or_exhaust_logical_time`: a recorded value is admitted exactly when it neither regresses below logical time nor reaches the unrestorable maximum, and the admitted snapshot restores.
+     - `hegel_recorded_random_values_replay_only_inside_their_range`: a value replays exactly when it lies in `0..upper`.
+     - `hegel_force_run_outranks_dependency_gated_in_every_order`: any order and mix of demands for one service derives force-run exactly when a force-run demand is present.
+6. Replay, Wasm and Prolly:
+   - Replay: `a_denied_demand_is_not_consumed_and_fails_the_step_even_when_ignored`, `a_transition_that_swallows_a_misbound_demand_error_fails_the_replay`, `the_trace_member_binds_the_trace_to_its_exact_record_bytes`, `equal_commit_ref_with_divergent_roots_is_a_root_divergence`, `equal_commit_ref_and_roots_with_field_differences_is_a_divergence`.
+   - New Hegel property (`src/world_replay/tests/sealedproperties.rs`): `hegel_misbound_demands_never_consume_a_slot_and_always_fail_the_step` sends 0–3 request-ref or operation-id misbound demands. Each is counted as a violation, none consumes the slot, its true demand is still served, and the step finishes only when there were none.
+   - Wasm: `wasm_nan_results_are_canonical_and_replay_identically` (mutation-checked above), `wasm_second_hostcall_is_denied_before_dispatch`.
+   - Prolly: `a_byte_split_last_group_is_never_overfilled_by_borrowing_or_merging`, `rebalancing_still_borrows_and_merges_when_bytes_allow`, `exhaustive_small_group_shapes_respect_both_bounds_and_rebalance_maximally`, `byte_bounded_builds_never_exceed_max_node_bytes`.
+
+**New properties fail on the old code (mutation check).** Each old behavior was reinstated temporarily: random values outside the range accepted, clock regressions accepted, dependency-gated outranking force-run, and a denied demand popping the next slot without counting a violation. All four properties failed with shrunk counterexamples: `recorded 1 for range 0..1`, `recorded 0 at logical time 1`, no force-run service derived, and zero violations counted. With the source restored they pass.
+
+Docs:
+- `docs/technical/foundations/canonical-identity-model.md`: the scoped discrepancy (the core codec accepted uppercase hex) now reads as a resolved discrepancy, and its "tracked as a defect" line is removed.
+- The entry is removed from the discrepancy list in `docs/technical/README.md`.
+- `python3 scripts/check-doc-links.py`: 320 files, 0 findings.
+
+Commands (leviathan via `aremote`; formatting and Cairn locally):
+- `cargo test -p molten-core --lib`: 823 passed, 0 failed.
+- `cargo test -p molten --lib -- embedded optional_ref optional_content secret_optional serialized_identity closure_report_receipt chaoscontrol_fact engine::dataspace engine::logic testbed:: world_replay world_snapshot meshspace::recorded codec:: vault:: remote addressable_actor`: 409 passed, 0 failed (with the four new properties).
+- `cargo test -p molten --test worldsnapshot --test fabricboundarycompat --test fabric_simulation_boundary`: 13 + 5 + 3 passed, 0 failed.
+- `cargo test -p molten --lib --features world-snapshot-vm-cohort -- world_snapshot`: 24 passed. `cargo test -p molten --lib --features spacewasm-pilot -- spacewasm::`: 40 passed, 1 ignored.
+- `cargo test -p molten --lib -- engine::dataspace`: 51 passed (includes the three new properties). `cargo test -p molten --lib -- runtime::dataspace world_replay`: 23 passed (includes the new sealed property).
+- `cargo clippy -p molten -p molten-core -p molten-node-host --all-targets -- -D warnings`: exit 0, including the new property files.
+- `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide (left for OctetSweep). None are in files this change touched or in the two new property files.
+- Strict `cairn validate`: valid.
+
+Review fix (FIX-FIRST): three `molten-core` boundaries still checked only the `blake3:` prefix, so they accepted uppercase, mixed-case and short digests:
+- `committed_stream::commit_transition` (payload and state refs);
+- `content_replication::check_publication`;
+- `fabric_crypto_identity::artifact::auth::artifact_ref` (key, payload, verifier-context and currentness refs).
+
+All three now use the shared lowercase validator `crate::fabric::valid_blake3_ref`.
+- New negative regressions, each also accepting a lowercase digest: `committed_stream::tests::refs::only_lowercase_canonical_digests_commit`, `content_replication::tests::spelling::publication_admits_only_lowercase_canonical_digests`, `fabric_crypto_identity::tests::spelling::artifact_key_identity_admits_only_lowercase_canonical_digests`.
+- Mutation check: with the shared validator temporarily made prefix-only (the old behavior), all three new tests failed. With the validator restored, they pass.
+- A sweep of every `blake3:` prefix check in `crates/molten-core/src` found no other prefix-only acceptance. Every other site checks a 64-character lowercase hex digest, or only compares against such a digest (`artifact/auth.rs` identity drift).
+- `cargo test -p molten-core --lib`: 826 passed. `cargo test -p molten --test content_replication`: 12 passed. Clippy (`-p molten -p molten-core -p molten-node-host --all-targets -D warnings`): exit 0.
+- `docs/technical/README.md` keeps a canonical-identity entry, and the article records the fix as tracked, until it is merged.
+- **Final task unchecked** until this fix lands on `molten`.

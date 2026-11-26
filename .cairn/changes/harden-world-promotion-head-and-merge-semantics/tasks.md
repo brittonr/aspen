@@ -49,3 +49,26 @@ Commands (run on leviathan via `aremote`/`anix`, formatting locally); final run 
   (first run found two `excessive_file_length` findings in the core test files; fixed by splitting
   out `tests/grant.rs` and moving one non-claims test into `tests/observation.rs`).
 - `cairn validate --root . --policy …/cairn-policy.json --strict` — valid.
+
+## Verification (2026-11-26, final validation)
+
+Coverage was checked against the code: each fixed defect has positive and negative regressions that fail on the old behavior. No test was missing, so none was added.
+
+1. Grant binding: `deny_or_abandon_grant_cannot_authorize_promotion`, `deny_retry_or_abandon_grant_cannot_authorize_promotion`, `current_operator_grant_admits_exactly_its_own_action_and_target`, `operator_grant_for_another_reservation_or_attempt_is_a_target_mismatch`, `expired_or_consumed_operator_grant_is_denied`, `operator_grant_must_match_the_live_branch_head`, `tampered_action_target_nonce_or_expiry_or_wrong_trusted_signer_is_denied`, `newline_and_comma_injection_cannot_collide_closure_signing_bytes`, `operator_grant_is_single_use_and_bound_to_the_live_branch_head`.
+2. Atomic dispatch and read-back: `reservation_and_attempt_transition_commits_together_or_not_at_all`, `legacy_crash_between_reservation_and_attempt_writes_is_recoverable`, `deny_transitions_a_committed_reservation_and_abandon_moves_attempt_and_reservation`, `update_reservation_rejects_immutable_field_changes`, `operator_mutation_rechecks_the_validated_head_inside_its_write_transaction`, `partial_promotion_persistence_reads_back_as_corrupt`, `idempotent_replay_survives_reservations_leaving_their_initial_state`.
+3. World head: `applied_stale_and_uncertain_outcomes_emit_distinct_truthful_receipts`, `local_cas_conflict_returns_stale_receipt_and_persists_nothing`, `signer_role_and_authority_come_from_trusted_policy_and_authority_port`, `signer_authority_withdrawn_before_commit_denies_inside_mutation_boundary`, `operator_signer_must_hold_the_trusted_role`.
+4. Merge and commit closure: `equal_roots_do_not_bypass_runtime_sensitivity_availability_or_profile_modes`, `application_handler_enforces_declared_input_schema`, `branch_creation_and_deletion_are_classified_as_changes_not_absence`, `closure_accepts_valid_diamond_ancestry`, `closure_rejects_detached_cycle_and_unreachable_observations`.
+
+Docs:
+- `docs/technical/world-effects/promotion-and-reservation-atomicity.md` and `docs/technical/world-state/typed-diff-and-merge-conflicts.md` already described the fixed behavior. Their remaining "tracked as a defect" lines are removed.
+- The two entries are removed from the discrepancy list in `docs/technical/README.md`.
+- `python3 scripts/check-doc-links.py`: 320 files, 0 findings.
+
+Commands (leviathan via `aremote`; formatting and Cairn locally):
+- `cargo test -p molten-core --lib`: 823 passed, 0 failed.
+- `cargo test -p molten --lib -- world_promotion world_head world_merge world_witness world_distribution worldcommit world_commit`: 97 passed, 0 failed.
+- `cargo test -p molten --test worldpromotioncli --test worldpromotiondenials --test worldcommit`: 5 + 3 + 4 passed, 0 failed.
+- `cargo clippy -p molten -p molten-core -p molten-node-host --all-targets -- -D warnings`: exit 0.
+- `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide, 0 errors. Files this change touched carry 20 of them across 4 files: `world_witness/authority/verify.rs` (13, mostly `non_trait_imports`), `world_head/parts/service/p000/body.rs` (4), and `world_head/parts/tests/{p000,p001}`. They are left for OctetSweep.
+- Strict `cairn validate`: valid.
+- **Final task left unchecked:** the Octet source gate is not clean for this change's files (above). Every other requirement is met.

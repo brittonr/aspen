@@ -4,6 +4,7 @@ mod deficits;
 mod edge;
 mod eligibility;
 mod repair;
+mod spelling;
 
 use super::*;
 

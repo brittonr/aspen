@@ -28,13 +28,13 @@ A different sender might transmit a parsable noncanonical encoding of the expect
 
 Even success at all four stages does not authorize a destructive operation using the object. Identity answers which artifact is under discussion. Authority and policy answer what an actor may do with it. The [fabric boundary](../../distributed-system-fabric.md#canonical-identity-and-adapters) explicitly excludes paths, backend ids, tickets, and transport frames from canonical authority.
 
-## Review guidance and a scoped discrepancy
+## Review guidance
 
 During review, identify which helper a caller uses and which conclusion the caller draws. Search for a concrete expected reference comparison, then inspect the label/schema check and subsequent admission. Do not substitute a filename containing a digest for measured bytes. For large referenced payloads, distinguish the metadata record's identity from the payload's own content reference and availability.
 
-There is a narrow implementation difference worth preserving in review: the pure core codec's `valid_blake3_ref` accepts ASCII hexadecimal characters, including uppercase, whereas the shared codec requires lowercase. Thus a core summary's shape acceptance does not prove acceptance by the shared `ContentRef` boundary. This article records the two inspected predicates rather than declaring their accepted languages identical or inventing a normalization rule. No code or governing policy is changed here.
+Resolved discrepancy (change `repair-canonical-identity-preserves-replay-and-dataspace-determinism`): the pure core codec's `valid_blake3_ref` previously accepted uppercase ASCII hexadecimal characters, whereas the shared codec requires lowercase, so a core summary's shape acceptance did not prove acceptance by the shared `ContentRef` boundary. The core codec, the other `molten-core` digest validators, and the root-crate `blake3:` boundaries now accept lowercase hexadecimal only, so both predicates accept the same digest spelling. Generic payload hex decoders (module bytes, signatures, public keys) are not `blake3:` identities and are outside this rule.
 
-This discrepancy is tracked as a defect by the Cairn change [`repair-canonical-identity-preserves-replay-and-dataspace-determinism`](../../../.cairn/changes/repair-canonical-identity-preserves-replay-and-dataspace-determinism/proposal.md), which enforces lowercase-only `blake3:` validation across `molten-core` and `src/`.
+Final validation found three `molten-core` boundaries that checked only the `blake3:` prefix: the committed-stream commit, content-replication publication, and the artifact-authentication reference projection. They now use the shared lowercase validator. This discrepancy is tracked as a defect by the Cairn change [`repair-canonical-identity-preserves-replay-and-dataspace-determinism`](../../../.cairn/changes/repair-canonical-identity-preserves-replay-and-dataspace-determinism/proposal.md) until that fix is merged.
 
 Suggested verification includes noncanonical input rejection, mismatched expected refs, unsupported labels, and schema drift. The core codec already contains domain-validation tests. These are review targets, not tests executed for this article.
 

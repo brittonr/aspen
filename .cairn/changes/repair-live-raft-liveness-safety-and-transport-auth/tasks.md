@@ -39,3 +39,66 @@ Audit claims 1–5 were confirmed in code before the fix: opposing timer handles
 - `aremote 'cargo test -p molten --lib reliability'`: 67 passed, 0 failed.
 - `aremote 'cargo clippy -p molten --all-targets -- -D warnings'`: clean.
 - `cargo fmt --all` (local); `cairn validate --root . --policy …/cairn-policy.json --strict`: valid.
+
+## Verification (2026-11-26, final validation)
+
+Coverage was checked against the code. Each named test asserts both the admitted behavior and the old failure's absence. Each defect states its coverage levels:
+- **Distinct-process:** separate OS processes.
+- **In-process live multi-node:** several live replicas over real loopback Iroh and Redb inside one test process.
+- **Deterministic multi-replica simulation:** replica states exchanging protocol messages without I/O.
+- **Executor:** the real effect executor over recording ports.
+- **Unit.**
+
+The only distinct-process Raft test is `live_process::three_elects_commits_reads_and_catches_up`. It runs three OS processes that elect, commit, serve a linearizable read, then crash and recover. It is a positive baseline through the repaired election, read and replication paths, but it does not drive any defect's triggering interleaving. The only distinct-process transport test is `cliharness fabric_transport` (3 cases): a generic listener and client over the admitted-peer listener, not Raft envelopes. The NixOS VM multinode check (`checks.nixos-vm-multinode`) checks fail-closed unsigned startup and network reachability only; it starts no Raft replica or reliability host.
+
+1. **Timer races.**
+   - In-process live multi-node (new): `live_cluster::regressions::replicas_ignore_timers_queued_before_a_role_change_and_keep_serving`. The new leader handles the startup and candidate election timeouts queued before its win. A follower, and later a leader that stepped down, each handle a heartbeat tick. Every one is a state-preserving no-op, and the old leader and then its successor keep committing.
+   - Deterministic simulation: `transition_liveness_tests::{a_new_leader_ignores_the_election_timeout_it_armed_as_candidate, a_leader_that_steps_down_ignores_its_pending_heartbeat_tick, a_timeout_queued_before_an_append_entries_reset_is_ignored}`.
+   - Unit (real Tokio timer port): `time_tests::{arming_heartbeats_on_election_win_cancels_the_pending_election_timer, arming_an_election_timer_on_step_down_cancels_the_pending_heartbeat}`.
+2. **ReadProbe at a lagging follower.**
+   - In-process live multi-node (new): `live_cluster::regressions::a_lagging_follower_acknowledges_a_read_probe_that_completes_a_quorum_read`. C misses the committed append, acknowledges the probe without catching up, and its acknowledgement completes A's linearizable read.
+   - Deterministic simulation: `a_lagging_follower_acknowledges_a_read_probe_and_adopts_its_term`; negative `a_read_probe_from_a_superseded_term_is_not_acknowledged`.
+3. **Retried `request_ref` after a partition.**
+   - In-process live multi-node (new): `live_cluster::regressions::a_healed_old_leader_durably_truncates_its_uncommitted_suffix_for_the_committed_retry`. A's uncommitted `(1, 1, R0)` and `(2, 1, R1)` are durably truncated for B's committed `(1, 2, R1)`, and after the heal A applies only R1.
+   - Deterministic simulation: `a_healed_old_leader_truncates_its_suffix_and_accepts_the_committed_retry`; negative `a_request_ref_repeated_against_the_retained_prefix_is_still_rejected`.
+4. **Commit chunking and the follower log bound.**
+   - Deterministic simulation plus executor: `a_full_message_batch_commits_in_effect_bounded_chunks`. Leader and follower states exchange a full `AppendEntries` batch, and the real executor then applies the response under the 128-effect reliability profile.
+   - Deterministic simulation: `transition_bounds_tests::a_follower_at_its_log_bound_acknowledges_what_fits_and_compacts_before_accepting_more`.
+   - Why not live: the defect needs more than `max_effects_per_step − 4` entries committable in one step (12 under the live test profile, 124 under the reliability profile). The live harness caps a transport frame at 4 KiB and a durable record at 1 KiB.
+   - A live attempt was removed: a 13-entry frame timed out at the listener, and a 12-entry follower append failed with `ByteLimitExceeded { actual: 3694, maximum: 1024 }`.
+5. **Recovery snapshot boundary term.**
+   - Deterministic multi-replica simulation: `rejoin::tests::fencing::peer_snapshot_installation_discards_a_suffix_both_peers_lack_after_a_mismatched_boundary` and the twelve `repair::tests`, where a recovering replica exchanges recovery query and report messages with peer replica states.
+   - Why not live: `live_cluster::setup::recover_node_at_root` has no seam for injecting a storage fault or a snapshot.
+6. **Transport authentication and isolation.**
+   - In-process live multi-endpoint over real loopback Iroh: `raft::iroh::tests::auth::{spoofed_sender_is_denied_before_acknowledgement_and_the_matching_voter_is_delivered, unadmitted_endpoint_is_refused_after_its_handshake_and_ingress_continues, failed_handshake_and_stalled_session_drop_only_their_connections}` use a real listener and `ReplicaIngressPump`, with transports dialing as distinct voter keys.
+   - In-process live multi-node: `live_cluster::contexts::voters_with_distinct_peer_contexts_elect_a_leader_and_refuse_an_unadmitted_identity`.
+   - Distinct-process: only the positive baselines above.
+7. **Teardown and write replay, fail-stop. Gap: unit level only.**
+   - Tests: `reliability::service::tests::{teardown_is_scoped_to_the_named_host_while_forwarded_operations_stay_admitted, quarantine_answers_uncertainty_and_latches_fail_stop_while_a_denial_does_not}`, and `reliability::authority::tests::signed_write_replays_are_denied_across_failover_and_restart_while_a_resigned_retry_is_admitted`.
+   - The last test runs the admission functions against two node-state roots, but no replica or host runs.
+   - No simulation or live multi-node harness reaches `reliability::service::Host`. `service::start` needs an operator-issued authorization grant, a native readiness record and a validated node source gate, and no VM check starts a reliability host.
+   - The tests drive the exact functions `Host::admit`, `perform`, `wait` and `serve_bound` call: `admit_scope`, `operation_response`, `FailStop::settle`, `verify_request`, `consume_nonce` and `require_write_fence`.
+8. **Fast-path ledger.**
+   - Unit: `fastpath` `equal_commands_from_distinct_sessions_both_apply_and_a_conflicting_retry_is_rejected` and `acknowledgements_from_outside_the_admitted_replicas_never_count`.
+   - Multi-replica simulation: pending. FastpathCore is adding `molten-fastpath-core` `tests::cluster::simulated_replicas_converge_on_session_keyed_ledgers_and_ignore_non_member_acknowledgements` in its own worktree. It is not merged here and was not run in this validation.
+   - The Quint trace replay (`tests/fastpathquint.rs`) uses one session and only admitted replicas, so it reaches neither defect.
+
+**Fails on the old code (mutation check).** The pre-fix code was reinstated temporarily and the tests rerun:
+- Round 1 (stale election timeout returns `Err`, the `required_index > last_log_index` probe rejection, duplicate-request validation over the whole log): all three new live tests failed with `live cluster turn denied: …` at the expected turn.
+- Round 2 (heartbeat at a non-leader returns `Err`): the timer test failed at the follower's heartbeat tick.
+- With the source restored, all three pass.
+
+Commands (leviathan via `aremote`, formatting locally):
+- `cargo test -p molten --lib live_cluster`: 5 passed, 0 failed, 1 ignored (opt-in trace diagnostic).
+- `cargo test -p molten --lib -- fabric_consistency reliability raft::iroh fastpath live_cluster federation fabric_transport::cross_process`: 274 passed, 0 failed, 1 ignored.
+- `cargo test -p molten --test directlanstreams`: 44 passed, 1 ignored. `cargo test -p molten --test fastpathquint`: 4 passed.
+- `cargo test -p molten --test cliharness`: 52 passed, 1 failed, 13 ignored. The failure, `cli_octet_baseline_allows_identical_noncritical_warning_and_denies_new_warning`, is a stale Octet config/profile hash in its fixture against the current workspace Octet scope, outside this change.
+- `cargo clippy -p molten -p molten-core -p molten-node-host --all-targets -- -D warnings`: exit 0.
+- `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide, 0 errors.
+  - The new `live_cluster/regressions.rs` has 0 findings. Three `path_segment_repetition` findings were removed by renaming its tests so they no longer repeat the `live` module segment.
+  - Other files this change touched carry 32 findings across 13 files: `transition/rejoin/repair.rs` (11), `transition/{election.rs,liveness.rs,message/replication.rs,parts/validation/p000}`, `iroh/parts/shell/{p001,p002}`, `reliability/{public/protocol.rs,service/host/runtime.rs}`, `cli/ops/reliability/authenticated.rs`, and tests. They are mostly `excessive_file_length` and `path_segment_repetition`, and are left for OctetSweep.
+- Strict `cairn validate`: valid.
+- **Final task left unchecked** for three reasons:
+  - Defect 7 has no simulation or live multi-node coverage (above).
+  - Defect 8's multi-replica simulation is pending FastpathCore.
+  - The Octet source gate is not clean for this change's files.
