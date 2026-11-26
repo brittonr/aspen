@@ -305,9 +305,14 @@ upstream move are recorded with their dependency chain instead.
    `flake.lock`; never edit it manually.
 6. Run `scripts/git-source-hashes.sh --write` to record the metadata-free NAR hash of
    every Cargo git source in `crate-hashes.json` under revision-qualified keys. Then
-   regenerate both plans with the repository's pinned unit2nix tool:
-   `unit2nix --workspace -o build-plan.json` and
-   `unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json`.
+   regenerate the plans with the repository's pinned unit2nix tool:
+   `unit2nix --workspace -o build-plan.json`,
+   `unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json`,
+   and `scripts/no-std-kernel-plans.sh`, which writes one `unit2nix -p <crate>` plan per
+   no_std kernel under `nix/no-std-kernels/` together with the BLAKE3 of every resolution
+   input (workspace manifest and lock, `.cargo/config.toml`, `rust-toolchain.toml`, and the
+   manifests of the kernel's `cargo metadata` path-dependency closure); the
+   `<crate>-no-std` flake checks reject a stale plan.
    Do not let unit2nix prefetch a git source itself: its prefetch hashes a checkout that
    still contains `.git`, while `pkgs.fetchgit` removes `.git`, so such a hash fails on
    any builder that lacks the prefetched store path. `scripts/git-source-hashes.sh --check`

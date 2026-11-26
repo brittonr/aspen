@@ -1,61 +1,15 @@
-pub(crate) mod features;
-mod identity;
+//! Shell for component execution admission: the pure planner lives in
+//! `molten_wasm_policy_core::component::admission`; this module binds the declared
+//! import-manifest port (Preserves manifest identity) and keeps byte inspection.
+
 pub(crate) mod inspection;
 
-pub const COMPONENT_INVOKE_EXPORT: &str = "invoke";
-pub const WASI_IMPORT_PREFIX: &str = "wasi:";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrowthFacts {
-    pub initial: u64,
-    pub maximum: Option<u64>,
-    pub strategy: super::model::GrowthStrategy,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArtifactFacts {
-    pub artifact_kind: super::model::ArtifactKind,
-    pub declared_profile_id: String,
-    pub declared_cohort_ref: String,
-    pub declared_world: String,
-    pub imports: Vec<String>,
-    pub exports: Vec<String>,
-    pub enabled_features: Vec<String>,
-    pub memory: GrowthFacts,
-    pub table: GrowthFacts,
-    pub instances: u64,
-    pub memories: u64,
-    pub tables: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImportGrant {
-    pub import: String,
-    pub capability: String,
-    pub policy_ref: String,
-    pub authority_ref: String,
-    pub resource_ref: String,
-    pub recorded_effect_ref: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutionPlan {
-    pub component_ref: String,
-    pub wit_ref: String,
-    pub bundle_ref: Option<String>,
-    pub profile_ref: String,
-    pub runtime_configuration_ref: String,
-    pub imports: Vec<String>,
-    pub capabilities: Vec<String>,
-    pub mantle_evidence_refs: Vec<String>,
-    pub valence_evidence_refs: Vec<String>,
-    pub cairn_evidence_refs: Vec<String>,
-    pub policy_refs: Vec<String>,
-    pub authority_refs: Vec<String>,
-    pub resource_refs: Vec<String>,
-    pub recorded_effect_refs: Vec<String>,
-    pub materialization: super::evidence::materialization::Admission,
-}
+pub use molten_wasm_policy_core::component::admission::ArtifactFacts;
+pub use molten_wasm_policy_core::component::admission::COMPONENT_INVOKE_EXPORT;
+pub use molten_wasm_policy_core::component::admission::ExecutionPlan;
+pub use molten_wasm_policy_core::component::admission::GrowthFacts;
+pub use molten_wasm_policy_core::component::admission::ImportGrant;
+pub use molten_wasm_policy_core::component::admission::WASI_IMPORT_PREFIX;
 
 pub fn plan_execution(
     profile: &super::model::RuntimeProfile,
@@ -64,37 +18,13 @@ pub fn plan_execution(
     facts: &ArtifactFacts,
     grants: &[ImportGrant],
 ) -> super::model::Result<ExecutionPlan> {
-    super::profile::validate_runtime(profile)?;
-    admit_declared_import_surface(profile, &materialization, manifest, facts)?;
-    let mut blockers = Vec::new();
-    validate_identity(profile, &materialization, facts, &mut blockers);
-    features::validate(profile, facts, &mut blockers);
-    validate_resources(profile, facts, &mut blockers);
-    if !blockers.is_empty() {
-        return Err(super::model::Denial::from_blockers(blockers));
-    }
-    let grant_plan = validate_imports(profile, facts, grants, &mut blockers);
-    if !blockers.is_empty() {
-        return Err(super::model::Denial::from_blockers(blockers));
-    }
-    let runtime_configuration_ref = identity::runtime_configuration_ref(profile, facts, &materialization, &grant_plan);
-    Ok(ExecutionPlan {
-        component_ref: materialization.component_ref.clone(),
-        wit_ref: materialization.wit_ref.clone(),
-        bundle_ref: materialization.bundle_ref.clone(),
-        profile_ref: super::profile::r#ref(profile),
-        runtime_configuration_ref,
-        imports: super::model::sorted_unique(&facts.imports),
-        capabilities: grant_plan.capabilities,
-        mantle_evidence_refs: materialization.mantle_evidence_refs.clone(),
-        valence_evidence_refs: materialization.valence_evidence_refs.clone(),
-        cairn_evidence_refs: materialization.cairn_evidence_refs.clone(),
-        policy_refs: merge_refs(&materialization.policy_refs, &grant_plan.policy_refs),
-        authority_refs: merge_refs(&materialization.authority_refs, &grant_plan.authority_refs),
-        resource_refs: merge_refs(&materialization.resource_refs, &grant_plan.resource_refs),
-        recorded_effect_refs: grant_plan.recorded_effect_refs,
+    molten_wasm_policy_core::component::admission::plan_execution(
+        profile,
         materialization,
-    })
+        facts,
+        grants,
+        |profile, materialization, facts| admit_declared_import_surface(profile, materialization, manifest, facts),
+    )
 }
 
 fn admit_declared_import_surface(
@@ -110,179 +40,4 @@ fn admit_declared_import_surface(
         return Err(super::model::Denial::from_blockers(admission.blockers));
     }
     Ok(())
-}
-
-#[derive(Debug)]
-struct GrantPlan {
-    bindings: Vec<String>,
-    capabilities: Vec<String>,
-    policy_refs: Vec<String>,
-    authority_refs: Vec<String>,
-    resource_refs: Vec<String>,
-    recorded_effect_refs: Vec<String>,
-}
-
-impl GrantPlan {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            bindings: Vec::with_capacity(capacity),
-            capabilities: Vec::with_capacity(capacity),
-            policy_refs: Vec::with_capacity(capacity),
-            authority_refs: Vec::with_capacity(capacity),
-            resource_refs: Vec::with_capacity(capacity),
-            recorded_effect_refs: Vec::with_capacity(capacity),
-        }
-    }
-}
-
-fn validate_identity(
-    profile: &super::model::RuntimeProfile,
-    materialization: &super::evidence::materialization::Admission,
-    facts: &ArtifactFacts,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
-    if facts.artifact_kind != super::model::ArtifactKind::Component {
-        blockers.push_item("component execution plan received a core module".to_string());
-    }
-    let is_admitted_profile = [
-        super::profile::COMPONENT_PROFILE_ID,
-        super::profile::TIME_SLICED_PROFILE_ID,
-        super::effect::HOST_PROFILE_ID,
-    ]
-    .contains(&facts.declared_profile_id.as_str());
-    if !is_admitted_profile || facts.declared_profile_id != profile.profile_id {
-        blockers.push_item("component artifact declared profile is stale or mismatched".to_string());
-    }
-    if facts.declared_cohort_ref != super::profile::r#ref(profile)
-        || materialization.profile_ref != super::profile::r#ref(profile)
-    {
-        blockers.push_item("component artifact or materialization cohort identity is stale".to_string());
-    }
-    if facts.declared_world != profile.wit.world {
-        blockers.push_item("component artifact WIT world does not match the admitted world".to_string());
-    }
-    if !facts.exports.iter().any(|value| value == COMPONENT_INVOKE_EXPORT) {
-        blockers.push_item("component artifact does not export the admitted invoke function".to_string());
-    }
-    if super::model::sorted_unique(&facts.exports) != facts.exports {
-        blockers.push_item("component export facts must be sorted and unique".to_string());
-    }
-}
-
-fn validate_resources(
-    profile: &super::model::RuntimeProfile,
-    facts: &ArtifactFacts,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
-    validate_fixed_growth("memory", &facts.memory, profile.resources.max_memory_bytes, blockers);
-    validate_fixed_growth("table", &facts.table, profile.resources.max_table_elements, blockers);
-    for (label, actual, maximum) in [
-        ("instances", facts.instances, profile.resources.max_instances),
-        ("memories", facts.memories, profile.resources.max_memories),
-        ("tables", facts.tables, profile.resources.max_tables),
-    ] {
-        if actual > maximum {
-            blockers.push_item(format!("component artifact {label} exceed the admitted resource bound"));
-        }
-    }
-    validate_collection_bound("imports", facts.imports.len(), profile.resources.max_imports, blockers);
-    validate_collection_bound("exports", facts.exports.len(), profile.resources.max_exports, blockers);
-}
-
-fn validate_collection_bound(
-    label: &str,
-    actual: usize,
-    maximum: u64,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
-    match u64::try_from(actual) {
-        Ok(actual) if actual <= maximum => {}
-        Ok(_) => blockers.push_item(format!("component artifact {label} exceed the admitted resource bound")),
-        Err(error) => blockers.push_item(format!("component artifact {label} count is unsupported: {error}")),
-    }
-}
-
-fn validate_fixed_growth(
-    label: &str,
-    facts: &GrowthFacts,
-    maximum: u64,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
-    if facts.strategy != super::model::GrowthStrategy::Fixed || facts.maximum != Some(facts.initial) {
-        blockers.push_item(format!("component {label} growth is not fixed up front"));
-    }
-    if facts.initial > maximum {
-        blockers.push_item(format!("component {label} declaration exceeds the admitted resource bound"));
-    }
-}
-
-fn validate_imports(
-    profile: &super::model::RuntimeProfile,
-    facts: &ArtifactFacts,
-    grants: &[ImportGrant],
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) -> GrantPlan {
-    let mut plan = GrantPlan::with_capacity(facts.imports.len());
-    if super::model::sorted_unique(&facts.imports) != facts.imports {
-        blockers.push_item("component import facts must be sorted and unique".to_string());
-    }
-    let mut used_grants = Vec::with_capacity(facts.imports.len());
-    for import in &facts.imports {
-        if !profile.allowed_imports.iter().any(|allowed| allowed == import) {
-            blockers.push_item(format!("component import {import} is not declared by the profile"));
-        }
-        if import.starts_with(WASI_IMPORT_PREFIX)
-            && !profile.allowed_wasi_interfaces.iter().any(|allowed| allowed == import)
-        {
-            blockers.push_item(format!("ambient WASI import {import} is denied"));
-        }
-        let matching = grants.iter().filter(|grant| &grant.import == import).collect::<Vec<_>>();
-        if matching.len() != 1 {
-            blockers.push_item(format!("component import {import} requires exactly one authority grant"));
-            continue;
-        }
-        let grant = matching[0];
-        used_grants.push(grant.import.clone());
-        if grant.capability.trim().is_empty()
-            || !super::model::valid_content_ref(&grant.policy_ref)
-            || !super::model::valid_content_ref(&grant.authority_ref)
-            || !super::model::valid_content_ref(&grant.resource_ref)
-            || !super::model::valid_content_ref(&grant.recorded_effect_ref)
-        {
-            blockers.push_item(format!("component import {import} has incomplete capability or evidence bindings"));
-            continue;
-        }
-        plan.bindings.push(format!(
-            "{}|{}|{}|{}|{}|{}",
-            grant.import,
-            grant.capability,
-            grant.policy_ref,
-            grant.authority_ref,
-            grant.resource_ref,
-            grant.recorded_effect_ref
-        ));
-        plan.capabilities.push(grant.capability.clone());
-        plan.policy_refs.push(grant.policy_ref.clone());
-        plan.authority_refs.push(grant.authority_ref.clone());
-        plan.resource_refs.push(grant.resource_ref.clone());
-        plan.recorded_effect_refs.push(grant.recorded_effect_ref.clone());
-    }
-    if super::model::sorted_unique(&used_grants)
-        != super::model::sorted_unique(&grants.iter().map(|grant| grant.import.clone()).collect::<Vec<_>>())
-    {
-        blockers.push_item("component import grants include unused authority".to_string());
-    }
-    plan.bindings = super::model::sorted_unique(&plan.bindings);
-    plan.capabilities = super::model::sorted_unique(&plan.capabilities);
-    plan.policy_refs = super::model::sorted_unique(&plan.policy_refs);
-    plan.authority_refs = super::model::sorted_unique(&plan.authority_refs);
-    plan.resource_refs = super::model::sorted_unique(&plan.resource_refs);
-    plan.recorded_effect_refs = super::model::sorted_unique(&plan.recorded_effect_refs);
-    plan
-}
-
-fn merge_refs(left: &[String], right: &[String]) -> Vec<String> {
-    let mut values = left.to_vec();
-    values.extend_from_slice(right);
-    super::model::sorted_unique(&values)
 }

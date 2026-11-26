@@ -5,7 +5,7 @@ without changing component correctness, authority, or build boundaries. The
 reviewed profile is authored in
 [`wasm-component-performance/profile.ncl`](wasm-component-performance/profile.ncl)
 and exported deterministically to
-[`generated/profile.json`](wasm-component-performance/generated/profile.json).
+[`config/wasm-component-performance/generated/profile.json`](../config/wasm-component-performance/generated/profile.json).
 Rust checks the export at startup; it does not evaluate Nickel at runtime.
 
 ## Sightglass boundary

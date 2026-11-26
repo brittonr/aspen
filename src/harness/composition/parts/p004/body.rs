@@ -1,27 +1,14 @@
 
 // The CPU-saturation scenario under the time-sliced execution profile.
 //
-// A saturating callback of the stateful service and one runnable of the
-// independent sibling are both ready under the admitted fabric-time
-// scheduler. Each slice of the callback consumes at most the admitted
-// quantum; on a yield the continuation is re-enqueued with the scheduler's
-// own command, so the sibling is selected between slices. The property holds
-// when the sibling completes before the callback and the callback still ends
-// within its budget.
-
-/// What one slice of saturating work did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SaturationSlice {
-    /// The callback consumed one quantum and yielded.
-    Yielded,
-    /// The callback ended: completed, or stopped at its budget.
-    Ended { is_within_budget: bool },
-}
-
-/// A saturating callback driven one slice at a time.
-pub trait SaturatingWork {
-    fn run_slice(&mut self) -> SaturationSlice;
-}
+// The slice contract (`SaturationSlice`, `SaturatingWork`) is the pure
+// `molten_composition_core::quantum` vocabulary. A saturating callback of
+// the stateful service and one runnable of the independent sibling are both
+// ready under the admitted fabric-time scheduler. Each slice of the callback
+// consumes at most the admitted quantum; on a yield the continuation is
+// re-enqueued with the scheduler's own command, so the sibling is selected
+// between slices. The property holds when the sibling completes before the
+// callback and the callback still ends within its budget.
 
 /// Saturating work modeled with the admitted profile's slice ledger: it needs
 /// a fixed amount of fuel and spends one quantum per slice.

@@ -97,7 +97,8 @@ case "$mode" in
         status=1
       fi
     done < <(sources)
-    for plan in build-plan.json release-policy-build-plan.json; do
+    # The per-kernel no_std plans (scripts/no-std-kernel-plans.sh) are bound by the same rule.
+    for plan in build-plan.json release-policy-build-plan.json $(cd "$root" && printf '%s\n' nix/no-std-kernels/*.build-plan.json); do
       # Every generated git source hash must be the revision-qualified crate-hashes.json value.
       drift="$(jq -r --slurpfile hashes "$hashes" '
         ($hashes[0] | to_entries | map({key: (.key | split("#")[0]), value}) | from_entries) as $bound

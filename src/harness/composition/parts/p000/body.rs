@@ -2,60 +2,10 @@
 //
 // One durable stateful service, one dependent worker in the same recovery
 // group, and one independent sibling outside it. Both harness tracks consume
-// these definitions.
+// these definitions. The role and property vocabulary is the pure
+// `molten_composition_core::judgment` vocabulary.
 
 use molten_core::system_extension::*;
-
-/// The three services in the composition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ServiceRole {
-    /// The durable stateful service the dependent worker needs.
-    Stateful,
-    /// The dependent worker, in the same recovery group and ordered after the
-    /// stateful service.
-    DependentWorker,
-    /// The independent sibling, outside the recovery group.
-    Sibling,
-}
-
-impl ServiceRole {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Stateful => "stateful",
-            Self::DependentWorker => "dependent-worker",
-            Self::Sibling => "sibling",
-        }
-    }
-}
-
-/// The properties the composition asserts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ServiceProperty {
-    /// Unaffected services continue while a member fails and recovers.
-    UnaffectedServicesContinue,
-    /// Stale instances lose influence.
-    StaleInstancesLoseInfluence,
-    /// Durable logical work is not silently lost and is readmitted under a
-    /// current claim.
-    DurableWorkIsReadmitted,
-    /// Uncertain external effects are surfaced as unknown outcomes and not
-    /// blindly repeated.
-    UncertainEffectsAreNotRepeated,
-    /// Restart storms terminate or escalate within the admitted window.
-    StormsTerminateWithinWindow,
-}
-
-impl ServiceProperty {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::UnaffectedServicesContinue => "unaffected-services-continue",
-            Self::StaleInstancesLoseInfluence => "stale-instances-lose-influence",
-            Self::DurableWorkIsReadmitted => "durable-work-is-readmitted",
-            Self::UncertainEffectsAreNotRepeated => "uncertain-effects-are-not-repeated",
-            Self::StormsTerminateWithinWindow => "storms-terminate-within-window",
-        }
-    }
-}
 
 /// The shared composition definitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
