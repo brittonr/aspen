@@ -22,6 +22,10 @@ const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 
 const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
 
+/// Snapshot-authority receipts whose readable-assertions check is labelled against the admitted
+/// set.
+const SNAPSHOT_AUTHORITY_V2_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v2";
+
 const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 pub fn validate_runtime_predicate_evidence(
@@ -125,6 +129,7 @@ fn parse_runtime_predicate_receipt(value: &preserves::IOValue) -> crate::error::
             | ACTORMAP_TRANSACTION_PREDICATE
             | NEAR_FAR_REFS_PREDICATE
             | SNAPSHOT_AUTHORITY_PREDICATE
+            | SNAPSHOT_AUTHORITY_V2_PREDICATE
             | SERVICE_DEPENDENCIES_PREDICATE
     ) {
         return Err(crate::error::Failure::invalid_harness(format!(

@@ -168,6 +168,41 @@ mod tests {
         assert!(!format!("{process_workspace:?}").contains(&process_workspace.display().to_string()));
     }
 
+    /// Descriptor number used only as a bridge entry name in the synthetic bridges below.
+    #[cfg(unix)]
+    const BRIDGE_DESCRIPTOR: std::os::fd::RawFd = 7;
+
+    #[cfg(unix)]
+    #[test]
+    fn missing_or_unusable_descriptor_bridge_is_unsupported() {
+        // r[verify molten.testing.descriptor_bridge_unsupported]
+        let host = ProcessWorkspace::new("missing_bridge").expect("process workspace");
+        let missing = resolve_descriptor_bridge(&host.join("absent-bridge"), BRIDGE_DESCRIPTOR)
+            .expect_err("missing bridge denied");
+        assert_eq!(missing.kind(), std::io::ErrorKind::Unsupported);
+        let file_bridge = host.join("bridge-file");
+        std::fs::write(&file_bridge, b"not a bridge").expect("bridge file");
+        let unusable = resolve_descriptor_bridge(&file_bridge, BRIDGE_DESCRIPTOR).expect_err("file bridge denied");
+        assert_eq!(unusable.kind(), std::io::ErrorKind::Unsupported);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn present_descriptor_bridge_resolves_and_other_errors_keep_their_class() {
+        // r[verify molten.testing.descriptor_bridge_unsupported]
+        let host = ProcessWorkspace::new("present_bridge").expect("process workspace");
+        let bridge = host.join("bridge");
+        std::fs::create_dir(&bridge).expect("bridge directory");
+        std::os::unix::fs::symlink(&*host, bridge.join(BRIDGE_DESCRIPTOR.to_string())).expect("bridge entry");
+        let resolved = resolve_descriptor_bridge(&bridge, BRIDGE_DESCRIPTOR).expect("bridge resolves");
+        assert_eq!(resolved, host.to_path_buf());
+        let plain = host.join("plain");
+        std::fs::create_dir(&plain).expect("plain directory");
+        std::fs::write(plain.join(BRIDGE_DESCRIPTOR.to_string()), b"not a link").expect("plain entry");
+        let error = resolve_descriptor_bridge(&plain, BRIDGE_DESCRIPTOR).expect_err("non-link entry");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
     #[test]
     fn logical_labels_and_paths_reject_ambient_or_traversing_inputs() {
         assert!(Workspace::new("../escape").is_err());

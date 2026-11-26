@@ -1,9 +1,16 @@
 
+/// Public key status. A status that names the resolved key's opaque handle reference uses the v2 record
+/// and schema; a status without one keeps the v1 record, so its canonical bytes are unchanged.
 // r[impl molten.crypto_identity.redaction]
+// r[impl molten.crypto_identity.status_handle_reference]
 pub fn status(input: &AdapterDiagnosticInput) -> crate::error::Result<StatusReadback> {
     let status = redact_adapter_status(input).map_err(|issues| validation_error("crypto status", &issues))?;
-    let value = crate::preserves_rail::record(CRYPTO_STATUS_RECORD, vec![
-        crate::preserves_rail::string(CRYPTO_STATUS_SCHEMA),
+    let (record, schema) = match status.handle_ref {
+        Some(_) => (CRYPTO_STATUS_HANDLE_RECORD, CRYPTO_STATUS_HANDLE_SCHEMA),
+        None => (CRYPTO_STATUS_RECORD, CRYPTO_STATUS_SCHEMA),
+    };
+    let mut fields = vec![
+        crate::preserves_rail::string(schema),
         field("profile-ref", crate::preserves_rail::string(&status.profile_ref)),
         field("purpose", crate::preserves_rail::string(status.purpose.as_str())),
         field("generation", optional_u64(status.generation)),
@@ -11,6 +18,11 @@ pub fn status(input: &AdapterDiagnosticInput) -> crate::error::Result<StatusRead
         field("permission-status", crate::preserves_rail::string(status.permission_status.as_str())),
         field("backend-class", crate::preserves_rail::string(status.backend_class.as_str())),
         field("public-key-ref", optional_string(status.public_key_ref.as_deref())),
+    ];
+    if let Some(handle_ref) = status.handle_ref.as_deref() {
+        fields.push(field("handle-ref", crate::preserves_rail::string(handle_ref)));
+    }
+    fields.extend([
         field("receipt-refs", strings_value(status.receipt_refs.iter().map(String::as_str))),
         field("backend-locator-redacted", crate::preserves_rail::bool_value(status.has_redacted_backend_locator)),
         field("raw-error-redacted", crate::preserves_rail::bool_value(status.has_redacted_error)),
@@ -22,6 +34,7 @@ pub fn status(input: &AdapterDiagnosticInput) -> crate::error::Result<StatusRead
             "public-status-bounded",
         ]),
     ]);
+    let value = crate::preserves_rail::record(record, fields);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(StatusReadback {
         status,

@@ -64,6 +64,8 @@ impl<V> Default for AdmissionPolicy<V> {
     }
 }
 
+/// Capability grants an actor holds. A context grants nothing unless built from explicit grants;
+/// granting every request requires the named [`CapabilityContext::allow_all`] constructor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapabilityContext<V> {
     grants: alloc::vec::Vec<CapabilityGrant<V>>,
@@ -111,9 +113,11 @@ impl<V: PartialEq + Clone> CapabilityContext<V> {
     }
 }
 
+/// The default context is deny-by-default: it holds no grants and authorizes nothing.
+// r[impl molten.runtime_spine.capability_context_deny_by_default]
 impl<V> Default for CapabilityContext<V> {
     fn default() -> Self {
-        Self::allow_all()
+        Self::from_grants(alloc::vec::Vec::new())
     }
 }
 

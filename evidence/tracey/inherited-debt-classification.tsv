@@ -2314,6 +2314,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.system_layer_suites.crash_retract_restart
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.system_layer_suites.cross_kind_replay
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.system_layer_suites.demand_start
+.cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.traceability_code_backed_coverage
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.upgrade_replay
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.upgrade_replay.trace_drift
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.verification_run_receipts.artifact_binding

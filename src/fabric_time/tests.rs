@@ -1,3 +1,4 @@
+mod entropyevidence;
 mod replay;
 #[path = "tests/adapters/mod.rs"]
 mod scheduler_adapters;

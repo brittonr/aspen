@@ -2280,6 +2280,7 @@ molten.testing.system_layer_suites
 molten.testing.system_layer_suites.crash_retract_restart
 molten.testing.system_layer_suites.cross_kind_replay
 molten.testing.system_layer_suites.demand_start
+molten.testing.traceability_code_backed_coverage
 molten.testing.upgrade_replay
 molten.testing.upgrade_replay.trace_drift
 molten.testing.verification_run_receipts.artifact_binding

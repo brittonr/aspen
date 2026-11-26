@@ -65,10 +65,12 @@ pub fn scheduler_cleanup(
     )
 }
 
-// Entropy output bytes are intentionally absent. Only purpose, bounds, stream
-// position, mode, and generation are evidence-bearing.
+// Entropy output bytes are intentionally absent. Only purpose, capability, bounds,
+// stream position, mode, and generation are evidence-bearing.
 // r[impl molten.fabric_time.entropy]
+// r[impl molten.fabric_time.entropy_capability_evidence]
 pub fn entropy_event(metadata: &super::EntropyEvidenceMetadata) -> crate::error::Result<Event> {
+    crate::preserves_rail::validate_content_ref(&metadata.capability_ref)?;
     let expected_replay = match metadata.mode {
         super::EntropyMode::DeterministicSimulation => super::EntropyReplayClass::RecomputeFromExplicitSeed,
         super::EntropyMode::ProductionCryptographic => super::EntropyReplayClass::SecretInputRequired,
@@ -101,12 +103,13 @@ pub fn entropy_event(metadata: &super::EntropyEvidenceMetadata) -> crate::error:
         },
         vec![
             field("purpose", crate::preserves_rail::string(&metadata.purpose)),
+            field("capability-ref", crate::preserves_rail::string(&metadata.capability_ref)),
             field("start-position-bytes", crate::preserves_rail::u64_value(metadata.start_position_bytes)),
             field("request-bytes", crate::preserves_rail::u64_value(metadata.request_bytes)),
             field("replay-class", crate::preserves_rail::string(metadata.replay_class.as_str())),
             field("deterministic-input-ref", optional_string(metadata.deterministic_input_ref.as_deref())),
         ],
-        &["purpose-bound", "generation-fenced", "secret-output-omitted"],
+        &["purpose-bound", "capability-bound", "generation-fenced", "secret-output-omitted"],
     )
 }
 
@@ -192,7 +195,11 @@ pub struct EventHeader<'a> {
     pub ticks: u64,
 }
 
+/// A detail-free event. Entropy evidence must bind its capability, so it is built only by `entropy_event`.
 pub fn named_event(header: EventHeader<'_>) -> crate::error::Result<Event> {
+    if header.kind == EventKind::Entropy {
+        return Err(crate::error::Failure::invalid_harness("entropy events require entropy_event metadata"));
+    }
     event(header, Vec::new(), &["explicit-input", "generation-bound", "bounded-evidence"])
 }
 

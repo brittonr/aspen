@@ -6,7 +6,7 @@ Key rotation changes which persisted private key may serve a purpose; it is not 
 
 `KeyRotationRequest` identifies profile, purpose, backend class and reference, old handle and public-key references, old and new generations, policy, activation boundary, overlap choice, and optional revocation evidence. In [rotation planning](../../../crates/molten-core/src/fabric_crypto_identity/rotation.rs), the old-side fields are checked against the supplied current handle. A request with the right generation but the wrong public key or backend is not the same transition.
 
-The generation law is strictly increasing: `new_generation` must exceed `old_generation`. The code does not require consecutive generations. Consequently, a reviewer should reason about monotonic advancement rather than invent a hidden “exactly plus one” invariant. Currentness must permit the operation, and a no-overlap request requires a well-formed revocation-evidence reference.
+The generation law is strictly increasing: `new_generation` must exceed `old_generation`. The code does not require consecutive generations. Consequently, a reviewer should reason about monotonic advancement rather than invent a hidden “exactly plus one” invariant. The old key must be `Current`, so a key already in overlap cannot start another rotation, and a no-overlap request requires a well-formed revocation-evidence reference.
 
 `complete_key_rotation` checks the generated handle against the requested profile, purpose, backend, and new generation. It also requires `Current` and rejects exposed secret material. The resulting `KeyRotationOutcome` records both public identities and generations together with activation, policy, and revocation references. This function compares supplied values; it does not independently observe durable storage or validate the truth of the referenced revocation evidence.
 
@@ -18,13 +18,11 @@ Signing resolves the purpose-specific key again and supplies its generation and 
 
 Verification has a different information source. `VerificationInput` supplies signer currentness and generation; ordinary `verify` does not resolve a remote signer's authoritative history from the local file namespace. That makes correct currentness evidence an external prerequisite. A retired signature's mathematical validity is neither erased by rotation nor sufficient for current admission.
 
-## Overlap discrepancy and safe scope of interpretation
+## Overlap is verification-only
 
-The [governing document](../../fabric-cryptographic-identity.md) describes overlap as verification-only and bounded by explicit policy. The inspected [core rotation enum](../../../crates/molten-core/src/fabric_crypto_identity/rotation.rs), however, includes both `VerifyOnly` and `SignAndVerify`, mapping either to `KeyCurrentness::Overlap`. The [core model](../../../crates/molten-core/src/fabric_crypto_identity/model.rs) makes `Overlap` satisfy `permits_signing`, and `plan_sign` uses that predicate. The current file adapter avoids both paths by rejecting overlap entirely.
+The [governing document](../../fabric-cryptographic-identity.md) describes overlap as verification-only and bounded by explicit policy. The [core rotation enum](../../../crates/molten-core/src/fabric_crypto_identity/rotation.rs) offers only `None`, which revokes the old key, and `VerifyOnly`, which moves it to `KeyCurrentness::Overlap`. The [core model](../../../crates/molten-core/src/fabric_crypto_identity/model.rs) splits the two predicates: `permits_signing` accepts only `Current`, while `permits_verification` accepts `Current` and `Overlap`. `plan_sign` therefore denies an overlap key with the typed `HandleNotCurrent(Overlap)` diagnostic, and `evaluate_verification` still accepts a signature that key made before the rotation boundary.
 
-These are not interchangeable descriptions of implemented production behavior. The intended verification-only contract is broader than the file adapter's implemented no-overlap operation, while the generic core representation admits a broader signing state than that prose suggests. This article neither changes the contract nor blesses overlap signing; it documents the discrepancy so readers do not infer a working bounded-overlap service, expiry mechanism, or retention policy from an enum variant.
-
-This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+The current file adapter is narrower still: it rejects every overlap request, so it never produces an overlap key. A verify-only core state is not a working bounded-overlap service; no expiry mechanism or retention policy follows from the enum variant.
 
 ## Illustrative stale-operator request
 
@@ -54,5 +52,7 @@ Generation fencing does not itself establish global ordering, exactly-once rotat
 - [Nominal authority references](../../nominal-authority-references.md)
 - [Core rotation planning and completion](../../../crates/molten-core/src/fabric_crypto_identity/rotation.rs)
 - [Core currentness model](../../../crates/molten-core/src/fabric_crypto_identity/model.rs)
-- [File rotation and revocation observations](../../../src/fabric_crypto_identity/file/parts/adapter/p002/body.rs)
-- [Signing and explicit revocation](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs)
+- [File rotation and status](../../../src/fabric_crypto_identity/file/parts/adapter/p002/body.rs)
+- [Signing](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs)
+- [Explicit revocation](../../../src/fabric_crypto_identity/file/parts/adapter/p004/body.rs)
+- [Revocation records](../../../src/fabric_crypto_identity/file/parts/adapter/p005/body.rs)
