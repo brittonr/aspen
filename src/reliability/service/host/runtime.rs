@@ -123,6 +123,11 @@ impl Host {
                 }
             };
             match incoming {
+                // r[impl molten.consensus.raft_timer_lifecycle_safety]
+                // A timer armed before a role change or timer reset can still be queued when it is
+                // received; it no longer applies, so the host ignores it instead of failing stop.
+                Incoming::Timer(event)
+                    if crate::fabric_consistency::raft::stale_timer_event(self.replica.state(), &event).is_some() => {}
                 Incoming::Timer(event) | Incoming::Peer(event) => {
                     self.apply(event).await?;
                 }

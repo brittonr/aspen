@@ -141,6 +141,49 @@ fn without_snapshots_a_full_log_denies_new_proposals() {
     assert_eq!(proposal_outcome(&denied), Some((ProposalDisposition::Denied, None)));
 }
 
+// r[verify molten.consensus.raft_replication_and_recovery_liveness]
+#[test]
+fn a_follower_at_its_log_bound_acknowledges_what_fits_and_compacts_before_accepting_more() {
+    // The follower has not snapshotted yet, so committed entries fill its log to the bound.
+    let mut pair = Pair::elected(SMALL_LOG_ENTRIES);
+    for write in 1..=SMALL_LOG_ENTRIES {
+        pair.commit(&format!("follower-bound-write-{write}"), false);
+    }
+    assert_eq!(pair.follower.log.len(), SMALL_LOG_ENTRIES);
+    let prev_log_index = pair.follower.log.last().expect("full follower log").index;
+
+    let proposal = propose(&pair.leader, "beyond-the-follower-bound");
+    let full = apply(&pair.follower, ReplicaEvent::Message {
+        envelope: super::tests::sent_envelope_to(&proposal, super::tests::NODE_B),
+    });
+    assert_eq!(full.next.log.len(), SMALL_LOG_ENTRIES, "nothing beyond the bound is stored");
+    let response = super::tests::sent_envelope_to(&full, super::tests::NODE_A);
+    assert!(matches!(response.message, Message::AppendResponse {
+        success: true,
+        match_index,
+        ..
+    } if match_index == prev_log_index));
+
+    // The hosting service compacts after the step; the leader resends the entry from the
+    // acknowledged index on its next heartbeat and the follower now stores it.
+    let follower = snapshot_if_due(full.next);
+    assert!(follower.snapshot.is_some());
+    let leader = apply(&proposal.next, ReplicaEvent::Message { envelope: response }).next;
+    let heartbeat = apply(&leader, ReplicaEvent::HeartbeatTimeout);
+    let accepted = apply(&follower, ReplicaEvent::Message {
+        envelope: super::tests::sent_envelope_to(&heartbeat, super::tests::NODE_B),
+    });
+    let stored = accepted.next.log.last().expect("resent entry").index;
+    assert_eq!(stored, prev_log_index + 1);
+    assert!(
+        matches!(super::tests::sent_envelope_to(&accepted, super::tests::NODE_A).message, Message::AppendResponse {
+        success: true,
+        match_index,
+        ..
+    } if match_index == stored)
+    );
+}
+
 // r[verify molten.consensus.bounded_request_dedup]
 #[test]
 fn a_retry_within_the_window_returns_the_prior_commit_without_appending() {

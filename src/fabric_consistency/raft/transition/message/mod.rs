@@ -153,14 +153,12 @@ fn dispatch_read(transition: &mut MessagePlan, from: String, message: Message) -
             term,
             leader_id,
             request_ref,
-            required_index,
             ..
         } => read::handle_probe(transition, read::ProbeInput {
             from,
             term,
             leader_id,
             request_ref,
-            required_index,
         }),
         Message::ReadAcknowledgement {
             term,

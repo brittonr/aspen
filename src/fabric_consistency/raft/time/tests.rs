@@ -84,8 +84,9 @@ async fn full_event_queue_parks_timer_delivery_until_drained() {
     let (mut port, mut receiver) =
         port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
     let timer_ref = super::tests::test_ref("backpressured-timer-token");
+    // The heartbeat fills the queue; the election timer armed afterwards parks behind it. Arming the
+    // election timer cancels only a heartbeat task that has not yet delivered.
     port.arm_heartbeat_timer().expect("heartbeat timer");
-    port.arm_election_timer(&timer_ref).expect("election timer");
     tokio::time::timeout(std::time::Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), async {
         while receiver.len() < TIME_TEST_EVENT_CAPACITY {
             tokio::time::sleep(std::time::Duration::from_millis(EVENT_POLL_MILLISECONDS)).await;
@@ -93,6 +94,7 @@ async fn full_event_queue_parks_timer_delivery_until_drained() {
     })
     .await
     .expect("queue fills to capacity");
+    port.arm_election_timer(&timer_ref).expect("election timer");
     tokio::time::sleep(std::time::Duration::from_millis(EVENT_QUIET_MILLISECONDS)).await;
     assert_eq!(receiver.len(), TIME_TEST_EVENT_CAPACITY);
 
@@ -104,8 +106,46 @@ async fn full_event_queue_parks_timer_delivery_until_drained() {
             .expect("parked timer event");
         delivered.push(event);
     }
-    assert!(delivered.contains(&ReplicaEvent::HeartbeatTimeout));
-    assert!(delivered.contains(&ReplicaEvent::ElectionTimeout { timer_ref }));
+    assert_eq!(delivered, vec![ReplicaEvent::HeartbeatTimeout, ReplicaEvent::ElectionTimeout {
+        timer_ref
+    }]);
+    assert!(receiver.try_recv().is_err());
+}
+
+// r[verify molten.consensus.raft_timer_lifecycle_safety]
+#[tokio::test(start_paused = true)]
+async fn arming_heartbeats_on_election_win_cancels_the_pending_election_timer() {
+    let (mut port, mut receiver) =
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+    port.arm_election_timer(&super::tests::test_ref("candidate-election-timer"))
+        .expect("candidate timer");
+    port.arm_heartbeat_timer().expect("leader heartbeat timer");
+    let delivered = tokio::time::timeout(std::time::Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), receiver.recv())
+        .await
+        .expect("bounded heartbeat wait")
+        .expect("heartbeat event");
+    assert_eq!(delivered, ReplicaEvent::HeartbeatTimeout);
+    // Well past the largest election delay: the candidate's election timer never fires at the leader.
+    tokio::time::sleep(std::time::Duration::from_millis(EVENT_QUIET_MILLISECONDS)).await;
+    assert!(receiver.try_recv().is_err());
+}
+
+// r[verify molten.consensus.raft_timer_lifecycle_safety]
+#[tokio::test(start_paused = true)]
+async fn arming_an_election_timer_on_step_down_cancels_the_pending_heartbeat() {
+    let (mut port, mut receiver) =
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+    port.arm_heartbeat_timer().expect("leader heartbeat timer");
+    let follower_timer_ref = super::tests::test_ref("follower-election-timer");
+    port.arm_election_timer(&follower_timer_ref).expect("follower timer");
+    let delivered = tokio::time::timeout(std::time::Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), receiver.recv())
+        .await
+        .expect("bounded election wait")
+        .expect("election event");
+    assert_eq!(delivered, ReplicaEvent::ElectionTimeout {
+        timer_ref: follower_timer_ref,
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(EVENT_QUIET_MILLISECONDS)).await;
     assert!(receiver.try_recv().is_err());
 }
 

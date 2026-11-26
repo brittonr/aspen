@@ -191,13 +191,17 @@ async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
     assert_eq!(service.ports().time.election_timer_refs.len(), EXPECTED_ELECTION_PORT_CALLS);
     assert_eq!(service.ports().time.election_timer_refs.last(), Some(&service.state().active_election_timer_ref));
 
+    // A superseded timer still queued after the re-arm is a benign no-op, not a fatal denial.
+    let candidate = service.state().clone();
     let stale = service
         .handle_event(ReplicaEvent::ElectionTimeout {
             timer_ref: initial_timer_ref,
         })
         .await;
-    assert!(matches!(stale, ReplicaExecutionOutcome::Denied { .. }));
+    assert!(matches!(&stale, ReplicaExecutionOutcome::Applied(executed) if executed.observations.is_empty()));
+    assert_eq!(service.state(), &candidate);
     assert_eq!(service.ports().transport.sent, EXPECTED_ELECTION_PORT_CALLS);
+    assert_eq!(service.ports().time.election_timer_refs.len(), EXPECTED_ELECTION_PORT_CALLS);
 }
 
 fn assert_substituted_identity_denied(runtime_identity: &ReplicaRuntimePortIdentity, plan: &ReplicaStartPlan) {

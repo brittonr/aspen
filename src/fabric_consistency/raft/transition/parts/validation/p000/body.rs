@@ -1,10 +1,17 @@
 use super::*;
 
+/// Validate one `AppendEntries` batch against the follower log it merges into.
+///
+/// `retained_before` is the first index whose local entry the batch replaces (`None` when the
+/// batch changes nothing): duplicate request refs are checked only against local entries below it,
+/// which the merge retains, and against earlier entries of the batch itself.
+// r[impl molten.consensus.raft_replication_and_recovery_liveness]
 pub(super) fn validate_incoming_entries(
     state: &ReplicaState,
     prev_log_index: u64,
     leader_term: u64,
     entries: &[ReplicatedEntry],
+    retained_before: Option<u64>,
 ) -> crate::error::Result<()> {
     if entries.len() > state.profile.max_message_entries {
         return Err(crate::error::Failure::invalid_harness(
@@ -16,7 +23,7 @@ pub(super) fn validate_incoming_entries(
         .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append index overflow"))?;
     let mut request_refs = std::collections::BTreeMap::new();
     for entry in entries {
-        validate_incoming_entry(state, entry, expected_index, leader_term, &mut request_refs)?;
+        validate_incoming_entry(state, entry, expected_index, leader_term, retained_before, &mut request_refs)?;
         expected_index = expected_index
             .checked_add(NEXT_LOG_INDEX_STEP)
             .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append index overflow"))?;
@@ -196,6 +203,7 @@ fn validate_incoming_entry<'a>(
     entry: &'a ReplicatedEntry,
     expected_index: u64,
     leader_term: u64,
+    retained_before: Option<u64>,
     request_refs: &mut std::collections::BTreeMap<&'a str, u64>,
 ) -> crate::error::Result<()> {
     if entry.index != expected_index || entry.term == 0 || entry.term > leader_term {
@@ -213,7 +221,8 @@ fn validate_incoming_entry<'a>(
         ));
     }
     if state.log.iter().any(|existing| {
-        existing.request_ref == entry.request_ref
+        retained_before.is_none_or(|boundary| existing.index < boundary)
+            && existing.request_ref == entry.request_ref
             && existing.index != entry.index
             && existing.index.abs_diff(entry.index) <= window
     }) {
