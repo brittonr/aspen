@@ -1,15 +1,13 @@
 diff --git a/src/fabric_consistency/fastpath/stable.rs b/src/fabric_consistency/fastpath/stable.rs
 --- a/src/fabric_consistency/fastpath/stable.rs
 +++ b/src/fabric_consistency/fastpath/stable.rs
-@@ -108,10 +108,9 @@
- fn same_view_acknowledgers(attempt: &StableViewAttempt) -> Option<BTreeSet<String>> {
-     let mut replicas = BTreeSet::new();
-     for acknowledgement in &attempt.acknowledgements {
+@@ -124,8 +124,7 @@
+         if !attempt.replicas.contains(&acknowledgement.replica_id) {
+             continue;
+         }
 -        if acknowledgement.acceleration_view != attempt.acceleration_view
 -            || acknowledgement.base_view != attempt.base_view
 +        if acknowledgement.base_view != attempt.base_view
              || acknowledgement.operation != attempt.operation
          {
              return None;
-         }
-         replicas.insert(acknowledgement.replica_id.clone());
