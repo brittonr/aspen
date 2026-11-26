@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::super::*;
 use super::metric_name;
@@ -9,7 +9,7 @@ const ISSUES_PER_METRIC: usize = 3;
 const MAX_METRIC_ISSUES: usize = WORLD_BENCHMARK_METRIC_COUNT * ISSUES_PER_METRIC;
 
 pub fn complete_world_benchmark_metrics(values: &[(WorldBenchmarkMetricKind, u64)]) -> Vec<WorldBenchmarkMetric> {
-    let supplied = values.iter().copied().collect::<std::collections::BTreeMap<_, _>>();
+    let supplied = values.iter().copied().collect::<alloc::collections::BTreeMap<_, _>>();
     WorldBenchmarkMetricKind::ALL
         .into_iter()
         .map(|kind| WorldBenchmarkMetric {

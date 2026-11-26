@@ -4,6 +4,8 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod preserves_rail {
     pub fn content_ref_from_bytes(bytes: &[u8]) -> String {
         format!("blake3:{}", blake3::hash(bytes).to_hex())

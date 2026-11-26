@@ -4,6 +4,8 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod fabric_simulation {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum SchedulerChoiceKind {

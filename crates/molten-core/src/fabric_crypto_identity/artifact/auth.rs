@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use artifact_auth_core::ALGORITHM_BLAKE3;
 use artifact_auth_core::ALGORITHM_ED25519;

@@ -4,5 +4,7 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 #[path = "../../../crates/molten-core/src/dag_sync/mod.rs"]
 pub mod dag_sync;

@@ -5,8 +5,8 @@
 
 mod transition;
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 pub use transition::*;
 

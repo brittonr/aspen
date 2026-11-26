@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
+use alloc::collections::BTreeMap;
+use alloc::collections::VecDeque;
 
 use super::*;
 

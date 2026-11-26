@@ -95,7 +95,7 @@ pub fn plan_closure(input: &ClosureInput) -> Result<ClosurePlan, super::Issue> {
     let mut required = input.required_objects.clone();
     required.sort();
     required.dedup();
-    let mut donors: std::collections::BTreeMap<&str, Vec<&ReplicaObjectFact>> = std::collections::BTreeMap::new();
+    let mut donors: alloc::collections::BTreeMap<&str, Vec<&ReplicaObjectFact>> = alloc::collections::BTreeMap::new();
     for fact in &input.inventory {
         donors.entry(fact.object_ref.as_str()).or_default().push(fact);
     }
@@ -183,7 +183,7 @@ fn validate_input(input: &ClosureInput) -> Vec<super::Issue> {
     if input.max_transfers == 0 {
         issues.push(super::Issue::InvalidResourceLimit);
     }
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     for fact in &input.inventory {
         if fact.peer_id.trim().is_empty() || fact.object_ref.trim().is_empty() {
             issues.push(super::Issue::InvalidReference);

@@ -18,7 +18,7 @@ impl super::PlanningState<'_> {
             return self.defer(content, Issue::MissingCleanupAuthority);
         };
         let policy = &self.input.manifest.policy;
-        let mut domain_counts = std::collections::BTreeMap::new();
+        let mut domain_counts = alloc::collections::BTreeMap::new();
         for replica in current {
             let count = domain_counts.entry(replica.fault_domain.as_str()).or_insert(0_usize);
             *count = count.saturating_add(1);

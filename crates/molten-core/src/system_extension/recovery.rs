@@ -95,8 +95,8 @@ pub fn validate_recovery_group(group: &RecoveryGroupDeclaration) -> Vec<Recovery
         if member_ids.contains(&member.member_id) {
             issues.push(RecoveryGroupIssue::DuplicateMember(member.member_id.clone()));
         }
-        if member.after.len() != member.after.iter().collect::<std::collections::BTreeSet<_>>().len() {
-            let mut seen = std::collections::BTreeSet::new();
+        if member.after.len() != member.after.iter().collect::<alloc::collections::BTreeSet<_>>().len() {
+            let mut seen = alloc::collections::BTreeSet::new();
             for dependency in &member.after {
                 if !seen.insert(dependency) {
                     issues.push(RecoveryGroupIssue::DuplicateDependency {

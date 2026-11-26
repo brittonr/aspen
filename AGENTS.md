@@ -20,7 +20,7 @@ Non-negotiable boundaries:
 | Owner | Responsibility |
 | --- | --- |
 | Root `molten` crate (`src/`) | Facade, canonical runtime kernels, encoding, ports, adapters, orchestration, CLI. Not all root code is pure. |
-| `crates/molten-core/` | In-memory decision cores, transitions, typed identities, plans. No filesystem/process/network/clocks or execution/backend runtimes. |
+| `crates/molten-core/` | In-memory decision cores, transitions, typed identities, plans. No filesystem/process/network/clocks or execution/backend runtimes. Without the default `std` feature it is `#![no_std]` + `alloc`, with a crate-wide prelude that provides `Vec`/`String`/`Box`/`ToString`/`ToOwned`/`format!`/`vec!`. Non-test code names everything else through `alloc::`/`core::`, never `std::`. Only `live_binding` and `world_merge` (`kamacite-core`) and `world_branch_authority` (`basalt`) are `std`-gated. `checks.molten-core-no-std` enforces this (see [docs/modularity-boundaries.md](docs/modularity-boundaries.md#molten-core-no-std-scope)). |
 | `crates/molten-node-host/` | Capability-rooted node state, typed local stores, shared `MoltenError`/`Result`; no CLI/workload/release semantics. |
 | `crates/molten-release-policy/` | Normalizes policy/repository observations for the pure `molten_core::release_dependency` validator. |
 

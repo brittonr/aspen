@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::super::*;
 use super::bounded_sorted_issues;

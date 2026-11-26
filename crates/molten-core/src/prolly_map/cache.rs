@@ -19,7 +19,7 @@
 //! working set in the protected segment survives the scan. Eviction order
 //! comes from a logical tick, never from a clock.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::*;
 

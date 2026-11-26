@@ -3,7 +3,7 @@
     reason = "local validation helpers append to one preallocated bounded typed issue sink"
 )]
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::super::*;
 use crate::dag_sync::DagNodeRef;

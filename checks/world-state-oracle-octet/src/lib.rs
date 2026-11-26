@@ -4,4 +4,6 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod world_state_oracle;

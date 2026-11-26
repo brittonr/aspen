@@ -34,8 +34,8 @@ pub fn validate_ebpf_profile(
     if adapter.mappings.is_empty() || adapter.mappings.len() > 6 {
         return Err(EbpfIssue::Mapping);
     }
-    let signals: std::collections::BTreeSet<_> = adapter.mappings.iter().map(|mapping| mapping.signal).collect();
-    let descriptors: std::collections::BTreeSet<_> =
+    let signals: alloc::collections::BTreeSet<_> = adapter.mappings.iter().map(|mapping| mapping.signal).collect();
+    let descriptors: alloc::collections::BTreeSet<_> =
         adapter.mappings.iter().map(|mapping| &mapping.descriptor.descriptor_ref).collect();
     if signals.len() != adapter.mappings.len()
         || descriptors.len() != adapter.mappings.len()

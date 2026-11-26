@@ -1,3 +1,12 @@
+// r[impl molten.project.molten_core_no_std]
+// Library builds without the `std` feature are `#![no_std]` + `alloc`; the unit-test harness keeps
+// the standard library so test-only helpers stay unchanged across both feature profiles.
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+// The no_std build swaps the standard prelude for `core`'s plus the `alloc` items that the standard
+// prelude would otherwise provide, so every module keeps one source form under both profiles and the
+// standalone Octet consumers that mount these modules keep compiling against `std`.
+#![cfg_attr(not(any(feature = "std", test)), feature(prelude_import))]
+#![cfg_attr(not(any(feature = "std", test)), allow(internal_features))]
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 
@@ -6,6 +15,33 @@
 //! This crate intentionally has no filesystem, process, network, clock, Redb,
 //! Wasmtime, Steel, Nickel runtime, Iroh, or CLI dependencies. It owns small
 //! in-memory decision cores that adapter shells can call before side effects.
+//!
+//! Without the default `std` feature the crate is `#![no_std]` and uses only `core` and `alloc`.
+//! The `std` feature adds `live_binding` and `world_merge` (which depend on `kamacite-core`) and
+//! `world_branch_authority` (which depends on `basalt`); those upstream crates still require `std`.
+
+extern crate alloc;
+
+#[cfg(not(any(feature = "std", test)))]
+#[allow(
+    unused_imports,
+    reason = "rustc's unused-import analysis does not count type names resolved through the prelude"
+)]
+mod no_std_prelude {
+    pub(crate) use alloc::borrow::ToOwned;
+    pub(crate) use alloc::boxed::Box;
+    pub(crate) use alloc::format;
+    pub(crate) use alloc::string::String;
+    pub(crate) use alloc::string::ToString;
+    pub(crate) use alloc::vec;
+    pub(crate) use alloc::vec::Vec;
+    pub(crate) use core::prelude::rust_2024::*;
+}
+
+#[cfg(not(any(feature = "std", test)))]
+#[prelude_import]
+#[allow(unused_imports)]
+use crate::no_std_prelude::*;
 
 pub mod addressable_actor;
 #[path = "cluster/harness.rs"]
@@ -33,6 +69,7 @@ pub mod fabric_simulation;
 pub mod fabric_time;
 pub mod fabric_transport;
 pub mod federation;
+#[cfg(feature = "std")]
 pub mod live_binding;
 pub mod marble_store;
 pub mod node_ingress;
@@ -48,12 +85,14 @@ pub mod stack;
 pub mod startup_binding;
 pub mod system_extension;
 pub mod world_benchmark;
+#[cfg(feature = "std")]
 pub mod world_branch_authority;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;
 pub mod world_faults;
 pub mod world_head;
+#[cfg(feature = "std")]
 pub mod world_merge;
 pub mod world_operator;
 pub mod world_promotion;

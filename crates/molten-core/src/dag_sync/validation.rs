@@ -3,8 +3,8 @@
     reason = "bounded graph validation uses ordered maps and sets repeatedly to keep decisions canonical"
 )]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::*;
 

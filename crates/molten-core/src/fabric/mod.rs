@@ -10,7 +10,7 @@ mod port;
 mod reference;
 mod tier;
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 pub use boundary::*;
 pub use evidence::*;

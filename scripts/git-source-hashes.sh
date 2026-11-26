@@ -13,6 +13,7 @@
 # Regenerate the plans after `--write` with the pinned unit2nix:
 #   unit2nix --workspace -o build-plan.json
 #   unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json
+#   unit2nix -p molten-core --no-default-features --features executable-extents -o molten-core-no-std-build-plan.json
 #
 set -euo pipefail
 
@@ -97,7 +98,7 @@ case "$mode" in
         status=1
       fi
     done < <(sources)
-    for plan in build-plan.json release-policy-build-plan.json; do
+    for plan in build-plan.json release-policy-build-plan.json molten-core-no-std-build-plan.json; do
       # Every generated git source hash must be the revision-qualified crate-hashes.json value.
       drift="$(jq -r --slurpfile hashes "$hashes" '
         ($hashes[0] | to_entries | map({key: (.key | split("#")[0]), value}) | from_entries) as $bound

@@ -4,6 +4,8 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod content_replication;
 pub mod dag_sync;
 pub mod world_commit;

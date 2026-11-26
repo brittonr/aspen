@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainArtifactInput<'a> {

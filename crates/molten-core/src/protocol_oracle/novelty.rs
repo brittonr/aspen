@@ -49,7 +49,7 @@ pub fn novelty_identity(fields: &[NoveltyField], projection: &ProtocolProjection
 
 /// The distinct novelty identities of a cohort, in first-seen order.
 pub fn cohort_novelty(fields: &[NoveltyField], cohort: &ProtocolCohort) -> Vec<String> {
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     let mut identities = Vec::with_capacity(cohort.projections.len());
     for admitted in &cohort.projections {
         let identity = novelty_identity(fields, &admitted.projection);
@@ -75,13 +75,13 @@ pub struct NoveltyScore {
 // r[impl molten.fabric_simulation.protocol_novelty]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NoveltyGuidance {
-    seen: std::collections::BTreeSet<String>,
+    seen: alloc::collections::BTreeSet<String>,
 }
 
 impl NoveltyGuidance {
     pub const fn new() -> Self {
         Self {
-            seen: std::collections::BTreeSet::new(),
+            seen: alloc::collections::BTreeSet::new(),
         }
     }
 
@@ -98,7 +98,7 @@ impl NoveltyGuidance {
         score
     }
 
-    pub fn seen(&self) -> &std::collections::BTreeSet<String> {
+    pub fn seen(&self) -> &alloc::collections::BTreeSet<String> {
         &self.seen
     }
 }

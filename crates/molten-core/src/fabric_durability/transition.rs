@@ -1,4 +1,4 @@
-use std::ops::Bound;
+use core::ops::Bound;
 
 use super::*;
 use crate::fabric::valid_blake3_ref;

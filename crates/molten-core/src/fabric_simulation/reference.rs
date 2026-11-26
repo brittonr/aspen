@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::valid_ref;
 use crate::fabric::FabricPortClass;
@@ -476,7 +476,7 @@ fn reference_transition(
 }
 
 fn validate_writes(writes: &[(String, String)]) -> Result<(), ReferenceServiceIssue> {
-    let mut keys = std::collections::BTreeSet::new();
+    let mut keys = alloc::collections::BTreeSet::new();
     for (key, value_ref) in writes {
         validate_identifier("transaction-key", key)?;
         validate_reference("transaction-value-ref", value_ref)?;

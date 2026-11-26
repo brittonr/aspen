@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 pub const CRYPTO_ADAPTER_PROFILE_SCHEMA: &str = "molten.crypto-identity.adapter-profile.v1";
 pub const OPAQUE_KEY_HANDLE_SCHEMA: &str = "molten.crypto-identity.opaque-key-handle.v1";

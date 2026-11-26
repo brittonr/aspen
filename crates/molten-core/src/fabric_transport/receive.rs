@@ -3,11 +3,11 @@
 //! A shell supplies an observed network address and completed-handshake facts.
 //! Passing this gate is not membership, trust, or capability admission.
 
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
-use std::net::Ipv6Addr;
+use alloc::collections::BTreeMap;
+use alloc::collections::btree_map::Entry;
+use core::net::IpAddr;
+use core::net::Ipv4Addr;
+use core::net::Ipv6Addr;
 
 use super::EndpointParticipantRole;
 use super::MAX_TRANSPORT_TEXT_BYTES;

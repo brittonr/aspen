@@ -1,7 +1,7 @@
 mod cases;
 mod contracts;
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use cases::expected_failure_cases;
 use contracts::expected_contract;

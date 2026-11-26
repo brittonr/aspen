@@ -1,7 +1,7 @@
 use super::*;
 
 struct ActionProgress<'a> {
-    verified_targets: std::collections::BTreeMap<&'a str, std::collections::BTreeSet<&'a str>>,
+    verified_targets: alloc::collections::BTreeMap<&'a str, alloc::collections::BTreeSet<&'a str>>,
     active_operations: Vec<String>,
     failures: Vec<String>,
 }
@@ -17,7 +17,7 @@ pub fn status(plan: &Plan, history: &[PriorOperation]) -> Status {
         let verified = progress
             .verified_targets
             .get(deficit.content_ref.as_str())
-            .map_or(0, std::collections::BTreeSet::len);
+            .map_or(0, alloc::collections::BTreeSet::len);
         verified_replicas = verified_replicas.saturating_add(verified.min(deficit.missing_replicas));
         if verified < deficit.missing_replicas {
             under_replicated.push(deficit.content_ref.clone());
@@ -50,7 +50,7 @@ pub fn operation_matches_plan_action(plan: &Plan, action: &Action, operation: &P
 }
 
 fn action_progress<'a>(plan: &'a Plan, history: &[PriorOperation]) -> ActionProgress<'a> {
-    let mut outcomes = std::collections::BTreeMap::new();
+    let mut outcomes = alloc::collections::BTreeMap::new();
     for operation in history {
         outcomes
             .entry(operation.operation_id.as_str())
@@ -58,7 +58,7 @@ fn action_progress<'a>(plan: &'a Plan, history: &[PriorOperation]) -> ActionProg
             .or_insert(Some(operation));
     }
     let mut progress = ActionProgress {
-        verified_targets: std::collections::BTreeMap::new(),
+        verified_targets: alloc::collections::BTreeMap::new(),
         active_operations: Vec::with_capacity(plan.actions.len()),
         failures: Vec::with_capacity(plan.actions.len()),
     };

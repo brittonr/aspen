@@ -5,7 +5,7 @@
 // to Rust debug text. A separate decoder reads projected values back for the
 // independent oracle, so the oracle never inspects the transition's own state.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::*;
 use crate::protocol_oracle::CanonicalValue;

@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::ClosureIssue;
 use super::ClosureReport;
@@ -130,7 +130,7 @@ fn validate_closure_bound(request: &ClosureRequest, issues: &mut Vec<ClosureIssu
         .parent_graph
         .iter()
         .map(|observation| observation.parents.len())
-        .chain(std::iter::once(request.core.parents.len()))
+        .chain(core::iter::once(request.core.parents.len()))
         .max()
         .unwrap_or(0);
     if actual_parent_max > request.bounds.max_parents {

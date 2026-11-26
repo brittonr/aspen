@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use super::*;
 use crate::fabric::valid_blake3_ref;

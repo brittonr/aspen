@@ -1,4 +1,4 @@
-use std::fmt::Write as _;
+use core::fmt::Write as _;
 
 use kamacite_core::CompatibilityContext;
 use kamacite_core::Identity;
@@ -15,7 +15,7 @@ use super::SemanticCompatibilityAdmissionInput;
 use super::SemanticDerivedIdentityInput;
 use super::SemanticSurfaceBindings;
 
-fn semantic_error(error: impl std::fmt::Display) -> LiveBindingError {
+fn semantic_error(error: impl core::fmt::Display) -> LiveBindingError {
     LiveBindingError::SemanticOperation(error.to_string())
 }
 

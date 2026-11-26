@@ -63,7 +63,7 @@ pub(in crate::world_merge) fn add_application_handler(
         kind: root.kind,
         output: WorldMergeOutput::Generated(WorldMergeGenerated {
             schema: profile.output_schema.clone(),
-            values: std::collections::BTreeMap::new(),
+            values: alloc::collections::BTreeMap::new(),
             bytes: Some(output.canonical_bytes),
         }),
     });

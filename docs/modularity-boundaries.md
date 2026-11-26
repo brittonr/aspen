@@ -6,7 +6,28 @@ This inventory records the first production-readiness modularity slice. It is ev
 
 ## Core and dependency classes
 
-`crates/molten-core/` is the minimal pure build surface. It has no dependencies beyond the Rust standard library and is validated with `cargo test -p molten-core`. The root crate depends on it and re-exports it through `molten::core_api` and `molten::prelude` so existing root-crate compatibility aliases keep working while new code has a stable preferred API.
+`crates/molten-core/` is the minimal pure build surface. The root crate depends on it and re-exports it through `molten::core_api` and `molten::prelude` so existing root-crate compatibility aliases keep working while new code has a stable preferred API.
+
+<a id="molten-core-no-std-scope"></a>
+
+r[impl molten.project.molten_core_no_std] `molten-core` is `#![no_std]` + `alloc` whenever its default `std` feature is off (`#![cfg_attr(not(any(feature = "std", test)), no_std)]`). In that build, `src/lib.rs` replaces the standard prelude with `core`'s prelude plus the `alloc` items that the standard prelude would otherwise provide (`Vec`, `String`, `Box`, `ToString`, `ToOwned`, `format!`, `vec!`), through a crate-private `#[prelude_import]`. As a result, module sources look the same under both profiles and need no per-file imports that would trip Tigerstyle's `non_trait_imports` lint. Other items are named through `alloc` (collections, `alloc::string`, `alloc::vec`) or `core` (`fmt`, `cmp`, `mem`, `net`, `hint`, `error`, `iter`, `slice`, `str`, `ops`), never through `std`. `blake3` and `serde` are declared with `default-features = false` (`serde` keeps `alloc` and `derive`); the `std` feature turns their `std` features back on. Exactly three modules need the `std` feature, because their upstream dependencies still require the standard library:
+
+| `std`-gated module | Upstream dependency |
+| --- | --- |
+| `live_binding` | `kamacite-core` |
+| `world_merge` (migration identity via `kamacite_core::encode_typed_preserves`) | `kamacite-core` |
+| `world_branch_authority` | `basalt` |
+
+Every other module, including `executable_extent` behind `executable-extents`, compiles under `no_std`. `std` is a default feature so the root crate, `molten-node-host`, `molten-release-policy`, and the focused Octet workspaces keep their current API; a consumer that wants only the pure cores depends on `molten-core` with `default-features = false`. Crates that mount `molten-core` module sources directly (the `checks/*-octet` roots and `pilots/orchestration/adapters`) declare `extern crate alloc;` whenever a mounted module names an `alloc::` path. Unit tests always link the standard library, so test modules may still use `std`, and the same tests run under both feature profiles.
+
+r[impl molten.testing.molten_core_no_std_ci_gate] The `molten-core-no-std` flake check builds `molten-core` from its own unit graph (`molten-core-no-std-build-plan.json`, generated with `unit2nix -p molten-core --no-default-features --features executable-extents`) and checks, at evaluation time, that the plan enables no `std` feature on `molten-core` or on any crate linked into it and does not contain `basalt` or `kamacite-core`. The check then:
+
+- **Plan freshness.** It runs the pinned `unit2nix` with the same flags in a copy of the source and requires "Build plan is up to date". That message appears only when the recorded `inputsHash` matches the current fingerprint (CLI flags, `Cargo.lock`, and every `Cargo.toml` in the tree). No cargo is available inside the check, so a stale plan fails, and the plan must be regenerated after any manifest change. As a negative, it flips `serde` back to its default (`std`) features in a copy of `crates/molten-core/Cargo.toml` and requires the freshness test to fail.
+- **Source guard.** It runs `scripts/check-molten-core-no-std-sources.sh`. The guard rejects any `extern crate` except `extern crate alloc;` in `lib.rs`. It also rejects any `std` path or `use std` outside the `std`-gated modules and test files (`tests.rs`, `**/tests/**`), including imports hidden behind `#[cfg(feature = "std")]`. Compilation alone misses an explicit `extern crate std;` in some module, because the library still builds. So the check plants `extern crate std; use std::fs::read;` in `dependency.rs` and a feature-gated `use ::std::time::SystemTime;` in `codec.rs`, and requires the guard to reject both.
+- **Compilation.** It compiles the library with `--no-default-features` and with `--no-default-features --features executable-extents`, and runs the unit tests for the no_std feature set.
+- **Compile probes.** It appends `use std::fs::read;`, `use std::time::SystemTime;`, and `use std::env::var;` in turn to `src/codec.rs`. Each of those builds must fail with rustc's unresolved-`std` diagnostic for that file.
+
+The `molten-core-tests` flake check runs the unit tests under the default `std` feature set. Compiling under `no_std` rules out ambient OS input/output at compile time. It does not prove that the logic is correct, it does not replace runtime authority gates, and it says nothing about embedded hardware targets.
 
 Cargo dependency classes for the current root crate:
 
@@ -172,6 +193,9 @@ Focused checks for this boundary slice:
 
 ```sh
 cargo test -p molten-core
+cargo test -p molten-core --no-default-features --features executable-extents
+cargo check -p molten-core --no-default-features
+nix build .#checks.x86_64-linux.molten-core-no-std
 cargo test --lib
 cargo fmt --check
 nickel export cairn-policy/default.ncl > /tmp/cairn-policy.json

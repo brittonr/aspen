@@ -46,7 +46,7 @@ pub fn stream_cursor_identity(cursor: &StreamCursor) -> String {
 /// order. Deduplication never authorizes: an event that was already seen is
 /// still an event that a reader must admit.
 pub fn deduplicate_events(events: &[CommittedChangeEvent]) -> DeduplicationOutcome {
-    let mut seen = std::collections::BTreeSet::<&str>::new();
+    let mut seen = alloc::collections::BTreeSet::<&str>::new();
     let mut unique = Vec::with_capacity(events.len());
     let duplicate_refs = events
         .iter()

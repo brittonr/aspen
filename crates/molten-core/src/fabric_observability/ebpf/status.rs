@@ -51,7 +51,7 @@ pub fn validate_onix_bpf_status(status: &OnixBpfStatus) -> Result<(), EbpfReadFa
     if status.machine_id.is_empty() || status.machine_id.len() > 256 {
         return Err(EbpfReadFailure::Binding);
     }
-    let mut generations = std::collections::BTreeSet::new();
+    let mut generations = alloc::collections::BTreeSet::new();
     for generation in &status.generations {
         if !generations.insert(&generation.generation)
             || !matches!(generation.state.as_str(), "staged" | "active" | "retained" | "degraded" | "cleanup-failed")

@@ -855,6 +855,64 @@
           enableKache = false;
           resolvedJson = ./release-policy-build-plan.json;
         };
+        # r[impl molten.testing.molten_core_no_std_ci_gate]
+        # molten-core's no_std profile resolves its own unit graph, so dependency features come from
+        # exactly `--no-default-features --features executable-extents` and are never unified with the
+        # std consumers in build-plan.json. Regenerate with
+        #   unit2nix -p molten-core --no-default-features --features executable-extents \
+        #     -o molten-core-no-std-build-plan.json
+        moltenCoreNoStdPlanPath = ./molten-core-no-std-build-plan.json;
+        moltenCoreNoStdPlan = builtins.fromJSON (builtins.readFile moltenCoreNoStdPlanPath);
+        moltenCoreNoStdPlanAdmitted =
+          let
+            crates = moltenCoreNoStdPlan.crates;
+            root = crates.${moltenCoreNoStdPlan.workspaceMembers."molten-core"};
+            # Proc macros and their own dependencies run on the host; the rest is linked into molten-core.
+            normalDependencyIds =
+              packageId:
+              builtins.map (dep: dep.packageId) (
+                builtins.filter (dep: !(crates.${dep.packageId}.procMacro or false)) (
+                  crates.${packageId}.dependencies or [ ]
+                )
+              );
+            closeOver =
+              packageIds:
+              let
+                next = pkgs.lib.unique (packageIds ++ builtins.concatMap normalDependencyIds packageIds);
+              in
+              if builtins.length next == builtins.length packageIds then packageIds else closeOver next;
+            linkedCrates = builtins.map (packageId: crates.${packageId}) (closeOver moltenCoreNoStdPlan.roots);
+            stdEnabledCrates = builtins.filter (crate: builtins.elem "std" crate.features) linkedCrates;
+            dependencyNames = builtins.map (dep: dep.externCrateName) root.dependencies;
+          in
+          pkgs.lib.assertMsg (
+            moltenCoreNoStdPlan.roots == [ moltenCoreNoStdPlan.workspaceMembers."molten-core" ]
+            && root.features == [ "executable-extents" ]
+            && !(builtins.elem "basalt" dependencyNames)
+            && !(builtins.elem "kamacite_core" dependencyNames)
+            && stdEnabledCrates == [ ]
+          ) "molten-core no_std plan must resolve --no-default-features --features executable-extents with no std feature in its linked closure";
+        moltenCoreNoStdWs = mkUnit2nixWorkspace {
+          enableKache = false;
+          resolvedJson = moltenCoreNoStdPlanPath;
+        };
+        moltenCoreNoStdExtents = moltenCoreNoStdWs.workspaceMembers."molten-core".build;
+        # `--no-default-features` alone: the same no_std unit graph without the executable-extents cfg.
+        moltenCoreNoStdBareWith =
+          crateArgs:
+          (moltenCoreNoStdExtents.override (_old: { features = [ ]; } // crateArgs)).overrideAttrs (_old: {
+            CARGO_CFG_FEATURE = "";
+          });
+        moltenCoreNoStdBare = moltenCoreNoStdBareWith { };
+        # Inject one ambient-std import into a no_std module; the gate must reject it at compile time.
+        moltenCoreNoStdProbe =
+          probe:
+          pkgs.testers.testBuildFailure (moltenCoreNoStdBareWith {
+            postPatch = ''
+              test -f src/codec.rs
+              printf '\n#[allow(unused_imports)]\n%s\n' ${pkgs.lib.escapeShellArg probe} >> src/codec.rs
+            '';
+          });
         samplePgo =
           if system == "x86_64-linux" then
             import ./nix/sample-pgo-experiment.nix {
@@ -2879,6 +2937,99 @@
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;
             molten-node-host = moltenNodeHostTests;
+            # r[verify molten.testing.molten_core_no_std_ci_gate]
+            # r[verify molten.project.molten_core_no_std]
+            molten-core-no-std =
+              assert moltenCoreNoStdPlanAdmitted;
+              pkgs.runCommand "molten-core-no-std"
+                {
+                  nativeBuildInputs = [ unit2nix.packages.${system}.unit2nix ];
+                  workspace = sourceForConfigChecks;
+                  bareLibrary = moltenCoreNoStdBare.lib;
+                  extentsLibrary = moltenCoreNoStdExtents.lib;
+                  noStdProfileTests = moltenCoreNoStdWs.test.check."molten-core";
+                  fsProbe = moltenCoreNoStdProbe "use std::fs::read;";
+                  timeProbe = moltenCoreNoStdProbe "use std::time::SystemTime;";
+                  envProbe = moltenCoreNoStdProbe "use std::env::var;";
+                }
+                ''
+                  set -euo pipefail
+                  # The checked-in unit graph must still be the one the current manifests resolve. The
+                  # pinned unit2nix fingerprints its CLI flags, Cargo.lock, and every Cargo.toml in the
+                  # tree, and only reports "up to date" when that fingerprint equals the plan's inputsHash.
+                  # No cargo is on PATH, so a stale plan cannot be regenerated here and fails closed.
+                  plan_is_current() {
+                    (
+                      cd "$1"
+                      unit2nix -p molten-core --no-default-features --features executable-extents \
+                        -o molten-core-no-std-build-plan.json
+                    ) > "$2" 2>&1 && grep -F 'Build plan is up to date' "$2" >/dev/null
+                  }
+                  cp -R "$workspace" fresh
+                  chmod -R u+w fresh
+                  if ! plan_is_current fresh "$TMPDIR/fresh.log"; then
+                    cat "$TMPDIR/fresh.log" >&2
+                    echo "molten-core-no-std-build-plan.json does not match the current manifests; regenerate it" >&2
+                    exit 1
+                  fi
+                  cmp fresh/molten-core-no-std-build-plan.json "$workspace/molten-core-no-std-build-plan.json"
+                  # Negative: re-enabling serde's default (std) features without regenerating the plan
+                  # must make the freshness check fail.
+                  cp -R "$workspace" flipped
+                  chmod -R u+w flipped
+                  sed -i 's/^serde = { version = "1", default-features = false, features = \["alloc", "derive"\] }$/serde = { version = "1", features = ["alloc", "derive"] }/' \
+                    flipped/crates/molten-core/Cargo.toml
+                  if cmp -s flipped/crates/molten-core/Cargo.toml "$workspace/crates/molten-core/Cargo.toml"; then
+                    echo "negative manifest flip did not change crates/molten-core/Cargo.toml" >&2
+                    exit 1
+                  fi
+                  if plan_is_current flipped "$TMPDIR/flipped.log"; then
+                    echo "no_std plan freshness accepted a manifest feature flip" >&2
+                    exit 1
+                  fi
+
+                  # Source guard: no `extern crate std` and no std paths in pure molten-core modules.
+                  guard="$workspace/scripts/check-molten-core-no-std-sources.sh"
+                  core_src="$workspace/crates/molten-core/src"
+                  bash "$guard" "$core_src"
+                  # Negatives: explicit std linkage in another module still compiles, so only the guard
+                  # catches it; a feature-gated std import in a pure module must be rejected as well.
+                  for planted in 'dependency.rs|extern crate std; use std::fs::read;' \
+                    'codec.rs|#[cfg(feature = "std")] use ::std::time::SystemTime;'; do
+                    file="''${planted%%|*}"
+                    rm -rf planted-src
+                    cp -R "$core_src" planted-src
+                    chmod -R u+w planted-src
+                    printf '\n%s\n' "''${planted#*|}" >> "planted-src/$file"
+                    if bash "$guard" planted-src > "$TMPDIR/guard.log" 2>&1; then
+                      echo "no_std source guard accepted a planted std use in $file" >&2
+                      exit 1
+                    fi
+                    grep -F "./$file:" "$TMPDIR/guard.log" >/dev/null
+                  done
+
+                  # Positive: both no_std profiles compiled and the unit tests passed for that feature set.
+                  for library in "$bareLibrary" "$extentsLibrary"; do
+                    if ! ls "$library"/lib/libmolten_core-*.rlib >/dev/null 2>&1; then
+                      echo "missing no_std molten-core rlib in $library" >&2
+                      exit 1
+                    fi
+                  done
+                  test -e "$noStdProfileTests"
+                  # Negative: each injected ambient-std import must fail compilation in src/codec.rs.
+                  for probe in "$fsProbe" "$timeProbe" "$envProbe"; do
+                    test "$(cat "$probe/testBuildFailure.exit")" != 0
+                    if ! grep -F 'unresolved module or unlinked crate `std`' "$probe/testBuildFailure.log" >/dev/null \
+                      || ! grep -F 'src/codec.rs' "$probe/testBuildFailure.log" >/dev/null; then
+                      echo "no_std probe failed for a reason other than the injected std import: $probe" >&2
+                      cat "$probe/testBuildFailure.log" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
+            # Full molten-core unit/property tests under the default std feature set.
+            molten-core-tests = ws.test.check."molten-core";
             clippy = ws.clippy.allWorkspaceMembers;
             executable-extent-consumer =
               assert executableExtentSource != null;

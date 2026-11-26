@@ -1,7 +1,7 @@
 //! Complete measured build cohorts, including the distinct Octet compiler.
-use std::collections;
-use std::string;
-use std::vec;
+use alloc::collections;
+use alloc::string;
+use alloc::vec;
 
 pub const SCHEMA: &str = "molten-measured-build-closure-v1";
 /// Measured union of all six graphs; real candidate plus vendored gate closures exceed 16k roots.

@@ -4,5 +4,7 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 #[path = "../../../crates/molten-core/src/content_replication/mod.rs"]
 pub mod content_replication;

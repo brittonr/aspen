@@ -4,6 +4,8 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod fabric;
 pub mod fabric_time {
     //! Compatibility re-export for the accepted product module path.

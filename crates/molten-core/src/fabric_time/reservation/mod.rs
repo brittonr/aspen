@@ -5,7 +5,7 @@
 //! there is no client-visible read-then-write window. A rejected command
 //! preserves state.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use crate::fabric_time::valid_time_id;
 

@@ -20,7 +20,7 @@ mod relational_pilot;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use self::identity::binding_identity;
 use self::identity::snapshot_identity;

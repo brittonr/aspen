@@ -8,8 +8,8 @@
 //! their supporting occurrences and values, which become the same
 //! [`Explanation`] shape the Rust path produces.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 use super::CollectionDeclaration;
 use super::CollectionState;
@@ -273,7 +273,7 @@ fn superseded_rules() -> Vec<Rule> {
     let superseded = |head: &'static str, observation: &'static str, wildcards: usize| {
         let row = |occurrence: usize| {
             let mut terms = vec![var(occurrence), var(1)];
-            terms.extend(std::iter::repeat_n(Term::Any, wildcards));
+            terms.extend(core::iter::repeat_n(Term::Any, wildcards));
             atom(observation, terms)
         };
         rule(atom(head, vec![var(0)]), vec![row(0), row(2)], Vec::new(), vec![Constraint::Greater(2, 0)], 3)

@@ -293,7 +293,7 @@ Historical source-migration receipts remain scoped to their original cohort.
 r[verify molten.dependency_audit.registry_refresh] The before/after audit
 records at one pinned database revision are how a registry-only refresh is
 checked. r[impl molten.dependency_audit.registry_refresh] A registry-only advisory refresh
-changes `Cargo.lock` and both unit2nix plans together and never adds an
+changes `Cargo.lock` and every unit2nix plan together and never adds an
 exception in place of an available fix; advisories that need a semver-breaking
 upstream move are recorded with their dependency chain instead.
 
@@ -305,9 +305,11 @@ upstream move are recorded with their dependency chain instead.
    `flake.lock`; never edit it manually.
 6. Run `scripts/git-source-hashes.sh --write` to record the metadata-free NAR hash of
    every Cargo git source in `crate-hashes.json` under revision-qualified keys. Then
-   regenerate both plans with the repository's pinned unit2nix tool:
-   `unit2nix --workspace -o build-plan.json` and
-   `unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json`.
+   regenerate the plans with the repository's pinned unit2nix tool:
+   `unit2nix --workspace -o build-plan.json`,
+   `unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json`, and
+   `unit2nix -p molten-core --no-default-features --features executable-extents -o molten-core-no-std-build-plan.json`
+   (the `molten-core-no-std` gate's own unit graph).
    Do not let unit2nix prefetch a git source itself: its prefetch hashes a checkout that
    still contains `.git`, while `pkgs.fetchgit` removes `.git`, so such a hash fails on
    any builder that lacks the prefetched store path. `scripts/git-source-hashes.sh --check`

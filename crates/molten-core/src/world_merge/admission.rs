@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use super::WorldMergeConflict;
 use super::WorldMergeHandler;
@@ -36,7 +36,7 @@ pub fn plan_world_merge(
     conflicts.sort_by(|left, right| {
         left.kind.cmp(&right.kind).then(left.key.cmp(&right.key)).then(left.code.cmp(right.code))
     });
-    let mut source_heads = std::mem::take(&mut request.source_heads);
+    let mut source_heads = core::mem::take(&mut request.source_heads);
     source_heads.sort();
     super::migration::restore_generated_outputs(&mut request, &migrations, &mut outputs)
         .map_err(|issue| vec![issue])?;

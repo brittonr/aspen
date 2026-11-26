@@ -3,7 +3,7 @@
     reason = "local validators append to one preallocated bounded typed issue sink"
 )]
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use artifact_binding_core::ArtifactId;
 use artifact_binding_core::GraphEdge;

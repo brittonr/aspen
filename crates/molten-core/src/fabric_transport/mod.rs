@@ -8,7 +8,7 @@ mod direct;
 mod receive;
 mod transition;
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 pub use cross_process::*;
 pub use direct::*;

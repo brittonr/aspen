@@ -17,8 +17,8 @@ macro_rules! digest_reference {
             }
         }
 
-        impl std::fmt::Display for $name {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl core::fmt::Display for $name {
+            fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 formatter.write_str(self.as_str())
             }
         }
@@ -48,8 +48,8 @@ impl WorldBranchId {
     }
 }
 
-impl std::fmt::Display for WorldBranchId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for WorldBranchId {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
@@ -63,13 +63,13 @@ pub enum WorldHeadReferenceError {
     UnsafeSegment,
 }
 
-impl std::fmt::Display for WorldHeadReferenceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for WorldHeadReferenceError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(formatter, "{self:?}")
     }
 }
 
-impl std::error::Error for WorldHeadReferenceError {}
+impl core::error::Error for WorldHeadReferenceError {}
 
 fn validate_digest_reference(value: &str) -> Result<(), WorldHeadReferenceError> {
     const BLAKE3_PREFIX: &str = "blake3:";

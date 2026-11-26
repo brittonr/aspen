@@ -4,5 +4,7 @@
 #![register_tool(tigerstyle)]
 #![forbid(unsafe_code)]
 
+extern crate alloc;
+
 pub mod fabric;
 pub mod fabric_execution;

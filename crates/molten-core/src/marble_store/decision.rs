@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 
 /// The non-claims every spike decision record carries.
 pub const SPIKE_NON_CLAIMS: &[&str] = &[

@@ -91,6 +91,6 @@ pub(crate) fn valid_time_ref(value: &str) -> bool {
 }
 
 pub(crate) fn has_duplicates<T: Ord>(values: &[T]) -> bool {
-    let mut ordered = std::collections::BTreeSet::new();
+    let mut ordered = alloc::collections::BTreeSet::new();
     values.iter().any(|value| !ordered.insert(value))
 }

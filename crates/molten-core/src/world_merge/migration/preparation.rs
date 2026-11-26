@@ -78,7 +78,7 @@ pub(in crate::world_merge) fn restore_generated_outputs(
         };
         output.output = WorldMergeOutput::Generated(WorldMergeGenerated {
             schema,
-            values: std::mem::take(&mut value.keyed_values),
+            values: core::mem::take(&mut value.keyed_values),
             bytes: value.canonical_bytes.take(),
         });
     }
