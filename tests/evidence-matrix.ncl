@@ -10,7 +10,8 @@
 #   row's plan ref, and each scenario's own test (`capability_qualification::matrix::assert_scenario_bound`)
 #   re-executes it once and requires its exact runtime-artifact ref. The subject-bound execution receipt itself is
 #   produced only by the independently admitted signed binary (see scripts/qualify-capability-report.py).
-# Sequential/repeated placeholder digests and one command aliased across rows are rejected by this contract,
+# Sequential/repeated placeholder digests and one command aliased across rows are rejected by the imported
+# contract (`tests/evidence-matrix-contract.ncl`),
 # by `hardening_core::build_evidence_matrix_manifest` and by `tools/capability-report.rs`.
 #
 # Tracked evidence debt (requirements with no row here; see docs/proof-workflow.md#evidence-matrix-tracked-debt):
@@ -23,45 +24,7 @@
 # - VM and cross-host families of config/capability-report/capabilities.json (`*-nixos-vm`, `*-cross-host`,
 #   `cross-host-transport`) and `post-effect-uncertainty-same-process` have no native producer: unqualified.
 
-let Prelude = import "../docs/nickel-contract-prelude.ncl" in
-let CoverageKinds = ["positive", "negative"] in
-let EvidenceScopes = ["unit", "property", "cli", "integration", "vm", "dogfood", "exemption"] in
-let CoverageKind = Prelude.contract (Prelude.is_one_of CoverageKinds) in
-let EvidenceScope = Prelude.contract (Prelude.is_one_of EvidenceScopes) in
-# A digest with 128 leading zero bits or one repeated nibble names no real bytes.
-let is_real_ref = fun value =>
-  Prelude.is_blake3_ref value
-  && !(std.string.is_match "^blake3:0{32}" value)
-  && std.string.replace (std.string.substring 7 8 value) "" (std.string.substring 7 71 value) != "" in
-let RealRef = Prelude.contract is_real_ref in
-let EntryContract = {
-  requirement_id | Prelude.contracts.StableId,
-  coverage_kind | CoverageKind,
-  evidence_scope | EvidenceScope,
-  target | Prelude.contracts.NonEmptyString,
-  command | Prelude.contracts.NonEmptyString,
-  artifact_refs | Array RealRef,
-  receipt_ref | RealRef,
-  caveats | Array Prelude.contracts.NonEmptyString | default = [],
-} in
-let ExemptionContract = {
-  requirement_id | Prelude.contracts.StableId,
-  reason_class | Prelude.contracts.StableId,
-  evidence_ref | RealRef,
-  scope | EvidenceScope,
-  review_note | Prelude.contracts.NonEmptyString,
-} in
-let MatrixContract = {
-  schema | Prelude.contract (Prelude.is_exact_string "molten.testing.evidence-matrix.v1"),
-  entries
-    | std.contract.Sequence [
-      Prelude.contracts.NonEmptyArray,
-      # One executed command is evidence for exactly one row.
-      Prelude.contract (Prelude.distinct_by (fun entry => entry.command)),
-      Array EntryContract
-    ],
-  exemptions | Array ExemptionContract | default = [],
-} in
+let MatrixContract = import "evidence-matrix-contract.ncl" in
 {
   schema = "molten.testing.evidence-matrix.v1",
   entries = [
@@ -279,7 +242,7 @@ let MatrixContract = {
       requirement_id = "molten.fabric_consistency.live_raft",
       coverage_kind = "positive",
       evidence_scope = "integration",
-      target = "src/capability_qualification/products/control_plane.rs",
+      target = "src/capability_qualification/products/control_plane/mod.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario raft-failover-commit-survives --out $RUN/raft-failover-commit-survives.preserves",
       artifact_refs = ["blake3:7498527d5ed9f936891980e9da67641f2c8fc61f88baf32d53e27675ec0e750b"],
       receipt_ref = "blake3:75a29d3033e86146965ff76d163869341bed4dbb2468176d65b3d5d28e9734e7",
@@ -289,7 +252,7 @@ let MatrixContract = {
       requirement_id = "molten.fabric_consistency.live_raft",
       coverage_kind = "negative",
       evidence_scope = "integration",
-      target = "src/capability_qualification/products/control_plane.rs",
+      target = "src/capability_qualification/products/control_plane/mod.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario raft-stale-leader-fenced --out $RUN/raft-stale-leader-fenced.preserves",
       artifact_refs = ["blake3:10ce4d6090ac413df8cd0f0bad49aac248d11c2b9521085542a7400abbff3fa1"],
       receipt_ref = "blake3:7468156f526ce7378c960c13afa8987f8e0a8c9b29488b66d3015b63f3ab8a0f",
@@ -299,7 +262,7 @@ let MatrixContract = {
       requirement_id = "molten.fabric_consistency.final_validation",
       coverage_kind = "positive",
       evidence_scope = "integration",
-      target = "src/capability_qualification/products/control_plane.rs",
+      target = "src/capability_qualification/products/control_plane/mod.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario raft-final-quorum-evidence --out $RUN/raft-final-quorum-evidence.preserves",
       artifact_refs = ["blake3:e7d1f17a492a5ca0a8ff722fa9b6895c70aed1fcc3b772824ee5deefd7c2d7c8"],
       receipt_ref = "blake3:29bd766781e80c40bfe3da2c4e74361647700ead178936061fd8b33c5af72554",
@@ -309,7 +272,7 @@ let MatrixContract = {
       requirement_id = "molten.fabric_consistency.final_validation",
       coverage_kind = "negative",
       evidence_scope = "integration",
-      target = "src/capability_qualification/products/control_plane.rs",
+      target = "src/capability_qualification/products/control_plane/mod.rs",
       command = "$SIGNED_OUTPUT/bin/molten evidence qualify --source-root $SOURCE_ROOT --scenario raft-false-quorum-denied --out $RUN/raft-false-quorum-denied.preserves",
       artifact_refs = ["blake3:1609244779b500d0f7fd046db1291ba4797d922c4374bf0718207036ffd71dec"],
       receipt_ref = "blake3:d01cad0edfb9ece6545333b7d05aeedb2e80eb63fabde6c473457d84bdb2c293",

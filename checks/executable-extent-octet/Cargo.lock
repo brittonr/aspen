@@ -53,6 +53,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-fs-ext"
+version = "3.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5528f85b1e134ae811704e41ef80930f56e795923f866813255bc342cc20654"
+dependencies = [
+ "cap-primitives",
+ "cap-std",
+ "io-lifetimes",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "cap-primitives"
 version = "3.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -237,6 +249,7 @@ dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
  "blake3",
+ "cap-fs-ext",
  "cap-std",
  "data-encoding",
  "executable-extent-conformance",

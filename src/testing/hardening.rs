@@ -4,4 +4,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p002/
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/p006/body.rs"));

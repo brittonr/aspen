@@ -23,4 +23,5 @@ fn bool_value(value: bool) -> IoValue {
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/testing/parts/hardening/tests/m000/p002/body.rs"));
 }

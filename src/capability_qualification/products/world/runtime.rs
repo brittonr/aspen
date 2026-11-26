@@ -1,49 +1,8 @@
 //! The committed runtime-spine world the world producers capture, restore and
-//! replay, its world-commit roots, and the node roots it lives in.
+//! replay, and its world-commit roots.
 
-use std::collections::BTreeMap;
-
-use ed25519_dalek::SigningKey;
-use molten_core::world_commit::ObservationStability;
-use molten_core::world_commit::RevisionFence;
-use molten_core::world_commit::RevisionRecheck;
-use molten_core::world_commit::RootKind;
-use molten_core::world_commit::RootObservation;
-use molten_core::world_commit::SnapshotProfile;
-use molten_core::world_commit::SnapshotProfileKind;
-use molten_core::world_commit::SnapshotProfileRef;
-use molten_core::world_commit::WorldCommitBounds;
-use molten_core::world_commit::WorldCommitRef;
-use molten_core::world_commit::WorldCommitVersion;
-use molten_core::world_commit::WorldRootRef;
-use molten_core::world_snapshot::SnapshotDescriptor;
-use preserves::IOValue;
-
-use crate::error::Failure;
-use crate::error::Result;
-use crate::node_state::DirectoryRoot;
-use crate::node_state::NamespaceKind;
-use crate::node_state::RelativePath;
-use crate::runtime::RuntimeEvent;
-use crate::runtime::RuntimeState;
-use crate::runtime::RuntimeStep;
-use crate::runtime::RuntimeValue;
-use crate::world_commit::CanonicalCaptureReceipt;
-use crate::world_commit::CanonicalWorldCommit;
-use crate::world_commit::CaptureShellInput;
-use crate::world_commit::LocalWorldCommitStore;
-use crate::world_commit::ObservedRootMaterial;
-use crate::world_commit::WorldCommitPortError;
 use crate::world_commit::WorldRevisionRecheckPort;
 use crate::world_commit::WorldRootObservationPort;
-use crate::world_commit::capture_world_commit;
-use crate::world_snapshot::LocalAdmissionInput;
-use crate::world_snapshot::LocalCurrentAdmission;
-use crate::world_snapshot::LocalLogicalSnapshot;
-use crate::world_snapshot::LogicalRuntimeImage;
-use crate::world_snapshot::canonical_snapshot_descriptor;
-use crate::world_snapshot::local_logical_profile_ref;
-use crate::world_snapshot::sign_local_admission;
 
 /// The runtime seed of the qualification world (any nonzero xorshift state).
 const RUNTIME_SEED: u64 = 0x5eed_a5be_0001;
@@ -54,16 +13,14 @@ const KEY_CONTEXT: &str = "aspen 2026-11 capability qualification world fixture 
 const RUNTIME_ARTIFACT: &str = "molten-runtime-state/committed-turn";
 const RUNTIME_SCHEMA: &str = "runtime-snapshot-v1/runtime-spine-image-v1";
 const ROOT_RECORD: &str = "aspen-qualification-runtime-world-root-v1";
-const RUNTIME_STORE: &str = "ledger/world-snapshot/runtime.redb";
-const ADMISSION_EXPIRY: u64 = u64::MAX;
 
 pub(super) fn reference(label: &str) -> String {
     crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
 }
 
 /// Fixed fixture signing key derived from a label; identical on every run.
-pub(super) fn fixture_key(label: &str) -> SigningKey {
-    SigningKey::from_bytes(&blake3::derive_key(KEY_CONTEXT, label.as_bytes()))
+pub(super) fn fixture_key(label: &str) -> ed25519_dalek::SigningKey {
+    ed25519_dalek::SigningKey::from_bytes(&blake3::derive_key(KEY_CONTEXT, label.as_bytes()))
 }
 
 pub(super) fn key_ref(key: &ed25519_dalek::VerifyingKey) -> String {
@@ -77,36 +34,36 @@ pub(super) fn policy_ref() -> String {
 /// A committed runtime world: owner state, committed turn history, unresolved
 /// effect requests and the policy it was committed under.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct WorldState {
-    pub runtime: RuntimeState,
-    pub history: Vec<IOValue>,
-    pub unresolved_effects: Vec<RuntimeEvent>,
+pub(super) struct CommittedState {
+    pub runtime: crate::runtime::RuntimeState,
+    pub history: Vec<preserves::IOValue>,
+    pub unresolved_effects: Vec<crate::runtime::RuntimeEvent>,
     pub policy_ref: String,
 }
 
-impl WorldState {
+impl CommittedState {
     /// The committed initial world every scenario starts from.
-    pub fn committed() -> Result<Self> {
+    pub fn committed() -> crate::error::Result<Self> {
         let mut world = Self {
-            runtime: RuntimeState::new(RUNTIME_SEED),
+            runtime: crate::runtime::RuntimeState::new(RUNTIME_SEED),
             history: Vec::new(),
             unresolved_effects: Vec::new(),
             policy_ref: policy_ref(),
         };
-        let ready = RuntimeValue::string("ready")?;
+        let ready = crate::runtime::RuntimeValue::string("ready")?;
         for step in [
-            RuntimeStep::Assert {
+            crate::runtime::RuntimeStep::Assert {
                 actor: "producer".into(),
                 value: ready.clone(),
             },
-            RuntimeStep::Observe {
+            crate::runtime::RuntimeStep::Observe {
                 actor: "consumer".into(),
                 pattern: ready,
             },
-            RuntimeStep::Clock {
+            crate::runtime::RuntimeStep::Clock {
                 actor: "producer".into(),
             },
-            RuntimeStep::Random {
+            crate::runtime::RuntimeStep::Random {
                 actor: "producer".into(),
                 upper: RANDOM_UPPER,
             },
@@ -116,7 +73,10 @@ impl WorldState {
         Ok(world)
     }
 
-    pub fn from_image(image: LogicalRuntimeImage, runtime: RuntimeState) -> Result<Self> {
+    pub fn from_image(
+        image: crate::world_snapshot::LogicalRuntimeImage,
+        runtime: crate::runtime::RuntimeState,
+    ) -> crate::error::Result<Self> {
         if runtime.snapshot() != image.snapshot {
             return Err(super::invalid("restored runtime owner differs from its activated image"));
         }
@@ -129,14 +89,14 @@ impl WorldState {
     }
 
     /// Apply one committed turn and append its events to the turn history.
-    pub fn apply(&mut self, step: &RuntimeStep) -> Vec<RuntimeEvent> {
+    pub fn apply(&mut self, step: &crate::runtime::RuntimeStep) -> Vec<crate::runtime::RuntimeEvent> {
         let events = self.runtime.apply_step(step);
-        self.history.extend(events.iter().map(RuntimeEvent::to_value));
+        self.history.extend(events.iter().map(crate::runtime::RuntimeEvent::to_value));
         events
     }
 
-    pub fn image(&self) -> LogicalRuntimeImage {
-        LogicalRuntimeImage {
+    pub fn image(&self) -> crate::world_snapshot::LogicalRuntimeImage {
+        crate::world_snapshot::LogicalRuntimeImage {
             snapshot: self.runtime.snapshot(),
             history: self.history.clone(),
             unresolved_effects: self.unresolved_effects.clone(),
@@ -144,66 +104,80 @@ impl WorldState {
         }
     }
 
-    fn root_materials(&self) -> Result<BTreeMap<RootKind, Vec<u8>>> {
+    fn root_materials(
+        &self,
+    ) -> crate::error::Result<std::collections::BTreeMap<molten_core::world_commit::RootKind, Vec<u8>>> {
         let snapshot = self.runtime.snapshot();
-        let mut materials = BTreeMap::new();
-        for kind in SnapshotProfileKind::Logical.required_roots() {
-            let value = match kind {
-                RootKind::Artifact => crate::preserves_rail::string(RUNTIME_ARTIFACT),
-                RootKind::Schema => crate::preserves_rail::string(RUNTIME_SCHEMA),
-                RootKind::DurableState => snapshot.to_value(),
-                RootKind::Tasks => crate::preserves_rail::sequence(
-                    snapshot.facets.values().map(crate::runtime::RuntimeFacet::to_value).collect(),
-                ),
-                RootKind::History => crate::preserves_rail::sequence(self.history.clone()),
-                RootKind::Effects => crate::preserves_rail::record("effects", vec![
-                    crate::preserves_rail::u64_value(snapshot.effect_sequence),
-                    crate::preserves_rail::sequence(
-                        self.unresolved_effects.iter().map(RuntimeEvent::to_value).collect(),
+        molten_core::world_commit::SnapshotProfileKind::Logical
+            .required_roots()
+            .iter()
+            .map(|kind| -> crate::error::Result<(molten_core::world_commit::RootKind, Vec<u8>)> {
+                let value = match kind {
+                    molten_core::world_commit::RootKind::Artifact => crate::preserves_rail::string(RUNTIME_ARTIFACT),
+                    molten_core::world_commit::RootKind::Schema => crate::preserves_rail::string(RUNTIME_SCHEMA),
+                    molten_core::world_commit::RootKind::DurableState => snapshot.to_value(),
+                    molten_core::world_commit::RootKind::Tasks => crate::preserves_rail::sequence(
+                        snapshot.facets.values().map(crate::runtime::RuntimeFacet::to_value).collect(),
                     ),
-                ]),
-                RootKind::Scheduler => crate::preserves_rail::sequence(
-                    snapshot.messages.iter().map(crate::runtime::RuntimeMessage::to_value).collect(),
-                ),
-                RootKind::Time => crate::preserves_rail::u64_value(snapshot.logical_time),
-                RootKind::Entropy => crate::preserves_rail::u64_value(snapshot.rng_state),
-                RootKind::RuntimeProfile => crate::preserves_rail::string(local_logical_profile_ref()?),
-                RootKind::Policy => crate::preserves_rail::string(&self.policy_ref),
-                _ => return Err(super::invalid("logical runtime world has no such root")),
-            };
-            let bytes = crate::preserves_rail::canonical_bytes(&crate::preserves_rail::record(ROOT_RECORD, vec![
-                crate::preserves_rail::string(kind.as_str()),
-                value,
-            ]))?;
-            materials.insert(*kind, bytes);
-        }
-        Ok(materials)
+                    molten_core::world_commit::RootKind::History => {
+                        crate::preserves_rail::sequence(self.history.clone())
+                    }
+                    molten_core::world_commit::RootKind::Effects => crate::preserves_rail::record("effects", vec![
+                        crate::preserves_rail::u64_value(snapshot.effect_sequence),
+                        crate::preserves_rail::sequence(
+                            self.unresolved_effects.iter().map(crate::runtime::RuntimeEvent::to_value).collect(),
+                        ),
+                    ]),
+                    molten_core::world_commit::RootKind::Scheduler => crate::preserves_rail::sequence(
+                        snapshot.messages.iter().map(crate::runtime::RuntimeMessage::to_value).collect(),
+                    ),
+                    molten_core::world_commit::RootKind::Time => {
+                        crate::preserves_rail::u64_value(snapshot.logical_time)
+                    }
+                    molten_core::world_commit::RootKind::Entropy => {
+                        crate::preserves_rail::u64_value(snapshot.rng_state)
+                    }
+                    molten_core::world_commit::RootKind::RuntimeProfile => {
+                        crate::preserves_rail::string(crate::world_snapshot::local_logical_profile_ref()?)
+                    }
+                    molten_core::world_commit::RootKind::Policy => crate::preserves_rail::string(&self.policy_ref),
+                    _ => return Err(super::invalid("logical runtime world has no such root")),
+                };
+                let bytes = crate::preserves_rail::canonical_bytes(&crate::preserves_rail::record(ROOT_RECORD, vec![
+                    crate::preserves_rail::string(kind.as_str()),
+                    value,
+                ]))?;
+                Ok((*kind, bytes))
+            })
+            .collect()
     }
 }
 
 /// The replay inputs: committed turns that reach only the simulated virtual
 /// clock, seeded entropy stream and deterministic scheduler.
-pub(super) fn replay_inputs() -> Result<Vec<RuntimeStep>> {
+pub(super) fn replay_inputs() -> crate::error::Result<Vec<crate::runtime::RuntimeStep>> {
     Ok(vec![
-        RuntimeStep::Clock {
+        crate::runtime::RuntimeStep::Clock {
             actor: "consumer".into(),
         },
-        RuntimeStep::Assert {
+        crate::runtime::RuntimeStep::Assert {
             actor: "consumer".into(),
-            value: RuntimeValue::string("acknowledged")?,
+            value: crate::runtime::RuntimeValue::string("acknowledged")?,
         },
-        RuntimeStep::Random {
+        crate::runtime::RuntimeStep::Random {
             actor: "consumer".into(),
             upper: RANDOM_UPPER,
         },
     ])
 }
 
-pub(super) fn logical_profile() -> Result<SnapshotProfile> {
-    Ok(SnapshotProfile {
-        kind: SnapshotProfileKind::Logical,
-        profile_ref: SnapshotProfileRef::new(local_logical_profile_ref()?)
-            .map_err(|error| super::invalid(format!("logical runtime profile ref: {error:?}")))?,
+pub(super) fn logical_profile() -> crate::error::Result<molten_core::world_commit::SnapshotProfile> {
+    Ok(molten_core::world_commit::SnapshotProfile {
+        kind: molten_core::world_commit::SnapshotProfileKind::Logical,
+        profile_ref: molten_core::world_commit::SnapshotProfileRef::new(
+            crate::world_snapshot::local_logical_profile_ref()?,
+        )
+        .map_err(|error| super::invalid(format!("logical runtime profile ref: {error:?}")))?,
         cohort_ref: None,
     })
 }
@@ -211,21 +185,21 @@ pub(super) fn logical_profile() -> Result<SnapshotProfile> {
 /// Capture one world commit through the production capture shell into the
 /// durable local world-commit store.
 pub(super) fn capture(
-    store: &mut LocalWorldCommitStore,
-    world: &WorldState,
-    parents: Vec<WorldCommitRef>,
-) -> Result<(CanonicalWorldCommit, CanonicalCaptureReceipt)> {
-    let input = CaptureShellInput {
-        version: WorldCommitVersion::V1,
+    store: &mut crate::world_commit::LocalWorldCommitStore,
+    world: &CommittedState,
+    parents: Vec<molten_core::world_commit::WorldCommitRef>,
+) -> crate::error::Result<(crate::world_commit::CanonicalWorldCommit, crate::world_commit::CanonicalCaptureReceipt)> {
+    let input = crate::world_commit::CaptureShellInput {
+        version: molten_core::world_commit::WorldCommitVersion::V1,
         profile: logical_profile()?,
         parents,
-        root_kinds: SnapshotProfileKind::Logical.required_roots().to_vec(),
-        bounds: WorldCommitBounds::default(),
+        root_kinds: molten_core::world_commit::SnapshotProfileKind::Logical.required_roots().to_vec(),
+        bounds: commit_bounds(),
     };
-    let mut roots = RuntimeRoots {
+    let mut roots = CommittedRoots {
         materials: world.root_materials()?,
     };
-    let execution = capture_world_commit(&input, &mut roots, store, &mut ImmutableRoots)?;
+    let execution = crate::world_commit::capture_world_commit(&input, &mut roots, store, &mut ImmutableRoots)?;
     store.write_capture_receipt(&execution.receipt)?;
     let commit = execution
         .commit
@@ -233,32 +207,51 @@ pub(super) fn capture(
     Ok((commit, execution.receipt))
 }
 
-pub(super) fn commit_store(root: &DirectoryRoot) -> Result<LocalWorldCommitStore> {
-    LocalWorldCommitStore::open(&root.namespace(NamespaceKind::Storage)?)
+pub(super) fn commit_store(
+    root: &crate::node_state::DirectoryRoot,
+) -> crate::error::Result<crate::world_commit::LocalWorldCommitStore> {
+    crate::world_commit::LocalWorldCommitStore::open(&root.namespace(crate::node_state::NamespaceKind::Storage)?)
+}
+
+/// The world-commit bounds the producers capture and parse under: the
+/// molten-core defaults, spelled out.
+pub(super) fn commit_bounds() -> molten_core::world_commit::WorldCommitBounds {
+    molten_core::world_commit::WorldCommitBounds {
+        max_parents: molten_core::world_commit::MAX_WORLD_COMMIT_PARENTS,
+        max_roots: molten_core::world_commit::MAX_WORLD_COMMIT_ROOTS,
+        max_revision_fences: molten_core::world_commit::MAX_WORLD_COMMIT_REVISION_FENCES,
+        max_closure_objects: molten_core::world_commit::MAX_WORLD_COMMIT_CLOSURE_OBJECTS,
+    }
 }
 
 /// Root observations of one committed runtime state. A committed turn image is
 /// immutable once captured, so no revision fence applies.
-struct RuntimeRoots {
-    materials: BTreeMap<RootKind, Vec<u8>>,
+struct CommittedRoots {
+    materials: std::collections::BTreeMap<molten_core::world_commit::RootKind, Vec<u8>>,
 }
 
-impl WorldRootObservationPort for RuntimeRoots {
-    fn observe_root(&mut self, kind: RootKind) -> std::result::Result<ObservedRootMaterial, WorldCommitPortError> {
+impl WorldRootObservationPort for CommittedRoots {
+    fn observe_root(
+        &mut self,
+        kind: molten_core::world_commit::RootKind,
+    ) -> std::result::Result<crate::world_commit::ObservedRootMaterial, crate::world_commit::WorldCommitPortError> {
         let bytes = self
             .materials
             .get(&kind)
             .cloned()
-            .ok_or_else(|| WorldCommitPortError::new("missing-runtime-root", kind.as_str()))?;
-        let schema_validated = crate::preserves_rail::strict_canonical_decode(&bytes).is_ok();
-        let root = WorldRootRef::parse(kind, crate::preserves_rail::content_ref_from_bytes(&bytes))
-            .map_err(|error| WorldCommitPortError::new("runtime-root-ref", format!("{error:?}")))?;
-        Ok(ObservedRootMaterial {
-            observation: RootObservation {
+            .ok_or_else(|| crate::world_commit::WorldCommitPortError::new("missing-runtime-root", kind.as_str()))?;
+        let is_schema_validated = crate::preserves_rail::strict_canonical_decode(&bytes).is_ok();
+        let root =
+            molten_core::world_commit::WorldRootRef::parse(kind, crate::preserves_rail::content_ref_from_bytes(&bytes))
+                .map_err(|error| {
+                    crate::world_commit::WorldCommitPortError::new("runtime-root-ref", format!("{error:?}"))
+                })?;
+        Ok(crate::world_commit::ObservedRootMaterial {
+            observation: molten_core::world_commit::RootObservation {
                 root,
                 source_kind: kind,
-                schema_validated,
-                stability: ObservationStability::Immutable,
+                schema_validated: is_schema_validated,
+                stability: molten_core::world_commit::ObservationStability::Immutable,
                 durable: false,
                 inventory_complete: true,
             },
@@ -272,90 +265,13 @@ struct ImmutableRoots;
 impl WorldRevisionRecheckPort for ImmutableRoots {
     fn recheck_revision(
         &mut self,
-        fence: &RevisionFence,
-    ) -> std::result::Result<RevisionRecheck, WorldCommitPortError> {
-        Err(WorldCommitPortError::new("unexpected-revision-fence", fence.source_id.clone()))
+        fence: &molten_core::world_commit::RevisionFence,
+    ) -> std::result::Result<molten_core::world_commit::RevisionRecheck, crate::world_commit::WorldCommitPortError>
+    {
+        Err(crate::world_commit::WorldCommitPortError::new("unexpected-revision-fence", fence.source_id.clone()))
     }
 }
 
-/// One node state root holding the runtime-spine destination layout.
-pub(super) struct NodeRoot {
-    pub root: DirectoryRoot,
-    pub signer: SigningKey,
-}
-
-impl NodeRoot {
-    pub fn open(path: &std::path::Path, label: &str) -> Result<Self> {
-        let root = DirectoryRoot::open(path)?;
-        root.create_layout()?;
-        for name in ["config.preserves", "identity.preserves"] {
-            let bytes = crate::preserves_rail::canonical_bytes(&crate::preserves_rail::record(
-                "aspen-qualification-node-v1",
-                vec![
-                    crate::preserves_rail::string(label),
-                    crate::preserves_rail::string(name),
-                ],
-            ))?;
-            root.write(&RelativePath::parse(name)?, &bytes)?;
-        }
-        Ok(Self {
-            root,
-            signer: fixture_key("runtime-spine restore authority"),
-        })
-    }
-
-    pub fn adapter(&self) -> Result<LocalLogicalSnapshot> {
-        LocalLogicalSnapshot::from_root(self.root.clone(), self.signer.verifying_key())
-    }
-
-    /// Publish the independently provisioned current admission and its signed
-    /// grant. `granted` is what the grant signs; `current` is the live document.
-    pub fn admit(&self, grant: SnapshotGrant<'_>) -> Result<()> {
-        let bytes = sign_local_admission(LocalAdmissionInput {
-            signer: grant.signer,
-            descriptor_ref: grant.descriptor_ref,
-            profile_ref: grant.descriptor.profile_ref.as_str(),
-            cohort_ref: grant.descriptor.cohort.cohort_ref.as_str(),
-            destination_ref: self.adapter()?.destination_ref(),
-            current: grant.granted.clone(),
-        })?;
-        let current = serde_json::to_vec(grant.current)
-            .map_err(|error| super::invalid(format!("current admission encoding: {error}")))?;
-        self.root.write(&RelativePath::parse("storage/world-snapshot/current.json")?, &current)?;
-        self.root.write(&RelativePath::parse("storage/world-snapshot/admission.json")?, &bytes)
-    }
-
-    pub fn runtime_store_exists(&self) -> Result<bool> {
-        self.root.try_exists(&RelativePath::parse(RUNTIME_STORE)?)
-    }
-}
-
-pub(super) struct SnapshotGrant<'a> {
-    pub signer: &'a SigningKey,
-    pub descriptor: &'a SnapshotDescriptor,
-    pub descriptor_ref: &'a str,
-    pub granted: &'a LocalCurrentAdmission,
-    pub current: &'a LocalCurrentAdmission,
-}
-
-pub(super) fn descriptor_ref(descriptor: &SnapshotDescriptor) -> Result<String> {
-    Ok(canonical_snapshot_descriptor(descriptor)?.artifact_ref)
-}
-
-/// The current runtime-spine admission at one generation and revocation epoch.
-pub(super) fn admission_document(generation: u64, revocation_label: &str, allowed: bool) -> LocalCurrentAdmission {
-    LocalCurrentAdmission {
-        policy_ref: policy_ref(),
-        capability_ref: reference("aspen qualification runtime-spine restore capability"),
-        revocation_ref: reference(revocation_label),
-        resource_ref: reference("aspen qualification bounded runtime resources"),
-        adapter_ref: reference("aspen qualification runtime-spine redb adapter"),
-        generation,
-        allowed,
-        expires_unix_seconds: ADMISSION_EXPIRY,
-    }
-}
-
-pub(super) fn store_error(error: WorldCommitPortError) -> Failure {
+pub(super) fn store_error(error: crate::world_commit::WorldCommitPortError) -> crate::error::Failure {
     super::invalid(format!("world-commit store: {error}"))
 }

@@ -21,6 +21,7 @@ path = "src/lib.rs"
 artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 artifact-binding-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 blake3 = "=1.8.5"
+cap-fs-ext = "=3.4.5"
 cap-std = "=3.4.5"
 data-encoding = "=2.11.0"
 executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f" }

@@ -79,7 +79,7 @@ impl Scope {
         let leaf_name = leaf
             .to_str()
             .ok_or_else(|| super::invalid(format!("node state update leaf {} is not UTF-8", path.display())))?;
-        super::publication::lock_leaf(&parent, leaf_name, super::publication::UPDATE_LOCK_KIND)
+        super::publication::exclusion::lock_leaf(&parent, leaf_name, super::publication::UPDATE_LOCK_KIND)
     }
 
     /// Creates a secret atomically without replacement: across a crash it is absent or whole, never

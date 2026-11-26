@@ -108,7 +108,7 @@ fn envelope_core_validation_is_deterministic() {
 
 #[test]
 fn envelope_core_source_excludes_adapter_effects() {
-    let source = include_str!("mod.rs");
+    let source = concat!(include_str!("mod.rs"), include_str!("checked.rs"));
     for (prefix, suffix) in [
         ("std", "::fs"),
         ("std", "::net"),

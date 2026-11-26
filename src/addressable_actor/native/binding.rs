@@ -1,6 +1,6 @@
 use molten_core::addressable_actor::*;
 
-use crate::fabric_membership::AssignmentPersistence;
+use crate::fabric_membership::AssignmentLog;
 
 pub(super) struct Observation {
     pub instance: crate::system_extension::NativeInstanceRecord,

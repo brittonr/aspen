@@ -47,9 +47,38 @@ pub mod preserves_rail {
             Err(())
         }
     }
+
+    #[must_use]
+    pub fn string(value: impl AsRef<str>) -> preserves::IOValue {
+        preserves::IOValue::new(value.as_ref().to_owned())
+    }
+
+    #[must_use]
+    pub fn u64_value(value: u64) -> preserves::IOValue {
+        preserves::IOValue::new(value)
+    }
+
+    #[must_use]
+    pub fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
+        preserves::IOValue::new(values)
+    }
+
+    #[must_use]
+    pub fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
+        preserves::IOValue::record(preserves::IOValue::symbol(label), fields)
+    }
+
+    /// Canonical packed Preserves bytes of `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a failure when the value cannot be written as packed Preserves.
+    pub fn canonical_bytes(value: &preserves::IOValue) -> crate::error::Result<Vec<u8>> {
+        preserves::write_iovalue_packed(value, false)
+            .map_err(|error| crate::error::Failure::invalid_harness(error.to_string()))
+    }
 }
 
-#[path = "chaoscontrol.rs"]
 pub mod chaoscontrol;
 #[path = "vm/mod.rs"]
 pub mod vm;
