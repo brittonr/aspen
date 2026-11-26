@@ -12,7 +12,7 @@ The relevant logical envelopes are distinct:
 - Ready work consumes `max_scheduler_queue_depth`.
 - Selected running work consumes `max_scheduler_concurrency`.
 
-An occurrence can stop consuming ready capacity without ceasing to be active. A blocked occurrence retains its active slot; so does a running occurrence. Conversely, completing an occurrence releases it from the active count but does not, in the inspected core, remove its retained `RunnableState` from the vector. Thus an active-work bound alone is not a proof of bounded lifetime history retention. This is an important scope limit when interpreting the governing description of bounded total runnables.
+An occurrence can stop consuming ready capacity without ceasing to be active. A blocked occurrence retains its active slot; so does a running occurrence. Completing or cancelling an occurrence releases its active slot and stamps it with a terminal sequence. `reclaim_terminal_history` then clears every terminal slot older than the newest `terminal_retention_limit` terminal entries. That limit is set from `max_runnables`. Retained lifetime history is therefore bounded by that window, separately from the active-work bound ([scheduler core](../../../crates/molten-core/src/fabric_time/scheduler/mod.rs)).
 
 ## Every path back to ready is admission
 

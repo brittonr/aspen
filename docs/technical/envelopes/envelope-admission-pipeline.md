@@ -10,6 +10,8 @@ At the DTO boundary, `Envelope::from_dto` rejects an unsupported envelope versio
 
 There is an important construction-path qualification. The local actor, capability, and evidence wrappers derive transparent Serde deserialization, whereas the shared `ContentRef` has a custom deserializer that calls its checked parser. `from_dto` does not rerun every wrapper constructor, and `validate_core` checks reference-list lengths before calculating the boundary; it does not revalidate every field or independently check the version. Therefore neither API should be described as comprehensive re-admission of arbitrarily assembled public struct fields. This article reports that inspected scope rather than inventing a stronger invariant.
 
+This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
+
 ## Representation and schema checks are distinct
 
 For packed input, the shared rail supplies `strict_canonical_decode`: parse, re-encode, compare bytes. `validate_boundary_bytes` uses strict decoding and then validates the value against a supplied `BoundarySchemaSpec`. These are generic boundary facilities; their existence does not establish that `Envelope::from_dto`, a textual DTO conversion, invokes them.

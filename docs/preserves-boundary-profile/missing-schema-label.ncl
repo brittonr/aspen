@@ -1,11 +1,6 @@
 let Contracts = import "contracts.ncl" in
-let Base = import "valid.ncl" in
-Base & {
-  measurements = [{
-    artifact_family = "node-control-envelope",
-    canonical_bytes = true,
-    blake3_ref = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    consumer = "runtime",
-    raw_preserves_core_coupling = false,
-  }],
-} | Contracts.Profile
+let Fixture = import "fixture.ncl" in
+std.record.update "measurements" (std.array.map (fun measurement =>
+  if measurement.artifact_family == "ticket" then std.record.remove "schema_label" measurement else measurement
+) Fixture.measurements) Fixture
+| Contracts.Profile

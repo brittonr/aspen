@@ -38,6 +38,8 @@ The governing guide lists node-state adapter coverage and two node-state blockin
 
 Thus the existence of the YAML rule does not establish that the default Rust receipt profile declares it. Because receipt checks require findings to reference known rules, callers cannot assume those two representations are interchangeable. This discrepancy is left explicit rather than repaired or silently normalized in documentation.
 
+These rule-binding and profile discrepancies are tracked as defects by the Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/changes/harden-traceability-proof-composition-and-static-audits/proposal.md).
+
 ## Verification and limits
 
 Suggested verification follows the guide's positive fixture, negative fixture, and converted-production scan commands. Record the actual tool version and scope, inspect exclusions, and review file moves against explicit path lists. No scans were executed for this article. The [modularity inventory](../../modularity-boundaries.md) provides the architectural ownership context needed to interpret results.

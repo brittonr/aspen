@@ -24,6 +24,8 @@ The [governing document](../../fabric-cryptographic-identity.md) describes overl
 
 These are not interchangeable descriptions of implemented production behavior. The intended verification-only contract is broader than the file adapter's implemented no-overlap operation, while the generic core representation admits a broader signing state than that prose suggests. This article neither changes the contract nor blesses overlap signing; it documents the discrepancy so readers do not infer a working bounded-overlap service, expiry mechanism, or retention policy from an enum variant.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Illustrative stale-operator request
 
 Imagine generation 7 is current. Operator A builds a no-overlap request for generation 8, naming the generation-7 handle and public key. Before operator B's later request is evaluated, A's rotation completes. B's request still names generation 7 but asks for generation 9.

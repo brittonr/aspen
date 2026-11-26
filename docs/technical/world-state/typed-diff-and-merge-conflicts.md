@@ -43,6 +43,8 @@ The authority recheck occurs before the generated-root loop, not as a second che
 
 The [governing prose](../../world-state-diff-and-merge.md) says merge is admitted by an exact profile and unavailable material is not equal. The inspected planner's `reduce_root` has an equal-left/right-root-and-schema shortcut before availability, schema-admission, and declared-mode checks. Its initial request validation does not perform those per-root checks first. Consequently, this article does not claim that the pure planner enforces the conservative diff classifier's precedence on every equal-root path. Diff and merge are separate implementations, and the discrepancy is not resolved by assuming that one calls the other.
 
+This discrepancy is tracked as a defect by the Cairn change [`harden-world-promotion-head-and-merge-semantics`](../../../.cairn/changes/harden-world-promotion-head-and-merge-semantics/proposal.md).
+
 ## Review, verification, and non-claims
 
 Suggested review cases include delete-versus-update conflict, unavailable equal references, absent equal references, an undeclared mode, ambiguous ancestry, a handler requesting effects, and failure while persisting a generated root. Compare canonical conflict/result artifacts with durable publication state; diagnostic output alone is insufficient. These scenarios were not executed for this documentation change.

@@ -26,7 +26,7 @@ Consider an illustrative requirement whose admission behavior changes. A develop
 
 After removing the duplicate, suppose the target has moved and the shell reports `target_exists = false`. The entry remains stale. Updating only a rendered summary would change no canonical evidence. The appropriate review asks whether the moved target preserves the same requirement and whether a fresh verification observation is needed; the manifest cannot answer that semantic question from a path string alone.
 
-Finally, suppose both current receipts are present. Review still follows the negative artifact to confirm the intended denial. The [receipt conversion](../../../src/testing/traceability/parts/p002/body.rs) carries the receipt decision into coverage, but not its diagnostics. As explained in the [verification receipt contract](verification-run-receipt-contract.md), this is a scoped discrepancy with the governing fail-closed wording: an invalid negative observation can also have decision `deny`. A covered manifest therefore does not remove the need to inspect negative-run validity.
+Finally, suppose both current receipts are present. Review still follows the negative artifact to confirm the intended denial. The [receipt conversion](../../../src/testing/traceability/parts/p002/body.rs) carries the receipt's decision and its run diagnostics into coverage. Coverage admission reports any invalid run as `stale-<kind>-invalid-run`, so an invalid negative observation cannot discharge a requirement even though its decision is also `deny`. See the [verification receipt contract](verification-run-receipt-contract.md). A covered manifest still does not remove the need to inspect what the negative run actually exercised.
 
 ## Review guidance and limits
 

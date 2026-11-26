@@ -22,6 +22,8 @@ The already-successor case is not treated as unconditional success. The store ch
 
 There is an important source boundary. The governing document describes rechecking current transaction facts within the atomic sequence. The inspected implementation calls `validate_promotion_transaction(plan, facts)` before `begin_write`, while the head comparison occurs inside the write transaction. The shell obtains those supplied facts through `observe_transaction` before calling the store. Thus the source establishes atomic head-and-reservation publication, but does not establish that every authority or policy observation is acquired inside the Redb transaction. This article does not resolve that wording difference by assuming an uninspected adapter guarantee.
 
+This discrepancy is tracked as a defect by the Cairn change [`harden-world-promotion-head-and-merge-semantics`](../../../.cairn/changes/harden-world-promotion-head-and-merge-semantics/proposal.md).
+
 ## Unknown publication is a distinct result
 
 A failure returned by the final Redb commit maps to `OutcomeUnknown`, not to definite non-publication. This is an epistemic distinction: an error reporting publication does not necessarily identify the durable state that a later observer will find.

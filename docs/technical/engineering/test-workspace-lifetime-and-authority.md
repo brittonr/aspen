@@ -26,6 +26,8 @@ The plan itself contains a `PathBuf` and label, not an `Arc<WorkspaceInner>`. Re
 
 The inspected Unix helper resolves `/proc/self/fd/<descriptor>` with `std::fs::read_link`. Non-Unix builds explicitly return `Unsupported`. There is a scoped discrepancy with the governing guide's broader wording that hosts without the descriptor bridge return `Unsupported`: on a Unix host lacking usable `/proc/self/fd`, this implementation propagates the filesystem error instead. This article does not claim uniform error classification or portability across all Unix hosts.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Worked export and substitution scenario
 
 Suppose, illustratively, workspace A creates `state/receipts/run.preserves`, and workspace B supplies an output root for selected artifacts. Export is allowed because `export_selected` verifies that the source root belongs to A, reads the selected relative source, and writes through the separately supplied output capability. It returns logical source and destination paths plus a BLAKE3 content reference. The [async export test](../../../src/test/parts/support/p002/body.rs) exercises this cross-workspace destination arrangement.

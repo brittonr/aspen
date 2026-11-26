@@ -26,6 +26,8 @@ This is an in-memory shell property. It does not establish a durable, fleet-wide
 
 There is an important implementation qualification to the governing document's statement that registered requests are consumed once. The [generic registered transport shell](../../../src/fabric_transport/shell.rs) retrieves commands from its request map and does not remove them or maintain a routed-request set in `execute_effect`. The inspected cross-process wrapper supplies explicit replay denial; the generic shell alone does not establish the same property. No code or governing prose is changed here, and no universal single-use guarantee is inferred.
 
+This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
+
 ## Worked reasoning: acknowledgement lost after receipt
 
 Suppose an illustrative 600-byte request is submitted, reaches the peer, and the connection disappears before the sender receives the expected acknowledgement. The sender has outstanding in-flight bytes and a nondefinitive disconnect observation. The correct transport conclusion is uncertain delivery. It is not “remote application did nothing,” even if the sender sees only an error.
