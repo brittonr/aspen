@@ -157,7 +157,16 @@
         assert_eq!(transcript.handler_profile_ref, Some(test_ref("handler-profile")));
     }
 
-    #[hegel::test(test_cases = 16)]
+    // Durable cache writes and invalidation cost about 1.2 s per case under parallel tests and up to 4.5 s
+    // when the CI builder is saturated (16 cases took 20 s; 8 cases took 36 s). Hegel's TooSlow window
+    // (10 valid cases in 30 s) is therefore load-dependent. The run is bounded explicitly instead: 8
+    // derandomized cases with TooSlow suppressed.
+    #[hegel::test(
+        test_cases = 8,
+        derandomize = true,
+        database = None,
+        suppress_health_check = [hegel::HealthCheck::TooSlow]
+    )]
     fn hegel_key_determinism_dependency_invalidation_and_no_name_key(tc: TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dependency = test_ref(&format!("dep-{salt}"));

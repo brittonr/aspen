@@ -50,8 +50,9 @@ repos:
           - pre-push
 
       - id: cairn-validate
-        name: cairn validate
-        entry: sh -c 'repo_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"; CAIRN_ROOT="${CAIRN_ROOT:-$repo_root/../cairn}"; nix run --offline "path:$CAIRN_ROOT#cairn" -- validate --root . --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json"'
+        name: cairn validate --strict (pinned)
+        # Same pinned validator and policy export as `checks.cairn-validate-strict`; never a sibling checkout.
+        entry: nix run .#cairn-validate-strict
         language: system
         pass_filenames: false
         stages:

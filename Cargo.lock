@@ -5055,6 +5055,7 @@ dependencies = [
  "choregraph-history",
  "content-identity-core",
  "executable-extent-core",
+ "hegeltest",
  "kamacite-core",
  "schema-migration-core",
  "serde",

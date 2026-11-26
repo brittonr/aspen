@@ -25,47 +25,6 @@
         assert_ne!(first.manifest_ref, different_bytes.manifest_ref);
     }
 
-    #[hegel::test(test_cases = 32)]
-    fn hegel_chunk_store_determinism_range_resumable_and_no_dangling(tc: hegel::TestCase) {
-        let bytes = tc.draw(hegel::generators::binary().max_size(96));
-        let chunk_size = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(16));
-        let root = temp_dir("chunk-hegel-root");
-        let duplicate_root = temp_dir("chunk-hegel-duplicate");
-        let sync_dest = temp_dir("chunk-hegel-sync-dest");
-
-        let first = put_bytes(&root, "artifact", &bytes, chunk_size).expect("put first");
-        let duplicate = put_bytes(&duplicate_root, "artifact", &bytes, chunk_size).expect("put duplicate");
-        assert_eq!(first.manifest_ref, duplicate.manifest_ref);
-        assert_eq!(read_object(&root, &first.manifest_ref).expect("read full").bytes, bytes);
-
-        let offset = tc.draw(hegel::generators::integers::<usize>().min_value(0).max_value(bytes.len()));
-        let max_len = bytes.len().saturating_sub(offset);
-        let length = tc.draw(hegel::generators::integers::<usize>().min_value(0).max_value(max_len));
-        let range = range_read(&root, &first.manifest_ref, offset as u64, length as u64).expect("range read");
-        assert_eq!(range.bytes, bytes[offset..offset + length]);
-
-        let sync = sync_missing_chunks(&root, &sync_dest, &first.manifest_ref).expect("sync missing");
-        assert_eq!(sync.missing_before.len(), first.chunk_refs.len());
-        assert_eq!(read_object(&sync_dest, &first.manifest_ref).expect("read synced").bytes, bytes);
-        let repeat = sync_missing_chunks(&root, &sync_dest, &first.manifest_ref).expect("repeat sync");
-        assert!(repeat.missing_before.is_empty());
-        assert!(repeat.fetched_chunks.is_empty());
-        assert!(missing_chunks(&sync_dest, &first.manifest_ref).expect("missing after sync").is_empty());
-
-        pin_manifest(&root, &first.manifest_ref).expect("pin manifest");
-        let retention_evidence = retention_evidence(&root, "hegel-pinned");
-        gc(&root, ChunkGcInput {
-            dry_run: false,
-            retention_evidence: &retention_evidence,
-            apply_refs: &[],
-        })
-        .expect("gc pinned root");
-        assert_eq!(read_object(&root, &first.manifest_ref).expect("read after gc").bytes, bytes);
-        for chunk_ref in &first.chunk_refs {
-            assert!(test_chunk_path(&root, chunk_ref).expect("chunk path").exists());
-        }
-    }
-
     #[test]
     fn chunks_deduplicate_across_objects_and_verify_ranges() {
         let root = temp_dir("chunk-dedup");

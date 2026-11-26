@@ -15,9 +15,12 @@ slow-timeout = { period = "30s", terminate-after = 2, grace-period = "10s" }
 leak-timeout = { period = "1s", result = "fail" }
 global-timeout = "30m"
 
+# The CI and deterministic aggregates select every workspace member explicitly; the
+# `nextest-config` flake check rejects a filter that drops one. Named semantic
+# profiles below remain partitions of `package(molten)`.
 [profile.ci]
 inherits = "default"
-default-filter = 'package(molten)'
+default-filter = 'package(molten) | package(molten-core) | package(molten-node-host) | package(molten-release-policy)'
 test-threads = 4
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 3, grace-period = "10s" }
@@ -25,7 +28,7 @@ junit = { path = "junit.xml", report-name = "molten-ci", store-failure-output = 
 
 [profile.deterministic]
 inherits = "default"
-default-filter = 'package(molten) & not test(/live|vm|dogfood|soak|exploratory/)'
+default-filter = '(package(molten) | package(molten-core) | package(molten-node-host) | package(molten-release-policy)) & not test(/live|vm|dogfood|soak|exploratory/)'
 test-threads = 4
 global-timeout = "20m"
 slow-timeout = { period = "10s", terminate-after = 1, grace-period = "5s" }

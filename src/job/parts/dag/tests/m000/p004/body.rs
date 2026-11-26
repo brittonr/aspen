@@ -76,24 +76,18 @@
         assert!(request_text.contains(&sync_ref));
     }
 
-    #[hegel::test(test_cases = 4)]
-    // r[verify molten.blob_ref_jobs.property_tests]
-    fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: hegel::TestCase) {
-        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(10_000));
-        let token_selector = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(2));
-        let token = match token_selector {
-            0 => "inline-bytes",
-            1 => "inline-executable",
-            _ => "inline-dataset",
-        };
-        let operation_id = test_ref(&format!("job-ref-hegel-operation-{salt}"));
-        let authority_ref = test_ref(&format!("job-ref-hegel-authority-{salt}"));
-        let inline_value = crate::preserves_rail::record("job-ref-submission-v1", vec![
+    fn inline_token_submission_value(
+        salt: u64,
+        token: &'static str,
+        operation_id: &str,
+        authority_ref: &str,
+    ) -> IoValue {
+        crate::preserves_rail::record("job-ref-submission-v1", vec![
             crate::preserves_rail::string(crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
             crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string(format!(
                 "job-ref-hegel-{salt}"
             ))]),
-            crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(&operation_id)]),
+            crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(operation_id)]),
             crate::preserves_rail::record("executable", vec![crate::preserves_rail::record(token, vec![
                 crate::preserves_rail::string("bytes"),
             ])]),
@@ -103,13 +97,35 @@
             crate::preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
             crate::preserves_rail::record("effects", vec![refs_sequence(&[])]),
             crate::preserves_rail::record("handler-profile", vec![crate::preserves_rail::string("local-echo-v1")]),
-            crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(&authority_ref)]),
+            crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(authority_ref)]),
             crate::preserves_rail::record("policy", vec![refs_sequence(&[])]),
             crate::preserves_rail::record("provenance", vec![refs_sequence(&[])]),
             crate::preserves_rail::record("evidence", vec![refs_sequence(&[])]),
             checks_value(&["content-refs-only", "no-inline-large-bytes"]),
-        ]);
-        assert!(parse_job_ref_submission_value(&inline_value).is_err());
+        ])
+    }
+
+    // Each case stores chunks and runs a full blob-ref job submission and pin lifecycle, about 35 s per
+    // case (143 s for 4 cases in isolation). Hegel's TooSlow check (fewer than 10 valid cases in 30 s) was
+    // therefore inherent. The run is bounded explicitly instead: 2 derandomized cases with TooSlow
+    // suppressed. Every case checks all three inline tokens, which costs no storage I/O, so the bound
+    // limits only the storage lifecycle.
+    #[hegel::test(
+        test_cases = 2,
+        derandomize = true,
+        database = None,
+        suppress_health_check = [hegel::HealthCheck::TooSlow]
+    )]
+    // r[verify molten.blob_ref_jobs.property_tests]
+    fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(10_000));
+        let operation_id = test_ref(&format!("job-ref-hegel-operation-{salt}"));
+        let authority_ref = test_ref(&format!("job-ref-hegel-authority-{salt}"));
+        for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
+            let inline_value = inline_token_submission_value(salt, token, &operation_id, &authority_ref);
+            let error = parse_job_ref_submission_value(&inline_value).expect_err("inline token must be rejected");
+            assert!(error.to_string().contains(&format!("found inline token {token}")), "{error}");
+        }
 
         let root = temp_dir(&format!("job-ref-hegel-{salt}"));
         let chunks = root.join("chunks");

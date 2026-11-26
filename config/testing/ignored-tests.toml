@@ -1,0 +1,373 @@
+# Reviewed inventory of every `#[ignore]` test, enforced by `scripts/ci-coverage.py ignored-tests`
+# (flake check `ci-coverage-audit`). Add, move, or remove an entry together with its `#[ignore]`.
+#
+# category: closed prerequisite category; the script fixes which dispositions each category allows.
+# disposition: rail (a named same-host rail selects and runs it), environment-blocked (needs
+#   infrastructure CI cannot provision), or reviewed-exclusion (diagnostic or role entrypoint).
+# rail/selector: `nix:<flake check>` or `workflow:<file>` and the selector text that rail uses. A Nix
+#   rail's own binding (and the Nix files it imports) must hold the selector and run
+#   `ci-coverage.py ignored-rail-evidence --rail nix:<flake check>` on its libtest output, which requires
+#   this test to have passed. A workflow rail must pass the selector to a `cargo test ... --ignored` command.
+
+[[test]]
+path = "src/content_store_adapter/live/cache.rs"
+test = "live_endpoint_roundtrip"
+category = "local-s3-endpoint"
+disposition = "rail"
+rail = "workflow:object-storage-live.yml"
+selector = "content_store_adapter::live_cache::tests::live_endpoint_roundtrip"
+prerequisite = "checksum-pinned disposable SeaweedFS S3 endpoint started by the workflow"
+
+[[test]]
+path = "src/content_store_adapter/live/object.rs"
+test = "live_corrupt_remote_chunk_fails_without_verified_payload"
+category = "local-s3-endpoint"
+disposition = "rail"
+rail = "workflow:object-storage-live.yml"
+selector = "content_store_adapter::live_object::live"
+prerequisite = "checksum-pinned disposable SeaweedFS S3 endpoint started by the workflow"
+
+[[test]]
+path = "src/content_store_adapter/live/object.rs"
+test = "live_publish_and_fetch_run_the_transition_core"
+category = "local-s3-endpoint"
+disposition = "rail"
+rail = "workflow:object-storage-live.yml"
+selector = "content_store_adapter::live_object::live"
+prerequisite = "checksum-pinned disposable SeaweedFS S3 endpoint started by the workflow"
+
+[[test]]
+path = "src/content_store_adapter/live/parts/object_contracts.rs"
+test = "live_command_conformance_emits_canonical_receipt"
+category = "local-s3-endpoint"
+disposition = "rail"
+rail = "workflow:object-storage-live.yml"
+selector = "content_store_adapter::live_object::completion_tests::live_command_conformance_emits_canonical_receipt"
+prerequisite = "checksum-pinned disposable SeaweedFS S3 endpoint and explicit receipt directory"
+
+[[test]]
+path = "src/content_store_adapter/live/tier.rs"
+test = "qualify_actual_nvme_path_capacity_and_reopen"
+category = "nvme-device"
+disposition = "environment-blocked"
+prerequisite = "operator-selected mount on a physical non-rotational NVMe device and its sysfs path"
+
+[[test]]
+path = "src/content_store_adapter/live/tier.rs"
+test = "tier_accepts_a_non_rotational_backing_device"
+category = "nvme-device"
+disposition = "environment-blocked"
+prerequisite = "operator-selected mount on a physical non-rotational NVMe device and its sysfs path"
+
+[[test]]
+path = "src/fabric_consistency/raft/live_cluster/trace/capture.rs"
+test = "records_read_index_after_leader_change"
+category = "diagnostic-only"
+disposition = "reviewed-exclusion"
+prerequisite = "opt-in read-index trace for manual diagnosis; asserts no pass/deny claim"
+
+[[test]]
+path = "src/fabric_crypto_identity/tpm2/tests/sealed.rs"
+test = "load_pcr_denial_secrecy_and_rotation"
+category = "swtpm-disposable"
+disposition = "rail"
+rail = "nix:tpm2-sealed-identity"
+selector = "fabric_crypto_identity::tpm2::tests::sealed::load_pcr_denial_secrecy_and_rotation"
+prerequisite = "disposable swtpm emulator and pinned tpm2-tools from nix/tpm2-identity.nix"
+
+[[test]]
+path = "src/fabric_observability/kernel/tests/replay.rs"
+test = "retained_vm_epochs_match_recorded_projection"
+category = "ebpf-replay-capture"
+disposition = "environment-blocked"
+prerequisite = "guarded OnixOS kernel capture output retained outside the repository"
+
+[[test]]
+path = "src/federation/liveproof/tests.rs"
+test = "actual_malicious_responses_cannot_materialize_receiver_registry_artifacts"
+category = "owner-approved-evidence"
+disposition = "environment-blocked"
+prerequisite = "owner-approved DAG conformance evidence reference (and fixture binary for distinct-process cases)"
+
+[[test]]
+path = "src/federation/liveproof/tests.rs"
+test = "distinct_os_processes_commit_signed_admitted_receiver_artifact"
+category = "owner-approved-evidence"
+disposition = "environment-blocked"
+prerequisite = "owner-approved DAG conformance evidence reference (and fixture binary for distinct-process cases)"
+
+[[test]]
+path = "src/federation/liveproof/tests.rs"
+test = "distinct_os_processes_reject_actual_malicious_signed_responses_before_registry_mutation"
+category = "owner-approved-evidence"
+disposition = "environment-blocked"
+prerequisite = "owner-approved DAG conformance evidence reference (and fixture binary for distinct-process cases)"
+
+[[test]]
+path = "src/federation/liveproof/tests.rs"
+test = "live_loopback_commits_real_receiver_registry_and_detached_evidence_denies_tampering"
+category = "owner-approved-evidence"
+disposition = "environment-blocked"
+prerequisite = "owner-approved DAG conformance evidence reference (and fixture binary for distinct-process cases)"
+
+[[test]]
+path = "src/job/authoring/live/tests.rs"
+test = "captured_nickel_live_examples_execute_like_direct_graphs"
+category = "pinned-host-tools"
+disposition = "rail"
+rail = "nix:job-captured-nickel"
+selector = "captured_nickel_live_"
+prerequisite = "pinned Nickel 1.17.0 and util-linux prlimit executables"
+
+[[test]]
+path = "src/job/authoring/live/tests.rs"
+test = "captured_nickel_live_generation_and_parameter_invalidation"
+category = "pinned-host-tools"
+disposition = "rail"
+rail = "nix:job-captured-nickel"
+selector = "captured_nickel_live_"
+prerequisite = "pinned Nickel 1.17.0 and util-linux prlimit executables"
+
+[[test]]
+path = "src/job/authoring/live/tests.rs"
+test = "captured_nickel_live_inline_and_explicit_module_match_canonical_fixture"
+category = "pinned-host-tools"
+disposition = "rail"
+rail = "nix:job-captured-nickel"
+selector = "captured_nickel_live_"
+prerequisite = "pinned Nickel 1.17.0 and util-linux prlimit executables"
+
+[[test]]
+path = "src/job/authoring/live/tests.rs"
+test = "captured_nickel_live_negative_controls_fail_without_stage_effects"
+category = "pinned-host-tools"
+disposition = "rail"
+rail = "nix:job-captured-nickel"
+selector = "captured_nickel_live_"
+prerequisite = "pinned Nickel 1.17.0 and util-linux prlimit executables"
+
+[[test]]
+path = "src/prolly_map/tests/marble/measure.rs"
+test = "measure_redb_and_marble_stores"
+category = "diagnostic-only"
+disposition = "reviewed-exclusion"
+prerequisite = "storage measurement whose output is recorded manually; not a pass/deny test"
+
+[[test]]
+path = "src/spacewasm/operator/smoke.rs"
+test = "configured_replay_smoke"
+category = "external-artifact-cohort"
+disposition = "environment-blocked"
+prerequisite = "independently pinned Mantle, Octet, and ChaosControl artifacts"
+
+[[test]]
+path = "tests/collaborationnative/driver/mod.rs"
+test = "collaboration_native_baseline"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/collaborationnative/driver/mod.rs"
+test = "installed_native_effect_commits_through_raft_and_returns_a_completion"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/collaborationnative/driver/scenarios/installation.rs"
+test = "installed_native_effect_rejects_a_mismatched_configuration"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/collaborationnative/driver/scenarios/installation.rs"
+test = "installed_native_effect_startup_failure_publishes_no_readiness"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/directlanstreams.rs"
+test = "direct_stream_child_role"
+category = "role-entrypoint"
+disposition = "reviewed-exclusion"
+prerequisite = "child role spawned by its parent test with explicit provisioned configuration; never a standalone test"
+
+[[test]]
+path = "tests/doltlite_oracle.rs"
+test = "live_doltlite_oracle_covers_normalized_positive_and_negative_cases"
+category = "nix-built-cohort"
+disposition = "rail"
+rail = "nix:feature-matrix"
+selector = "live_doltlite_oracle_covers_normalized_positive_and_negative_cases"
+prerequisite = "Nix-built remotes-disabled DoltLite oracle cohort (packages.doltlite-oracle)"
+
+[[test]]
+path = "tests/nativesystemextension/recovery.rs"
+test = "live_public_node_broken_variants_fail_shared_properties"
+category = "external-artifact-cohort"
+disposition = "environment-blocked"
+prerequisite = "separately admitted fencing/history/transformation fault-build cohorts"
+
+[[test]]
+path = "tests/nativesystemextension/recovery.rs"
+test = "live_public_node_composition"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/negative.rs"
+test = "live_outside_in_a_fault_the_host_cannot_apply_is_recorded_as_unsupported"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/negative.rs"
+test = "live_outside_in_a_retained_scratch_path_fails_the_scenario_despite_agreement"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/negative.rs"
+test = "live_outside_in_an_unreadable_history_is_incomplete_not_agreement"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/negative.rs"
+test = "live_outside_in_each_exhausted_budget_stops_the_scenario_with_its_kind"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/profiles.rs"
+test = "live_outside_in_kill_restart_keeps_the_committed_request_and_identity"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/profiles.rs"
+test = "live_outside_in_lost_response_stays_unresolved_and_the_retry_is_suppressed"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/profiles.rs"
+test = "live_outside_in_no_fault_baseline_agrees"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/profiles.rs"
+test = "live_outside_in_partition_heal_fails_during_the_partition_and_delivers_once_after_heal"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/outside_in/profiles.rs"
+test = "live_outside_in_pause_resume_delivers_once_after_resume"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p004/body.rs"
+test = "cli_node_init_run_status_and_stop_write_receipts"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p005/body.rs"
+test = "cli_node_control_ingress_build_publish_deliver_work"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p005/body.rs"
+test = "cli_node_live_ingress_loopback_enqueues_request"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p007/body.rs"
+test = "cli_node_live_send_denies_offline_ticket_without_addresses"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p007/body.rs"
+test = "cli_node_serve_drains_shutdown_request"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p007/body.rs"
+test = "cli_node_serve_live_iroh_empty_listener_receipt"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p007/body.rs"
+test = "cli_node_supervisor_policy_fixture_and_serve_receipt"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p016/body.rs"
+test = "cli_cluster_two_node_lifecycle_roundtrip_writes_canonical_receipts"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p018/body.rs"
+test = "cli_cluster_harness_admits_exact_bound_fixture_with_actual_child"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p018/body.rs"
+test = "cli_cluster_harness_executes_checked_fixture_and_verifies_offline"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p018/body.rs"
+test = "cli_cluster_harness_offline_verifier_denies_tampered_artifact"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p023/body.rs"
+test = "cli_node_profile_backed_init_binds_startup_metadata"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"
+
+[[test]]
+path = "tests/parts/cliharness/p027/body.rs"
+test = "cli_node_live_ticket_and_authority_import_receipts_work"
+category = "signed-source-trust"
+disposition = "environment-blocked"
+prerequisite = "independently signed producer output and trust record (operator-held signing key)"

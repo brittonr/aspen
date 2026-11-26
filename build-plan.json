@@ -23,8 +23,8 @@
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/crates/molten-release-policy#0.1.0",
     "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-syndicate-repin-20261119/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "d92257244ab69e628c4060c6e2c76de9c496ff10f490deeb929fe7e1e5bb64b2",
-  "inputsHash": "275f8fc0848c2dcb34569875794b8fa428c9bfd91b192b212b1fff565108e4a0",
+  "cargoLockHash": "106fe78d18cd7a5f0ec423a06e21ee3fd063a030b9495b337ef939bba6992c6a",
+  "inputsHash": "5227a7472fc2c1423a7d2f3deda4822daebe605ac4326fc06cd00e0941bb5972",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -2381,6 +2381,12 @@
         }
       ],
       "buildDependencies": [],
+      "devDependencies": [
+        {
+          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12",
+          "externCrateName": "hegel"
+        }
+      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
