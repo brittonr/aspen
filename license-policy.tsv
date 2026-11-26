@@ -5,6 +5,7 @@ package	crates/molten-composition-core/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-core/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-fastpath-core/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-node-host/Cargo.toml	AGPL-3.0-or-later
+package	crates/molten-preserves-core/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-raft-core/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-release-policy/Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-reliability-model-core/Cargo.toml	AGPL-3.0-or-later

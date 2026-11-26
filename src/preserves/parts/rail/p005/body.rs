@@ -279,7 +279,6 @@ fn validate_boundary_field(
     }
 }
 
-const FIELD_ARITY_ZERO: usize = 0;
 const FIELD_ARITY_ONE: usize = 1;
 const FIELD_ARITY_TWO: usize = 2;
 const FIELD_ARITY_THREE: usize = 3;

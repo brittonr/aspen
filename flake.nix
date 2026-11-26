@@ -797,6 +797,7 @@
           "molten-core"
           "molten-fastpath-core"
           "molten-node-host"
+          "molten-preserves-core"
           "molten-release-policy"
           "molten-raft-core"
           "molten-reliability-model-core"
@@ -1023,6 +1024,19 @@
             linkedAllowlist = [ ];
             compileProbeModule = "src/quorate.rs";
             sourceProbeModule = "src/succession.rs";
+          };
+          # r[impl molten.project.molten_preserves_core_no_std_gate]
+          "molten-preserves-core" = {
+            linkedAllowlist = [
+              "arrayref"
+              "arrayvec"
+              "blake3"
+              "cfg-if"
+              "constant_time_eq"
+              "cpufeatures"
+            ];
+            compileProbeModule = "src/writer.rs";
+            sourceProbeModule = "src/identity.rs";
           };
           "molten-raft-core" = {
             # molten-core (no default features) supplies the pure recovery reconciliation core.
@@ -3371,6 +3385,7 @@
             molten-core-tests = ws.test.check."molten-core";
             molten-composition-core-no-std = noStdKernelCheck "molten-composition-core";
             molten-fastpath-core-no-std = noStdKernelCheck "molten-fastpath-core";
+            molten-preserves-core-no-std = noStdKernelCheck "molten-preserves-core";
             molten-raft-core-no-std = noStdKernelCheck "molten-raft-core";
             molten-reliability-model-core-no-std = noStdKernelCheck "molten-reliability-model-core";
             molten-runtime-admission-core-no-std = noStdKernelCheck "molten-runtime-admission-core";

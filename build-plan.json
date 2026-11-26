@@ -14,6 +14,7 @@
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
@@ -28,6 +29,7 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
     "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0",
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0",
+    "molten-preserves-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
     "molten-raft-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
     "molten-reliability-model-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0",
@@ -35,8 +37,8 @@
     "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0",
     "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "b7a6aa4f3a4052619cc0b0b000f5a68ff35117cb79655220323d54bb247ab3d1",
-  "inputsHash": "3bb0bc941ef068c0eb4db39263682498c795e09b97d446e5c1f780b85ed66d23",
+  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
+  "inputsHash": "7abda6360bdba3c41641739c9bc859a9edc42bd50cac749757887775e57825a4",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -2148,6 +2150,10 @@
           "externCrateName": "molten_node_host"
         },
         {
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
+          "externCrateName": "molten_preserves_core"
+        },
+        {
           "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
           "externCrateName": "molten_raft_core"
         },
@@ -2170,6 +2176,10 @@
         {
           "packageId": "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46#nickel-lang@2.2.0",
           "externCrateName": "nickel_lang"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-bigint@0.4.6",
+          "externCrateName": "num_bigint"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.10",
@@ -2538,6 +2548,41 @@
       "crateBin": [],
       "links": null,
       "description": "Capability-rooted node host boundary for Aspen",
+      "license": "AGPL-3.0-or-later"
+    },
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0": {
+      "crateName": "molten-preserves-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-preserves-core"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        }
+      ],
+      "buildDependencies": [],
+      "devDependencies": [
+        {
+          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12",
+          "externCrateName": "hegel"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "no_std canonical packed Preserves encoding, BLAKE3 identity, and bounded traversal for Aspen",
       "license": "AGPL-3.0-or-later"
     },
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0": {

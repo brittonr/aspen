@@ -7,8 +7,8 @@
   "workspaceMembers": {
     "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0"
   },
-  "cargoLockHash": "b7a6aa4f3a4052619cc0b0b000f5a68ff35117cb79655220323d54bb247ab3d1",
-  "inputsHash": "522cd0d8438cd0585564ab069835b8078f65f9a76d4d04b76d6adf592375af88",
+  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
+  "inputsHash": "15ad1ed8cefe42b6e8a829ad5718d2841f7989a94e6367ea9c9f69e25ab8ffda",
   "crates": {
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0": {
       "crateName": "molten-fastpath-core",

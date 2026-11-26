@@ -19,6 +19,7 @@ plans="nix/no-std-kernels"
 kernels=(
   molten-composition-core
   molten-fastpath-core
+  molten-preserves-core
   molten-raft-core
   molten-reliability-model-core
   molten-runtime-admission-core

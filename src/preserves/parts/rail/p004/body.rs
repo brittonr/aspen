@@ -59,7 +59,9 @@ pub fn record_content_ref_strings(
 }
 
 pub fn optional_ref_value(value: Option<&str>) -> IoValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    let none = molten_preserves_core::identity::NONE_LABEL;
+    let some = molten_preserves_core::identity::SOME_LABEL;
+    value.map_or_else(|| record(none, Vec::new()), |value| record(some, vec![string(value)]))
 }
 
 pub fn refs_sequence(refs: &[String]) -> IoValue {

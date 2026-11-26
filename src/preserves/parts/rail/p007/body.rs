@@ -198,29 +198,12 @@ fn boundary_field_error(
 
 pub const DEFAULT_STRUCTURAL_SCAN_MAX_NODES: usize = 8_192;
 pub const DEFAULT_STRUCTURAL_SCAN_MAX_DEPTH: usize = 128;
-pub const SENSITIVE_STRUCTURAL_MARKERS: &[&str] = &["secret", "confidential", "credential", "private", "encrypted-ref"];
-pub const AMBIENT_JOB_TOKENS: &[&str] = &[
-    "mobile-code",
-    "raw-closure",
-    "closure",
-    "host-path",
-    "source-path",
-    "source-registry",
-    "process-command",
-    "command",
-    "env",
-    "environment",
-    "source-text",
-];
+pub const SENSITIVE_STRUCTURAL_MARKERS: &[&str] = molten_preserves_core::inspect::catalog::SENSITIVE_STRUCTURAL_MARKERS;
+pub const AMBIENT_JOB_TOKENS: &[&str] = molten_preserves_core::inspect::catalog::AMBIENT_JOB_TOKENS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StructuralTokenKind {
-    RecordLabel,
-    Symbol,
-    String,
-    ByteString,
-    ContentRef,
-}
+/// The token classes of the kernel walker: record labels, symbols, strings, byte strings (as the
+/// content ref of their bytes), and strings that parse as canonical content refs.
+pub type StructuralTokenKind = molten_preserves_core::inspect::TokenKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralMatch {

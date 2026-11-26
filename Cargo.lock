@@ -5001,6 +5001,7 @@ dependencies = [
  "molten-core",
  "molten-fastpath-core",
  "molten-node-host",
+ "molten-preserves-core",
  "molten-raft-core",
  "molten-reliability-model-core",
  "molten-runtime-admission-core",
@@ -5008,6 +5009,7 @@ dependencies = [
  "n0-future",
  "nickel-eval",
  "nickel-lang",
+ "num-bigint",
  "preserves 5.0.0-rc.10",
  "preserves-schema",
  "quint-connect",
@@ -5090,6 +5092,14 @@ dependencies = [
  "cap-tempfile",
  "molten-core",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "molten-preserves-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hegeltest",
 ]
 
 [[package]]

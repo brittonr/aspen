@@ -54,7 +54,7 @@ junit = { path = "junit.xml", report-name = "molten-exploratory", store-failure-
 # Extracted no_std + alloc kernels: every unit and Hegel property test of the pure crates.
 [profile.no-std-kernels]
 inherits = "deterministic"
-default-filter = 'package(molten-composition-core) | package(molten-fastpath-core) | package(molten-raft-core) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)'
+default-filter = 'package(molten-composition-core) | package(molten-fastpath-core) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)'
 junit = { path = "junit.xml", report-name = "molten-no-std-kernels", store-failure-output = true, store-success-output = false }
 
 [profile.fast-core]

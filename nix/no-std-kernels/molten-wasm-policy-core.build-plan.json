@@ -7,8 +7,8 @@
   "workspaceMembers": {
     "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0"
   },
-  "cargoLockHash": "b7a6aa4f3a4052619cc0b0b000f5a68ff35117cb79655220323d54bb247ab3d1",
-  "inputsHash": "fa31d15cc3b495b6b582fcadfee603b346d8320805c5ee8a5289c4a4f2a8908a",
+  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
+  "inputsHash": "258f52b2539b1ea0eee0f0fcf23f60cd54634ff7852412209258b0003c855d48",
   "crates": {
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0": {
       "crateName": "molten-wasm-policy-core",
