@@ -107,7 +107,8 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let other_public_key = other_federation_public_key();
     let wrong_key = adapter.verify(&other_public_key, verify_input).expect("wrong key outcome");
     assert_eq!(wrong_key.decision.kind, VerificationDecisionKind::Deny);
-    assert!(wrong_key.decision.issues.contains(&CryptoIdentityIssue::SignerPublicRefMismatch));
+    // The verifying key is not the domain's declared signer, so its check is not evidence for that signer.
+    assert!(wrong_key.decision.issues.contains(&CryptoIdentityIssue::CryptographicVerificationFailed));
 
     let mut malformed_signature = signature.clone();
     malformed_signature.signature = b"not-an-ed25519-signature".to_vec();

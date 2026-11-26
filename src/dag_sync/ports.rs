@@ -39,6 +39,10 @@ pub trait DagAuthorityPort {
 
 pub trait DagResourcePort {
     fn reserve(&mut self, plan: &DagSyncPlan) -> Result<DagResourceObservation>;
+
+    /// Re-observes an existing reservation before each object fetch without reserving again; a
+    /// released or replaced reservation must report `admitted: false` or a different ref.
+    fn confirm(&mut self, plan: &DagSyncPlan, reservation_ref: &str) -> Result<DagResourceObservation>;
 }
 
 pub trait DagTransportPort {

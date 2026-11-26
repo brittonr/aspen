@@ -102,6 +102,22 @@ mod tests {
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic == "conflicting-authority-override"));
     }
 
+    // r[verify molten.runtime_spine.admission_and_capability_hardening]
+    #[test]
+    fn denies_conflicting_retention_override_but_accepts_identical_one() {
+        let mut same = empty_overrides();
+        same.retention_refs = vec![local_ref("retention")];
+        let accepted = expand(&sample(), &requirements("node.install"), &same).expect("same retention");
+        assert_eq!(accepted.decision, DECISION_PASS);
+        assert_eq!(accepted.expanded_refs.retention_refs, refs().retention_refs);
+
+        let mut conflicting = empty_overrides();
+        conflicting.retention_refs = vec![local_ref("shorter-retention")];
+        let denied = expand(&sample(), &requirements("node.install"), &conflicting).expect("conflicting retention");
+        assert_eq!(denied.decision, DECISION_DENY);
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic == "conflicting-retention-override"));
+    }
+
     #[test]
     fn presence_cannot_authorize_mutation_by_itself() {
         let artifact = build_artifact(&sample()).expect("profile artifact");

@@ -291,3 +291,26 @@ fn fails_closed_for_unavailable_authority_and_path_traversal() {
         Err(ConsumeError::Source(SourceError::InvalidLeaf))
     ));
 }
+
+// r[verify molten.runtime_spine.admission_and_capability_hardening]
+#[cfg(unix)]
+#[test]
+fn capability_source_refuses_symlinked_and_world_writable_members() {
+    use cap_std::fs::PermissionsExt;
+
+    let root = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("temporary capability root");
+    root.write("real.json", b"{}").expect("regular member");
+    let source = CapabilityBundleSource::new(&root);
+    assert_eq!(source.read_leaf("real.json", 16).expect("regular member reads"), b"{}");
+
+    cap_fs_ext::DirExt::symlink(&*root, "real.json", "linked.json").expect("member symlink");
+    assert!(
+        source.read_leaf("linked.json", 16).is_err(),
+        "a symlinked member must not be followed even to another member"
+    );
+
+    root.write("shared.json", b"{}").expect("shared member");
+    root.set_permissions("shared.json", cap_std::fs::Permissions::from_mode(0o666))
+        .expect("world-writable mode");
+    assert!(matches!(source.read_leaf("shared.json", 16), Err(SourceError::UnsafeMember)));
+}

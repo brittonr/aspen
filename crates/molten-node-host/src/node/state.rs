@@ -24,6 +24,9 @@ pub use namespace::Scope;
 pub use process::Executable;
 pub use process::MAX_EXECUTABLE_BYTES;
 pub use process::Workspace;
+pub use publication::LeafLock;
+#[cfg(any(test, feature = "test-seams"))]
+pub use publication::seam as publication_seam;
 
 const MAX_NODE_STATE_ENTRIES: usize = 100_000;
 pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16 * 1_024 * 1_024;

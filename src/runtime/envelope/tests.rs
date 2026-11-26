@@ -131,3 +131,52 @@ fn invalid_content_ref_is_rejected() {
     let error = ContentRef::parse("b3:not-canonical").expect_err("invalid ref");
     assert!(error.to_string().contains("content ref must start with blake3:"));
 }
+
+fn dto_json(sender: &str, capability: &str, evidence_ref: &str) -> String {
+    serde_json::json!({
+        "version": 1,
+        "sender": sender,
+        "subject_preserves": "\"molten.runtime.local.subject\"",
+        "body_preserves": "\"hello\"",
+        "blob_refs": [],
+        "capabilities": [capability],
+        "evidence_refs": [evidence_ref],
+    })
+    .to_string()
+}
+
+// r[verify molten.runtime_spine.admission_and_capability_hardening]
+#[test]
+fn envelope_wrappers_deserialize_only_through_checked_parsers() {
+    let evidence = ref_from_bytes(b"evidence-a");
+    let valid = serde_json::from_str::<EnvelopeDto>(&dto_json("actor:alice", "send:subject", &evidence))
+        .expect("valid wrappers deserialize");
+    assert_eq!(valid.sender.as_str(), "actor:alice");
+
+    let oversized_actor = "a".repeat(MAX_ACTOR_ID_BYTES + 1);
+    let oversized_capability = "c".repeat(MAX_CAPABILITY_BYTES + 1);
+    for (json, expected) in [
+        (dto_json("", "send:subject", &evidence), "actor id must not be empty"),
+        (dto_json(&oversized_actor, "send:subject", &evidence), "actor id exceeds"),
+        (dto_json("actor:alice", "", &evidence), "capability must not be empty"),
+        (dto_json("actor:alice", &oversized_capability, &evidence), "capability exceeds"),
+        (dto_json("actor:alice", "send:subject", "not-a-ref"), "content ref must start with blake3:"),
+    ] {
+        let error = serde_json::from_str::<EnvelopeDto>(&json).expect_err("unchecked wrapper must deny");
+        assert!(error.to_string().contains(expected), "{error} lacks {expected}");
+    }
+    assert!(serde_json::from_str::<ActorId>("\"\"").is_err());
+    assert!(serde_json::from_str::<Capability>("\"\"").is_err());
+    assert!(serde_json::from_str::<EvidenceRef>("\"blake3:short\"").is_err());
+}
+
+// r[verify molten.runtime_spine.admission_and_capability_hardening]
+#[test]
+fn envelope_core_validation_rechecks_version_and_contents() {
+    let envelope = fixture_envelope();
+    envelope.validate_core().expect("valid envelope");
+    let mut wrong_version = envelope.clone();
+    wrong_version.version = ENVELOPE_VERSION + 1;
+    let error = wrong_version.validate_core().expect_err("unsupported version must deny");
+    assert!(error.to_string().contains("unsupported envelope version"));
+}

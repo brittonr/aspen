@@ -33,6 +33,8 @@ type RuntimeValue = crate::runtime::RuntimeValue;
 
 const AUTHORITY_DEFAULT_GRANT_EPOCH: u64 = 0;
 const AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY: usize = 8;
+/// Receipt diagnostic stating that capability-scope admission makes no principal or key claim.
+pub const CAPABILITY_SCOPE_NON_CLAIM: &str = "principal-and-key-currentness-not-claimed";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
@@ -163,6 +165,41 @@ pub struct AuthorityGrantCurrentnessInput<'a> {
     pub current_epoch: u64,
     pub current_key_refs: &'a [String],
     pub revocations: &'a [Revocation],
+}
+
+/// Caller-independent facts for [`admit_authority`] and [`gatekeeper_resolve_live_ref`]. The expected
+/// principal, minimum epoch and current key set must come from the caller's own authenticated view,
+/// never from the context being admitted.
+#[derive(Debug, Clone, Copy)]
+pub struct AuthorityAdmissionInput<'a> {
+    pub context_value: &'a IoValue,
+    pub expected_principal_ref: &'a str,
+    pub requested_capability: &'a str,
+    pub requested_scope: &'a str,
+    pub logical_time: u64,
+    pub minimum_epoch: u64,
+    pub current_key_refs: &'a [String],
+    pub revocation_values: &'a [IoValue],
+}
+
+#[derive(Clone, Copy)]
+struct ScopeCheck<'a> {
+    context: &'a Context,
+    requested_capability: &'a str,
+    requested_operation: &'a str,
+    requested_scope: &'a str,
+    logical_time: u64,
+    revocations: &'a [Revocation],
+}
+
+struct AdmissionReceiptInput<'a> {
+    operation: &'a str,
+    decision: String,
+    context: &'a Context,
+    capability: &'a str,
+    scope: &'a str,
+    logical_time: u64,
+    diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

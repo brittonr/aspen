@@ -58,6 +58,37 @@ fn deterministic_partition_after_submission_reports_uncertainty_without_retry() 
 fn registered_effect_port_routes_only_exact_profile_generation_and_known_request() {
     use crate::system_extension::FabricEffectPort;
 
+    let (binding, mut port, effect) = registered_port_fixture();
+    let mut stale = effect.clone();
+    stale.generation = molten_core::system_extension::Generation::new(STALE_GENERATION);
+    assert!(port.route(&binding, &stale).is_err(), "stale generation must deny before consuming the request");
+
+    let output = port.route(&binding, &effect).expect("route transport effect");
+    assert!(output.output_ref.starts_with("blake3:"));
+    assert_eq!(port.adapter().state().protocols.len(), 1);
+
+    let mut unknown = effect;
+    unknown.request_ref = OPERATION_REF.to_string();
+    assert!(port.route(&binding, &unknown).is_err());
+}
+
+// r[verify molten.runtime_spine.admission_and_capability_hardening]
+#[test]
+fn registered_effect_port_denies_replay_of_a_routed_request() {
+    use crate::system_extension::FabricEffectPort;
+
+    let (binding, mut port, effect) = registered_port_fixture();
+    port.route(&binding, &effect).expect("first route");
+    let replay = port.route(&binding, &effect).expect_err("second route of the same request must deny");
+    assert!(replay.to_string().contains("replay"), "{replay}");
+    assert_eq!(port.adapter().state().protocols.len(), 1);
+}
+
+fn registered_port_fixture() -> (
+    crate::fabric::CanonicalPortBinding,
+    RegisteredTransportEffectPort<DeterministicAdapter>,
+    crate::system_extension::TypedEffectRequest,
+) {
     let profile = profile(TransportAdapterKind::DeterministicSimulation);
     let descriptor = fabric_transport_port_descriptor(&profile);
     let binding = crate::fabric::resolve_canonical_port_binding(
@@ -92,16 +123,7 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
         incarnation: molten_core::system_extension::Incarnation::new(0),
         accounted_bytes: 0,
     };
-    let output = port.route(&binding, &effect).expect("route transport effect");
-    assert!(output.output_ref.starts_with("blake3:"));
-    assert_eq!(port.adapter().state().protocols.len(), 1);
-
-    let mut stale = effect.clone();
-    stale.generation = molten_core::system_extension::Generation::new(STALE_GENERATION);
-    assert!(port.route(&binding, &stale).is_err());
-    let mut unknown = effect;
-    unknown.request_ref = OPERATION_REF.to_string();
-    assert!(port.route(&binding, &unknown).is_err());
+    (binding, port, effect)
 }
 
 // r[verify molten.fabric_transport.flow_control]

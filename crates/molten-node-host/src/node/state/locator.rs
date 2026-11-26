@@ -20,6 +20,15 @@ impl RelativePath {
         for component in std::path::Path::new(value).components() {
             match component {
                 std::path::Component::Normal(value) => {
+                    // Publication stages and locks live under this reserved prefix; an application
+                    // leaf can never be named like one, so internal cleanup never touches app data.
+                    // r[impl molten.runtime_spine.admission_and_capability_hardening]
+                    if value.to_str().is_some_and(super::publication::is_reserved_artifact_name) {
+                        return Err(super::invalid(format!(
+                            "node state path component {} uses the reserved publication-artifact prefix",
+                            value.to_string_lossy()
+                        )));
+                    }
                     component_count = checked_component_count(component_count)?;
                     relative.push(value);
                 }

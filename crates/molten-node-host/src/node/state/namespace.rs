@@ -68,6 +68,20 @@ impl Scope {
         )
     }
 
+    /// Exclusively locks `path` for a read-modify-write update until the returned lock drops. Every
+    /// updater of the same leaf, in any process, serializes its read and its publication under it.
+    // r[impl molten.runtime_spine.admission_and_capability_hardening]
+    pub fn lock_update(
+        &self,
+        path: &super::locator::RelativePath,
+    ) -> crate::error::Result<super::publication::LeafLock> {
+        let (parent, leaf) = super::filesystem::open_parent(&self.dir, path.as_path(), true)?;
+        let leaf_name = leaf
+            .to_str()
+            .ok_or_else(|| super::invalid(format!("node state update leaf {} is not UTF-8", path.display())))?;
+        super::publication::lock_leaf(&parent, leaf_name, super::publication::UPDATE_LOCK_KIND)
+    }
+
     /// Creates a secret atomically without replacement: across a crash it is absent or whole, never
     /// partial.
     pub fn write_new_restricted(

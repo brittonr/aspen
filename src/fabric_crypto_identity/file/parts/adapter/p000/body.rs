@@ -14,6 +14,10 @@ const KEY_SECRET_START: usize = KEY_GENERATION_START + KEY_GENERATION_BYTES;
 const KEY_RECORD_BYTES: usize = KEY_SECRET_START + ED25519_SECRET_BYTES;
 const FIRST_KEY_GENERATION: u64 = 1;
 const REVOCATION_MARKER_SUFFIX: &str = ".revoked";
+const KEY_REVOCATION_LABEL: &str = "fabric-crypto-key-revocation-v1";
+const KEY_REVOCATIONS_LABEL: &str = "fabric-crypto-key-revocations-v1";
+const KEY_REVOCATION_ARITY: usize = 5;
+pub(super) const MAX_KEY_REVOCATIONS: usize = 64;
 const NODE_TRANSPORT_PROFILE_LABEL: &[u8] = b"molten.node.transport.crypto-profile.v1";
 const NODE_TRANSPORT_ENTROPY_LABEL: &[u8] = b"molten.node.transport.os-csprng.v1";
 
@@ -68,6 +72,75 @@ pub(crate) struct TransportEndpointKeyMaterial {
 struct KeyRecord {
     generation: u64,
     secret_key: iroh::SecretKey,
+}
+
+/// The verified handle and the key material read from one opened key-leaf observation.
+#[derive(Debug)]
+struct CurrentKey {
+    resolved: ResolvedProductionKey,
+    record: KeyRecord,
+}
+
+#[derive(Debug)]
+struct ObservedKeyRecord {
+    record: KeyRecord,
+    permission_status: KeyPermissionStatus,
+}
+
+/// One persisted revocation record: the exact revoked handle, its generation and public key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyRevocation {
+    pub handle_ref: String,
+    pub public_key_ref: String,
+    pub generation: u64,
+    pub evidence_ref: String,
+    pub policy_ref: String,
+}
+
+/// Test-only hooks at the adapter's observe/sign and revocation read/write boundaries, so a
+/// regression can force a concurrent rotation or revocation into exactly that window.
+#[cfg(test)]
+pub(super) mod seam {
+    type Hook = Box<dyn FnMut(&super::IrohEd25519<'_>)>;
+
+    thread_local! {
+        static HOOKS: std::cell::RefCell<Vec<(&'static str, Hook)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    pub(in super::super) fn set(point: &'static str, hook: impl FnMut(&super::IrohEd25519<'_>) + 'static) {
+        HOOKS.with(|hooks| hooks.borrow_mut().push((point, Box::new(hook))));
+    }
+
+    pub(super) fn fire(point: &'static str, adapter: &super::IrohEd25519<'_>) {
+        let hook = HOOKS.with(|hooks| {
+            let mut hooks = hooks.borrow_mut();
+            let index = hooks.iter().position(|(name, _)| *name == point)?;
+            Some(hooks.remove(index).1)
+        });
+        if let Some(mut hook) = hook {
+            hook(adapter);
+        }
+    }
+}
+
+/// The exact key a revocation check is about: its purpose, handle, generation and public key.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct KeyRevocationSubject<'a> {
+    pub purpose: KeyPurpose,
+    pub handle_ref: &'a str,
+    pub public_key_ref: &'a str,
+    pub generation: u64,
+}
+
+impl<'a> KeyRevocationSubject<'a> {
+    pub(super) fn of(handle: &'a OpaqueKeyHandle) -> Self {
+        Self {
+            purpose: handle.purpose,
+            handle_ref: &handle.handle_ref,
+            public_key_ref: &handle.public_key_ref,
+            generation: handle.generation,
+        }
+    }
 }
 
 pub(crate) struct ExactArtifactAuthSignature {

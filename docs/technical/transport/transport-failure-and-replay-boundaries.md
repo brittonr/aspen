@@ -24,7 +24,7 @@ For cross-process effects, the [registered port](../../../src/fabric_transport/c
 
 This is an in-memory shell property. It does not establish a durable, fleet-wide deduplication registry, survive arbitrary process replacement by itself, or reconcile an application effect that may already have occurred remotely. A different request reference does not make re-executing an application action safe.
 
-There is an important implementation qualification to the governing document's statement that registered requests are consumed once. The [generic registered transport shell](../../../src/fabric_transport/shell.rs) retrieves commands from its request map and does not remove them or maintain a routed-request set in `execute_effect`. The inspected cross-process wrapper supplies explicit replay denial; the generic shell alone does not establish the same property. No code or governing prose is changed here, and no universal single-use guarantee is inferred.
+Resolved discrepancy (change `fix-authority-bypasses-and-sandbox-isolation`): the governing document states that registered requests are consumed once, but the [generic registered transport shell](../../../src/fabric_transport/shell.rs) previously kept no consumed set in `execute_effect`, so only the cross-process wrapper denied replay. The generic shell now records each request reference as consumed after binding, generation, and command admission pass and before the adapter executes it, and denies a later route of the same reference. A request denied before consumption (for example a stale generation) can still be routed with correct facts. This is local single-use per port instance, not exactly-once application processing.
 
 ## Worked reasoning: acknowledgement lost after receipt
 

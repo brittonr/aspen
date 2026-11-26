@@ -16,16 +16,15 @@ Building the profile artifact validates text, collection bounds, reference synta
 
 The override behavior is category-specific rather than a generic last-writer-wins merge:
 
-- Policy, authority, and resource overrides are checked against the profile using set equality. A nonempty different set adds a conflict diagnostic.
+- Policy, authority, resource, and retention overrides are checked against the profile using set equality. A nonempty different set adds a conflict diagnostic (`conflicting-retention-override` for retention).
 - Evidence overrides are additive. An ordered set combines profile and override evidence, deduplicating references.
 - Capability and redaction references are copied from the profile; the override input has no fields for replacing them.
-- Retention overrides use the same selection helper as the non-additive categories, but the current function does not add a corresponding conflict diagnostic.
 
-For a conflicting policy, authority, or resource override, the helper can still place the override vector in `expanded_refs`; the overall decision remains denied. A consumer that reads only the vector and ignores the decision would cross the intended boundary. Denial does not mean the artifact contains no proposed values.
+For a conflicting policy, authority, resource, or retention override, the helper can still place the override vector in `expanded_refs`; the overall decision remains denied. A consumer that reads only the vector and ignores the decision would cross the intended boundary. Denial does not mean the artifact contains no proposed values.
 
-## Scoped discrepancy: retention overrides
+## Resolved discrepancy: retention overrides
 
-The [proof workflow](../../proof-workflow.md) describes expansion denials for conflicting overrides in broad terms. The inspected [`merge_refs` implementation](../../../src/operator/context/parts/profile/p000/body.rs) explicitly diagnoses policy, authority, and resource conflicts, but not retention conflicts. A nonempty different retention vector is selected, subject to reference validation and required-presence checks. This article does not interpret that omission as an approved retention-policy exception or amend the governing description. It records the narrower observed behavior; intended treatment of conflicting retention overrides remains a source discrepancy for review.
+The [proof workflow](../../proof-workflow.md) describes expansion denials for conflicting overrides in broad terms. The [`merge_refs` implementation](../../../src/operator/context/parts/profile/p000/body.rs) previously diagnosed policy, authority, and resource conflicts but selected a different retention vector without a diagnostic. Change `fix-authority-bypasses-and-sandbox-isolation` adds the retention conflict check, so a different nonempty retention override now denies expansion, while an identical one passes.
 
 A similar distinction applies to diagnostic terminology. Reference validation can report `stale-ref`, but the inspected helper delegates to content-reference validation without retrieving external objects or checking their lifecycle. That diagnostic name is not proof that a remote revocation or freshness check occurred.
 
