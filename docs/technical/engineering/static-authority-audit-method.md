@@ -36,7 +36,7 @@ Because `rule_bundle_hash` consumes the edited YAML bytes, the current rule-bund
 
 The default Rust profile declares the `node-state-adapters` surface (converted daemon, ingress, identity, and target-job pages) and both node-state blocking rules, `node-state-ambient-filesystem-call` and `node-state-root-reacquisition`, alongside the store, test-workspace, and materialization blocking rules. Surface scopes are concrete paths or globs taken from the rule files; none is a prose placeholder. A finding from `node-state-root-reacquisition` is therefore a known blocking finding that invalidates the receipt. The Linux eBPF and BPF-loader rules under the same directory belong to their own focused checks and are not part of this default profile.
 
-These rule-binding and profile discrepancies are tracked as defects by the Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/changes/harden-traceability-proof-composition-and-static-audits/proposal.md).
+The archived Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/archive/2026-11-26-harden-traceability-proof-composition-and-static-audits/proposal.md) fixed the earlier rule-binding and profile gaps described here.
 
 ## Verification and limits
 

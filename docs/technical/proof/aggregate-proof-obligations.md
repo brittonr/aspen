@@ -28,7 +28,7 @@ Cycle detection uses a three-colour depth-first search with an explicit active p
 
 Coverage extraction fails closed as well: `coverage_from_aggregate_proof` returns a typed `aggregate-proof-denied` harness divergence, naming the manifest's diagnostics, whenever `manifest.decision` is not `pass` or the manifest carries any diagnostic, and only then extracts obligation coverage. Extracted coverage still does not replace review of the decomposition or the downstream gates that control an operation.
 
-These discrepancies are tracked as defects by the Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/changes/harden-traceability-proof-composition-and-static-audits/proposal.md).
+The archived Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/archive/2026-11-26-harden-traceability-proof-composition-and-static-audits/proposal.md) fixed the earlier gaps between this description and the implementation.
 
 ## Verification and review guidance
 
