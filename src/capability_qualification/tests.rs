@@ -21,8 +21,8 @@ fn peer_entry() {
     run_peer(&role, std::path::Path::new(&run_directory)).expect("qualification peer role");
 }
 
-fn launcher() -> Launcher {
-    Launcher::test_harness()
+fn programs() -> Programs {
+    Programs::test_harness()
 }
 
 // Explicit cfg(test) source token. It never calls/stands in for production
@@ -60,7 +60,7 @@ fn fixture_source(scenarios: &[Scenario]) -> (ReadbackSource, preserves::IOValue
 
 fn recorded(source: &ReadbackSource, validation: preserves::IOValue, scenario: Scenario) -> preserves::IOValue {
     let suite = fixture(scenario).expect("real fixed suite");
-    let (artifact, decision) = execute(scenario, &suite, &launcher()).expect("actual native runtime run");
+    let (artifact, decision) = execute(scenario, &suite, &programs()).expect("actual native runtime run");
     assert_eq!(decision, "pass", "{} artifact: {artifact:?}", scenario.id());
     execution_value(source.subject_for(scenario).expect("subject"), scenario, &source.binding_ref, ExecutionArtifacts {
         validation,

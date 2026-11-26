@@ -1,6 +1,7 @@
 use super::*;
 
 mod binding;
+pub(crate) mod interpreter;
 mod live;
 mod simulation;
 mod stdin;
@@ -32,7 +33,6 @@ const SUCCESS_EXIT_CODE: i32 = 0;
 const REJECTED_EXIT_CODE: i32 = 7;
 const EXPECTED_STDOUT: &[u8] = b"bounded:input";
 const INPUT_BYTES: &[u8] = b"input\n";
-const SHELL_PATH: &str = "/bin/sh";
 const FLOOD_OUTPUT: &str = "overflow";
 const NON_TERMINATING_SCRIPT: &str = "while :; do :; done";
 
@@ -191,14 +191,20 @@ fn canonicalize_request_with_descriptor(
     (profile, request)
 }
 
+/// The fixture shell: a non-multicall `bash`, because the child's `argv[0]` is the measured handle
+/// path.
+fn shell_path() -> std::path::PathBuf {
+    interpreter::non_multicall_shell()
+}
+
 /// The BLAKE3 content identity of the fixture shell, as the admitted executable measurement.
 fn shell_identity_ref() -> String {
-    crate::preserves_rail::content_ref_from_bytes(&std::fs::read(SHELL_PATH).expect("read fixture shell"))
+    crate::preserves_rail::content_ref_from_bytes(&std::fs::read(shell_path()).expect("read fixture shell"))
 }
 
 fn resolved(stdin_bytes: Option<Vec<u8>>) -> ResolvedContext {
     ResolvedContext {
-        executable_path: std::path::PathBuf::from(SHELL_PATH),
+        executable_path: shell_path(),
         executable_artifact_ref: HASH_B.to_string(),
         executable_identity_ref: shell_identity_ref(),
         workspace_path: std::path::PathBuf::from("/"),

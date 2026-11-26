@@ -6,13 +6,14 @@
 //! Canonical bounded-execution fabric port and adapters.
 
 mod canonical;
+mod handle;
 mod live;
 mod mechanics;
 mod ports;
 mod simulation;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use canonical::*;
 pub use live::*;

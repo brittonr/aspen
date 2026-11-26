@@ -1,12 +1,14 @@
 //! The production capability-rooted service host boundary: durable native work
 //! whose delivery runs one real child-process effect.
 
-/// Open the host with a fresh runtime whose effect attempts are counted in `attempts`.
+/// Open the host with a fresh runtime whose effect runs `shell` and whose effect
+/// attempts are counted in `attempts`.
 pub(super) fn open(
     root: &crate::node_state::DirectoryRoot,
     attempts: &std::rc::Rc<std::cell::Cell<u64>>,
+    shell: &std::path::Path,
 ) -> crate::error::Result<crate::node_service_hosting::Host<Authority, ProcessRuntime>> {
-    crate::node_service_hosting::Host::open(root, Authority, ProcessRuntime::new(attempts.clone())?)
+    crate::node_service_hosting::Host::open(root, Authority, ProcessRuntime::new(attempts.clone(), shell)?)
 }
 
 /// Install the member, submit durable work, claim it and deliver it. The
@@ -129,7 +131,10 @@ pub(super) struct ProcessRuntime {
 }
 
 impl ProcessRuntime {
-    pub(super) fn new(attempts: std::rc::Rc<std::cell::Cell<u64>>) -> crate::error::Result<Self> {
+    pub(super) fn new(
+        attempts: std::rc::Rc<std::cell::Cell<u64>>,
+        shell: &std::path::Path,
+    ) -> crate::error::Result<Self> {
         Ok(Self {
             instance: crate::system_extension::NativeInstanceRecord {
                 schema: crate::system_extension::NATIVE_INSTANCE_STATE_SCHEMA.to_string(),
@@ -159,7 +164,7 @@ impl ProcessRuntime {
                 evidence_refs: Vec::new(),
                 is_accepting_ingress: false,
             },
-            effect: super::bounded::LiveEffect::new()?,
+            effect: super::bounded::LiveEffect::new(shell)?,
             attempts,
         })
     }
@@ -212,7 +217,7 @@ impl crate::node_service_hosting::RuntimePort for ProcessRuntime {
         if member != super::SERVICE_ID {
             return Err(super::super::super::invalid("unknown qualification effect member"));
         }
-        let failure = self.effect.execute(super::EFFECT_PROGRAM, &self.effect.resolved(super::EFFECT_PROGRAM))?;
+        let failure = self.effect.execute(&self.effect.shell_resolution())?;
         // Count only effects whose child process actually started.
         if self.effect.take_child_started()? {
             self.attempts.set(self.attempts.get().saturating_add(1));

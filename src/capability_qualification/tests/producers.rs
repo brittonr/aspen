@@ -34,7 +34,7 @@ fn product_receipts_validate_only_untampered_actual_execution() {
     assert_eq!(validated.canonical_decision, "pass");
 
     let suite = fixture(scenario).expect("plan");
-    let (artifact, _) = runtime_artifact(scenario, &launcher()).expect("actual run");
+    let (artifact, _) = runtime_artifact(scenario, &programs()).expect("actual run");
     let rewrite = |artifact: preserves::IOValue| {
         execution_value(&subject, scenario, &source.binding_ref, ExecutionArtifacts {
             validation: gate.clone(),

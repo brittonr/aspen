@@ -29,7 +29,7 @@ fn fixed_native_positive_and_negative_execute_and_validate_without_live_promotio
 fn every_subject_dimension_denies_even_when_caller_rewrites_receipt_and_input_together() {
     let (source, gate) = fixture_source(&HARNESS_SCENARIOS);
     let suite = fixture(Scenario::GrantedSend).expect("fixed suite");
-    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &launcher()).expect("real run");
+    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &programs()).expect("real run");
     for dimension in 0..8 {
         let mut forged = source.subject_for(Scenario::GrantedSend).expect("subject").clone();
         match dimension {
@@ -58,7 +58,7 @@ fn stale_gate_wrong_fixed_scenario_and_generic_success_are_rejected() {
     let (source, gate) = fixture_source(&HARNESS_SCENARIOS);
     let subject = source.subject_for(Scenario::GrantedSend).expect("subject").clone();
     let suite = fixture(Scenario::GrantedSend).expect("fixed suite");
-    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &launcher()).expect("real native run");
+    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &programs()).expect("real native run");
     let wrong_suite = execution_value(&subject, Scenario::DeniedSend, &source.binding_ref, ExecutionArtifacts {
         validation: gate.clone(),
         suite: suite.clone(),

@@ -11,17 +11,20 @@ pub(super) struct LiveEffect {
     /// The child's working directory; the admitted script creates
     /// `CHILD_STARTED_MARKER` there as its first (externally visible) effect.
     workspace: tempfile::TempDir,
+    /// The caller-supplied shell whose measurement the request admits: a real
+    /// distinct OS process, never a shell builtin inside this process.
+    shell: std::path::PathBuf,
 }
 
 impl LiveEffect {
-    pub(super) fn new() -> crate::error::Result<Self> {
+    pub(super) fn new(shell: &std::path::Path) -> crate::error::Result<Self> {
         let descriptor = descriptor();
         let profile = crate::fabric_execution::admit_profile(&descriptor)?;
         // The live adapter measures the resolved executable before it spawns
-        // anything, so the admitted identity is the measurement of this host's
-        // `/bin/sh`. That identity is host-specific and therefore never enters
-        // the deterministic observation (only the adapter's typed outcomes do).
-        let executable = std::fs::read(super::EFFECT_PROGRAM).map_err(crate::error::Failure::from)?;
+        // anything, so the admitted identity is the measurement of the supplied
+        // shell. That identity is host-specific and therefore never enters the
+        // deterministic observation (only the adapter's typed outcomes do).
+        let executable = std::fs::read(shell).map_err(crate::error::Failure::from)?;
         let request = execution_request(crate::preserves_rail::content_ref_from_bytes(&executable));
         let authority = authority(&request);
         let request =
@@ -32,6 +35,7 @@ impl LiveEffect {
             adapter,
             request,
             workspace: super::super::scratch("effect-workspace")?,
+            shell: shell.to_path_buf(),
         })
     }
 
@@ -59,10 +63,15 @@ impl LiveEffect {
         self.adapter.publisher().published
     }
 
-    pub(super) fn resolved(&self, program: &str) -> crate::fabric_execution::ResolvedContext {
+    /// The resolved context naming the caller-supplied shell.
+    pub(super) fn shell_resolution(&self) -> crate::fabric_execution::ResolvedContext {
+        self.resolved(&self.shell)
+    }
+
+    pub(super) fn resolved(&self, program: &std::path::Path) -> crate::fabric_execution::ResolvedContext {
         let plan = &self.request.plan.resolution;
         crate::fabric_execution::ResolvedContext {
-            executable_path: std::path::PathBuf::from(program),
+            executable_path: program.to_path_buf(),
             executable_artifact_ref: plan.executable_artifact_ref.clone(),
             executable_identity_ref: plan.executable_identity_ref.clone(),
             workspace_path: self.workspace.path().to_path_buf(),
@@ -75,10 +84,8 @@ impl LiveEffect {
     /// Run the admitted request; a completed run is not the expected outcome here.
     pub(super) fn execute(
         &mut self,
-        program: &str,
         resolved: &crate::fabric_execution::ResolvedContext,
     ) -> crate::error::Result<Box<crate::fabric_execution::PortFailure>> {
-        debug_assert!(resolved.executable_path == std::path::Path::new(program));
         match self.adapter.execute(&self.request, resolved, None) {
             Ok(_) => Err(super::super::super::invalid(
                 "live effect completed definitively; uncertainty boundary not reached",

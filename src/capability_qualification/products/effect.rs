@@ -1,6 +1,6 @@
 //! Post-effect uncertainty over a live bounded child process. The effect runs as
-//! a distinct OS process (`/bin/sh`) through the production live execution
-//! adapter; the native work boundary is the production capability-rooted
+//! a distinct OS process (the caller-supplied shell) through the production live
+//! execution adapter; the native work boundary is the production capability-rooted
 //! service host, whose durable work record must stay Unknown and must never be
 //! requeued once that process effect may have happened.
 
@@ -9,9 +9,6 @@ mod host;
 #[cfg(test)]
 mod tests;
 
-/// The admitted effect executable. A real distinct OS process, never a shell
-/// builtin inside this process.
-const EFFECT_PROGRAM: &str = "/bin/sh";
 const MISSING_PROGRAM: &str = "/nonexistent/aspen-qualification-effect";
 /// Created by the child in its workspace before it exits without reading its
 /// input: proof that a distinct process started and its effect may have happened.
@@ -38,12 +35,14 @@ const DELIVER_TICK: u64 = 4;
 const RETRY_TICK: u64 = 5;
 const REOPEN_TICK: u64 = 6;
 
-pub(super) fn run(scenario: super::super::Scenario) -> crate::error::Result<super::Evidence> {
+/// Run one effect-uncertainty scenario through `shell`, the caller-supplied
+/// effect executable whose measurement the live request admits.
+pub(super) fn run(scenario: super::super::Scenario, shell: &std::path::Path) -> crate::error::Result<super::Evidence> {
     match scenario {
-        super::super::Scenario::ExecutionUnknownAfterStart => execution_unknown_after_start(),
-        super::super::Scenario::ExecutionPreStartDefinite => execution_prestart_definite(),
-        super::super::Scenario::NativeWorkUnknownAfterEffect => native_work_unknown_after_start(),
-        super::super::Scenario::NativeUncertainWorkNotReadmitted => native_uncertain_work_not_readmitted(),
+        super::super::Scenario::ExecutionUnknownAfterStart => execution_unknown_after_start(shell),
+        super::super::Scenario::ExecutionPreStartDefinite => execution_prestart_definite(shell),
+        super::super::Scenario::NativeWorkUnknownAfterEffect => native_work_unknown_after_start(shell),
+        super::super::Scenario::NativeUncertainWorkNotReadmitted => native_uncertain_work_not_readmitted(shell),
         super::super::Scenario::GrantedSend
         | super::super::Scenario::DeniedSend
         | super::super::Scenario::DurableRestartRecovery
@@ -68,11 +67,11 @@ pub(super) fn run(scenario: super::super::Scenario) -> crate::error::Result<supe
 }
 
 // r[impl molten.fabric_execution.uncertainty]
-fn execution_unknown_after_start() -> crate::error::Result<super::Evidence> {
+fn execution_unknown_after_start(shell: &std::path::Path) -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
-    let mut effect = bounded::LiveEffect::new()?;
+    let mut effect = bounded::LiveEffect::new(shell)?;
     evidence.runtime(effect.profile_value());
-    let failure = effect.execute(EFFECT_PROGRAM, &effect.resolved(EFFECT_PROGRAM))?;
+    let failure = effect.execute(&effect.shell_resolution())?;
     evidence.check("effect-child-process-started", effect.child_started());
     evidence.check(
         "post-start-failure-classified-unknown",
@@ -90,13 +89,13 @@ fn execution_unknown_after_start() -> crate::error::Result<super::Evidence> {
 }
 
 // r[impl molten.fabric_execution.uncertainty]
-fn execution_prestart_definite() -> crate::error::Result<super::Evidence> {
+fn execution_prestart_definite(shell: &std::path::Path) -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
-    let mut effect = bounded::LiveEffect::new()?;
+    let mut effect = bounded::LiveEffect::new(shell)?;
 
-    let mut crossed = effect.resolved(EFFECT_PROGRAM);
+    let mut crossed = effect.shell_resolution();
     crossed.executable_identity_ref = reference("qualification effect substituted executable measurement");
-    let denied = effect.execute(EFFECT_PROGRAM, &crossed)?;
+    let denied = effect.execute(&crossed)?;
     evidence.check(
         "crossed-resolution-denied-before-start",
         denied.kind == crate::fabric_execution::PortFailureKind::ResolutionDenied,
@@ -108,7 +107,7 @@ fn execution_prestart_definite() -> crate::error::Result<super::Evidence> {
     evidence.check("crossed-resolution-started-no-child", !effect.child_started());
     evidence.runtime(bounded::failure_value(&denied));
 
-    let missing = effect.execute(MISSING_PROGRAM, &effect.resolved(MISSING_PROGRAM))?;
+    let missing = effect.execute(&effect.resolved(std::path::Path::new(MISSING_PROGRAM)))?;
     evidence.check(
         "spawn-failure-rejected-before-start",
         missing.kind == crate::fabric_execution::PortFailureKind::RejectedBeforeStart,
@@ -125,13 +124,13 @@ fn execution_prestart_definite() -> crate::error::Result<super::Evidence> {
 }
 
 // r[impl molten.system_extension.native_effect_uncertainty]
-fn native_work_unknown_after_start() -> crate::error::Result<super::Evidence> {
+fn native_work_unknown_after_start(shell: &std::path::Path) -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
     let scratch = super::scratch("native-effect")?;
     let root = crate::node_state::DirectoryRoot::open_existing(scratch.path())?;
     root.create_layout()?;
     let attempts = std::rc::Rc::new(std::cell::Cell::new(0_u64));
-    let mut host = host::open(&root, &attempts)?;
+    let mut host = host::open(&root, &attempts, shell)?;
     let delivered = host::deliver_work(&mut host)?;
     evidence.check("effect-delivery-reported-uncertain", host::is_uncertain(&delivered));
     if let Err(error) = &delivered {
@@ -143,7 +142,7 @@ fn native_work_unknown_after_start() -> crate::error::Result<super::Evidence> {
     evidence.runtime(status);
     drop(host);
 
-    let mut reopened = host::open(&root, &attempts)?;
+    let mut reopened = host::open(&root, &attempts, shell)?;
     let status = reopened.status(REOPEN_TICK)?;
     evidence.check("reopened-work-still-unknown", host::work_state(&status)? == "unknown");
     evidence.check("reopen-does-not-requeue-effect", attempts.get() == 1);
@@ -152,13 +151,13 @@ fn native_work_unknown_after_start() -> crate::error::Result<super::Evidence> {
 }
 
 // r[impl molten.system_extension.native_effect_uncertainty]
-fn native_uncertain_work_not_readmitted() -> crate::error::Result<super::Evidence> {
+fn native_uncertain_work_not_readmitted(shell: &std::path::Path) -> crate::error::Result<super::Evidence> {
     let mut evidence = super::Evidence::default();
     let scratch = super::scratch("native-effect-readmit")?;
     let root = crate::node_state::DirectoryRoot::open_existing(scratch.path())?;
     root.create_layout()?;
     let attempts = std::rc::Rc::new(std::cell::Cell::new(0_u64));
-    let mut host = host::open(&root, &attempts)?;
+    let mut host = host::open(&root, &attempts, shell)?;
     let delivered = host::deliver_work(&mut host)?;
     evidence.check("effect-delivery-reported-uncertain", host::is_uncertain(&delivered));
     evidence.check("process-effect-child-started-once", attempts.get() == 1);
@@ -170,7 +169,7 @@ fn native_uncertain_work_not_readmitted() -> crate::error::Result<super::Evidenc
     evidence.check("uncertain-effect-not-repeated", attempts.get() == 1);
     drop(host);
 
-    let mut reopened = host::open(&root, &attempts)?;
+    let mut reopened = host::open(&root, &attempts, shell)?;
     evidence.check(
         "reopened-uncertain-work-readmission-denied",
         reopened.readmit(SERVICE_ID, &host::work_ref(), REOPEN_TICK).is_err(),
