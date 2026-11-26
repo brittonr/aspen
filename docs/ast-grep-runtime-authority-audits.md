@@ -88,7 +88,7 @@ ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesy
 # Must report no findings across converted production adapter pages.
 ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesystem-call.yml \
   --json=compact \
-  src/artifacts/parts/mod src/chunk/parts/store src/retention/parts/mod \
+  src/artifacts/parts/mod src/chunk/store.rs src/chunk/store src/retention/parts/mod \
   src/remote/parts/dataspace src/iroh/parts/exchange
 
 # Must report prohibited predictable-root and broad-cleanup findings.

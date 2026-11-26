@@ -1820,7 +1820,8 @@
                     > "$TMPDIR/negative.json"
                   ast-grep scan --rule "$rule" --json=compact \
                     src/artifacts/parts/mod \
-                    src/chunk/parts/store \
+                    src/chunk/store.rs \
+                    src/chunk/store \
                     src/retention/parts/mod \
                     src/remote/parts/dataspace \
                     src/iroh/parts/exchange \
@@ -1852,7 +1853,7 @@
                     src/test/parts/support/p002/body.rs \
                     src/main/tests/ops/helpers.rs \
                     src/local_store/tests.rs \
-                    src/chunk/parts/store/tests/m000/p002/body.rs \
+                    src/chunk/store/tests/mod.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
                     src/retention/parts/mod/tests/m000/p009/body.rs \
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \

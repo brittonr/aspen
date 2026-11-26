@@ -1,0 +1,189 @@
+//! Byte-range reads that verify only the chunks a range touches.
+
+struct SpanInput<'a> {
+    root: &'a crate::blocks::CapabilityChunkRoot,
+    manifest: &'a crate::blocks::ChunkManifest,
+    refs: &'a [String],
+    offset: u64,
+    length: u64,
+}
+
+struct SpanWindow {
+    chunk_size: usize,
+    offset: usize,
+    end: usize,
+    first: usize,
+    last_exclusive: usize,
+    expected_len: usize,
+}
+
+struct SpanData {
+    bytes: Vec<u8>,
+    refs: Vec<String>,
+}
+
+fn span_window(manifest: &crate::blocks::ChunkManifest, offset: u64, length: u64) -> crate::error::Result<SpanWindow> {
+    let chunk_size = usize::try_from(manifest.chunk_size).map_err(|error| {
+        crate::error::Failure::invalid_harness(format!("manifest chunk size is unsupported on this platform: {error}"))
+    })?;
+    if chunk_size == 0 {
+        return Err(crate::error::Failure::invalid_harness("manifest chunk size must be greater than zero"));
+    }
+    let offset_usize = usize::try_from(offset).map_err(|error| {
+        crate::error::Failure::invalid_harness(format!("range offset is unsupported on this platform: {error}"))
+    })?;
+    let length_usize = usize::try_from(length).map_err(|error| {
+        crate::error::Failure::invalid_harness(format!("range length is unsupported on this platform: {error}"))
+    })?;
+    crate::bounded::ensure_count_at_most(
+        length_usize,
+        crate::blocks::limits::MAX_CHUNK_STORE_OBJECT_BYTES,
+        "chunk store range bytes",
+    )?;
+    let end = offset
+        .checked_add(length)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("range offset and length overflow"))?;
+    let end_usize = usize::try_from(end).map_err(|error| {
+        crate::error::Failure::invalid_harness(format!("range end is unsupported on this platform: {error}"))
+    })?;
+    let first = offset_usize
+        .checked_div(chunk_size)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("range chunk size must be non-zero"))?;
+    Ok(SpanWindow {
+        chunk_size,
+        offset: offset_usize,
+        end: end_usize,
+        first,
+        last_exclusive: end_usize.div_ceil(chunk_size),
+        expected_len: length_usize,
+    })
+}
+
+fn read_span(input: SpanInput<'_>) -> crate::error::Result<SpanData> {
+    let mut bytes = Vec::new();
+    let mut refs = Vec::new();
+    let mut expected_len = 0usize;
+    if input.length > 0 {
+        let window = span_window(input.manifest, input.offset, input.length)?;
+        expected_len = window.expected_len;
+        for index in window.first..window.last_exclusive {
+            let chunk = input.manifest.chunks.get(index).ok_or_else(|| {
+                crate::error::Failure::invalid_harness(format!("range maps to missing chunk index {index}"))
+            })?;
+            let chunk_bytes = match crate::blocks::read_verified_chunk(input.root, chunk, window.chunk_size) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+                        "range-read",
+                        Some(&input.manifest.manifest_ref),
+                        input.refs,
+                        error.to_string(),
+                        vec![
+                            ("range-chunk-verification", "fail"),
+                            ("deny-corrupt-or-missing-chunk", "pass"),
+                        ],
+                    );
+                    crate::blocks::registry::receipt(input.root, &receipt_value)?;
+                    return Err(error);
+                }
+            };
+            let chunk_start = index * window.chunk_size;
+            let wanted_start = window.offset.saturating_sub(chunk_start);
+            let wanted_end = window.end.saturating_sub(chunk_start).min(chunk_bytes.len());
+            crate::blocks::limits::extend_bytes_bounded(
+                &mut bytes,
+                &chunk_bytes[wanted_start..wanted_end],
+                crate::blocks::limits::MAX_CHUNK_STORE_OBJECT_BYTES,
+                "chunk store range bytes",
+            )?;
+            crate::bounded::push(
+                &mut refs,
+                chunk.chunk_ref.clone(),
+                crate::blocks::limits::MAX_CHUNK_STORE_CHUNKS,
+                "chunk store range touched chunks",
+            )?;
+        }
+    }
+    if bytes.len() != expected_len {
+        let message = format!("range reconstruction length mismatch: got {}, expected {}", bytes.len(), input.length);
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "range-read",
+            Some(&input.manifest.manifest_ref),
+            input.refs,
+            &message,
+            vec![
+                ("range-chunk-verification", "fail"),
+                ("deny-range-reconstruction-mismatch", "pass"),
+            ],
+        );
+        crate::blocks::registry::receipt(input.root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    Ok(SpanData { bytes, refs })
+}
+
+pub fn range_read(
+    root: &std::path::Path,
+    manifest_ref: &str,
+    offset: u64,
+    length: u64,
+) -> crate::error::Result<crate::blocks::ChunkRangeRead> {
+    let root = crate::blocks::open_capability_chunk_root(root)?;
+    range_read_with_root(&root, manifest_ref, offset, length)
+}
+
+pub fn range_read_with_root(
+    root: &crate::blocks::CapabilityChunkRoot,
+    manifest_ref: &str,
+    offset: u64,
+    length: u64,
+) -> crate::error::Result<crate::blocks::ChunkRangeRead> {
+    let manifest = crate::blocks::local::readout::read_admitted_manifest(root, "range-read", manifest_ref)?;
+    let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
+    if offset > manifest.total_len || offset.saturating_add(length) > manifest.total_len {
+        let message =
+            format!("range {offset}..{} outside object length {}", offset.saturating_add(length), manifest.total_len);
+        let receipt_value = crate::blocks::wire::outcome::denial_receipt_value(
+            "range-read",
+            Some(&manifest.manifest_ref),
+            &chunk_refs,
+            &message,
+            vec![("range-bounds", "fail"), ("deny-out-of-bounds-range", "pass")],
+        );
+        crate::blocks::registry::receipt(root, &receipt_value)?;
+        return Err(crate::error::Failure::invalid_harness(message));
+    }
+    crate::blocks::registry::deny_unsupported_transform(root, "range-read", &manifest, &chunk_refs)?;
+    let span = read_span(SpanInput {
+        root,
+        manifest: &manifest,
+        refs: &chunk_refs,
+        offset,
+        length,
+    })?;
+    let receipt_value =
+        crate::blocks::wire::outcome::receipt_value(crate::blocks::wire::outcome::ChunkReceiptValueInput {
+            operation: "range-read",
+            decision: "pass",
+            manifest_ref: Some(&manifest.manifest_ref),
+            chunk_refs: &span.refs,
+            checks: vec![
+                ("range-bounds", "pass"),
+                ("chunk-order-root", "pass"),
+                ("range-chunk-verification", "pass"),
+                ("redb-index-availability", "pass"),
+            ],
+            details: vec![
+                crate::preserves_rail::record("offset", vec![crate::preserves_rail::u64_value(offset)]),
+                crate::preserves_rail::record("length", vec![crate::preserves_rail::u64_value(length)]),
+            ],
+        });
+    crate::blocks::registry::update::index_manifest_available(root, &manifest, &receipt_value)?;
+    Ok(crate::blocks::ChunkRangeRead {
+        manifest_ref: manifest.manifest_ref,
+        offset,
+        length,
+        bytes: span.bytes,
+        receipt_value,
+    })
+}
