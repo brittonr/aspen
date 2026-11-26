@@ -1,16 +1,16 @@
 {
   "baseline": {
-    "blake3": "eea83e5d920a104628677f2ca8ca66033c43af957e8841cc42c7506d7d70d7d6",
-    "entries": 1930,
+    "blake3": "68015e0ce09323a3bd878e25d7bccc0ed6eaf316500826528a4671763e1cba4e",
+    "entries": 2456,
     "path": "evidence/tracey/inherited-debt-baseline.txt"
   },
   "classes": {
-    "accepted_implementation_unestablished": 1930,
+    "accepted_implementation_unestablished": 2456,
     "implemented_missing_marker": 0,
     "obsolete_or_invalid": 0,
     "renamed_or_replaced": 0
   },
-  "classification_base_revision": "9842cc6453a00ed943a866549bb4307c8502d575",
+  "classification_base_revision": "bfb7a7f4a1d19bc81a11624d019e7c183d5fdadc",
   "direct_repair_manifests": [
     "evidence/tracey/runtime-spine-direct-repairs.ncl",
     "evidence/tracey/runtime-spine-job-dag-direct-repairs.ncl",
@@ -30,12 +30,12 @@
     }
   ],
   "inventory": {
-    "blake3": "dbcb648281f2e8d359a45134bff526cfb3f70d743ce523a3893548cd78949793",
-    "entries": 1930,
+    "blake3": "5a6338ba9ef40a7ff6d2aa07ade772b3443b41c39edea37314220ec542c2ffba",
+    "entries": 2456,
     "path": "evidence/tracey/inherited-debt-classification.tsv",
-    "source_area_groups": 109,
-    "specification_groups": 38,
-    "summary_blake3": "a4bff7ab168209653925e657e1b098b36a28eb4557729d6194e3fabeee689d88",
+    "source_area_groups": 201,
+    "specification_groups": 81,
+    "summary_blake3": "66509842cd3a63df8f8203ab3806fdf3a3c5f5c48548c32c1b79f36bec45502e",
     "summary_path": "evidence/tracey/inherited-debt-classification.md"
   },
   "non_claims": [
@@ -46,7 +46,7 @@
     "behavioral-correctness",
     "release-readiness"
   ],
-  "observed_date": "2026-11-13",
+  "observed_date": "2026-11-26",
   "resolved_links": [
     {
       "implementation_path": "src/protocol/parts/session/p012/body.rs",

@@ -22,6 +22,12 @@ const OPTION_SUMMARY_OUTPUT: &str = "--summary-output";
 const ADJACENT_PAIR_WIDTH: usize = 2;
 const CLASS_ACCEPTED_IMPLEMENTATION_UNESTABLISHED: &str = "accepted-implementation-unestablished";
 const REPORT_HEADER: &str = "specification\tsource_area\tclass\trequirement_id\n";
+/// Project namespaces whose second identifier segment names the source area (`molten.<area>.*`,
+/// `aspen.<area>.*`).
+const PROJECT_NAMESPACES: &[&str] = &["molten", "aspen"];
+/// Accepted specification namespaces that carry no project prefix; the namespace itself is the
+/// source area.
+const UNPREFIXED_SPEC_NAMESPACES: &[&str] = &["dev_profiling", "linux_ebpf_observability"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RequirementDefinition {
@@ -61,10 +67,16 @@ fn source_area(requirement_id: &str) -> Result<String, String> {
     let mut parts = requirement_id.split('.');
     let namespace = parts.next().unwrap_or_default();
     let area = parts.next().unwrap_or_default();
-    if namespace != "molten" || area.is_empty() {
-        return Err(format!("requirement identifier has no Molten source area: {requirement_id}"));
+    if area.is_empty() {
+        return Err(format!("requirement identifier has no source area: {requirement_id}"));
     }
-    Ok(area.to_string())
+    if PROJECT_NAMESPACES.contains(&namespace) {
+        return Ok(area.to_string());
+    }
+    if UNPREFIXED_SPEC_NAMESPACES.contains(&namespace) {
+        return Ok(namespace.to_string());
+    }
+    Err(format!("requirement identifier has a foreign namespace: {requirement_id}"))
 }
 
 fn classify_baseline(
@@ -310,6 +322,9 @@ mod tests {
         assert!(!baseline_is_sorted_and_unique(&["molten.alpha.one".to_string(), "molten.alpha.one".to_string()]));
         assert!(source_area("foreign.alpha.one").is_err());
         assert!(source_area("molten").is_err());
+        assert!(source_area("aspen").is_err());
+        assert_eq!(source_area("aspen.cas.verification"), Ok("cas".to_string()));
+        assert_eq!(source_area("dev_profiling.capture"), Ok("dev_profiling".to_string()));
     }
 
     #[test]

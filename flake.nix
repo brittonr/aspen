@@ -2676,12 +2676,44 @@
                   runtime_spine_preserves_boundary_repairs=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.ncl
                   runtime_spine_preserves_boundary_repairs_generated=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json
                   expected_runtime_spine_preserves_boundary_candidate_count=9
+                  # r[verify molten.testing.traceability_code_backed_coverage]
+                  coverage_corrections=evidence/tracey/2026-11-26-code-backed-coverage-corrections.ncl
+                  coverage_corrections_generated=evidence/tracey/2026-11-26-code-backed-coverage-corrections.json
+                  expected_withdrawn_repair_count=9
 
                   # r[verify molten.project.inherited_tracey_debt.active_delta_validation]
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
                   rustc --edition=2024 "$guard_source" -o "$TMPDIR/guard"
-                  "$TMPDIR/guard" --root . --baseline "$baseline"
+                  "$TMPDIR/guard" --root . --baseline "$baseline" | tee "$TMPDIR/guard.out"
+                  for field in requirements referenced covered uncovered dangling uncompiled_marker_files; do
+                    expected="$(jq -r ".$field" "$generated")"
+                    if ! grep -Fxq "$field=$expected" "$TMPDIR/guard.out"; then
+                      echo "guard $field output differs from $generated ($expected)" >&2
+                      exit 1
+                    fi
+                  done
+
+                  nickel typecheck "$coverage_corrections"
+                  nickel export "$coverage_corrections" --format json > "$TMPDIR/coverage-corrections.json"
+                  diff -u "$coverage_corrections_generated" "$TMPDIR/coverage-corrections.json"
+                  withdrawn_count="$(jq '.withdrawn_repairs | length' "$coverage_corrections_generated")"
+                  test "$withdrawn_count" -eq "$expected_withdrawn_repair_count"
+                  jq -r '.withdrawn_repairs[] | [.manifest, .requirement_id] | @tsv' "$coverage_corrections_generated" \
+                    | while IFS="$(printf '\t')" read -r manifest requirement_id
+                  do
+                    jq -e --arg id "$requirement_id" '.repairs | any(.requirement_id == $id)' "$manifest" > /dev/null
+                    if ! grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "withdrawn repair left inherited debt: $requirement_id" >&2
+                      exit 1
+                    fi
+                  done
+                  jq -r '.superseded_verifications[] | [.requirement_id, .verification_path] | @tsv' \
+                    "$coverage_corrections_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id verification_path
+                  do
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
 
                   rustc --edition=2024 --test "$classifier_source" -o "$TMPDIR/classifier-tests"
                   "$TMPDIR/classifier-tests"
@@ -2804,6 +2836,10 @@
                     "$runtime_spine_content_refs_repairs_generated" \
                     | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
                   do
+                    if jq -e --arg id "$requirement_id" '.withdrawn_repairs | any(.requirement_id == $id)' \
+                      "$coverage_corrections_generated" > /dev/null; then
+                      continue
+                    fi
                     if grep -Fxq "$requirement_id" "$baseline"; then
                       echo "runtime-spine content-ref repair remains in inherited debt baseline: $requirement_id" >&2
                       exit 1
@@ -2847,6 +2883,10 @@
                     "$runtime_spine_preserves_boundary_repairs_generated" \
                     | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
                   do
+                    if jq -e --arg id "$requirement_id" '.withdrawn_repairs | any(.requirement_id == $id)' \
+                      "$coverage_corrections_generated" > /dev/null; then
+                      continue
+                    fi
                     if grep -Fxq "$requirement_id" "$baseline"; then
                       echo "runtime-spine Preserves boundary repair remains in inherited debt baseline: $requirement_id" >&2
                       exit 1

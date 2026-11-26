@@ -14,4 +14,5 @@ mod tests {
     include!("traceability/parts/tests/p000/body.rs");
     include!("traceability/parts/tests/p001/body.rs");
     include!("traceability/parts/tests/p002/body.rs");
+    include!("traceability/parts/tests/p003/body.rs");
 }

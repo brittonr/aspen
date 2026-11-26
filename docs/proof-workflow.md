@@ -67,6 +67,30 @@ The standalone inherited-debt guard separates accepted coverage from pending ide
 resolution. Only accepted `.cairn/specs` requirements contribute to accepted reference
 counts, uncovered requirements, and the exact reviewed inherited baseline.
 
+Accepted coverage is code-backed: a requirement leaves the inherited baseline only when
+compiled Rust sources under `src/`, `crates/`, or `tests/` carry both an `impl` and a
+`verify` marker for it. Markers in `tools/`, `docs/`, `scripts/`, `pilots/`, `nix/`, and
+`flake.nix`, and every `depends` or `related` marker, are cross-references: the guard
+still rejects them when they dangle, but they never discharge debt. The guard also
+rejects uncompiled comment-only Rust stubs that hold markers and coverage-bearing files
+that cite repository files which do not exist.
+
+"Compiled" is approximated, not measured. The guard walks each workspace target's
+module tree (`mod`, `#[path]`, `include!`) with a heuristic, dependency-free lexer that
+ignores comments and string literals. It treats items under `#[cfg(any())]`,
+`#[cfg(FALSE)]`, and `#[cfg(not(all()))]`, together with the comments directly attached
+above them, as dead, and does not evaluate any other `cfg`. Macros are handled
+conservatively: `macro_rules!` bodies never add reachability and their comments never
+discharge coverage, and no macro invocation is resolved as an include. Any macro-mediated or
+build-script-generated source is therefore not counted, so its markers are reported as debt
+rather than coverage. Reachability is file-level: it follows only item-level `mod` and
+`include!` (never ones inside another macro invocation's arguments, such as `cfg_if!` or a
+token-discarding macro), and it does not judge whether code inside a reached file is itself
+expanded. It does not resolve macro paths: only unqualified, `std::`, or `core::` `include!`
+is followed, and the check fails closed when any scanned Rust file defines a macro named
+`include`. The guard is not compiler dep-info: a passing check does not claim that every
+counted file is compiled under every feature set, or that every compiled file was found.
+
 An otherwise unknown source reference can resolve as pending when its identifier is
 declared under ADDED or MODIFIED requirements in a native
 `.cairn/changes/<change>/specs/**/spec.md` delta. The guard reports these separately as

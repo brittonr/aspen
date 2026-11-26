@@ -97,36 +97,56 @@ fn layered_proof_diagnostics(input: &LayeredProofInput) -> Result<Vec<String>> {
     }
     let by_id = input.layers.iter().map(|layer| (layer.id.clone(), layer)).collect::<OrderedMap<_, _>>();
     ensure_count_at_most(by_id.len(), MAX_PROOF_LAYERS, "proof layer ids")?;
+    let denied = effectively_denied_layers(&by_id);
     for layer in &input.layers {
-        for child in &layer.child_ids {
-            let Some(child_layer) = by_id.get(child) else {
-                diagnostics.push_limited(
-                    format!("stale-child:{}:{child}", layer.id),
-                    max_diagnostics,
-                    "layered proof diagnostics",
-                )?;
-                continue;
-            };
-            if child_layer.subject_ref != layer.subject_ref {
-                diagnostics.push_limited(
-                    format!("wrong-child-subject:{}:{child}", layer.id),
-                    max_diagnostics,
-                    "layered proof diagnostics",
-                )?;
-            }
-            if !role_can_bind(&layer.role, &child_layer.role) {
-                diagnostics.push_limited(
-                    format!("unsupported-layer-link:{}:{}", layer.role, child_layer.role),
-                    max_diagnostics,
-                    "layered proof diagnostics",
-                )?;
-            }
-        }
+        child_link_diagnostics(layer, &by_id, &denied, max_diagnostics, &mut diagnostics)?;
     }
     for cycle in layer_cycles(&by_id)? {
         diagnostics.push_limited(format!("cycle:{cycle}"), max_diagnostics, "layered proof diagnostics")?;
     }
     Ok(diagnostics)
+}
+
+/// Stale, wrong-subject, unsupported-role, and denied-child diagnostics for one layer's child links.
+fn child_link_diagnostics(
+    layer: &ProofLayerInput,
+    by_id: &OrderedMap<String, &ProofLayerInput>,
+    denied: &OrderedSet<String>,
+    max_diagnostics: usize,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
+    for child in &layer.child_ids {
+        let Some(child_layer) = by_id.get(child) else {
+            diagnostics.push_limited(
+                format!("stale-child:{}:{child}", layer.id),
+                max_diagnostics,
+                "layered proof diagnostics",
+            )?;
+            continue;
+        };
+        if child_layer.subject_ref != layer.subject_ref {
+            diagnostics.push_limited(
+                format!("wrong-child-subject:{}:{child}", layer.id),
+                max_diagnostics,
+                "layered proof diagnostics",
+            )?;
+        }
+        if !role_can_bind(&layer.role, &child_layer.role) {
+            diagnostics.push_limited(
+                format!("unsupported-layer-link:{}:{}", layer.role, child_layer.role),
+                max_diagnostics,
+                "layered proof diagnostics",
+            )?;
+        }
+        if layer.decision == "pass" && denied.contains(child) {
+            diagnostics.push_limited(
+                format!("denied-child-layer:{}:{child}", layer.id),
+                max_diagnostics,
+                "layered proof diagnostics",
+            )?;
+        }
+    }
+    Ok(())
 }
 
 fn validate_layer(layer: &ProofLayerInput) -> Result<()> {
@@ -139,27 +159,68 @@ fn validate_layer(layer: &ProofLayerInput) -> Result<()> {
     validate_string_list("proof layer caveats", &layer.caveats, MAX_RECEIPT_REFS)
 }
 
+/// Layers whose own decision is not `pass`, plus every layer that transitively binds one.
+// r[impl molten.evidence_gates.layered_proof_sound_composition]
+fn effectively_denied_layers(by_id: &OrderedMap<String, &ProofLayerInput>) -> OrderedSet<String> {
+    let mut denied = by_id
+        .iter()
+        .filter(|(_, layer)| layer.decision != "pass")
+        .map(|(id, _)| id.clone())
+        .collect::<OrderedSet<_>>();
+    // Each productive round denies at least one more layer, so `by_id.len()` rounds reach the fixed point.
+    for _ in 0..by_id.len() {
+        let newly_denied = by_id
+            .iter()
+            .filter(|(id, layer)| !denied.contains(*id) && layer.child_ids.iter().any(|child| denied.contains(child)))
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        if newly_denied.is_empty() {
+            break;
+        }
+        denied.extend(newly_denied);
+    }
+    denied
+}
+
+/// Three-colour depth-first search: a child on the active recursion path closes a cycle, while a child that
+/// already finished (a shared descendant in a diamond) is not revisited. Every layer on a cycle is reported.
+// r[impl molten.evidence_gates.layered_proof_sound_composition]
 fn layer_cycles(by_id: &OrderedMap<String, &ProofLayerInput>) -> Result<Vec<String>> {
-    let mut cycles = Vec::with_capacity(by_id.len());
-    for id in by_id.keys() {
-        let mut seen = OrderedSet::new();
-        let mut stack = Vec::with_capacity(by_id.len());
-        stack.push_limited(id.clone(), MAX_LAYER_STACK_ITEMS, "proof layer traversal stack")?;
-        while let Some(current) = stack.pop() {
-            if !seen.insert(current.clone()) {
-                cycles.push_limited(id.clone(), MAX_PROOF_LAYERS, "proof layer cycles")?;
-                break;
+    let mut cycles = OrderedSet::new();
+    let mut finished = OrderedSet::new();
+    let mut active = OrderedSet::new();
+    for (root_id, root_layer) in by_id {
+        if finished.contains(root_id) {
+            continue;
+        }
+        let mut path: Vec<(&String, &ProofLayerInput, usize)> = Vec::with_capacity(by_id.len());
+        path.push_limited((root_id, *root_layer, 0), MAX_PROOF_LAYERS, "proof layer traversal path")?;
+        active.insert(root_id.clone());
+        while let Some(frame) = path.last_mut() {
+            let (current_id, current_layer, next_child) = *frame;
+            let Some(child) = current_layer.child_ids.get(next_child) else {
+                active.remove(current_id);
+                finished.insert(current_id.clone());
+                path.pop();
+                continue;
+            };
+            frame.2 = next_child.saturating_add(1);
+            if active.contains(child) {
+                let start = path.iter().position(|(id, _, _)| *id == child).unwrap_or_default();
+                cycles.extend(path[start..].iter().map(|(id, _, _)| (*id).clone()));
+                continue;
             }
-            if let Some(layer) = by_id.get(&current) {
-                for child in &layer.child_ids {
-                    stack.push_limited(child.clone(), MAX_LAYER_STACK_ITEMS, "proof layer traversal stack")?;
-                }
+            if finished.contains(child) {
+                continue;
             }
+            let Some((child_id, child_layer)) = by_id.get_key_value(child) else {
+                continue;
+            };
+            active.insert(child_id.clone());
+            path.push_limited((child_id, *child_layer, 0), MAX_PROOF_LAYERS, "proof layer traversal path")?;
         }
     }
-    cycles.sort();
-    cycles.dedup();
-    Ok(cycles)
+    Ok(cycles.into_iter().collect())
 }
 
 fn role_can_bind(parent: &str, child: &str) -> bool {

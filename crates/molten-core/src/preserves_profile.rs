@@ -171,6 +171,7 @@ mod tests {
         assert!(validate_preserves_boundary_profile(&rows, &measurements).is_empty());
     }
 
+    // r[verify molten.runtime_spine.preserves_boundary_profile.validation.core_coupling]
     #[test]
     fn preserves_profile_rejects_non_canonical_bytes_missing_schema_stale_refs_and_raw_core_coupling() {
         let rows = rows();
