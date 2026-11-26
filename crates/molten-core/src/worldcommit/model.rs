@@ -188,6 +188,7 @@ pub enum ClosureIssue {
     },
     MissingParentObject(String),
     MissingParentObservation(String),
+    UnreachableParentObservation(String),
     ParentCycle(String),
 }
 

@@ -4,9 +4,9 @@ Comparing world roots and authorizing a merged world are different operations. D
 
 ## Conservative classification preserves missing information
 
-[diff_world_roots](../../../crates/molten-core/src/world_merge/diff.rs) checks the supplied root bound and duplicate root kinds, classifies each supplied root, and orders the result by kind. Classification has deliberate precedence: exclusion by profile first, then unavailable material, absent root references, incompatible schemas, and finally equality or change between the left and right root references.
+[diff_world_roots](../../../crates/molten-core/src/world_merge/diff.rs) checks the supplied root bound and duplicate root kinds, classifies each supplied root, and orders the result by kind. Classification has deliberate precedence: exclusion by profile first, then unavailable material, roots absent from base, left, and right alike, incompatible schemas among the present roots, and finally equality or change between the left and right root references.
 
-This precedence prevents unavailable objects from being reported as equal merely because their references happen to match. Absence and unavailability also remain distinct: one concerns a missing reference, the other unavailable material. Schema compatibility in this classifier compares base, left, and right schema references directly; it does not execute a migration to discover whether two schemas could be reconciled.
+This precedence prevents unavailable objects from being reported as equal merely because their references happen to match. Absence and unavailability also remain distinct: one concerns a missing reference, the other unavailable material. `absent` is reserved for a root missing from all three inputs. Branch creation (absent base, present side) and deletion (present base, missing side) are compared against the present roots: they classify as `changed`, or `incompatible` when the present roots' schemas differ, and a side missing its root is never `equal`, even when both sides deleted it. Two sides creating the same root are `equal`. Schema compatibility in this classifier compares the schema references of the present roots directly; it does not execute a migration to discover whether two schemas could be reconciled.
 
 The function processes the supplied collection. Its output should not be read as proof that an upstream caller supplied every root required by a complete world profile. Nor does an equal classification authorize branch mutation, runtime activation, or effect release.
 
@@ -14,9 +14,9 @@ The function processes the supplied collection. Its output should not be read as
 
 The governing contract requires one verified common ancestor and rejects ambiguous bases before handler execution. In the [pure planner](../../../crates/molten-core/src/world_merge/admission.rs), `common_ancestor_verified` and `common_ancestor_ambiguous` are explicit input facts checked during request validation. The reducer does not independently walk history to establish them. This distinguishes a deterministic check of supplied evidence from the integration responsibility to obtain trustworthy ancestry observations.
 
-The closed modes are identical-only, ancestor-replacement, keyed-durable-values, and application-handler. Identical-only retains equal state. Ancestor replacement permits one changed side when the other equals the base. Keyed merging is restricted to durable state. Application handlers bind exact behavior, schemas, policy, and bounds and receive loaded bytes; an effect request denies the result.
+The closed modes are identical-only, ancestor-replacement, keyed-durable-values, and application-handler. Identical-only retains equal state. Ancestor replacement permits one changed side when the other equals the base. Keyed merging is restricted to durable state. Application handlers bind exact behavior, schemas, policy, and bounds and receive loaded bytes; every present base, left, and right root must carry the profile's declared `input_schema` before the handler runs (`HandlerInputSchemaMismatch` otherwise), and an effect request denies the result.
 
-Divergent tasks, scheduler state, effects, time, entropy, authority observations, and opaque snapshots are runtime-sensitive and rejected rather than treated like ordinary application records. A history graph can explain where those values came from without supplying a safe composition rule for them.
+Tasks, scheduler state, effects, time, entropy, authority observations, and opaque snapshots are runtime-sensitive and rejected, whether the two sides diverge or carry equal references, rather than treated like ordinary application records. A history graph can explain where those values came from without supplying a safe composition rule for them.
 
 ## Worked three-way key conflict
 
@@ -39,9 +39,9 @@ During publication, conflicts take the conflict-persistence path and return no r
 
 The authority recheck occurs before the generated-root loop, not as a second check immediately after that loop. Thus “recheck before publication” should not be expanded into an uninspected atomic transaction spanning authority, root storage, and commit publication. Branch-head movement remains a separate operation.
 
-## Source discrepancy requiring narrow claims
+## Equal roots follow the same admission order
 
-The [governing prose](../../world-state-diff-and-merge.md) says merge is admitted by an exact profile and unavailable material is not equal. The inspected planner's `reduce_root` has an equal-left/right-root-and-schema shortcut before availability, schema-admission, and declared-mode checks. Its initial request validation does not perform those per-root checks first. Consequently, this article does not claim that the pure planner enforces the conservative diff classifier's precedence on every equal-root path. Diff and merge are separate implementations, and the discrepancy is not resolved by assuming that one calls the other.
+The [governing prose](../../world-state-diff-and-merge.md) says merge is admitted by an exact profile and unavailable material is not equal. The planner's `reduce_root` checks runtime sensitivity, material availability and schema admission, and the declared profile mode before it selects an equal left/right root, so equal references cannot carry a runtime-sensitive root (`Tasks`, `Entropy`, and the other runtime kinds), an unavailable root, or a root kind the profile excludes into a plan. An equal root under the application-handler mode is additionally held to that handler's purity, policy, and declared input schema. Diff and merge remain separate implementations; this ordering is enforced by the planner itself, not by assuming that one calls the other.
 
 ## Review, verification, and non-claims
 
