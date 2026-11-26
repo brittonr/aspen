@@ -7,6 +7,13 @@ license.workspace = true
 [lib]
 path = "src/lib.rs"
 
+# The Hegel property suite drives the std profile (its `hegeltest` dev-dependency needs std), so the
+# no_std profile build (`--no-default-features`) leaves this test target out.
+[[test]]
+name = "hegel_properties"
+path = "tests/hegel_properties/main.rs"
+required-features = ["std"]
+
 [features]
 # Without `std` the crate builds as `#![no_std]` + `alloc`. `std` carries the modules whose upstream
 # dependencies (`basalt`, `kamacite-core`) still require the standard library.
@@ -26,3 +33,6 @@ kamacite-core = { git = "https://github.com/OnixResearch/kamacite.git", rev = "d
 schema-migration-core = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "4fe90e130f2871cf69a6febcdc70785adca98aea", version = "0.1.0" }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "eb2bd3441753af97bfcb247cef7cc22d72675b62", version = "0.1.0" }
+
+[dev-dependencies]
+hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }

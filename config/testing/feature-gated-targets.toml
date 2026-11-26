@@ -1,0 +1,14 @@
+# Reviewed feature-gated test targets that cannot execute a test in `checks.feature-matrix`, enforced by
+# `scripts/ci-coverage.py feature-tests`. Every other feature-gated target must execute at least one test
+# there. An entry for a target that does execute tests, or that is no longer feature-gated, is stale.
+#
+# target: `<kind>:<cargo target name>` (`lib:molten`, `bin:<name>`, `test:<name>`).
+# disposition: ignored-inventory (every gated test is `#[ignore]`d and accounted for, with its rail, in
+#   `config/testing/ignored-tests.toml`) or environment-blocked (needs hardware or network the sandbox
+#   cannot provide; not run).
+# reason: why the target cannot execute in the matrix.
+
+[[target]]
+target = "test:doltlite_oracle"
+disposition = "ignored-inventory"
+reason = "its only test needs the Nix-built DoltLite cohort; checks.feature-matrix runs it with --ignored and checks the ignored-rail evidence"

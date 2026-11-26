@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0"
+    "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0"
   },
-  "cargoLockHash": "78a999dad872b47323d1489cec075b28685bf2008bc74c49c3db4dc5d15d6e3e",
-  "inputsHash": "ae53884d5d0bba6d61b18d25f20dfb82bd5caa67faf4851e3e5da273138225e9",
+  "cargoLockHash": "605010694242a648d6246d7c22976b1c457f218df618feb5efcb524655bd80b7",
+  "inputsHash": "e4e5dd321d0e1d34c8d727e7a9bdc2a31c3b862b9c1aa9f284ef1371be3a7e60",
   "crates": {
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0": {
       "crateName": "molten-wasm-policy-core",
       "version": "0.1.0",
       "edition": "2024",

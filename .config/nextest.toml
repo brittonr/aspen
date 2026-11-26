@@ -24,9 +24,13 @@ global-timeout = "30m"
 filter = 'package(molten) & test(/capability_qualification::products::(world|control_plane)::tests::/)'
 slow-timeout = { period = "60s", terminate-after = 4, grace-period = "10s" }
 
+# The CI and deterministic aggregates select every workspace member explicitly; the
+# `nextest-config` flake check rejects a filter that drops one. Named semantic
+# profiles below remain partitions of `package(molten)`; `no-std-kernels` selects
+# only the extracted kernel crates.
 [profile.ci]
 inherits = "default"
-default-filter = 'package(molten)'
+default-filter = 'package(molten) | package(molten-composition-core) | package(molten-core) | package(molten-fastpath-core) | package(molten-node-host) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-release-policy) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)'
 test-threads = 4
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 3, grace-period = "10s" }
@@ -34,7 +38,7 @@ junit = { path = "junit.xml", report-name = "molten-ci", store-failure-output = 
 
 [profile.deterministic]
 inherits = "default"
-default-filter = 'package(molten) & not test(/live|vm|dogfood|soak|exploratory/)'
+default-filter = '(package(molten) | package(molten-composition-core) | package(molten-core) | package(molten-fastpath-core) | package(molten-node-host) | package(molten-preserves-core) | package(molten-raft-core) | package(molten-release-policy) | package(molten-reliability-model-core) | package(molten-runtime-admission-core) | package(molten-wasm-policy-core)) & not test(/live|vm|dogfood|soak|exploratory/)'
 test-threads = 4
 global-timeout = "20m"
 slow-timeout = { period = "10s", terminate-after = 1, grace-period = "5s" }

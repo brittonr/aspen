@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0"
+    "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0"
   },
-  "cargoLockHash": "78a999dad872b47323d1489cec075b28685bf2008bc74c49c3db4dc5d15d6e3e",
-  "inputsHash": "1b9915ea9065bf2c4942b94a6a2e5ecf40dde88ab28cbc54f61ea2edb3d2daed",
+  "cargoLockHash": "605010694242a648d6246d7c22976b1c457f218df618feb5efcb524655bd80b7",
+  "inputsHash": "946242bbdfa8f7b0f5078d7203118691247e6c37673518f5bcc3301df6496240",
   "crates": {
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0": {
       "crateName": "molten-fastpath-core",
       "version": "0.1.0",
       "edition": "2024",

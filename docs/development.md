@@ -101,10 +101,7 @@ cargo run -- test octet remediation plan \
   --receipt-out target/octet/remediation-plan.preserves
 cargo test
 cargo clippy --all-targets -- -D warnings
-CAIRN_ROOT="${CAIRN_ROOT:-../cairn}"
-nix run "path:$CAIRN_ROOT#cairn" -- validate --root . \
-  --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json" \
-  --strict
+nix run .#cairn-validate-strict   # pinned cairn-validator input + its policy export
 ```
 
 Directory-only corpus selection omits include-only modules from the producer's

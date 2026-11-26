@@ -1,6 +1,7 @@
 # Repository-pinned nixpkgs supplies the tpm2-tools and swtpm versions recorded below.
 # This is a disposable check module, not a NixOS daemon backend selector.
-{ pkgs, testBinaries, rustLibDir ? null }:
+# `source` supplies the ignored-test inventory and the audit script that checks this rail's run evidence.
+{ pkgs, testBinaries, source, rustLibDir ? null }:
 let
   # Retained fd execution changes argv[0]. Enter the immutable Nix wrapper by its
   # real basename so tpm2's multicall dispatch still sees "tpm2". No secret here.
@@ -10,8 +11,8 @@ let
 in
 pkgs.runCommand "molten-tpm2-sealed-identity"
   {
-    nativeBuildInputs = [ pkgs.swtpm pkgs.coreutils pkgs.gnugrep ];
-    inherit testBinaries;
+    nativeBuildInputs = [ pkgs.swtpm pkgs.coreutils pkgs.gnugrep pkgs.python3 ];
+    inherit testBinaries source;
   }
   ''
     set -euo pipefail
@@ -56,6 +57,8 @@ pkgs.runCommand "molten-tpm2-sealed-identity"
     test "$status" -eq 0 || exit "$status"
     mkdir -p "$out"
     cp "$TMPDIR/consumer.log" "$out/consumer.log"
+    python3 "$source/scripts/ci-coverage.py" --root "$source" \
+      ignored-rail-evidence --rail nix:tpm2-sealed-identity --log "$out/consumer.log"
     printf '%s\n' 'tpm2-tools=${pkgs.tpm2-tools.version}' 'swtpm=${pkgs.swtpm.version}' \
       'PCR=sha256:16 (actually extended before denial)' \
       'filesystem=all TPM consumer regular files scanned; provider device state is a separate authority' \

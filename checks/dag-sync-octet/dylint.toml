@@ -1,3 +1,0 @@
-[octet]
-core_source_scopes = ["../../../crates/molten-core/src/dag_sync"]
-disabled_lints = []

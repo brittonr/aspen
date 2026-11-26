@@ -35,12 +35,18 @@ fn validate_production_dependencies(source: &str) -> Result<(), Vec<String>> {
     }
 }
 
+// Fixtures are embedded at compile time: hermetic test runners (the Nix `nextest` check) execute
+// the prebuilt binary outside the compile-time manifest directory, so a runtime path read would not
+// resolve.
 fn fixture_source(name: &str) -> std::io::Result<String> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/node-host-boundary")
-        .join(name)
-        .join("Cargo.toml");
-    std::fs::read_to_string(path)
+    let source = match name {
+        "positive" => include_str!("fixtures/node-host-boundary/positive/Cargo.toml"),
+        "invalid-host" => include_str!("fixtures/node-host-boundary/invalid-host/Cargo.toml"),
+        "invalid-missing-core" => include_str!("fixtures/node-host-boundary/invalid-missing-core/Cargo.toml"),
+        "malformed" => include_str!("fixtures/node-host-boundary/malformed/Cargo.toml"),
+        other => return Err(std::io::Error::other(format!("unknown node-host boundary fixture: {other}"))),
+    };
+    Ok(source.to_string())
 }
 
 fn require_denial(result: Result<(), Vec<String>>) -> std::io::Result<Vec<String>> {

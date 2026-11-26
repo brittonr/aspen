@@ -138,6 +138,9 @@
       url = "git+https://seed.radicle.garden/z21miuQLqLwe1HkaMu2mEZy5fdG9F.git?rev=2d1fb2b59f373967cc69e13ec289759d9cd4df46";
       flake = false;
     };
+    # Pinned Cairn validator for `checks.cairn-validate-strict`; its package carries the matching generated
+    # policy export at share/cairn/cairn-policy.json. Not the Cargo `cairn-src` dependency source above.
+    cairn-validator.url = "github:OnixResearch/cairn/965591480848b144bd7e4e7288d3c17675f2ea31";
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
@@ -174,6 +177,7 @@
       transactional-reconciliation-src,
       release-channel-src,
       quint-connect-src,
+      cairn-validator,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -1007,7 +1011,6 @@
           };
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
-        moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
         # r[impl molten.project.tier1_no_std_kernel_crates]
         # Each extracted no_std kernel resolves its own unit graph (`unit2nix -p <crate>`), so its
         # dependency features (serde, blake3) are never unified with the std consumers in
@@ -1310,6 +1313,24 @@
             (old: {
               CARGO_CFG_FEATURE = pkgs.lib.concatStringsSep "," old.crateFeatures;
             });
+        # r[impl molten.testing.ci_workspace_member_coverage]
+        # Every workspace member's test binaries; each per-member graph adds only that member's dev-deps.
+        # The no_std kernel crates run here under their default (std) feature set, like molten-core;
+        # their no_std builds are gated separately by `checks.<kernel>-no-std`.
+        memberTestBinaries =
+          workspace: name: (workspace.test.workspaceMembers.${name}.build).override { buildTests = true; };
+        workspaceTestBinarySets = pkgs.lib.genAttrs (builtins.attrNames noStdKernels) (memberTestBinaries ws) // {
+          molten = moltenTestBinaries;
+          molten-core = memberTestBinaries ws "molten-core";
+          molten-node-host = memberTestBinaries ws "molten-node-host";
+          # The workspace plan omits this member's binary target, which holds all of its unit tests; the
+          # release-policy plan (generated with `--bin molten-release-policy`) carries it. Its tests embed
+          # repository fixtures (`../../../config/...`), so the test build unpacks the whole source.
+          molten-release-policy = (memberTestBinaries releasePolicyWs "molten-release-policy").overrideAttrs (_old: {
+            src = sourceForConfigChecks;
+            sourceRoot = "source/crates/molten-release-policy";
+          });
+        };
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
         rustLibDir = "${rustToolchain}/lib/rustlib/${targetTriple}/lib";
         nextestCi = pkgs.writeShellApplication {
@@ -1350,6 +1371,47 @@
               octet = octet-toolchain;
               gateCompiler = startupGateCompiler;
             };
+        };
+        # Package names of every workspace member, read from the manifests so a new member joins the
+        # workspace Octet run and its scope check without a second list to maintain.
+        workspacePackageNames = map (
+          member: (builtins.fromTOML (builtins.readFile (./. + "/${member}/Cargo.toml"))).package.name
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.members;
+        # r[impl molten.evidence_gates.ci_octet_and_cairn_hermetic]
+        # The startup gate's pinned Octet cohort, run over every workspace member. The strict startup gate
+        # keeps `[workspace.metadata.octet] default_scope`; `checks.octet-workspace` compares this run with
+        # the reviewed debt baseline. The planted run adds one molten-core violation that must surface; the
+        # planted crate source is kept so the check can anchor that run's findings to their source lines.
+        workspaceOctetFindings = import ./nix/startup-octet-cohort.nix {
+          inherit pkgs system;
+          source = sourceForConfigChecks;
+          octet = octet-toolchain;
+          gateCompiler = startupGateCompiler;
+          name = "molten-workspace-octet-findings";
+          runs = ''
+            export CARGO_TARGET_DIR="$NIX_BUILD_TOP/workspace-target"
+            cargo octet check ${pkgs.lib.concatMapStringsSep " " (package: "-p ${package}") workspacePackageNames} \
+              --artifact-dir "$out/workspace"
+            cmp Cargo.lock ${sourceForConfigChecks}/Cargo.lock
+            printf '\n%s\n' 'pub fn planted_octet_violation(value: Option<u8>) -> u8 { value.unwrap() }' \
+              >> crates/molten-core/src/codec.rs
+            cargo octet check -p molten-core --artifact-dir "$out/planted"
+            mkdir -p "$out/planted-source/crates"
+            cp Cargo.toml "$out/planted-source/Cargo.toml"
+            cp -R crates/molten-core "$out/planted-source/crates/molten-core"
+          '';
+        };
+        cairnValidator = cairn-validator.packages.${system}.cairn;
+        # r[impl molten.testing.feature_and_ignore_ci_accounting]
+        featureMatrix = import ./nix/feature-matrix.nix {
+          inherit pkgs rustToolchain doltliteOracle;
+          source = sourceForConfigChecks;
+          vendor = workspaceOctetFindings.vendor;
+          defaultTestBinaries = moltenTestBinaries;
+          extraInputs = [
+            pkgs.nickel
+            fastpathQuint.quint
+          ];
         };
         moltenReadinessVerifier = pkgs.writeShellScriptBin "onixos-molten-readiness-verifier" ''
           exec ${startupSourceBinding}/bin/molten reliability verify-readiness "$@"
@@ -1766,6 +1828,8 @@
           doltlite-oracle = doltliteOracle;
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
+          # Raw workspace Octet findings; regenerate the reviewed debt baseline from this output.
+          octet-workspace-findings = workspaceOctetFindings;
           all = ws.allWorkspaceMembers;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
@@ -3284,12 +3348,166 @@
                   grep -Fq 'r[verify molten.testing.receipt_driven_traceability.coverage_derivation]' src/testing/traceability/parts/tests/p001/body.rs
                   touch "$out"
                 '';
+            # r[impl molten.testing.ci_workspace_member_coverage]
+            # `cargo nextest run --profile ci` over prebuilt unit2nix test binaries of the selected workspace
+            # members (attrset member -> binaries). `receipt` adds the canonical CI run receipt; `postRun`
+            # runs inside the source copy after nextest wrote target/nextest/ci/junit.xml.
+            mkWorkspaceNextest =
+              {
+                name,
+                members,
+                receipt ? false,
+                postRun ? "",
+              }:
+              pkgs.runCommand name
+                {
+                  nativeBuildInputs = [
+                    rustToolchain
+                    pkgs.cargo-nextest
+                    pkgs.nickel
+                    fastpathQuint.quint
+                    pkgs.perl
+                    pkgs.python3
+                  ]
+                  ++ pkgs.lib.optional receipt moltenPkg;
+                  src = sourceForConfigChecks;
+                  testBinarySets = pkgs.lib.concatStringsSep " " (
+                    pkgs.lib.mapAttrsToList (member: binaries: "${member}=${binaries}") members
+                  );
+                  inherit targetTriple rustLibDir;
+                }
+                ''
+                  set -euo pipefail
+                  export HOME="$TMPDIR/home"
+                  mkdir -p "$HOME"
+                  cp -R $src source
+                  chmod -R u+w source
+                  cd source
+                  cargo metadata --format-version 1 --no-deps --locked > cargo-metadata.json
+                  perl -MJSON::PP -e '
+                    use strict;
+                    use warnings;
+                    my $metadata_path = "cargo-metadata.json";
+                    my $target_triple = $ENV{targetTriple};
+                    my $rust_lib_dir = $ENV{rustLibDir};
+                    my $metadata = decode_json(do { local $/; open my $fh, "<", $metadata_path or die "open $metadata_path: $!"; <$fh> });
+                    my %packages = map { $_->{name} => $_ } @{$metadata->{packages}};
+
+                    my %rust_binaries;
+                    my $target_directory;
+                    for my $set (split " ", $ENV{testBinarySets}) {
+                      my ($member, $root) = split /=/, $set, 2;
+                      my $package = $packages{$member} or die "cargo metadata did not contain package $member\n";
+                      my $test_dir = "$root/tests";
+                      die "missing unit2nix test binary directory for $member: $test_dir\n" unless -d $test_dir;
+                      $target_directory //= $root;
+                      my $index = 0;
+                      for my $path (sort glob("$test_dir/*")) {
+                        next unless -f $path && -x $path;
+                        next unless system("$path --list --format terse >/dev/null 2>&1") == 0;
+                        (my $name = $path) =~ s{.*/}{};
+                        my $id = "$member" . "::nix-test/$index/$name";
+                        $rust_binaries{$id} = {
+                          "binary-id" => $id,
+                          "binary-name" => $name,
+                          "package-id" => $package->{id},
+                          "kind" => "test",
+                          "binary-path" => $path,
+                          "build-platform" => "target",
+                        };
+                        $index++;
+                      }
+                      die "no libtest-compatible binaries found for $member in $test_dir\n" unless $index;
+                    }
+                    die "no workspace member test binaries selected\n" unless defined $target_directory;
+
+                    my $binaries_metadata = {
+                      "rust-build-meta" => {
+                        "target-directory" => $target_directory,
+                        "base-output-directories" => ["tests"],
+                        "non-test-binaries" => {},
+                        "build-script-out-dirs" => {},
+                        "build-script-info" => {},
+                        "linked-paths" => [],
+                        "platforms" => {
+                          "host" => {
+                            "platform" => {
+                              "triple" => $target_triple,
+                              "target-features" => "unknown",
+                            },
+                            "libdir" => {
+                              "status" => "available",
+                              "path" => $rust_lib_dir,
+                            },
+                          },
+                          "targets" => [],
+                        },
+                        "target-platforms" => [{
+                          "triple" => $target_triple,
+                          "target-features" => "unknown",
+                        }],
+                        "target-platform" => undef,
+                      },
+                      "rust-binaries" => \%rust_binaries,
+                    };
+
+                    open my $out, ">", "binaries-metadata.json" or die "write binaries-metadata.json: $!";
+                    print $out JSON::PP->new->canonical->pretty->encode($binaries_metadata);
+                  '
+                  cargo nextest run \
+                    --profile ci \
+                    --user-config-file none \
+                    --cargo-metadata cargo-metadata.json \
+                    --binaries-metadata binaries-metadata.json \
+                    --no-tests fail
+                  mkdir -p "$out"
+                  cp cargo-metadata.json binaries-metadata.json "$out"/
+                  if [ ! -s target/nextest/ci/junit.xml ]; then
+                    echo "missing CI JUnit evidence at target/nextest/ci/junit.xml" >&2
+                    find target/nextest -maxdepth 4 -type f | sort >&2 || true
+                    exit 1
+                  fi
+                  cp target/nextest/ci/junit.xml "$out"/
+                  # Every selected member must have executed tests: a member silently dropped by a filter fails.
+                  python3 scripts/ci-coverage.py junit-members --junit target/nextest/ci/junit.xml \
+                    $(for set in $testBinarySets; do printf ' --member %s' "''${set%%=*}"; done)
+                  ${pkgs.lib.optionalString receipt ''
+                    molten test traceability ci-run-receipt \
+                      --source-marker "$src" \
+                      --profile-id ci \
+                      --command-surface 'cargo nextest run --profile ci --user-config-file none --cargo-metadata cargo-metadata.json --binaries-metadata binaries-metadata.json --no-tests fail' \
+                      --nextest-config .config/nextest.toml \
+                      --cargo-metadata cargo-metadata.json \
+                      --binaries-metadata binaries-metadata.json \
+                      --junit target/nextest/ci/junit.xml \
+                      --caveat 'JUnit is a rendered view over canonical CI receipt metadata' \
+                      --out "$out/ci-test-run-receipt.preserves"
+                  ''}
+                  ${postRun}
+                '';
+            # The hermetic molten-core rail also proves its Hegel properties exist, ran, and passed.
+            moltenCoreHegelCoverage = ''
+              python3 scripts/ci-coverage.py hegel-coverage --junit target/nextest/ci/junit.xml
+              printf 'hegel-coverage decision=pass\n' > "$out/hegel-coverage.txt"
+            '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;
-            molten-node-host = moltenNodeHostTests;
+            molten-node-host = mkWorkspaceNextest {
+              name = "molten-node-host-nextest";
+              members = { inherit (workspaceTestBinarySets) molten-node-host; };
+            };
+            molten-core = mkWorkspaceNextest {
+              name = "molten-core-nextest";
+              members = { inherit (workspaceTestBinarySets) molten-core; };
+              postRun = moltenCoreHegelCoverage;
+            };
+            molten-release-policy = mkWorkspaceNextest {
+              name = "molten-release-policy-nextest";
+              members = { inherit (workspaceTestBinarySets) molten-release-policy; };
+            };
             # r[verify molten.testing.molten_core_no_std_ci_gate]
             # r[verify molten.project.molten_core_no_std]
             molten-core-no-std =
@@ -5018,124 +5236,13 @@
                 touch "$out"
               '';
 
-            nextest =
-              pkgs.runCommand "molten-nextest"
-                {
-                  nativeBuildInputs = [
-                    rustToolchain
-                    pkgs.cargo-nextest
-                    pkgs.nickel
-                    fastpathQuint.quint
-                    pkgs.perl
-                    moltenPkg
-                  ];
-                  src = sourceForConfigChecks;
-                  testBinaries = moltenTestBinaries;
-                  inherit targetTriple rustLibDir;
-                }
-                ''
-                  set -euo pipefail
-                  export HOME="$TMPDIR/home"
-                  mkdir -p "$HOME"
-                  cp -R $src source
-                  chmod -R u+w source
-                  cd source
-                  cargo metadata --format-version 1 --no-deps --locked > cargo-metadata.json
-                  perl -MJSON::PP -e '
-                    use strict;
-                    use warnings;
-                    my $metadata_path = "cargo-metadata.json";
-                    my $test_dir = "$ENV{testBinaries}/tests";
-                    my $target_triple = $ENV{targetTriple};
-                    my $rust_lib_dir = $ENV{rustLibDir};
-                    die "missing unit2nix test binary directory: $test_dir\n" unless -d $test_dir;
-
-                    my $metadata = decode_json(do { local $/; open my $fh, "<", $metadata_path or die "open $metadata_path: $!"; <$fh> });
-                    my ($package) = grep { $_->{name} eq "molten" } @{$metadata->{packages}};
-                    die "cargo metadata did not contain package molten\n" unless $package;
-
-                    my @binaries;
-                    for my $path (sort glob("$test_dir/*")) {
-                      next unless -f $path && -x $path;
-                      next unless system("$path --list --format terse >/dev/null 2>&1") == 0;
-                      push @binaries, $path;
-                    }
-                    die "no libtest-compatible binaries found in $test_dir\n" unless @binaries;
-
-                    my %rust_binaries;
-                    my $index = 0;
-                    for my $path (@binaries) {
-                      (my $name = $path) =~ s{.*/}{};
-                      my $id = "molten::nix-test/$index/$name";
-                      $rust_binaries{$id} = {
-                        "binary-id" => $id,
-                        "binary-name" => $name,
-                        "package-id" => $package->{id},
-                        "kind" => "test",
-                        "binary-path" => $path,
-                        "build-platform" => "target",
-                      };
-                      $index++;
-                    }
-
-                    my $binaries_metadata = {
-                      "rust-build-meta" => {
-                        "target-directory" => $ENV{testBinaries},
-                        "base-output-directories" => ["tests"],
-                        "non-test-binaries" => {},
-                        "build-script-out-dirs" => {},
-                        "build-script-info" => {},
-                        "linked-paths" => [],
-                        "platforms" => {
-                          "host" => {
-                            "platform" => {
-                              "triple" => $target_triple,
-                              "target-features" => "unknown",
-                            },
-                            "libdir" => {
-                              "status" => "available",
-                              "path" => $rust_lib_dir,
-                            },
-                          },
-                          "targets" => [],
-                        },
-                        "target-platforms" => [{
-                          "triple" => $target_triple,
-                          "target-features" => "unknown",
-                        }],
-                        "target-platform" => undef,
-                      },
-                      "rust-binaries" => \%rust_binaries,
-                    };
-
-                    open my $out, ">", "binaries-metadata.json" or die "write binaries-metadata.json: $!";
-                    print $out JSON::PP->new->canonical->pretty->encode($binaries_metadata);
-                  '
-                  cargo nextest run \
-                    --profile ci \
-                    --user-config-file none \
-                    --cargo-metadata cargo-metadata.json \
-                    --binaries-metadata binaries-metadata.json \
-                    --no-tests fail
-                  mkdir -p "$out"
-                  cp cargo-metadata.json binaries-metadata.json "$out"/
-                  if [ ! -s target/nextest/ci/junit.xml ]; then
-                    echo "missing CI JUnit evidence at target/nextest/ci/junit.xml" >&2
-                    find target/nextest -maxdepth 4 -type f | sort >&2 || true
-                    exit 1
-                  fi
-                  cp target/nextest/ci/junit.xml "$out"/
-                  molten test traceability ci-run-receipt \
-                    --source-marker "$src" \
-                    --profile-id ci \
-                    --command-surface 'cargo nextest run --profile ci --user-config-file none --cargo-metadata cargo-metadata.json --binaries-metadata binaries-metadata.json --no-tests fail' \
-                    --nextest-config .config/nextest.toml \
-                    --cargo-metadata cargo-metadata.json \
-                    --binaries-metadata binaries-metadata.json \
-                    --junit target/nextest/ci/junit.xml \
-                    --caveat 'JUnit is a rendered view over canonical CI receipt metadata' \
-                    --out "$out/ci-test-run-receipt.preserves"
-                '';
+            # Every workspace member's tests under the CI profile, plus the canonical CI run receipt.
+            nextest = mkWorkspaceNextest {
+              name = "molten-nextest";
+              members = workspaceTestBinarySets;
+              receipt = true;
+              postRun = moltenCoreHegelCoverage;
+            };
 
             dogfood-local-node =
               pkgs.runCommand "molten-dogfood-local-node"
@@ -5327,6 +5434,7 @@
                     rustToolchain
                     pkgs.cargo-nextest
                     pkgs.gnugrep
+                    pkgs.python3
                   ];
                   src = sourceForConfigChecks;
                 }
@@ -5357,6 +5465,23 @@
                   done
                   grep -A $profile_block_context '^\[profile.exploratory\]' .config/nextest.toml | grep '^retries = 1' > $out/exploratory-retry-policy.txt
                   grep -A $profile_block_context '^\[profile.exploratory\]' .config/nextest.toml | grep '^flaky-result = "pass"' > $out/exploratory-flaky-result.txt
+                  # r[impl molten.testing.ci_workspace_member_coverage]
+                  # CI and deterministic profiles must name every workspace member; a planted drop must deny.
+                  python3 scripts/ci-coverage.py nextest-scope
+                  planted="$TMPDIR/planted-scope"
+                  mkdir -p "$planted/.config"
+                  cp Cargo.toml "$planted/"
+                  for member in crates/*/; do
+                    mkdir -p "$planted/$member"
+                    cp "$member/Cargo.toml" "$planted/$member/"
+                  done
+                  sed 's/ | package(molten-core)//' .config/nextest.toml > "$planted/.config/nextest.toml"
+                  if python3 scripts/ci-coverage.py --root "$planted" nextest-scope 2> "$out/planted-scope.txt"; then
+                    echo "nextest scope guard admitted a profile without molten-core" >&2
+                    exit 1
+                  fi
+                  grep -Fxq 'nextest-profile-missing-member:ci:molten-core' "$out/planted-scope.txt"
+                  grep -Fxq 'nextest-profile-missing-member:deterministic:molten-core' "$out/planted-scope.txt"
                   printf 'nextest-profile-matrix decision=pass diagnostics=none\n' > $out/nextest-profile-matrix.txt
                   printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
                   printf 'cargo nextest run --profile deterministic\n' > $out/deterministic-command.txt
@@ -5393,6 +5518,87 @@
                   cargo fmt --check
                   touch $out
                 '';
+
+            # r[impl molten.evidence_gates.ci_octet_and_cairn_hermetic]
+            # Workspace Octet over all four members against the reviewed baseline of individual finding
+            # identities (molten and molten-node-host pinned at zero). New identities and unrecorded
+            # repairs both deny, and the planted molten-core violation must be reported as a new finding.
+            octet-workspace =
+              pkgs.runCommand "molten-octet-workspace"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                  findings = workspaceOctetFindings;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_ci_coverage.py
+                  python3 scripts/ci-coverage.py octet-baseline check --artifacts "$findings/workspace" \
+                    --scope ${pkgs.lib.concatStringsSep "," workspacePackageNames}
+                  mkdir -p "$out"
+                  if python3 scripts/ci-coverage.py --root "$findings/planted-source" octet-baseline check \
+                    --artifacts "$findings/planted" --baseline "$src/config/testing/octet-workspace-baseline.json" \
+                    --scope molten-core --crate molten_core 2> "$out/planted.txt"; then
+                    echo "workspace Octet baseline admitted the planted molten-core violation" >&2
+                    exit 1
+                  fi
+                  grep -Eq '^octet-new-finding:molten_core:crates/molten-core/src/codec.rs:no_unwrap:sha256:' "$out/planted.txt"
+                  # Every other molten-core identity must still match its baseline row.
+                  if grep -v '^octet-new-finding:molten_core:crates/molten-core/src/codec.rs:' "$out/planted.txt"; then
+                    echo "planted Octet run reported diagnostics beyond the planted violation" >&2
+                    exit 1
+                  fi
+                  cp "$findings/workspace/summary.txt" "$out/workspace-summary.txt"
+                '';
+
+            # r[impl molten.evidence_gates.ci_octet_and_cairn_hermetic]
+            # Strict Cairn validation with the pinned validator and its packaged policy export; a planted
+            # malformed change must deny. Nothing outside this source and the pinned input is read.
+            cairn-validate-strict =
+              pkgs.runCommand "molten-cairn-validate-strict"
+                {
+                  nativeBuildInputs = [ cairnValidator ];
+                  src = sourceForConfigChecks;
+                  policy = "${cairnValidator}/share/cairn/cairn-policy.json";
+                }
+                ''
+                  set -euo pipefail
+                  mkdir -p "$out" source
+                  cp -R "$src/.cairn" source/.cairn
+                  chmod -R u+w source
+                  cairn validate --root source --policy "$policy" --strict > "$out/validate.json"
+                  planted="$TMPDIR/planted"
+                  cp -R source "$planted"
+                  mkdir -p "$planted/.cairn/changes/planted-malformed-change"
+                  printf 'not a proposal\n' > "$planted/.cairn/changes/planted-malformed-change/proposal.md"
+                  if cairn validate --root "$planted" --policy "$policy" --strict > "$out/planted.json" 2>&1; then
+                    echo "strict Cairn validation admitted a malformed change" >&2
+                    exit 1
+                  fi
+                  grep -Fq 'planted-malformed-change: missing tasks.md' "$out/planted.json"
+                '';
+
+            # r[impl molten.testing.feature_and_ignore_ci_accounting]
+            # Reviewed `#[ignore]` inventory and Hegel-property presence over the source, with the
+            # audit script's own positive and negative tests.
+            ci-coverage-audit =
+              pkgs.runCommand "molten-ci-coverage-audit"
+                {
+                  nativeBuildInputs = [ pkgs.python3 ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  python3 scripts/test_ci_coverage.py
+                  python3 scripts/ci-coverage.py ignored-tests
+                  python3 scripts/ci-coverage.py hegel-coverage
+                  python3 scripts/ci-coverage.py nextest-scope
+                  touch "$out"
+                '';
+
+            feature-matrix = featureMatrix;
           }
           // import ./nix/consensus-fastpath-model.nix {
             inherit pkgs;
@@ -5406,7 +5612,42 @@
             tpm2-sealed-identity = import ./nix/tpm2-identity.nix {
               inherit pkgs rustLibDir;
               testBinaries = moltenTestBinaries;
+              source = sourceForConfigChecks;
             };
+            # r[impl molten.testing.feature_and_ignore_ci_accounting]
+            # Same-host rail for the ignored captured-Nickel job tests: pinned Nickel and util-linux prlimit.
+            # Its libtest output must show every inventory test assigned to this rail passed.
+            job-captured-nickel =
+              pkgs.runCommand "molten-job-captured-nickel"
+                {
+                  nativeBuildInputs = [
+                    pkgs.gnugrep
+                    pkgs.python3
+                  ];
+                  src = sourceForConfigChecks;
+                  testBinaries = moltenTestBinaries;
+                  MOLTEN_GRAPH_NICKEL = "${pkgs.nickel}/bin/nickel";
+                  MOLTEN_GRAPH_PRLIMIT = "${pkgs.util-linux}/bin/prlimit";
+                }
+                ''
+                  set -euo pipefail
+                  export LD_LIBRARY_PATH=${pkgs.lib.escapeShellArg rustLibDir}
+                  mkdir -p "$out"
+                  selected=0
+                  for binary in "$testBinaries"/tests/*; do
+                    test -f "$binary" && test -x "$binary" || continue
+                    "$binary" --list --ignored captured_nickel_live_ 2>/dev/null \
+                      | sed -n 's/: test$//p' > "$TMPDIR/list" || continue
+                    count=$(wc -l < "$TMPDIR/list")
+                    [ "$count" -gt 0 ] || continue
+                    selected=$((selected + count))
+                    "$binary" --ignored --test-threads 1 captured_nickel_live_ | tee -a "$out/run.txt"
+                  done
+                  test "$selected" -eq 4
+                  grep -Eq '^test result: ok\. 4 passed' "$out/run.txt"
+                  python3 "$src/scripts/ci-coverage.py" --root "$src" \
+                    ignored-rail-evidence --rail nix:job-captured-nickel --log "$out/run.txt"
+                '';
           };
 
         apps =
@@ -5465,6 +5706,19 @@
               program = "${nextestCi}/bin/molten-nextest-ci";
               meta = {
                 description = "Run Aspen's cargo-nextest CI profile";
+              };
+            };
+            # The pre-push hook and local strict validation use the same pinned validator and policy as
+            # `checks.cairn-validate-strict`, never an unpinned sibling checkout.
+            cairn-validate-strict = {
+              type = "app";
+              program = "${pkgs.writeShellScript "molten-cairn-validate-strict" ''
+                set -euo pipefail
+                exec ${cairnValidator}/bin/cairn validate --root . \
+                  --policy ${cairnValidator}/share/cairn/cairn-policy.json --strict "$@"
+              ''}";
+              meta = {
+                description = "Strict Cairn validation with the pinned validator and policy export";
               };
             };
           };

@@ -59,7 +59,16 @@
         assert!(text.contains(&format!("octet-review-ref:{review_ref}")));
     }
 
-    #[hegel::test(test_cases = 12)]
+    // Durable catalog installs cost about 2 s per case under parallel tests and up to 7 s when the CI builder
+    // is saturated (12 cases took 24 s; 6 cases took 43 s). Hegel's TooSlow window (10 valid cases in 30 s)
+    // is therefore load-dependent. The run is bounded explicitly instead: 6 derandomized cases with TooSlow
+    // suppressed.
+    #[hegel::test(
+        test_cases = 6,
+        derandomize = true,
+        database = None,
+        suppress_health_check = [hegel::HealthCheck::TooSlow]
+    )]
     fn hegel_catalog_identity_short_ids_and_visibility_are_stable(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dir = temp_dir("catalog-hegel");

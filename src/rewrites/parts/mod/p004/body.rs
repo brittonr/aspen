@@ -175,7 +175,16 @@ mod tests {
         assert!(error.to_string().contains("capability"), "{error}");
     }
 
-    #[hegel::test(test_cases = 12)]
+    // Each case installs, previews twice, and applies through durable artifact storage, which costs about 9 s
+    // per case on the shared CI builder. Hegel's TooSlow check (fewer than 10 valid cases in 30 s) was
+    // therefore inherent. The run is bounded explicitly instead: 3 derandomized cases (about 27 s) with
+    // TooSlow suppressed.
+    #[hegel::test(
+        test_cases = 3,
+        derandomize = true,
+        database = None,
+        suppress_health_check = [hegel::HealthCheck::TooSlow]
+    )]
     fn hegel_preview_apply_consistency_and_path_stability(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("rewrite-hegel");

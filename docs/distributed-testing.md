@@ -163,6 +163,38 @@ A `distributed-test-run-v1` receipt binds the source ref, test binary ref, topol
 
 A denial identifies the invariant that failed before side effects, such as missing authority, transport evidence being treated as authority, stale evidence, partitioned quorum, corrupted receipts, or undeclared ambient state.
 
+## CI workspace scope
+
+r[impl molten.testing.ci_workspace_member_coverage] The workspace members are `molten`, `molten-core`, `molten-node-host`, `molten-release-policy`, and the extracted no_std kernel crates (`molten-composition-core`, `molten-fastpath-core`, `molten-preserves-core`, `molten-raft-core`, `molten-reliability-model-core`, `molten-runtime-admission-core`, `molten-wasm-policy-core`). This is exactly what each CI rail covers:
+
+| Rail | What runs | Fails closed when |
+| --- | --- | --- |
+| `cargo nextest run --profile ci` / `--profile deterministic` | every test of every member (`deterministic` also excludes names matching `live`, `vm`, `dogfood`, `soak`, `exploratory`); `--profile no-std-kernels` selects only the kernel crates | not applicable: this is a local command |
+| `checks.nextest-config` | profile readback | the `ci` or `deterministic` filter omits a workspace member (a planted drop of `molten-core` must deny) |
+| `checks.nextest` | `--profile ci` over the unit2nix test binaries of every member (kernels under their default feature set; `checks.<kernel>-no-std` gates their no_std builds), plus the canonical CI run receipt | any test fails or any member executed no test |
+| `checks.molten-core`, `checks.molten-node-host`, `checks.molten-release-policy` | the same runner over one member | any test of that member fails; for `molten-core`, also when a `#[hegel::test]` in the crate did not execute and pass, or none exist |
+| `checks.octet-workspace` | the pinned Octet cohort with `-p` for every member (read from the workspace manifests), compared finding by finding with the baseline | a finding identity is new (even when it replaces a repaired finding of the same lint in the same file), a recorded identity disappeared without a baseline update, the baseline has duplicate rows or a `total` that disagrees with its rows or the run, or a package in `[workspace.metadata.octet] default_scope` gains any finding |
+| `checks.cairn-validate-strict` | the pinned `cairn-validator` input with its packaged policy export, `--strict` | any validation issue (a planted malformed change must deny) |
+| `checks.feature-matrix` | `cargo check --all-targets` per optional feature over the vendored lock; under the union of self-contained features, every test of every `molten` test target (library, binaries, integration tests) that does not exist under default features; and the DoltLite oracle test | a feature fails to compile, a gated test fails, a feature-gated target executes no test without a reviewed entry in `config/testing/feature-gated-targets.toml`, an integration target gated by `required-features` or a crate-level `#![cfg(feature = ...)]` is not built, or `[features]` and the matrix list disagree |
+| `checks.ci-coverage-audit` | the `#[ignore]` inventory and Hegel-property presence | an ignored test is unlisted, has no reason, uses a category its disposition does not allow, or names a rail whose own definition does not select it (text elsewhere in the flake does not count) |
+
+The named semantic profiles (`fast-core`, `harness`, `cli`, `distributed-simulation`, `outside-in`, `vm-platform`, `dogfood-soak`) stay partitions of `package(molten)`.
+
+Plain `cargo octet check` uses `[workspace.metadata.octet] default_scope` (`molten`, `molten-node-host`, and the no_std kernels), because the strict source gate and the startup binding deny any `warning-only` run; `molten-core` and `molten-release-policy` stay outside it while they carry reviewed debt. `checks.octet-workspace` gates that debt through `config/testing/octet-workspace-baseline.json` and pins every `default_scope` package at zero. Each baseline row is one finding identity: crate, file, lint, and an `anchor` with its `count`. The anchor is the first 16 hex digits of the SHA-256 of the finding's whitespace-normalized line together with its two nearest non-blank lines above and below, then `#` and that window's ordinal among identical windows in the file. An identity survives unrelated line shifts, but a new violation cannot hide behind a repaired one, even on an identical line elsewhere in the file. To shrink it after a repair, rebuild the findings and rewrite the baseline, then review the diff:
+
+```sh
+nix build .#octet-workspace-findings
+python3 scripts/ci-coverage.py octet-baseline write --artifacts result/workspace \
+  --scope "$(cargo metadata --no-deps --format-version 1 | jq -r '[.packages[].name] | join(",")')"
+git diff --stat config/testing/octet-workspace-baseline.json
+```
+
+When the baseline is empty, `default_scope` takes every member and the baseline goes away.
+
+Ignored tests are listed in `config/testing/ignored-tests.toml`. Same-host prerequisites run on rails: `checks.tpm2-sealed-identity` (swtpm), `checks.job-captured-nickel` (pinned Nickel and `prlimit`), `checks.feature-matrix` (DoltLite), and the `object-storage-live` workflow (a disposable S3 endpoint). A Nix rail's own flake binding (with the Nix files it imports) must hold the selector and run `scripts/ci-coverage.py ignored-rail-evidence --rail nix:<rail>`, which fails the rail unless its libtest output shows every inventory test assigned to it passed. A workflow rail must pass the selector to a `cargo test ... --ignored` command. Signed-source, owner-approved-evidence, NVMe, eBPF-capture, and external-cohort tests are recorded as environment-blocked. Diagnostics and role entrypoints are reviewed exclusions.
+
+These rails establish hermetic build, test, lint, and structural validation for the exact checked candidate. They do not establish cross-host, physical-hardware, or production release qualification.
+
 ## Distributed CI risk matrix
 
 Release review uses an explicit risk/cost matrix:
