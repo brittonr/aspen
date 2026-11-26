@@ -5296,9 +5296,11 @@
             inherit pkgs;
             src = sourceForConfigChecks;
           }
+          // import ./nix/production-raft-model.nix { inherit pkgs; }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
             dev-function-profiling = fluxProfilerCli;
-            verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
+            # The verified node-replication pilot is opt-in research, built as
+            # packages.x86_64-linux.verified-node-replication-pilot, not a default check.
             tpm2-sealed-identity = import ./nix/tpm2-identity.nix {
               inherit pkgs rustLibDir;
               testBinaries = moltenTestBinaries;
