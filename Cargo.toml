@@ -220,3 +220,8 @@ overflow-checks = true
 
 [profile.release.package.molten-release-policy]
 overflow-checks = true
+
+# The live execution adapter measures each executable's full bytes before its first spawn; debug native
+# callback fixtures are hundreds of MB, and unoptimized BLAKE3 turns that into tens of seconds per test.
+[profile.dev.package.blake3]
+opt-level = 3

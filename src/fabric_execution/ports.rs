@@ -88,6 +88,9 @@ pub enum PortFailureKind {
     UnknownAfterStart,
     OutputPublication,
     ReceiptConstruction,
+    /// The exact operation and generation already carry unknown or terminal evidence; nothing was
+    /// spawned.
+    DuplicateOperation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

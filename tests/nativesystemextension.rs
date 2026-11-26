@@ -12,3 +12,4 @@ mod support;
 mod test_support;
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/parts/nativesystemextension/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/parts/nativesystemextension/p001/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/parts/nativesystemextension/p002/body.rs"));

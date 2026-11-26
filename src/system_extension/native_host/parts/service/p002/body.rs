@@ -138,55 +138,52 @@ where
             .lock()
             .map_err(|_| crate::fabric::FabricPortError::storage("native effect instance state is unavailable"))? =
             next;
-        match self.delegate.route(binding, effect) {
-            Ok(output) => {
-                let materialized_admission = admit_materialized_effect_output(self.profile, &output);
-                let current = self
-                    .instance
-                    .lock()
-                    .map_err(|_| {
-                        crate::fabric::FabricPortError::storage("native effect instance state is unavailable")
-                    })?
-                    .clone();
-                let terminal = observe_native_operation(
-                    &current,
-                    &operation_ref,
-                    NativeOperationState::Terminal,
-                    Some(output.output_ref.clone()),
-                )
-                .map_err(|_| crate::fabric::FabricPortError::storage("native effect terminal admission failed"))?;
-                save_shared(&self.journal, &terminal).map_err(|_| {
-                    crate::fabric::FabricPortError::storage("native effect terminal persistence failed")
-                })?;
-                *self.instance.lock().map_err(|_| {
-                    crate::fabric::FabricPortError::storage("native effect instance state is unavailable")
-                })? = terminal;
-                materialized_admission?;
-                Ok(output)
-            }
-            Err(error) => {
-                let current = self
-                    .instance
-                    .lock()
-                    .map_err(|_| {
-                        crate::fabric::FabricPortError::storage("native effect instance state is unavailable")
-                    })?
-                    .clone();
-                let unknown = observe_native_operation(&current, &operation_ref, NativeOperationState::Unknown, None)
-                    .map_err(|_| {
-                    crate::fabric::FabricPortError::storage("native effect uncertainty admission failed")
-                })?;
-                save_shared(&self.journal, &unknown).map_err(|_| {
-                    crate::fabric::FabricPortError::storage("native effect uncertainty persistence failed")
-                })?;
-                *self.instance.lock().map_err(|_| {
-                    crate::fabric::FabricPortError::storage("native effect instance state is unavailable")
-                })? = unknown;
-                Err(error)
-            }
-        }
+        // The materialized output is admitted before anything terminal is recorded: an invalid output leaves the
+        // effect unknown (it may have happened) instead of committing its output ref as a terminal observation.
+        let outcome = self
+            .delegate
+            .route(binding, effect)
+            .and_then(|output| admit_materialized_effect_output(self.profile, &output).map(|()| output));
+        let (state, terminal_ref) = match &outcome {
+            Ok(output) => (NativeOperationState::Terminal, Some(output.output_ref.clone())),
+            Err(_) => (NativeOperationState::Unknown, None),
+        };
+        self.record_routed_outcome(&operation_ref, state, terminal_ref)?;
+        outcome
     }
 }
+
+impl<E, J> IntentRecordingEffectPort<'_, E, J>
+where
+    E: FabricEffectPort + ?Sized,
+    J: NativeHostJournal,
+{
+    /// Records what the delegate observed. The delegate has already been called, so the effect may have happened:
+    /// any failure to admit, persist, or publish that record is an uncertain outcome, never a storage denial.
+    // r[impl molten.system_extension.independent_authority_and_output_gate]
+    fn record_routed_outcome(
+        &self,
+        operation_ref: &str,
+        state: NativeOperationState,
+        terminal_ref: Option<String>,
+    ) -> crate::fabric::FabricPortResult<()> {
+        let current = self
+            .instance
+            .lock()
+            .map_err(|_| crate::fabric::FabricPortError::uncertain(EFFECT_UNRECORDED_STATE))?
+            .clone();
+        let next = observe_native_operation(&current, operation_ref, state, terminal_ref)
+            .map_err(|_| crate::fabric::FabricPortError::uncertain(EFFECT_UNRECORDED_ADMISSION))?;
+        save_shared(&self.journal, &next)
+            .map_err(|_| crate::fabric::FabricPortError::uncertain(EFFECT_UNRECORDED_JOURNAL))?;
+        *self.instance.lock().map_err(|_| crate::fabric::FabricPortError::uncertain(EFFECT_UNRECORDED_STATE))? = next;
+        Ok(())
+    }
+}
+
+const EFFECT_UNRECORDED_STATE: &str = "native effect was routed but its instance state is unavailable";
+const EFFECT_UNRECORDED_ADMISSION: &str = "native effect was routed but its outcome record was not admitted";
+const EFFECT_UNRECORDED_JOURNAL: &str = "native effect was routed but its outcome was not journaled";
 
 // r[impl molten.system_extension.native_host.effect_completion_value]
 fn admit_materialized_effect_output(

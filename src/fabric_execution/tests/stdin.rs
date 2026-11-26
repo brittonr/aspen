@@ -25,21 +25,31 @@ pub(super) fn request_without_input(arguments: Vec<String>) -> ExecutionRequest 
 // `WriteStdin` error, and the adapter keeps that post-start failure unknown.
 // The follow-up that adopts bounded-exec's input-delivery observation revises
 // this test to expect the normal publication path instead.
+// r[verify molten.bounded_execution.live_adapter_binding_and_no_replay]
 #[test]
 fn live_adapter_keeps_unconsumed_oversized_input_unknown_without_completion_claim() {
+    let input = vec![0_u8; usize::try_from(PIPE_OVERFLOW_INPUT_BYTES).expect("fixture input fits the host")];
     let mut oversized_request = request(script_arguments("exit 0"));
     oversized_request.limits.stdin_max_bytes = PIPE_OVERFLOW_INPUT_BYTES;
+    oversized_request.stdin_ref = Some(crate::preserves_rail::content_ref_from_bytes(&input));
     let mut oversized_descriptor = descriptor(ExecutionProfileKind::LiveBoundedProcess);
     oversized_descriptor.max_stdin_bytes = PIPE_OVERFLOW_INPUT_BYTES;
     let (profile, request) = canonicalize_request_with_descriptor(&oversized_descriptor, oversized_request);
     let mut adapter = Adapter::new(profile, MemoryPublisher::default()).expect("live adapter");
-    let input = vec![0_u8; usize::try_from(PIPE_OVERFLOW_INPUT_BYTES).expect("fixture input fits the host")];
     let failure = adapter
-        .execute(&request, &resolved(Some(input)), None)
+        .execute(&request, &resolved(Some(input.clone())), None)
         .expect_err("unconsumed oversized input is not a completion");
     assert_eq!(failure.kind, PortFailureKind::UnknownAfterStart);
     assert!(failure.process_observation.is_none());
     assert!(failure.receipt.is_none());
+    assert!(adapter.publisher().published.is_empty());
+    assert_eq!(adapter.reconcile(HASH_B, GENERATION), ReconciliationStatus::UnknownRequiresReconciliation);
+
+    let retry = adapter
+        .execute(&request, &resolved(Some(input)), None)
+        .expect_err("unknown work is not re-executed");
+    assert_eq!(retry.kind, PortFailureKind::DuplicateOperation);
+    assert!(retry.process_observation.is_none());
     assert!(adapter.publisher().published.is_empty());
     assert_eq!(adapter.reconcile(HASH_B, GENERATION), ReconciliationStatus::UnknownRequiresReconciliation);
 }

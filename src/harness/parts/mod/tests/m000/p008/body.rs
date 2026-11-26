@@ -159,8 +159,8 @@
               [<assert "producer" "service.ready">]>"#,
         )
         .expect("parse recursive Steel suite");
-        let error = run_suite_value(&recursive).expect_err("recursive Steel source fails resource preflight");
-        assert!(error.to_string().contains("recursive callable"), "{error}");
+        let error = run_suite_value(&recursive).expect_err("recursive Steel source exhausts real fuel");
+        assert!(error.to_string().contains("exhausted its deterministic fuel limit"), "{error}");
 
         let unbounded_output = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "steel-unbounded-output" 3
@@ -177,8 +177,8 @@
               [<assert "producer" "service.ready">]>"#,
         )
         .expect("parse unbounded Steel output suite");
-        let error = run_suite_value(&unbounded_output).expect_err("unbounded Steel output fails resource preflight");
-        assert!(error.to_string().contains("unbounded resource token make-string"), "{error}");
+        let error = run_suite_value(&unbounded_output).expect_err("ambient Steel allocation primitive is unavailable");
+        assert!(error.to_string().contains("identifier make-string is not available in the Steel sandbox"), "{error}");
     }
 
     #[test]
