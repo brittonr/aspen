@@ -44,12 +44,13 @@ The deterministic adapter described in the governing document consumes canonical
 
 ## Limits and non-claims
 
-The adapter's operation map, keyed by exact `(operation_ref, generation)`, and its measurement cache are local runtime bookkeeping, not a durable distributed reconciliation service. Measurement binds the bytes of the opened file at measurement time; an in-place write to that same file by a holder of write access after measurement and before exec is outside this check, and the resolver's capability is responsible for excluding writers. A receipt describes one bounded observation, not executable trust, application success, platform equivalence, or release readiness. Current authority and resource facts remain application-owned inputs; content identity never supplies them implicitly.
+The adapter's operation map, keyed by exact `(operation_ref, generation)`, and its measurement cache are local runtime bookkeeping, not a durable distributed reconciliation service. Measurement binds the bytes of the opened file at measurement time; an in-place write to that same file by a holder of write access after measurement and before exec is outside this check, and the resolver's capability is responsible for excluding writers. The child's `argv[0]` is the measured handle path (`/proc/<pid>/fd/<n>`), not the resolved executable path: `bounded-exec`'s `CommandSpec` takes the program path and the arguments after `argv[0]` but has no separate `argv[0]`, and the adapter runs the program as that handle path so that the measured file is what executes. Multicall executables that select their behavior from the final component of `argv[0]`, such as BusyBox applets (including the static BusyBox the Nix build sandbox mounts as `/bin/sh`) and coreutils multicall builds, are therefore unsupported by the live adapter; they see a descriptor number as their name. Supporting them needs an explicit `argv0` field on `bounded-exec`'s `CommandSpec` that the adapter sets to the resolved executable path while it still executes the measured handle. An interpreter script runs because the kernel passes the handle path to the interpreter, which reopens it while the adapter still holds the handle open. A receipt describes one bounded observation, not executable trust, application success, platform equivalence, or release readiness. Current authority and resource facts remain application-owned inputs; content identity never supplies them implicitly.
 
 ## Sources
 
 - [Bounded execution fabric contract](../../fabric-execution.md)
 - [Canonical request and receipt boundary](../../../src/fabric_execution/canonical/mod.rs)
 - [Resolved-context checks and request construction](../../../src/fabric_execution/mechanics.rs)
+- [Executable measurement and spawn handle](../../../src/fabric_execution/handle.rs)
 - [Live adapter failures and reconciliation](../../../src/fabric_execution/live.rs)
 - [Technical companion](../README.md)

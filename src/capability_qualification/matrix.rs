@@ -71,8 +71,8 @@ pub(crate) fn scenario_entry(scenario: super::Scenario) -> Entry {
 /// checked into its matrix row. The row was computed by earlier independent
 /// executions, so equality is also the cross-process determinism check.
 pub(crate) fn assert_scenario_bound(scenario: super::Scenario) -> preserves::IOValue {
-    let launcher = super::Launcher::test_harness();
-    let (artifact, decision) = super::runtime_artifact(scenario, &launcher).expect("actual runtime execution");
+    let programs = super::Programs::test_harness();
+    let (artifact, decision) = super::runtime_artifact(scenario, &programs).expect("actual runtime execution");
     assert_eq!(
         decision,
         "pass",

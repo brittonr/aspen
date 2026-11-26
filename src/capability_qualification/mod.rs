@@ -25,6 +25,7 @@ pub use model::Validated;
 pub use model::adapter_ref;
 use preserves::ValueImpl as _;
 pub use products::Launcher;
+pub use products::Programs;
 pub use source::ReadbackSource;
 pub use source::readback;
 
@@ -56,10 +57,10 @@ pub fn observe_subject(root: &crate::node_state::DirectoryRoot) -> crate::error:
 /// Successful identities come from this executing binary, not a wrapper.
 pub fn observe_runs(root: &crate::node_state::DirectoryRoot) -> crate::error::Result<ObservedReadback> {
     let admitted = source::current(root)?;
-    let launcher = Launcher::current()?;
+    let programs = Programs::current()?;
     let mut receipt_refs = std::collections::BTreeMap::new();
     for scenario in Scenario::ALL {
-        let (id, receipt_ref) = observed_receipt(&admitted, scenario, &launcher)?;
+        let (id, receipt_ref) = observed_receipt(&admitted, scenario, &programs)?;
         receipt_refs.insert(id, receipt_ref);
     }
     Ok(ObservedReadback {
@@ -73,10 +74,10 @@ pub fn observe_runs(root: &crate::node_state::DirectoryRoot) -> crate::error::Re
 fn observed_receipt(
     admitted: &source::Current,
     scenario: Scenario,
-    launcher: &Launcher,
+    programs: &Programs,
 ) -> crate::error::Result<(String, String)> {
     let suite = fixture(scenario)?;
-    let (artifact, _) = execute(scenario, &suite, launcher)?;
+    let (artifact, _) = execute(scenario, &suite, programs)?;
     let value = execution_value(
         admitted.source.subject_for(scenario)?,
         scenario,
@@ -99,7 +100,7 @@ pub fn produce(root: &crate::node_state::DirectoryRoot, scenario: Scenario) -> c
     let admitted = source::current(root)?;
     let subject = admitted.source.subject_for(scenario)?.clone();
     let suite = fixture(scenario)?;
-    let (artifact, decision) = execute(scenario, &suite, &Launcher::current()?)?;
+    let (artifact, decision) = execute(scenario, &suite, &Programs::current()?)?;
     let value = execution_value(&subject, scenario, &admitted.source.binding_ref, ExecutionArtifacts {
         validation: admitted.validation_value,
         suite,
@@ -121,10 +122,10 @@ pub fn run_peer(role: &str, run_directory: &std::path::Path) -> crate::error::Re
 fn execute(
     scenario: Scenario,
     suite: &preserves::IOValue,
-    launcher: &Launcher,
+    programs: &Programs,
 ) -> crate::error::Result<(preserves::IOValue, &'static str)> {
     if !scenario.is_harness() {
-        return match products::execute(scenario, launcher) {
+        return match products::execute(scenario, programs) {
             Ok(observation) => match products::verify_observation(scenario, &observation) {
                 Ok(()) => Ok((observation, "pass")),
                 Err(error) => Ok((crate::harness::report_failure_value("validate", &error, &observation)?, "fail")),
@@ -259,9 +260,9 @@ pub fn failure(value: &preserves::IOValue) -> crate::error::Result<crate::harnes
 /// report or the product observation). Evidence-matrix rows bind this ref.
 pub fn runtime_artifact(
     scenario: Scenario,
-    launcher: &Launcher,
+    programs: &Programs,
 ) -> crate::error::Result<(preserves::IOValue, &'static str)> {
-    execute(scenario, &fixture(scenario)?, launcher)
+    execute(scenario, &fixture(scenario)?, programs)
 }
 
 fn text(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<String> {

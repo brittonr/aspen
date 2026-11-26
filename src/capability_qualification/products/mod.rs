@@ -19,6 +19,38 @@ use preserves::ValueImpl as _;
 
 const MAX_CHECKS: usize = 64;
 const MAX_RUNTIME_VALUES: usize = 64;
+/// The shell production qualification runs its live process effect through.
+const PRODUCTION_EFFECT_SHELL: &str = "/bin/sh";
+
+/// The executables product producers start, supplied by their caller.
+#[derive(Debug, Clone)]
+pub struct Programs {
+    /// How a producer starts distinct-process peers of itself.
+    pub peer: Launcher,
+    /// The shell the effect-uncertainty producer runs through the live bounded-process adapter. The
+    /// adapter measures it and starts it through the measured handle path, which becomes its
+    /// `argv[0]`, so it must not be a multicall binary that selects its behavior from that name.
+    pub effect_shell: std::path::PathBuf,
+}
+
+impl Programs {
+    /// Peers of the executing binary and the host `/bin/sh`, as production qualification runs them.
+    pub fn current() -> crate::error::Result<Self> {
+        Ok(Self {
+            peer: Launcher::current()?,
+            effect_shell: std::path::PathBuf::from(PRODUCTION_EFFECT_SHELL),
+        })
+    }
+
+    /// Peers through the unit-test harness and a non-multicall shell resolved by test setup.
+    #[cfg(test)]
+    pub(in crate::capability_qualification) fn test_harness() -> Self {
+        Self {
+            peer: Launcher::test_harness(),
+            effect_shell: crate::fabric_execution::tests::interpreter::non_multicall_shell(),
+        }
+    }
+}
 
 /// Invariant outcomes and canonical runtime receipts observed during one run.
 #[derive(Debug, Default)]
@@ -53,18 +85,18 @@ pub(super) fn plan(scenario: super::Scenario) -> preserves::IOValue {
 }
 
 /// Execute the actual runtime path. An error is a canonical failure, never a pass.
-pub(super) fn execute(scenario: super::Scenario, launcher: &Launcher) -> crate::error::Result<preserves::IOValue> {
+pub(super) fn execute(scenario: super::Scenario, programs: &Programs) -> crate::error::Result<preserves::IOValue> {
     let capability = scenario.definition().capability;
     let evidence = if capability == super::model::DURABLE_STATE_RECOVERY {
         durable::run(scenario)?
     } else if capability == super::model::EFFECT_UNCERTAINTY {
-        effect::run(scenario)?
+        effect::run(scenario, &programs.effect_shell)?
     } else if capability == super::model::CROSS_PROCESS_TRANSPORT {
-        transport::run(scenario, launcher)?
+        transport::run(scenario, &programs.peer)?
     } else if capability == super::model::WORLD_REPLAY_PROMOTION_RESTORE {
         world::run(scenario)?
     } else if capability == super::model::CONTROL_PLANE_FAILOVER {
-        control_plane::run(scenario, launcher)?
+        control_plane::run(scenario, &programs.peer)?
     } else {
         return Err(super::invalid("scenario has no native product producer"));
     };

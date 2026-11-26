@@ -18,8 +18,8 @@ fn qualification_peer_entry() {
     run_peer(&role, std::path::Path::new(&run_directory)).expect("qualification peer role");
 }
 
-fn launcher() -> Launcher {
-    Launcher::test_harness()
+fn programs() -> Programs {
+    Programs::test_harness()
 }
 
 // Explicit cfg(test) source token. It never calls/stands in for production
@@ -57,7 +57,7 @@ fn fixture_source(scenarios: &[Scenario]) -> (ReadbackSource, preserves::IOValue
 
 fn recorded(source: &ReadbackSource, validation: preserves::IOValue, scenario: Scenario) -> preserves::IOValue {
     let suite = fixture(scenario).expect("real fixed suite");
-    let (artifact, decision) = execute(scenario, &suite, &launcher()).expect("actual native runtime run");
+    let (artifact, decision) = execute(scenario, &suite, &programs()).expect("actual native runtime run");
     assert_eq!(decision, "pass", "{} artifact: {artifact:?}", scenario.id());
     execution_value(source.subject_for(scenario).expect("subject"), scenario, &source.binding_ref, ExecutionArtifacts {
         validation,
@@ -98,7 +98,7 @@ fn fixed_native_positive_and_negative_execute_and_validate_without_live_promotio
 fn every_subject_dimension_denies_even_when_caller_rewrites_receipt_and_input_together() {
     let (source, gate) = fixture_source(&HARNESS_SCENARIOS);
     let suite = fixture(Scenario::GrantedSend).expect("fixed suite");
-    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &launcher()).expect("real run");
+    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &programs()).expect("real run");
     for dimension in 0..8 {
         let mut forged = source.subject_for(Scenario::GrantedSend).expect("subject").clone();
         match dimension {
@@ -127,7 +127,7 @@ fn stale_gate_wrong_fixed_scenario_and_generic_success_are_rejected() {
     let (source, gate) = fixture_source(&HARNESS_SCENARIOS);
     let subject = source.subject_for(Scenario::GrantedSend).expect("subject").clone();
     let suite = fixture(Scenario::GrantedSend).expect("fixed suite");
-    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &launcher()).expect("real native run");
+    let (artifact, _) = execute(Scenario::GrantedSend, &suite, &programs()).expect("real native run");
     let wrong_suite = execution_value(&subject, Scenario::DeniedSend, &source.binding_ref, ExecutionArtifacts {
         validation: gate.clone(),
         suite: suite.clone(),
@@ -310,7 +310,7 @@ fn product_receipts_validate_only_untampered_actual_execution() {
     assert_eq!(validated.canonical_decision, "pass");
 
     let suite = fixture(scenario).expect("plan");
-    let (artifact, _) = runtime_artifact(scenario, &launcher()).expect("actual run");
+    let (artifact, _) = runtime_artifact(scenario, &programs()).expect("actual run");
     let rewrite = |artifact: preserves::IOValue| {
         execution_value(&subject, scenario, &source.binding_ref, ExecutionArtifacts {
             validation: gate.clone(),
