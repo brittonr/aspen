@@ -1,5 +1,6 @@
 use super::*;
 
+mod binding;
 mod live;
 mod simulation;
 mod stdin;
@@ -31,6 +32,7 @@ const SUCCESS_EXIT_CODE: i32 = 0;
 const REJECTED_EXIT_CODE: i32 = 7;
 const EXPECTED_STDOUT: &[u8] = b"bounded:input";
 const INPUT_BYTES: &[u8] = b"input\n";
+const SHELL_PATH: &str = "/bin/sh";
 const FLOOD_OUTPUT: &str = "overflow";
 const NON_TERMINATING_SCRIPT: &str = "while :; do :; done";
 
@@ -107,7 +109,7 @@ fn request(arguments: Vec<String>) -> ExecutionRequest {
         generation: GENERATION,
         profile_ref: HASH_A.to_string(),
         executable_artifact_ref: HASH_B.to_string(),
-        executable_identity_ref: HASH_C.to_string(),
+        executable_identity_ref: shell_identity_ref(),
         arguments,
         environment: vec![EnvironmentEntry {
             name: "FIXTURE".to_string(),
@@ -119,7 +121,7 @@ fn request(arguments: Vec<String>) -> ExecutionRequest {
         executable_resolution: ExecutableResolutionMode::ExactArtifact,
         workspace_ref: HASH_D.to_string(),
         workspace_mode: WorkspaceMode::CapabilityRoot,
-        stdin_ref: Some(HASH_E.to_string()),
+        stdin_ref: Some(crate::preserves_rail::content_ref_from_bytes(INPUT_BYTES)),
         limits: ExecutionRequestLimits {
             timeout_ms: TIMEOUT_MS,
             stdin_max_bytes: STREAM_BYTES,
@@ -189,14 +191,19 @@ fn canonicalize_request_with_descriptor(
     (profile, request)
 }
 
+/// The BLAKE3 content identity of the fixture shell, as the admitted executable measurement.
+fn shell_identity_ref() -> String {
+    crate::preserves_rail::content_ref_from_bytes(&std::fs::read(SHELL_PATH).expect("read fixture shell"))
+}
+
 fn resolved(stdin_bytes: Option<Vec<u8>>) -> ResolvedContext {
     ResolvedContext {
-        executable_path: std::path::PathBuf::from("/bin/sh"),
+        executable_path: std::path::PathBuf::from(SHELL_PATH),
         executable_artifact_ref: HASH_B.to_string(),
-        executable_identity_ref: HASH_C.to_string(),
+        executable_identity_ref: shell_identity_ref(),
         workspace_path: std::path::PathBuf::from("/"),
         workspace_ref: HASH_D.to_string(),
-        stdin_ref: stdin_bytes.as_ref().map(|_| HASH_E.to_string()),
+        stdin_ref: stdin_bytes.as_deref().map(crate::preserves_rail::content_ref_from_bytes),
         stdin_bytes,
     }
 }

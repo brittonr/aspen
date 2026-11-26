@@ -61,6 +61,8 @@ The decoder rejects missing bytes, identity drift, malformed values, non-canonic
 
 The executor persists callback intent before value reads or process execution. It materializes payload and state through `NativeCallbackValuePort`.
 
+Each callback execution request is admitted against the authority grant admitted with the service and the live supervisor generation read from the instance record. The grant is never rewritten from the request: only the host-derived callback operation identity and the active generation scope it to one execution. A callback generation fenced after its intent commit, or a request whose authority, resource grant, executable, workspace, extension, or service binding differs from the admitted grant, is denied before any process starts.
+
 After execution, it admits all returned values and effect metadata. It persists each publication intent before the value port can publish bytes.
 
 A definite publication rejection becomes terminal. Uncertain publication remains unknown and blocks automatic retry and dependent provider routing.
@@ -141,13 +143,13 @@ Every public invocation needs both its exact operation credential and a fresh lo
 
 The callback outcome is validated before any effect is visible. Every effect request body publishes before routing. Each effect uses one active manifest binding.
 
-The service persists effect intent before adapter routing. A lost result remains unknown.
+The service persists effect intent before adapter routing. A lost result remains unknown. Once the adapter has been called the effect may have happened, so a failure to admit, journal, or publish the routed outcome is reported as an uncertain external outcome, never as a storage denial.
 
 A terminal effect observation returns through a generation-fenced `message` callback. Version two binds the exact optional provider output value.
 
 A materializing native profile requires bounded output bytes whose BLAKE3 identity matches the effect output reference. Missing or changed bytes block callback delivery.
 
-The provider effect remains terminal when value admission fails. The host does not retry it or infer workload success. The extension decides its semantic transition.
+Output-value admission runs before anything terminal is recorded. When it fails, the provider effect is recorded `Unknown` (it may have happened) with no terminal reference; the invalid output reference is never committed as a terminal observation. The host does not retry it or infer workload success, and reconciliation, not the reference, decides its meaning. The extension decides its semantic transition.
 
 Public installed collaboration effects additionally require the separately
 governed [admitted native effect runtime composition](native-effect-runtime.md).

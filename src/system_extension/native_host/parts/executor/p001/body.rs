@@ -230,11 +230,21 @@ where
         self.replace_instance(next)
     }
 
+    /// Builds the callback execution request and admits it against the service's independently admitted authority
+    /// grant and the live supervisor generation.
+    ///
+    /// The template authority is the grant admitted with the service; it is never rewritten from the request. Only
+    /// the host-derived operation identity and the active generation scope it to this execution, so a stale
+    /// callback generation or a request whose executable, workspace, extension, or grant bindings differ from the
+    /// admitted grant is denied before any process starts.
+    // r[impl molten.system_extension.independent_authority_and_output_gate]
     fn execution_request(
         &self,
         operation_ref: &str,
         envelope: &CanonicalCallbackEnvelope,
     ) -> Result<Request, CallbackFailure> {
+        let active_generation =
+            self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.lifecycle.generation.get();
         let mut request = self.template.request.clone();
         request.operation_ref = operation_ref.to_string();
         request.idempotency_ref = native_identity_ref(&[
@@ -256,24 +266,10 @@ where
         request.resource_grant_ref = self.template.executable.executable.resource_ref.clone();
 
         let mut authority = self.template.authority.clone();
-        authority.authority_ref = request.authority_ref.clone();
-        authority.resource_grant_ref = request.resource_grant_ref.clone();
-        authority.executable_artifact_ref = request.executable_artifact_ref.clone();
-        authority.executable_identity_ref = request.executable_identity_ref.clone();
-        authority.workspace_ref = request.workspace_ref.clone();
-        authority.operation_ref = request.operation_ref.clone();
-        authority.extension_id = request.extension_id.clone();
-        authority.service_id = request.service_id.clone();
-        authority.generation = request.generation;
-        authority.profile_ref = request.profile_ref.clone();
-        admit_request(
-            self.port.profile(),
-            &request,
-            &authority,
-            self.template.resources,
-            request.generation,
-        )
-        .map_err(|error| CallbackFailure::Admission(error.to_string()))
+        authority.operation_ref = operation_ref.to_string();
+        authority.generation = active_generation;
+        admit_request(self.port.profile(), &request, &authority, self.template.resources, active_generation)
+            .map_err(|error| CallbackFailure::Admission(error.to_string()))
     }
 
     fn resolved_context(&self, envelope: &CanonicalCallbackEnvelope) -> ResolvedContext {

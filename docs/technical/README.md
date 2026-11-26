@@ -100,6 +100,7 @@ Compare bounded processes, component hosts, and executable mappings without conf
 - [Component resource accounting](execution/component-resource-accounting.md)
 - [Executable extent trust boundary](execution/executable-extent-trust-boundary.md)
 - [Execution performance evidence](execution/execution-performance-evidence.md)
+- [Steel sandbox and metering](execution/steel-sandbox-and-metering.md)
 
 ### Time
 
