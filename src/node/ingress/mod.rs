@@ -11,7 +11,7 @@ mod state;
 pub(super) fn enqueue(
     root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
-) -> Result<EnqueueOutcome> {
+) -> crate::error::Result<super::delivery::EnqueueOutcome> {
     let delivery_root = root.delivery_store()?;
     let mut store = match crate::delivery_idempotency::PublicationStore::open(&delivery_root) {
         Ok(store) => store,
@@ -30,7 +30,7 @@ fn enqueue_locked(
     root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
-) -> Result<EnqueueOutcome> {
+) -> crate::error::Result<super::delivery::EnqueueOutcome> {
     let evidence = observations::Evidence::read(root, &envelope.request)?;
     let intent = store.read(&envelope.operation_ref, &envelope.request.request_ref)?;
     let preflight =
@@ -62,8 +62,8 @@ fn complete_enqueue(
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
     delivery: crate::delivery_idempotency::Decision,
     evidence: &observations::Evidence,
-) -> Result<EnqueueOutcome> {
-    import_artifact(root, &delivery.receipt.value)?;
+) -> crate::error::Result<super::delivery::EnqueueOutcome> {
+    super::storage::import_artifact(root, &delivery.receipt.value)?;
     let mut intent = store.read(&envelope.operation_ref, &envelope.request.request_ref)?;
     let dedup = match delivery.receipt.decision.as_str() {
         "first" => DedupObservation::First,
@@ -94,8 +94,8 @@ fn complete_enqueue(
 pub(super) fn reserve(
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
     envelope: &ControlIngressEnvelope,
-) -> Result<crate::delivery_idempotency::Decision> {
-    let evidence = ingress_idempotency_evidence_refs(envelope);
+) -> crate::error::Result<crate::delivery_idempotency::Decision> {
+    let evidence = super::mandates::ingress_idempotency_evidence_refs(envelope);
     let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
     store.reserve(
         crate::delivery_idempotency::CheckRequest {
@@ -126,14 +126,14 @@ fn execute(
     input: ExecuteInput<'_>,
     store: &mut crate::delivery_idempotency::PublicationStore<'_>,
     intent: &mut Option<crate::delivery_idempotency::PublicationIntent>,
-) -> Result<EnqueueOutcome> {
+) -> crate::error::Result<super::delivery::EnqueueOutcome> {
     let ExecuteInput {
         root,
         envelope,
         evidence,
         decision,
     } = input;
-    let mut outcome = EnqueueOutcome::default();
+    let mut outcome = super::delivery::EnqueueOutcome::default();
     match decision {
         PublicationDecision::PublishFresh | PublicationDecision::RecoverPublication => {
             state::transition(store, intent, PublicationPhase::Publishing)?;
@@ -157,7 +157,7 @@ fn execute(
             let queue = evidence
                 .queue
                 .as_ref()
-                .ok_or_else(|| MoltenError::invalid_harness("published queue evidence missing"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("published queue evidence missing"))?;
             state::transition(store, intent, PublicationPhase::Published)?;
             outcome.queue_receipt_ref = Some(queue.receipt_ref.clone());
             outcome.phase = "duplicate-publication";
@@ -166,7 +166,7 @@ fn execute(
             let control = evidence
                 .dispatch
                 .as_ref()
-                .ok_or_else(|| MoltenError::invalid_harness("dispatch evidence missing"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("dispatch evidence missing"))?;
             outcome.queue_receipt_ref = Some(effects::observe_dispatch(root, &envelope.request, control)?);
             state::transition(store, intent, PublicationPhase::Dispatched)?;
             outcome.phase = "completed-dispatch";
@@ -181,7 +181,10 @@ fn execute(
     Ok(outcome)
 }
 
-pub(super) fn submit(root: &crate::node_state::DirectoryRoot, request_value: &IoValue) -> Result<ControlSubmit> {
+pub(super) fn submit(
+    root: &crate::node_state::DirectoryRoot,
+    request_value: &preserves::IOValue,
+) -> crate::error::Result<ControlSubmit> {
     let request = crate::node_runtime::parse_control_request(request_value)?;
     let delivery_root = root.delivery_store()?;
     let mut store = crate::delivery_idempotency::PublicationStore::open(&delivery_root)?;

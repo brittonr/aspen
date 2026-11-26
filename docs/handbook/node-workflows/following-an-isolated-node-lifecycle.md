@@ -8,7 +8,7 @@ Everything below is source-checked, not executed for this document. The regressi
 
 ## 1. Establish a genuinely separate workspace
 
-The [regression case](../../../src/node/parts/daemon/tests/m000/p000/body.rs) obtains a process workspace before initialization. Mirror that separation: select an unused node root and a separate unused evidence directory, neither shared with another service nor nested in an existing deployment. Keep permissions suitable for persisted endpoint secrets. Do not initialize over an old root to repair it.
+The [regression case](../../../src/node/daemon/tests/lifecycle/startup.rs) obtains a process workspace before initialization. Mirror that separation: select an unused node root and a separate unused evidence directory, neither shared with another service nor nested in an existing deployment. Keep permissions suitable for persisted endpoint secrets. Do not initialize over an old root to repair it.
 
 The source path is `src/main.rs` → `cli/ops/node.rs` → the lifecycle shell → `init_local_with_root`. The public shell accepts a host path, opens a `DirectoryRoot`, and passes the acquired capability onward. Descendant operations are not authorized by repeatedly trusting the path string.
 
@@ -35,7 +35,7 @@ The regression checks canonical configuration and profile-resolution refs, then 
 
 The next source call is `run_local`. It checks restart state, reads configuration and identity evidence, obtains runtime startup receipts, writes adapter-start receipts, and writes the startup receipt. Only a passing decision proceeds to the startup-bound active lock and startup ledger import. These writes are ordered effects, not one atomic commit.
 
-For an optional exercise, continue only after reviewing successful initialization. These commands use the [same declarations](../../../src/cli/ops/node/command/base.rs) and the [run/status/stop shells](../../../src/cli/ops/node/lifecycle.rs); their effect ordering is in [daemon startup and shutdown](../../../src/node/parts/daemon/p018/body.rs). Source-checked; not executed.
+For an optional exercise, continue only after reviewing successful initialization. These commands use the [same declarations](../../../src/cli/ops/node/command/base.rs) and the [run/status/stop shells](../../../src/cli/ops/node/lifecycle.rs); their effect ordering is in [daemon startup and shutdown](../../../src/node/daemon/lifecycle/running.rs). Source-checked; not executed.
 
 ```sh
 : "${NODE_ROOT:?Use the initialized isolated root}"
@@ -70,6 +70,6 @@ On the clean path, restart writes restart-health evidence and requires a passing
 - [Lifecycle technical companion](../../technical/operations/node-lifecycle-and-recovery.md)
 - [Production operator runbooks](../../production-operator-runbooks.md)
 - [Node-state authority contract](../../node-state-filesystem-authority.md)
-- [Concrete lifecycle regression](../../../src/node/parts/daemon/tests/m000/p000/body.rs)
-- [Initialization implementation](../../../src/node/parts/daemon/p045/body.rs)
-- [Restart implementation](../../../src/node/parts/daemon/p036/body.rs)
+- [Concrete lifecycle regression](../../../src/node/daemon/tests/lifecycle/startup.rs)
+- [Initialization implementation](../../../src/node/daemon/lifecycle/bootstrapping.rs)
+- [Restart implementation](../../../src/node/daemon/records/inspection.rs)

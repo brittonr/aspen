@@ -1826,10 +1826,11 @@
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \
                     src/iroh/parts/exchange/tests/m000/p001/body.rs \
                     src/evidence/parts/chain/tests/m000/p003/body.rs \
-                    src/node/parts/daemon/tests/m000/p000/body.rs \
-                    src/node/parts/daemon/tests/m000/p015/body.rs \
-                    src/node/parts/daemon/tests/m000/p010/body.rs \
-                    src/node/parts/daemon/tests/m000/p022/body.rs \
+                    src/node/daemon/tests/lifecycle/startup.rs \
+                    src/node/daemon/tests/lifecycle/mailbox.rs \
+                    src/node/daemon/tests/lifecycle/looping.rs \
+                    src/node/daemon/tests/services/loopbacks.rs \
+                    src/node/daemon/tests/services/supervisors.rs \
                     tests/parts/cliharness/p000/body.rs \
                     tests/parts/cliharness/p013/body.rs \
                     > "$TMPDIR/converted.json"
@@ -1902,7 +1903,8 @@
                     tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs \
                     > "$TMPDIR/reacquisition-negative.json"
                   ast-grep scan --rule "$ambient_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon.rs \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
@@ -1912,7 +1914,7 @@
                     src/job/parts/dag/p033/body.rs \
                     > "$TMPDIR/ambient-converted.json"
                   ast-grep scan --rule "$reacquisition_rule" --json=compact \
-                    src/node/parts/daemon \
+                    src/node/daemon \
                     src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \

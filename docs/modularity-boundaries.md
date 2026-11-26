@@ -91,9 +91,9 @@ The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and ou
 
 ## Semantic module layout
 
-The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), and node daemon (`src/node/daemon.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. Converting them into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
+The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), and job DAG (`src/job/dag.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. The node daemon (`src/node/daemon.rs`) is converted; see [Node daemon layout](#node-daemon-layout). The harness schema is converted as described below. Converting the rest into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
 
-- re-export every public item explicitly from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths;
+- re-export every public item from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths (explicitly where the list fits the file limit; the node daemon uses one glob per submodule, see below);
 - reference other modules by qualified owner path, because Octet's `non_trait_imports` rejects non-trait `use`, and replace shared-scope aliases (`type Result<T>`, forwarding wrappers around `preserves_rail`) with their owner paths;
 - name modules so that no contained item repeats a module word (`path_segment_repetition`), and keep each file within 300 lines and each directory within seven Rust files;
 - start every item private and raise its visibility only where another module uses it;
@@ -104,6 +104,26 @@ The internal root names (`blocks`, `custody`, `workload`, and `daemon_core`) and
 The harness schema (`src/harness/schema.rs`) is converted. It is the real `testbed::schema` module; the former internal name `format` and its `schema` alias module are gone, because no item name repeats `schema` once three private names were renamed (`POLICY_INPUT_ID`, `CAPABILITY_INPUT_ID`, `parse_budget_limits_record`). `schema.rs` declares 50 private child modules with `#[path]`. They are grouped into ten directories under `src/harness/schema/`: `model`, `trace`, `gates`, `grants`, `checks`, `receipts`, `repro`, `redaction`, `preflight`, and `executors`. Each child module owns one responsibility, such as `intake` (suite parsing), `tape` (effect logs), `covenant` (policy preflight material), `evaluator` (in-process Nickel), or `scrub` (bounded redaction traversal). Siblings call each other through `super::<module>::<item>`, and those items are `pub(super)`. Other items stay private. Items used by other harness modules are `pub` and re-exported with `pub use` from `schema.rs`, so `super::schema::*` and `molten::harness::*` paths resolve as before. Their effective visibility is still bounded by the private `schema` module. The shared aliases (`IoValue`, `Result`, `MoltenError`, and others) and the `preserves_rail` forwarding wrappers were replaced by owner paths. Child modules import nothing except the `preserves::ValueImpl` trait, and only where its methods are called. `effect_log_value` is re-exported under `#[cfg(test)]` because only the harness tests call it from outside the module. No schema text, fixture, or source file of this module is hashed into an identity, and canonical encodings are unchanged.
 
 Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
+
+### Node daemon layout
+
+`src/node/daemon.rs` mounts the internal root `daemon_core` (public alias `node_daemon`) as a real module tree. Its 61 production shards and 24 test shards under `src/node/parts/daemon/` are gone.
+
+- **Submodules.** The entrypoint declares 81 flat submodules with `#[path]`, one responsibility each, plus the existing `ingress` and `source_binding` modules. Physical directories under `src/node/daemon/` group them, each with at most seven files:
+  - `vocabulary/`: limits and public request and outcome records.
+  - `access/` and `trust/`: grants, tickets, peer admission, and delegation.
+  - `workflow/` and `protocol/`: live workflow bundles and the protocol gate.
+  - `records/`: Preserves field readers, validators, receipt parsers, and lifecycle inspection.
+  - `encoding/` and `stamping/`: receipt values and summaries.
+  - `lifecycle/`, `service/`, and `dispatch/`: local lifecycle, the control service, and dispatch.
+  - `live/`, `listen/`, and `preflight/`: live Iroh ingress, sends, listeners, and profiles.
+  - `state/`: state-root storage, paths, locks, and current-run tracking.
+- **References.** Siblings refer to each other by qualified path, such as `super::storage::read_preserves`. The only `use` items are trait imports (`n0_future::StreamExt`). The former shared aliases (`Result`, `IoValue`, `Path`, `PathBuf`, `MoltenError`, `Ipv4Addr`) are replaced by their owner paths, in `ingress/` as well.
+- **Visibility.** Items, fields, and methods stay private unless another daemon submodule or test uses them; those get `pub(super)`. Public items keep `pub`.
+- **Re-exports.** The entrypoint has one `pub use self::<module>::*;` for each submodule that holds a public item. An explicit per-item list (about 190 lines) plus the `#[path]` declarations would exceed the 300-line file limit. Outside `daemon_core`, the globs expose only `pub` items.
+- **Tests.** `src/node/daemon/tests/` uses the same layout: 30 flat modules under `daemon_core::tests`. The `cfg(test)` helpers that used to sit in the production shards moved to `tests/mod.rs`: the `fs` wrappers, the `Path`/`PathBuf` `NodeStateAuthority` impls, and the test authority refs.
+- **ast-grep rules.** The host-path helpers (`config_path`, `startup_path`, `shutdown_path`, `diagnostic_node_state_path`) live in `state/ambient.rs`. It is the only daemon file the node-state ambient-filesystem rule ignores. The root-reacquisition rule lists the modules that now hold the items of the shards it used to list.
+- **Alias.** `daemon_core` stays the internal root and `node_daemon` stays its alias. 184 call sites use `node_daemon`. Promoting the alias would repeat `node` in 22 item names, 7 of them public (for example `NodeLifecycleState`).
 
 ## Chunk store semantic boundary
 

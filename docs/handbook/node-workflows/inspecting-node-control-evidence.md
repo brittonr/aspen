@@ -23,7 +23,7 @@ By contrast, `node status` writes health and control receipts and imports them i
 
 ## 2. Anchor the investigation to one request
 
-Locate the original `node-control-request` and its canonical request ref. The concrete [status-dispatch regression](../../../src/node/parts/daemon/tests/m000/p000/body.rs) checks that the parsed control receipt's `request_ref` equals the request it submitted. Apply that relationship rather than joining evidence by timestamp or a familiar-looking basename.
+Locate the original `node-control-request` and its canonical request ref. The concrete [status-dispatch regression](../../../src/node/daemon/tests/lifecycle/mailbox.rs) checks that the parsed control receipt's `request_ref` equals the request it submitted. Apply that relationship rather than joining evidence by timestamp or a familiar-looking basename.
 
 Check operation and any target or payload binding before interpreting a result. The dispatcher has distinct branches for `status`, `shutdown`, `install`, `run`, and `gate`; a successful status request does not validate a neighboring job or installation. Treat authority, policy, resource, and evidence references as relationships requiring their own review, not as permission merely because strings are present.
 
@@ -70,7 +70,7 @@ Stop when request identity, startup binding, admission evidence, or effect compl
 - [Handbook](../README.md)
 - [Production operator runbooks](../../production-operator-runbooks.md)
 - [Lifecycle technical companion](../../technical/operations/node-lifecycle-and-recovery.md)
-- [Control submission implementation](../../../src/node/parts/daemon/p018/body.rs)
-- [Dispatch and bounded loop implementation](../../../src/node/parts/daemon/p046/body.rs)
-- [Lock and archive path helpers](../../../src/node/parts/daemon/p034/body.rs)
-- [Control regression example](../../../src/node/parts/daemon/tests/m000/p000/body.rs)
+- [Control submission implementation](../../../src/node/daemon/lifecycle/submission.rs)
+- [Dispatch and bounded loop implementation](../../../src/node/daemon/lifecycle/submission.rs)
+- [Lock and archive path helpers](../../../src/node/daemon/state/leases.rs)
+- [Control regression example](../../../src/node/daemon/tests/lifecycle/mailbox.rs)
