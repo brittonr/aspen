@@ -5,7 +5,7 @@
 - [x] [serial] Add `inspect_pending`, `abort_pre_effect_intent`, and `reconcile_pending_intent` to `AssignmentPersistence`/`Redb` (`src/fabric_membership/`) and allow fenced successor initialization after `Quarantined` (`crates/molten-core/src/fabric_membership/transition.rs`). r[molten.fabric_membership.recoverable_pending_and_quarantined_slots]
 - [x] [parallel] Fix `PlacementSearch::select` to rank healthy nodes ahead of `Suspected`/`Unavailable` under `allow_degraded`, and make failure-observation reduction order-independent and scoped per `time_basis_ref` (`crates/molten-core/src/fabric_membership/mod.rs`). r[molten.fabric_membership.healthy_first_placement_and_time_basis_reduction]
 - [x] [serial] Fix coordination (`src/coordination/parts/mod/{p002,p003,p004,p005}/body.rs`) to persist real `FencingToken.token_ref`, bind `receipt.dataspace_assertion_refs` to emitted assertions, add lock expiry and election resignation, and stop hardcoding the fixture manifest over `control_group_ref`. r[molten.coordination.truthful_tokens_assertions_and_expiry]
-- [ ] [serial] Run focused `fabric_time`, `fabric_membership`, and `coordination` unit/property suites, Clippy, Octet, and strict Cairn validation. r[molten.fabric_time.reservation_stale_release_and_worker_conservation] r[molten.fabric_time.batch_item_atomicity_and_fenced_renew] r[molten.fabric_membership.recoverable_pending_and_quarantined_slots] r[molten.fabric_membership.healthy_first_placement_and_time_basis_reduction] r[molten.coordination.truthful_tokens_assertions_and_expiry]
+- [x] [serial] Run focused `fabric_time`, `fabric_membership`, and `coordination` unit/property suites, Clippy, Octet, and strict Cairn validation. r[molten.fabric_time.reservation_stale_release_and_worker_conservation] r[molten.fabric_time.batch_item_atomicity_and_fenced_renew] r[molten.fabric_membership.recoverable_pending_and_quarantined_slots] r[molten.fabric_membership.healthy_first_placement_and_time_basis_reduction] r[molten.coordination.truthful_tokens_assertions_and_expiry]
 
 ## Verification (2026-11-26, tasks 1–4: fabric_time + fabric_membership)
 
@@ -103,3 +103,11 @@ Commands (leviathan via `aremote`; formatting and Cairn locally):
 - `cargo octet check --artifact-dir target/octet`: warning-only, 1053 findings workspace-wide, 0 errors. Files this change touched carry 35 of them across 13 files: `coordination/parts/mod/{p000,p002,p004,p005,p016}`, `fabric_membership/{persistence.rs,persistence/codec.rs,ports.rs}` and tests, `fabric_time/parts/tests/p003`, `addressable_actor/command/placement.rs`. They are mostly `excessive_file_length`; the rest are `bool_naming`, `compound_assertion` and `fat_trait`. They are left for OctetSweep.
 - Strict `cairn validate`: valid.
 - **Final task left unchecked:** the Octet source gate is not clean for this change's files (above). Every other requirement is met.
+
+## Verification (2026-11-26, integration closure)
+
+OctetSweep cleared the 35 findings listed above by splitting files and renaming items, with no behavior change. These were rerun on the integration branch:
+- `aremote 'cargo test -p molten-core --lib'` on `054b09732`: 834 passed, 0 failed.
+- `aremote 'cargo test -p molten --lib -- fabric_time fabric_membership orchestration:: coordination addressable_actor::command world_promotion world_head world_merge world_witness world_distribution worldcommit world_commit'` on `054b09732`: 224 passed, 0 failed.
+- Workspace `cargo octet check` on `6d259b9b0`: `Status: clean`, 0 findings. `aremote 'cargo clippy --workspace --all-targets -- -D warnings'`: clean.
+- Strict `cairn validate`: valid.

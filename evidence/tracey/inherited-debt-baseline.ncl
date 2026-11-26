@@ -42,9 +42,9 @@ let metadata | BaselineMetadata = {
   # `uncompiled_marker_files=` output lines; the inherited-tracey-debt check compares each of them.
   # `referenced`: accepted requirements named by any marker (any verb, any scanned root).
   # `covered`: accepted requirements with compiled `impl` and `verify` markers (code-backed coverage).
-  requirements = 3147,
-  referenced = 1174,
-  covered = 686,
+  requirements = 3161,
+  referenced = 1188,
+  covered = 700,
   uncovered = 2461,
   dangling = 0,
   uncompiled_marker_files = 0,
@@ -68,7 +68,13 @@ let metadata | BaselineMetadata = {
   # it is implemented and verified in `tools/`, which never discharges coverage. Referenced and covered counts
   # moved with the concurrent CompanionDocs, daemon, and schema de-shard merges. Archiving
   # `repair-companion-doc-source-discrepancies` then accepted seven requirements (3,147), all carrying compiled
-  # `impl` and `verify` markers, so covered rose to 686 and the 2,461-entry baseline is unchanged.
+  # `impl` and `verify` markers, so covered rose to 686 and the 2,461-entry baseline is unchanged. Archiving
+  # `extract-no-std-preserves-packed-kernel`, `extract-no-std-raft-and-consensus-kernels`,
+  # `eliminate-time-membership-and-coordination-state-wedges` and
+  # `harden-world-promotion-head-and-merge-semantics` then accepted fourteen requirements (3,161), all carrying
+  # compiled `impl` and `verify` markers once `molten.project.molten_preserves_core_no_std_gate` gained its
+  # verify marker on the kernel's encoder round-trip property, so covered rose to 700 and the 2,461-entry
+  # baseline is unchanged.
   previous_observation = {
     observed_date = "2026-11-13",
     revision = "9842cc6453a00ed943a866549bb4307c8502d575",

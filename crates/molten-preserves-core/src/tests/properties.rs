@@ -1,6 +1,7 @@
 //! Bounded Hegel properties of the encoder, the strict decoder, identity, and the walker.
 
 // r[verify molten.runtime_spine.no_std_preserves_packed_kernel]
+// r[verify molten.project.molten_preserves_core_no_std_gate]
 #[hegel::test(test_cases = 128)]
 fn hegel_canonical_bytes_round_trip_through_the_strict_decoder(tc: hegel::TestCase) {
     let value = super::support::draw_value(&tc);

@@ -5,7 +5,7 @@
     "crates",
     "tests"
   ],
-  "covered": 686,
+  "covered": 700,
   "cross_reference_roots": [
     "tools",
     "docs",
@@ -30,9 +30,9 @@
     "revision": "9842cc6453a00ed943a866549bb4307c8502d575",
     "uncovered": 1930
   },
-  "referenced": 1174,
+  "referenced": 1188,
   "requirement_root": ".cairn/specs",
-  "requirements": 3147,
+  "requirements": 3161,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v2",
   "uncompiled_marker_files": 0,

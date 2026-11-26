@@ -10,7 +10,7 @@
   - `canonical_bytes`, `strict_canonical_decode`, content refs, optional refs and scans route through the kernel; text syntax stays on `preserves`. Failure classes are kept (malformed → `Preserves`, non-canonical/limit → invalid-harness denial).
   - Review fix (hot path): `canonical_bytes` no longer builds a `PackedValue` tree. `src/preserves/bridge/encode.rs` implements `preserves::Writer` over the kernel's `incremental::CanonicalWriter`, so `IOValue` walks itself by reference and the kernel writes each payload once (lengths, integer minimality, chunk sorting). `PackedValue` stays for decoding and no_std callers. `num-bigint` became a direct dependency only because `preserves::Writer::write_int` names `BigInt`; it was already in `Cargo.lock`.
   - Review fix (annotated order): `decode_skipping_annotations` orders set elements and dictionary keys by their annotation-free canonical bytes (`skipped_annotations_do_not_change_collection_order`).
-- [ ] [serial] Wire `crates/molten-preserves-core` into `Cargo.toml`, workspace Octet, `flake.nix` (`no_std` compile gate + tests), and `build-plan.json`, then run Clippy, Octet, Nix checks, and strict Cairn validation. r[molten.project.molten_preserves_core_no_std_gate]
+- [x] [serial] Wire `crates/molten-preserves-core` into `Cargo.toml`, workspace Octet, `flake.nix` (`no_std` compile gate + tests), and `build-plan.json`, then run Clippy, Octet, Nix checks, and strict Cairn validation. r[molten.project.molten_preserves_core_no_std_gate]
   - Wiring done: workspace member, release overflow-check profile, `[workspace.metadata.octet]`, `no-std-kernels` nextest profile, `moltenOwnedCrates`, `noStdKernels` entry + `molten-preserves-core-no-std` check, `license-policy.tsv` package rule, `scripts/no-std-kernel-plans.sh`, regenerated `Cargo.lock`, `build-plan.json`, `release-policy-build-plan.json`, `molten-core-no-std-build-plan.json` and `nix/no-std-kernels/*`. In the slice worktree the final checks were blocked by failures outside this change (a node-host crate-boundary requirement reference in another change's notes, a stale cliharness Octet fixture hash, and two Hegel `TooSlow` properties); all three are fixed or bounded on the integration branch, where the final run below happens.
 
 ## Verification (2026-11-26, PreservesKernel)
@@ -42,3 +42,10 @@ Run on the integration branch after merging this change with the raft and fast-p
 - `aremote 'cargo nextest run -p molten --test cliharness --test fabricboundarycompat --test worldcommit --test worldsnapshot'`: 79 passed, 13 skipped. The cliharness Octet baseline case now passes.
 - Workspace `cargo octet check`: warning-only, 3 findings, none in this change's files. Two are in the live-cluster test contexts and one is in `tests/fastpathquint.rs`.
 - `anix build --keep-going` of `molten-preserves-core-no-std`, `molten-core-no-std`, `license-boundary`, `inherited-tracey-debt`, `git-source-hash-binding` and all 19 `*-octet-deny-all` checks: everything passes except `world-faults-octet-deny-all` and `world-distribution-octet-deny-all`. Those two scaffolds copy molten-core files that now call `fabric::valid_blake3_ref`, after the canonical-identity digest fix, and are not part of this change.
+
+## Verification (2026-11-26, integration closure)
+
+On integration `6d259b9b0`, after OctetSweep's follow-up fixed the two scaffold failures above:
+- `anix build --keep-going` of the seven kernel `*-no-std` checks, `production-raft-model`, `consensus-fastpath-quint` and `doc-links`: all built. `world-faults-octet-deny-all` and `world-distribution-octet-deny-all` also pass (checked on `054b09732`).
+- Workspace `cargo octet check`: `Status: clean`, 0 findings.
+- `aremote 'cargo test -p molten-preserves-core'`: 33 passed.
