@@ -14,6 +14,7 @@ fn status_fact_for(
                     string(&lock.owner),
                     u64_value(lock.token),
                     string(&lock.token_ref),
+                    u64_value(lock.lease_expires_at),
                 ])
             },
         )),
@@ -46,6 +47,7 @@ fn status_fact_for(
                     string(&election.leader),
                     u64_value(election.token),
                     string(&election.token_ref),
+                    u64_value(election.lease_expires_at),
                 ])
             },
         )),
@@ -204,7 +206,7 @@ fn payload_token(request: &CoordinationRequest) -> Result<u64> {
     let payload = request
         .payload
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("coordination release requires token payload"))?;
+        .ok_or_else(|| MoltenError::invalid_harness(format!("coordination {} requires token payload", request.operation)))?;
     let fields = simple_record(payload, "token", 1)?;
     required_u64(&fields[0], "coordination token")
 }

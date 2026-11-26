@@ -17,6 +17,7 @@ const COORDINATION_REQUEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_RE
 const COORDINATION_SERVICE_MANIFEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_SERVICE_MANIFEST_SCHEMA;
 const COORDINATION_STATE_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
 const COORDINATION_STATUS_ASSERTION_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
+const COORDINATION_COMMIT_INTENT_SCHEMA: &str = "molten.coordination.commit-intent.v1";
 
 fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
@@ -67,6 +68,11 @@ pub const OP_ARRIVE: &str = "arrive";
 pub const OP_REGISTER: &str = "register";
 pub const OP_UNREGISTER: &str = "unregister";
 pub const OP_READ: &str = "read";
+/// Releases a lock lease or leader term once the runtime's coordination clock reaches its expiry. It takes
+/// no payload: requests never carry time.
+pub const OP_EXPIRE: &str = "expire";
+/// Steps the current leader down; only the leader holding the current fencing token may resign.
+pub const OP_RESIGN: &str = "resign";
 /// Requested from the coordination runtime, `linearizable` is denied: its in-process control registry has
 /// no replicated read index.
 pub const READ_CONSISTENCY_LINEARIZABLE: &str = crate::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE;
@@ -94,6 +100,18 @@ pub const DEFAULT_COORDINATION_QUEUE_CAPACITY: u64 = 4;
 pub const DEFAULT_COORDINATION_SEMAPHORE_CAPACITY: u64 = 2;
 pub const DEFAULT_COORDINATION_RATE_LIMIT: u64 = 2;
 pub const DEFAULT_COORDINATION_BARRIER_PARTIES: u64 = 2;
+/// Coordination time is sampled from the runtime's shell-owned [`CoordinationClock`] port, once per
+/// admitted mutation, and recorded with each committed mutation as `(time_basis_ref, ticks)`. Lease lengths
+/// are measured in the ticks of that basis (nanoseconds on the live node monotonic basis).
+///
+/// Lease length for a lock or leader term requested without `<lease ttl>`: 30 seconds on the live basis.
+pub const DEFAULT_COORDINATION_LEASE_TICKS: u64 = 30_000_000_000;
+/// Largest lease a lock or leader term may request (one hour on the live basis), so every holder eventually
+/// becomes expirable.
+pub const MAX_COORDINATION_LEASE_TICKS: u64 = 3_600_000_000_000;
+/// Last clock sample a commit may record. Above it a maximal lease would not be representable, so further
+/// mutations are denied instead of overflowing.
+pub const MAX_COORDINATION_TIME_TICKS: u64 = u64::MAX - MAX_COORDINATION_LEASE_TICKS;
 
 const MAX_COORDINATION_REFS: usize = 4096;
 const MAX_COORDINATION_ITEMS: usize = 4096;
@@ -107,6 +125,7 @@ const _: () = assert!(MAX_COORDINATION_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_COORDINATION_CHECKS <= 10_000);
 const _: () = assert!(MAX_COORDINATION_SERVICES <= 64);
 const _: () = assert!(MAX_COORDINATION_KEY_LEN <= 4096);
+const _: () = assert!(DEFAULT_COORDINATION_LEASE_TICKS > 0 && DEFAULT_COORDINATION_LEASE_TICKS <= MAX_COORDINATION_LEASE_TICKS);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordinationServiceManifestInput {
@@ -184,7 +203,9 @@ pub struct CoordinationStatusAssertion {
     pub key: String,
     pub read_consistency_mode: String,
     pub state_ref: String,
-    pub receipt_ref: String,
+    /// Control-plane receipt the observation is bound to: the Raft commit receipt of a mutation or the
+    /// registry read receipt of a read. The coordination receipt in turn lists this assertion's ref.
+    pub control_plane_receipt_ref: String,
     pub value: IoValue,
 }
 
@@ -228,6 +249,9 @@ pub struct CoordinationApplyResult {
     pub raft_commit_ref: Option<String>,
     pub raft_read_receipt: Option<RaftReadReceipt>,
     pub evidence_values: Vec<IoValue>,
+    /// The clock sample a committed mutation recorded; `None` for reads, denials, and replays. Replaying the
+    /// committed requests with these samples reproduces the committed state.
+    pub time_sample: Option<CoordinationTimeSample>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -253,8 +277,12 @@ pub struct CoordinationApplyReport {
     pub value: IoValue,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The imperative coordination shell: committed state, its in-process control registry, and the
+/// shell-owned clock port that samples coordination time. The clock is private: a clock on another basis
+/// is installed only through [`recreate_coordination_live_clock`], which commits the basis change.
+#[derive(Debug)]
 pub struct CoordinationRuntime {
+    clock: CoordinationClock,
     pub manifest: CoordinationServiceManifest,
     pub raft: ControlRegistryRuntime,
     pub state: CoordinationState,
@@ -275,19 +303,43 @@ pub struct CoordinationState {
     pub barriers: OrderedMap<String, BarrierState>,
     pub registry: OrderedMap<String, RegistryEntry>,
     pub next_fencing_token: u64,
+    /// Time basis every committed clock sample must come from; bound when the runtime is built.
+    pub time_basis_ref: String,
+    /// Clock sample (ticks of `time_basis_ref`) recorded by the last committed mutation. Samples may never
+    /// regress below it.
+    pub time_ticks: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockState {
     pub owner: String,
     pub token: u64,
+    /// `token_ref` of the issued [`FencingToken`], which is bound to the lock's control-plane commit receipt.
     pub token_ref: String,
     pub lease_epoch: u64,
+    /// Coordination clock tick at which the lease becomes expirable through [`OP_EXPIRE`].
+    pub lease_expires_at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElectionState {
     pub leader: String,
     pub token: u64,
+    /// `token_ref` of the issued [`FencingToken`], which is bound to the election's control-plane commit receipt.
     pub token_ref: String,
+    /// Coordination clock tick at which the leader term becomes expirable through [`OP_EXPIRE`].
+    pub lease_expires_at: u64,
+}
+
+/// A fencing-token grant prepared by a pure transition core. The token itself, and the lock or election
+/// entry carrying its `token_ref`, exist only after the control plane commits the transition, because the
+/// token binds that commit receipt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoordinationTokenClaim {
+    pub service: String,
+    pub key: String,
+    pub owner: String,
+    pub token: u64,
+    pub lease_epoch: u64,
+    pub lease_expires_at: u64,
 }

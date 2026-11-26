@@ -18,8 +18,12 @@ pub struct PrimitiveTransitionResult {
     pub kind: String,
     pub decision: String,
     pub before_state: CoordinationState,
+    /// For a passing transition that grants a fencing token, `after_state` omits the claimed lock or
+    /// election entry: the commit shell inserts it with the token bound to the control-plane commit receipt.
     pub after_state: CoordinationState,
-    pub token: Option<FencingToken>,
+    pub token_claim: Option<CoordinationTokenClaim>,
+    /// The coordination clock sample a passing transition was evaluated at and commits.
+    pub time_sample: Option<CoordinationTimeSample>,
     pub status_fact: IoValue,
     pub output_facts: Vec<IoValue>,
     pub diagnostics: Vec<String>,
@@ -27,20 +31,10 @@ pub struct PrimitiveTransitionResult {
     pub shell_intents: Vec<String>,
 }
 
-impl PrimitiveTransitionResult {
-    fn state_for_receipt(&self) -> &CoordinationState {
-        if self.decision == "pass" {
-            &self.after_state
-        } else {
-            &self.before_state
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct PreparedMutation {
     state: CoordinationState,
-    token: Option<FencingToken>,
+    token_claim: Option<CoordinationTokenClaim>,
     status_fact: IoValue,
     checks: Vec<(&'static str, &'static str)>,
 }

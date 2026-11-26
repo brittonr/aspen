@@ -1,7 +1,8 @@
 
 pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
     let manifest_value = coordination_fixture_manifest_value()?;
-    let mut runtime = new_coordination_runtime(&manifest_value)?;
+    let mut runtime =
+        new_coordination_simulation_runtime(&manifest_value, CoordinationClock::deterministic(coordination_fixture_time_basis_ref(), 0))?;
     let auth = vec![fixture_ref("coordination-authority")];
     let resources = vec![fixture_ref("coordination-resource")];
     let policies = vec![fixture_ref("coordination-policy")];

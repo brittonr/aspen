@@ -18,7 +18,7 @@
 
     fn runtime() -> CoordinationRuntime {
         let manifest = coordination_fixture_manifest_value().expect("manifest");
-        new_coordination_runtime(&manifest).expect("runtime")
+        new_coordination_simulation_runtime(&manifest, CoordinationClock::fixture(0)).expect("runtime")
     }
 
     fn temp_root(label: &str) -> std::path::PathBuf {
