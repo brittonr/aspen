@@ -1,15 +1,8 @@
 {
  "schema": "molten-octet-workspace-baseline-v3",
  "anchor": "sha256, first 16 hex digits, of the finding's whitespace-normalized source line together with the nearest 2 non-blank lines above and below it, then '#' and the 1-based ordinal of that window among identical windows in the file",
- "total": 3504,
+ "total": 3503,
  "findings": [
-  {
-   "crate": "fastpathquint",
-   "file": "tests/fastpathquint.rs",
-   "lint": "no_unwrap",
-   "anchor": "sha256:8cef41e808dd8f50#1",
-   "count": 1
-  },
   {
    "crate": "molten-release-policy",
    "file": "crates/molten-release-policy/src/main.rs",
