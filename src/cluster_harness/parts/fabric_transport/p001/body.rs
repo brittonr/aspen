@@ -89,6 +89,11 @@ pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> c
             validity: fixture_validity(),
             admission: EndpointAdmissionState::fully_active(),
             observed_tick: OBSERVED_TICK,
+            admitted_peers: std::collections::BTreeMap::from([(CLIENT_ROLE.to_string(), AdmittedPeer {
+                public_endpoint_identity: fixture_capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF)?
+                    .public_endpoint_identity(),
+                peer_context_ref: PEER_CONTEXT_REF.to_string(),
+            })]),
         })
         .await?;
         write_preserves_atomic(&run_directory.join(HANDOFF_FILE), &listener.handoff().value)?;

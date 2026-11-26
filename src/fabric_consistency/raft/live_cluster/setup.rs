@@ -115,11 +115,15 @@ fn transport_for(
     endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
     protocol_ref: String,
 ) -> crate::error::Result<(ReplicaTransportPort, String)> {
+    // Each node dials as its own admitted test peer, so listeners bind its envelopes to `node_id`.
     let peers = endpoints
         .iter()
         .filter(|(peer_id, _endpoint)| peer_id.as_str() != node_id)
         .map(|(peer_id, endpoint)| {
-            (peer_id.clone(), crate::fabric_transport::cross_process::tests::client_input(endpoint.clone()))
+            (
+                peer_id.clone(),
+                crate::fabric_transport::cross_process::tests::client_input_for(endpoint.clone(), node_id),
+            )
         })
         .collect::<std::collections::BTreeMap<_, _>>();
     let session_ref = peers

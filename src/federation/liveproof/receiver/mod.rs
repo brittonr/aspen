@@ -14,6 +14,11 @@ pub fn run(
         runtime.block_on(super::setup::transport::listen("federation-live-receiver-listener", &adapter))?;
     super::setup::exchange::publish(exchange, "receiver", &listener, &key)?;
     let peer = super::setup::exchange::handoff(exchange, "provider")?;
+    let local_context = listener.handoff().descriptor.expected_peer_context_ref.clone();
+    listener.admit_peer(
+        "provider".into(),
+        crate::fabric_transport::AdmittedPeer::for_endpoint(&peer.endpoint, &local_context),
+    )?;
     let context = super::setup::exchange::context(
         &peer,
         &key.public_key,

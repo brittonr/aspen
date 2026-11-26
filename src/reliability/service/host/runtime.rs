@@ -44,6 +44,96 @@ pub struct Host {
     pub(super) timers: tokio::sync::mpsc::Receiver<crate::fabric_consistency::raft::ReplicaEvent>,
     pub(super) observations: tokio::sync::mpsc::Receiver<crate::fabric_consistency::raft::ReplicaObservation>,
     pub(super) context: super::session::Context,
+    pub(super) fail_stop: FailStop,
+}
+
+/// Sticky fail-stop latch. A quarantined replica (`ReplicaExecutionOutcome::Failed`) or a failed
+/// snapshot stops the host once the current response is answered, whichever path observed it:
+/// the serve loop, a public operation, its wait, or a forwarded exchange.
+// r[impl molten.consensus.reliability_replay_and_failstop]
+#[derive(Debug, Default)]
+pub(super) struct FailStop(Option<crate::error::Failure>);
+
+impl FailStop {
+    /// `Applied` continues; `Denied` is an error its caller answers; `Failed` latches fail-stop.
+    pub(super) fn settle(
+        &mut self,
+        outcome: crate::fabric_consistency::raft::ReplicaExecutionOutcome,
+    ) -> crate::error::Result<()> {
+        match outcome {
+            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => Ok(()),
+            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
+                Err(crate::error::Failure::invalid_harness(diagnostic))
+            }
+            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failed) => {
+                Err(self.latch(quarantined(&failed.diagnostic)))
+            }
+        }
+    }
+
+    /// Latch `failure` unless an earlier one is latched, returning the latched failure.
+    pub(super) fn latch(&mut self, failure: crate::error::Failure) -> crate::error::Failure {
+        self.0.get_or_insert(failure).clone()
+    }
+
+    pub(super) fn latched(&self) -> Option<&crate::error::Failure> {
+        self.0.as_ref()
+    }
+
+    pub(super) fn take(&mut self) -> Option<crate::error::Failure> {
+        self.0.take()
+    }
+}
+
+fn quarantined(diagnostic: &str) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("replica quarantined; host fail-stops: {diagnostic}"))
+}
+
+/// The response that ends a public operation once the replica handled its proposal or read, or
+/// `None` to await the replica's observation. A quarantine latches fail-stop: the client hears an
+/// uncertain outcome, because the failed effect may have happened, and the host stops after it.
+pub(super) fn operation_response(
+    fail_stop: &mut FailStop,
+    request: &super::super::protocol::Request,
+    outcome: crate::fabric_consistency::raft::ReplicaExecutionOutcome,
+) -> Option<super::super::protocol::Response> {
+    match outcome {
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => None,
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
+            Some(denied(request, diagnostic))
+        }
+        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failed) => {
+            let failure = fail_stop.latch(quarantined(&failed.diagnostic));
+            Some(super::super::protocol::uncertain(request, failure.to_string()))
+        }
+    }
+}
+
+/// Request scope checks that precede authority: the admitted run, cohort, profile and key. A
+/// `Teardown` stops only the host it names: a signed teardown for one endpoint replayed to another
+/// voter is denied there.
+// r[impl molten.consensus.reliability_replay_and_failstop]
+pub(super) fn admit_scope(
+    admission: &HostAdmission,
+    request: &super::super::protocol::Request,
+    object_key: &str,
+) -> std::result::Result<(), String> {
+    let endpoint = super::super::protocol::validate_request(request)?;
+    if request.run_id != admission.run_id || !admission.peers.values().any(|peer| peer == &endpoint) {
+        return Err("request-outside-admitted-host".into());
+    }
+    if request.phase == super::super::protocol::Phase::Teardown && endpoint != admission.endpoint {
+        return Err("teardown-outside-local-endpoint".into());
+    }
+    if request.profile.as_ref() != Some(&admission.profile) {
+        return Err("request-profile-substitution".into());
+    }
+    if let Some(operation) = &request.operation
+        && operation.get("object_key").and_then(|value| value.as_str()) != Some(object_key)
+    {
+        return Err("request-outside-admitted-key".into());
+    }
+    Ok(())
 }
 
 enum Incoming {
@@ -70,6 +160,7 @@ impl Host {
             timers: channels.0,
             observations: channels.1,
             context,
+            fail_stop: FailStop::default(),
         }
     }
     pub fn observation(&self) -> crate::error::Result<super::diagnostics::HostObservation> {
@@ -136,7 +227,8 @@ impl Host {
         }
     }
 
-    /// Answer one fully read request; its connection permit is released when this returns.
+    /// Answer one fully read request; its connection permit is released when this returns. A
+    /// fail-stop latched while serving it ends the host after the response is sent.
     async fn connection(&mut self, admitted: connections::Admitted) -> crate::error::Result<bool> {
         let connections::Admitted { frame, mut stream, .. } = admitted;
         let Ok(request) = parse_request(&frame) else {
@@ -156,22 +248,13 @@ impl Host {
             stream.write_all(b"\n").await
         })
         .await;
+        if let Some(failure) = self.fail_stop.take() {
+            return Err(failure);
+        }
         Ok(should_stop)
     }
     fn admit(&self, request: &super::super::protocol::Request) -> std::result::Result<(), String> {
-        let endpoint = super::super::protocol::validate_request(request)?;
-        if request.run_id != self.admission.run_id || !self.admission.peers.values().any(|peer| peer == &endpoint) {
-            return Err("request-outside-admitted-host".into());
-        }
-        if request.profile.as_ref() != Some(&self.admission.profile) {
-            return Err("request-profile-substitution".into());
-        }
-        if let Some(operation) = &request.operation
-            && operation.get("object_key").and_then(|value| value.as_str())
-                != Some(self.replica.ports().application.handler().object_key())
-        {
-            return Err("request-outside-admitted-key".into());
-        }
+        admit_scope(&self.admission, request, self.replica.ports().application.handler().object_key())?;
         self.context.require_current("serve").map_err(|error| error.to_string())?;
         self.context.authorization.request(request).map_err(|error| error.to_string())?;
         Ok(())
@@ -215,36 +298,25 @@ impl Host {
         event: crate::fabric_consistency::raft::ReplicaEvent,
     ) -> crate::error::Result<()> {
         self.context.require_current("serve")?;
-        executed(self.replica.handle_event(event).await)?;
+        let outcome = self.replica.handle_event(event).await;
+        self.fail_stop.settle(outcome)?;
         self.snapshot_if_due().await
     }
 
     /// Snapshot with the registry's state ref once the retained applied entries reach the profile's
-    /// threshold, so the log keeps room for new proposals. A denied or failed snapshot takes the
-    /// same fail-stop path as any other replica effect.
+    /// threshold, so the log keeps room for new proposals. A denied or failed snapshot latches the
+    /// same fail-stop as any other failed replica effect.
     // r[impl molten.consensus.snapshot_threshold]
     async fn snapshot_if_due(&mut self) -> crate::error::Result<()> {
         if !crate::fabric_consistency::raft::is_snapshot_due(self.replica.state()) {
             return Ok(());
         }
         let application_state_ref = self.replica.ports().application.handler().state_ref()?;
-        executed(
-            self.replica
-                .handle_event(crate::fabric_consistency::raft::ReplicaEvent::CreateSnapshot { application_state_ref })
-                .await,
-        )
-    }
-}
-
-fn executed(outcome: crate::fabric_consistency::raft::ReplicaExecutionOutcome) -> crate::error::Result<()> {
-    match outcome {
-        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => Ok(()),
-        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(crate::error::Failure::invalid_harness(diagnostic))
-        }
-        crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failure) => {
-            Err(crate::error::Failure::invalid_harness(failure.diagnostic))
-        }
+        let outcome = self
+            .replica
+            .handle_event(crate::fabric_consistency::raft::ReplicaEvent::CreateSnapshot { application_state_ref })
+            .await;
+        self.fail_stop.settle(outcome).map_err(|failure| self.fail_stop.latch(failure))
     }
 }
 

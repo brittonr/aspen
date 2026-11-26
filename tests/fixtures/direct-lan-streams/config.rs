@@ -160,6 +160,13 @@ pub fn listener_input(config: &RoleConfig) -> TestResult<molten::fabric_transpor
         },
         admission: molten::fabric_transport::EndpointAdmissionState::fully_active(),
         observed_tick: 10,
+        admitted_peers: std::collections::BTreeMap::from([(
+            "direct-stream-client".to_owned(),
+            molten::fabric_transport::AdmittedPeer {
+                public_endpoint_identity: format!("iroh:{}", identity(true)),
+                peer_context_ref: reference("direct-stream-peer-context")?,
+            },
+        )]),
     })
 }
 

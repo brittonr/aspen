@@ -62,8 +62,18 @@ fn protocol(lease: &super::authority::Lease) -> crate::fabric_transport::Protoco
     }
 }
 
-pub async fn listener(lease: &super::authority::Lease, byte: u8) -> super::Result<crate::fabric_transport::Listener> {
+/// A listener keyed by `byte` that admits only the endpoint keyed by `caller`, under its own
+/// context.
+pub async fn listener(
+    lease: &super::authority::Lease,
+    byte: u8,
+    caller: u8,
+) -> super::Result<crate::fabric_transport::Listener> {
     lease.check(10, 1)?;
+    let admitted_caller = crate::fabric_transport::AdmittedPeer {
+        public_endpoint_identity: capability(caller)?.public_endpoint_identity(),
+        peer_context_ref: peer(byte),
+    };
     crate::fabric_transport::Listener::bind(crate::fabric_transport::ListenerInput {
         profile: profile()?,
         protocol: protocol(lease),
@@ -83,6 +93,7 @@ pub async fn listener(lease: &super::authority::Lease, byte: u8) -> super::Resul
         },
         admission: crate::fabric_transport::EndpointAdmissionState::fully_active(),
         observed_tick: 10,
+        admitted_peers: std::collections::BTreeMap::from([(format!("rpc-caller-{caller}"), admitted_caller)]),
     })
     .await
     .map_err(super::failure)

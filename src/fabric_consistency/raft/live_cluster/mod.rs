@@ -1,5 +1,6 @@
 use super::*;
 
+mod contexts;
 mod plan;
 pub(in crate::fabric_consistency::raft) mod setup;
 #[path = "trace/capture.rs"]

@@ -102,6 +102,7 @@ fn attempt(node_count: usize) -> StableViewAttempt {
         acceleration_view: INITIAL_VIEW,
         base_view: INITIAL_VIEW,
         conflict_free: true,
+        replicas: (0..node_count).map(|index| format!("node-{index}")).collect(),
         acknowledgements,
         promises: vec![ProposerPromise {
             proposer_id: "node-a".to_owned(),

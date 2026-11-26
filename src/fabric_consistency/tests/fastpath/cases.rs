@@ -81,12 +81,13 @@ fn mixed_views_missing_promises_and_identity_drift_fallback() {
     );
 }
 
+// r[verify molten.consensus.fast_path_model.fallback_identity]
 #[test]
 fn convergence_suppresses_duplicate_application_and_reply() {
     let mut ledger = ApplicationLedger::default();
     let operation = operation("command-a");
-    let first = ledger.converge(&operation);
-    let duplicate = ledger.converge(&operation);
+    let first = ledger.converge(&operation).expect("first session operation");
+    let duplicate = ledger.converge(&operation).expect("identical retry");
     assert!(first.is_applied);
     assert!(first.is_replied);
     assert!(!first.is_duplicate_suppressed);
@@ -94,6 +95,53 @@ fn convergence_suppresses_duplicate_application_and_reply() {
     assert!(!duplicate.is_replied);
     assert!(duplicate.is_duplicate_suppressed);
     assert_eq!(ledger.applied_count(), 1);
+}
+
+// r[verify molten.consensus.fast_path_model.fallback_identity]
+#[test]
+fn equal_commands_from_distinct_sessions_both_apply_and_a_conflicting_retry_is_rejected() {
+    let mut ledger = ApplicationLedger::default();
+    let first = operation("command-a");
+    let mut other_session = first.clone();
+    other_session.session_ref = "session-b".to_owned();
+    assert!(ledger.converge(&first).expect("session A").is_applied);
+    let distinct = ledger.converge(&other_session).expect("session B");
+    assert!(distinct.is_applied && distinct.is_replied, "session B's equal command is its own operation");
+    assert_eq!(ledger.applied_count(), 2);
+
+    let mut conflicting = first.clone();
+    conflicting.command_ref = "command-b".to_owned();
+    assert_eq!(ledger.converge(&conflicting), Err(LedgerIssue::ConflictingSessionRetry));
+    assert_eq!(ledger.applied_count(), 2, "a rejected retry applies nothing");
+    assert!(ledger.converge(&first).expect("original retry").is_duplicate_suppressed);
+}
+
+// r[verify molten.consensus.fast_path_model.stable_view]
+#[test]
+fn acknowledgements_from_outside_the_admitted_replicas_never_count() {
+    let quorums = derive_quorums(THREE_NODES).expect("named profile quorum");
+    let mut padded = attempt(THREE_NODES);
+    padded.acknowledgements.truncate(quorums.superquorum - 1);
+    let template = padded.acknowledgements[0].clone();
+    for outsider in ["outsider-0", "outsider-1", "outsider-2"] {
+        padded.acknowledgements.push(FastAcknowledgement {
+            replica_id: outsider.to_owned(),
+            ..template.clone()
+        });
+    }
+    assert_eq!(
+        evaluate_stable_view(&padded, quorums),
+        StableViewDecision::Fallback(FallbackReason::InsufficientAcknowledgements)
+    );
+
+    // A non-member acknowledgement in another view is ignored, not a mixed view.
+    let mut stray = attempt(THREE_NODES);
+    stray.acknowledgements.push(FastAcknowledgement {
+        replica_id: "outsider".to_owned(),
+        base_view: NEXT_VIEW,
+        ..template
+    });
+    assert_eq!(evaluate_stable_view(&stray, quorums), StableViewDecision::FastCommitted);
 }
 
 // r[verify molten.consensus.fast_path_model.view_change_recovery]

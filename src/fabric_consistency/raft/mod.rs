@@ -63,7 +63,7 @@ mod port_tests;
 #[path = "rejoin/tests.rs"]
 mod rejoin_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 #[cfg(test)]
 #[path = "time/tests.rs"]
 mod time_tests;

@@ -13,6 +13,11 @@ pub fn run(root: &crate::node_state::DirectoryRoot, exchange: &crate::node_state
         runtime.block_on(super::setup::transport::listen("federation-live-provider-listener", &adapter))?;
     super::setup::exchange::publish(exchange, "provider", &listener, &key)?;
     let receiver = super::setup::exchange::handoff(exchange, "receiver")?;
+    let local_context = listener.handoff().descriptor.expected_peer_context_ref.clone();
+    listener.admit_peer(
+        "receiver".into(),
+        crate::fabric_transport::AdmittedPeer::for_endpoint(&receiver.endpoint, &local_context),
+    )?;
     let role = Role {
         runtime: &runtime,
         adapter: &adapter,

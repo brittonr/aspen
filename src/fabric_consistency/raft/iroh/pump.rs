@@ -1,16 +1,21 @@
 use super::*;
 
 impl<S: ReplicaFrameSource> ReplicaIngressPump<S> {
-    /// Pump frames from `source` until cancellation or a transport failure. Deliveries draw from a
+    /// Pump frames from `source` until cancellation or a listener failure. Deliveries draw from a
     /// budget of `delivery_limit` per `delivery_window`; a spent budget stops polling until the
-    /// window ends and then refills. Undecodable frames are dropped, counted and logged.
+    /// window ends and then refills. A rejected connection (failed or stalled handshake, session
+    /// failure, undecodable payload, or unauthenticated sender) is dropped, counted and logged; it
+    /// never ends ingress, so one stalled or hostile peer cannot stop delivery from the others.
     // r[impl molten.consensus.long_running_service_bounds]
+    // r[impl molten.fabric_transport.raft_peer_auth_and_isolation]
     pub fn spawn_source(source: S, config: ReplicaIngressConfig) -> crate::error::Result<Self> {
         validate_ingress_config(&config)?;
         let (event_sender, events) = tokio::sync::mpsc::channel(config.event_capacity);
         let (cancel, mut cancellation) = tokio::sync::oneshot::channel();
         let dropped_frames = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
         let dropped = std::sync::Arc::clone(&dropped_frames);
+        let authentication_failures = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let unauthenticated = std::sync::Arc::clone(&authentication_failures);
         let task = tokio::spawn(async move {
             let mut source = source;
             let mut budget = config.delivery_limit;
@@ -46,14 +51,18 @@ impl<S: ReplicaFrameSource> ReplicaIngressPump<S> {
                         }
                         budget -= 1;
                     }
-                    Err(error) => {
+                    Err(rejected) => {
                         let count = dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed).saturating_add(1);
+                        if matches!(rejected, RejectedReplicaFrame::Unauthenticated(_)) {
+                            unauthenticated.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
                         tracing::warn!(
                             target: "molten_fabric_consistency",
                             session_ref = %config.session_ref,
                             dropped_frames = count,
-                            error = %error,
-                            "dropped undecodable live Raft ingress frame"
+                            error = %rejected.failure(),
+                            is_unauthenticated = matches!(rejected, RejectedReplicaFrame::Unauthenticated(_)),
+                            "dropped rejected live Raft ingress connection"
                         );
                     }
                     Ok(None) => {}
@@ -65,6 +74,7 @@ impl<S: ReplicaFrameSource> ReplicaIngressPump<S> {
             cancel: Some(cancel),
             task: Some(task),
             dropped_frames,
+            authentication_failures,
         })
     }
 
@@ -75,9 +85,15 @@ impl<S: ReplicaFrameSource> ReplicaIngressPump<S> {
             .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft ingress pump terminated before delivery"))
     }
 
-    /// Undecodable frames dropped since the pump started.
+    /// Rejected connections dropped since the pump started, authentication failures included.
     pub fn dropped_frames(&self) -> u64 {
         self.dropped_frames.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Connections dropped because the authenticated endpoint is not admitted or is not the
+    /// admitted endpoint of the envelope's sender.
+    pub fn authentication_failures(&self) -> u64 {
+        self.authentication_failures.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn shutdown(mut self) -> crate::error::Result<S> {

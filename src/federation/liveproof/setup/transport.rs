@@ -93,6 +93,8 @@ pub async fn listen(
         },
         admission: crate::fabric_transport::EndpointAdmissionState::fully_active(),
         observed_tick: NOW,
+        // The peer's endpoint arrives through the handoff after binding; see `Listener::admit_peer`.
+        admitted_peers: std::collections::BTreeMap::new(),
     })
     .await
 }

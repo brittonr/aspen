@@ -25,7 +25,7 @@ pub(super) fn test_ref(label: &str) -> String {
     .expect("test ref")
 }
 
-pub(super) fn active_group() -> crate::fabric_consistency::Group {
+pub(crate) fn active_group() -> crate::fabric_consistency::Group {
     active_group_for("extension-live-raft", &test_ref("application-manifest"))
 }
 
@@ -259,7 +259,7 @@ fn live_replica_start_denies_duplicate_membership_and_unsafe_timer_bounds() {
     assert!(unsafe_timer.to_string().contains("heartbeat < election minimum"));
 }
 
-pub(super) fn started_state(group: &crate::fabric_consistency::Group, node_id: &str) -> ReplicaState {
+pub(crate) fn started_state(group: &crate::fabric_consistency::Group, node_id: &str) -> ReplicaState {
     plan_live_replica_start(ReplicaStartInput {
         node_id: node_id.to_string(),
         membership: membership(group),

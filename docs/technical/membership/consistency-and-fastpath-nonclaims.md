@@ -38,7 +38,7 @@ Recovery introduces another sequencing boundary: it pauses for base-view change,
 
 Suggested review separates four evidence questions: whether the membership source is admitted, whether assignment authority permits effects, whether a bounded model schedule satisfies its invariants, and whether a live integration actually enforces its claimed guarantees. Keep profile selection, finite bounds, source revision, and unexplored alternatives attached to model readback.
 
-A focused model review can examine mixed-view acknowledgements, missing proposer promises, insufficient superquorums, and interrupted recovery without making performance claims. The in-memory `ApplicationLedger` suppresses repeated command application and session replies in its retained sets; this is not an exactly-once claim across crashes or external effects. No model execution or live consistency experiment was performed for this documentation task.
+A focused model review can examine mixed-view acknowledgements, missing proposer promises, insufficient superquorums, and interrupted recovery without making performance claims. `evaluate_stable_view` counts acknowledgements only from the attempt's admitted `replicas`; other ids are ignored. The in-memory `ApplicationLedger` applies and replies once per `(session_ref, session_sequence)`: equal commands from distinct sessions are distinct operations, an identical retry is suppressed, and a retry that changes the command or identity is rejected. This is not an exactly-once claim across crashes or external effects. No model execution or live consistency experiment was performed for this documentation task.
 
 ## Limits and non-claims
 

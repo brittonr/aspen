@@ -47,14 +47,9 @@ impl Authorization {
         let mut unsigned = request.clone();
         unsigned.authorization = None;
         super::super::authority::verify_request(&self.grant, &unsigned, invocation)?;
-        let identity = crate::preserves_rail::record("live-client-replay-v1", vec![
-            crate::preserves_rail::string(&invocation.client_scope_ref),
-            preserves::IOValue::bytes(invocation.nonce),
-        ]);
-        let reference = crate::preserves_rail::canonical_hash(&identity)?;
-        let path =
-            crate::node_state::RelativePath::parse(&format!("coordination-client-{}.preserves", &reference[7..]))?;
-        self.root.write_new(&path, &crate::preserves_rail::canonical_bytes(&identity)?)
+        // Every node that admits the request, the executing term leader included, records the
+        // replay marker durably before any effect; see `require_write_fence` for writes.
+        super::super::authority::consume_nonce(&self.root, invocation)
     }
 
     pub(super) fn validate_start(&self, input: &super::launch::Startup) -> crate::error::Result<()> {

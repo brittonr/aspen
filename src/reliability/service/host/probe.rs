@@ -4,7 +4,16 @@ impl super::runtime::Host {
         request: &super::super::protocol::Request,
     ) -> super::super::protocol::Response {
         match self.probe_checked(request).await {
-            Ok(value) => super::super::protocol::response(request, super::super::protocol::Outcome::Ok, value, None),
+            Ok(value) => {
+                let mut response =
+                    super::super::protocol::response(request, super::super::protocol::Outcome::Ok, value, None);
+                // An unchallenged probe also reports this node's Raft term, which a client signs as a
+                // write's fence term. The answer is advisory; the executing leader enforces the fence.
+                if request.probe.is_none() {
+                    response.fence_term = Some(self.replica.state().current_term);
+                }
+                response
+            }
             Err(error) => super::super::protocol::uncertain(request, error.to_string()),
         }
     }

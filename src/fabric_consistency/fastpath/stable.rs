@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use super::profile::DerivedQuorums;
@@ -39,6 +40,8 @@ pub struct StableViewAttempt {
     pub acceleration_view: u64,
     pub base_view: u64,
     pub conflict_free: bool,
+    /// Admitted replica set of the view; acknowledgements from other ids are ignored.
+    pub replicas: BTreeSet<String>,
     pub acknowledgements: Vec<FastAcknowledgement>,
     pub promises: Vec<ProposerPromise>,
     pub active_proposers: BTreeSet<String>,
@@ -63,10 +66,12 @@ pub enum StableViewDecision {
     Fallback(FallbackReason),
 }
 
+/// Exactly-once application keyed by client session operation `(session_ref, session_sequence)`.
+/// Equal commands from distinct sessions are distinct operations; a retry of one session operation
+/// must carry its original identity.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ApplicationLedger {
-    applied_commands: BTreeSet<String>,
-    replied_operations: BTreeSet<(String, u64)>,
+    session_operations: BTreeMap<(String, u64), OperationIdentity>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +79,12 @@ pub struct ConvergenceOutcome {
     pub is_applied: bool,
     pub is_replied: bool,
     pub is_duplicate_suppressed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LedgerIssue {
+    /// A session operation was retried with a different command or identity.
+    ConflictingSessionRetry,
 }
 
 // r[impl molten.consensus.fast_path_model.stable_view]
@@ -105,9 +116,14 @@ fn fallback(attempt: &StableViewAttempt, reason: FallbackReason) -> StableViewDe
     }
 }
 
+/// Distinct admitted replicas that acknowledged this exact attempt; `None` when an admitted
+/// replica acknowledged another view or operation. Ids outside the admitted set never count.
 fn same_view_acknowledgers(attempt: &StableViewAttempt) -> Option<BTreeSet<String>> {
     let mut replicas = BTreeSet::new();
     for acknowledgement in &attempt.acknowledgements {
+        if !attempt.replicas.contains(&acknowledgement.replica_id) {
+            continue;
+        }
         if acknowledgement.acceleration_view != attempt.acceleration_view
             || acknowledgement.base_view != attempt.base_view
             || acknowledgement.operation != attempt.operation
@@ -139,23 +155,34 @@ fn validate_promises(attempt: &StableViewAttempt) -> Result<(), FallbackReason> 
 impl ApplicationLedger {
     pub fn new() -> Self {
         Self {
-            applied_commands: std::collections::BTreeSet::new(),
-            replied_operations: std::collections::BTreeSet::new(),
+            session_operations: BTreeMap::new(),
         }
     }
 
+    /// Apply and reply once per session operation. A retry with the same identity is suppressed;
+    /// a retry that changes the command or any other identity field is rejected.
     // r[impl molten.consensus.fast_path_model.fallback_identity]
-    pub fn converge(&mut self, operation: &OperationIdentity) -> ConvergenceOutcome {
-        let is_applied = self.applied_commands.insert(operation.command_ref.clone());
-        let is_replied = self.replied_operations.insert((operation.session_ref.clone(), operation.session_sequence));
-        ConvergenceOutcome {
-            is_applied,
-            is_replied,
-            is_duplicate_suppressed: !is_applied || !is_replied,
+    pub fn converge(&mut self, operation: &OperationIdentity) -> Result<ConvergenceOutcome, LedgerIssue> {
+        let key = (operation.session_ref.clone(), operation.session_sequence);
+        if let Some(original) = self.session_operations.get(&key) {
+            if original != operation {
+                return Err(LedgerIssue::ConflictingSessionRetry);
+            }
+            return Ok(ConvergenceOutcome {
+                is_applied: false,
+                is_replied: false,
+                is_duplicate_suppressed: true,
+            });
         }
+        self.session_operations.insert(key, operation.clone());
+        Ok(ConvergenceOutcome {
+            is_applied: true,
+            is_replied: true,
+            is_duplicate_suppressed: false,
+        })
     }
 
     pub fn applied_count(&self) -> usize {
-        self.applied_commands.len()
+        self.session_operations.len()
     }
 }
