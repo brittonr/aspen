@@ -240,7 +240,7 @@ fn sign(input: SignInput) -> Result<()> {
         public_key_hex: bytes_to_hex(&carrier.public_key_bytes),
         signature_hex: bytes_to_hex(&carrier.signature_bytes),
         key_generation: carrier.key_generation,
-        role: carrier.role.as_str().to_string(),
+        role: role.as_str().to_string(),
         authority_admitted: false,
     };
     let output = serde_json::to_vec_pretty(&document)

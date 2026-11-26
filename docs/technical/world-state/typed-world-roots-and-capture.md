@@ -35,13 +35,13 @@ The task recheck now disagrees with the fence. `compare_revision_rechecks` retur
 
 A second variant preserves revision 12 but reports an incomplete task inventory. That also denies. Treating inventory completeness as synonymous with digest integrity would miss this case: a perfectly intact object may describe only a partial enumeration. A third variant returns two rechecks for one source; duplicate evidence is rejected rather than allowing the later answer to silently replace the earlier one.
 
-These examples explain why capture and closure are separate questions. Closure establishes declared object presence and identity, including bounded parent reachability. It does not retroactively repair a failed capture fence or establish authorization to activate the result.
+These examples explain why capture and closure are separate questions. Closure establishes declared object presence and identity, including bounded parent reachability. The [parent-graph check](../../../crates/molten-core/src/worldcommit/restore.rs) covers every supplied observation: an observation unreachable from the subject commit is reported as `UnreachableParentObservation`, and cycle detection starts from every node, so a detached `X -> Y -> X` component fails closure instead of hiding beside a valid diamond ancestry. It does not retroactively repair a failed capture fence or establish authorization to activate the result.
 
 ## Review and verification guidance
 
 Review the revision source contract first: what mutation increments it, and can an adapter omit part of an inventory while declaring completeness? Next trace every root from observation through canonical-byte verification and publication. Finally distinguish a capture receipt, a closure report, and a restore plan when reading operator diagnostics.
 
-The existing [core tests](../../../crates/molten-core/src/worldcommit/tests.rs) contain input-order normalization, domain-confusion, revision-drift, incomplete-inventory, missing-root, and parent-cycle scenarios. Suggested focused checks are `cargo test -p molten-core world_commit` and `cargo test --lib world_commit`; they were not executed for this documentation change. An integration review should additionally interrupt publication and inspect the resulting receipt rather than infer success from root files alone.
+The existing [core tests](../../../crates/molten-core/src/worldcommit/tests.rs) contain input-order normalization, domain-confusion, revision-drift, incomplete-inventory, missing-root, parent-cycle, valid-diamond, detached-cycle, and unreachable-observation scenarios. Suggested focused checks are `cargo test -p molten-core worldcommit` and `cargo test --lib world_commit`. An integration review should additionally interrupt publication and inspect the resulting receipt rather than infer success from root files alone.
 
 ## Limits and non-claims
 

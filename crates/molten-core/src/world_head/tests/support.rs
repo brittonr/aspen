@@ -74,7 +74,7 @@ fn authentication() -> WorldHeadAuthenticationObservation {
         policy_matches: true,
         signers: vec![WorldHeadSignerObservation {
             key_identity_ref: reference("key"),
-            role: WorldHeadSignerRole::Maintainer,
+            role: Some(WorldHeadSignerRole::Maintainer),
             authenticated: true,
             current: true,
             revoked: false,

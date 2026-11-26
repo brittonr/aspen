@@ -3,6 +3,7 @@ use std::fmt;
 use artifact_auth_core::ArtifactStatement;
 use molten_core::world_head::WorldBranchId;
 use molten_core::world_head::WorldHeadAuthorityObservation;
+use molten_core::world_head::WorldHeadClaim;
 use molten_core::world_head::WorldHeadConflictSet;
 use molten_core::world_head::WorldHeadPolicyRef;
 use molten_core::world_head::WorldHeadSignerRole;
@@ -42,6 +43,10 @@ pub struct WorldHeadSignerIdentity {
     pub key_identity: artifact_auth_core::ArtifactRef,
 }
 
+/// Detached signature evidence for one world-head claim.
+///
+/// The carrier holds no role or authority: those are derived from the verified signed statement,
+/// the authentication policy's trusted keys, and [`WorldHeadSignerAuthorityPort`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldHeadSignatureCarrier {
     pub producer_id: String,
@@ -49,8 +54,16 @@ pub struct WorldHeadSignatureCarrier {
     pub public_key_bytes: Vec<u8>,
     pub signature_bytes: Vec<u8>,
     pub key_generation: u64,
+}
+
+/// A signer whose statement verified against a trusted policy key, with the role that key's
+/// policy-bound identity declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorldHeadVerifiedSigner<'a> {
+    pub key_identity_ref: &'a str,
+    pub producer_id: &'a str,
+    pub key_id: &'a str,
     pub role: WorldHeadSignerRole,
-    pub authority_admitted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +106,16 @@ pub trait WorldHeadSigningPort {
     ) -> Result<WorldHeadSignatureCarrier, WorldHeadPortError>;
 }
 
-pub trait WorldHeadAuthorityPort {
+/// Decides whether a verified signer currently holds mutation authority for a claim.
+pub trait WorldHeadSignerAuthorityPort {
+    fn signer_authority(
+        &mut self,
+        claim: &WorldHeadClaim,
+        signer: &WorldHeadVerifiedSigner<'_>,
+    ) -> Result<bool, WorldHeadPortError>;
+}
+
+pub trait WorldHeadAuthorityPort: WorldHeadSignerAuthorityPort {
     fn observe_authority(
         &mut self,
         branch_id: &WorldBranchId,
