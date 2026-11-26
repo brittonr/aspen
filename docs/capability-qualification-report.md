@@ -71,16 +71,26 @@ fixed by the producer, not selected by a caller-authored decision field.
 Readback calls the existing selected-output validator once, and invokes that
 exact admitted immutable `bin/molten` through Bounded Exec in read-only
 `readback` mode. The admitted process remeasures itself and reports its actual
-compiled features, platform, fixed profile and adapter. It also executes and
-replays the two fixed **pure simulation** scenarios without creating files or
-using live ports, returning their actual canonical execution identities.
+compiled features, platform, and one exact subject per reviewed capability
+(`subjects`, keyed by capability id: profile, environment and adapter). It then
+re-executes **every** fixed scenario and returns their actual canonical
+execution identities. The two harness scenarios are pure simulation; the product
+scenarios run their real runtime paths in scratch directories and start
+distinct-process peers of the same admitted executable (`molten evidence
+qualify-peer`), so readback creates temporary files, binds loopback ports and
+can take minutes (its bound is 30 minutes). Peers are killed and reaped on
+every exit path and emit no evidence.
 Receipt metadata and caller JSON must match those observed facts even when
 both are edited together; successful supplied receipt identities must match
 those actually observed executions of the selected binary. Native report
 validation/replay and exact fixed-suite identity are checked again. A raw
 valid harness report or authored carrier without that chain remains
 inconclusive, not qualified for an arbitrary build. The separate `describe`
-mode used to construct inputs reads metadata without running a scenario.
+mode used to construct inputs reads metadata (`subjects`) without running a
+scenario.
+
+The product producers and their scenarios are listed in
+[native capability qualification producers](distributed-testing.md#native-capability-qualification-producers).
 
 The source signer, approved Nix verifier/store/kernel and reviewed native
 producer remain trust assumptions. A source signature is not a signature over
@@ -109,10 +119,11 @@ python3 scripts/qualify-capability-report.py \
   --out target/capability-qualification-run
 ```
 
-The fixture requires a new output directory, retains both actual receipts,
-constructs the full input with all seven views, asserts the bounded simulation
-row, rejects promotion of that evidence into the six unexecuted product rows,
-and compares repeated canonical output bytes. Its parsed stdout refs are only
+For each capability with a native producer, the fixture runs every scenario
+named by the matrix, retains the receipts under its own subject and directory,
+builds the input with all capability views, asserts that capability's row is
+`bounded-observed`, rejects promotion of its evidence into any other row, and
+compares repeated canonical output bytes. Its parsed stdout refs are only
 declarations: the consumer independently recomputes identity and validates the
 native artifacts. The source verification may take minutes; it never skips the
 measured closure to accelerate a diagnostic report.
@@ -151,16 +162,19 @@ no timestamps, process IDs, path-derived subjects or input-order dependence.
 | `not-recorded` | The selected mapping supports this profile/environment but no execution artifact was supplied; missing definitions/families remain listed. |
 | `unsupported` | The selected profile/environment is outside the reviewed capability mapping. Evidence and diagnostics are still retained. |
 
-Only the fixed harness simulation producer is admitted for observed qualification
-by this increment. The six requested product-capability views remain visible,
-with missing/unsupported scopes; this does not claim that their implementations
-are absent or complete. Their native producers must supply their own actual
-runtime artifacts, exact subject binding and native validators before those
-families can become observed. Generic verification-run wrappers, source gates,
-performance experiments, model receipts and the harness simulation cannot fill
-that gap. In particular, VM startup failure, unavailable world adapters, hosted
-actor integration and cross-host ownership evidence keep their original bounded
-scope. A missing external checker cohort remains unavailable, never invented.
+Native producers exist for the harness simulation and for the same-process or
+distinct-process families of `durable-state-recovery`, `effect-uncertainty`
+(distinct-process only), `cross-process-transport`,
+`world-replay-promotion-restore` and `control-plane-failover`. These families
+remain **unqualified** (no producer; `not-recorded` or `unsupported`, never
+observed): `post-effect-uncertainty-same-process`, every `*-nixos-vm` family,
+every `*-cross-host` family and `cross-host-transport`. The
+`native_effect_uncertainty` scenarios are partial: the service host runs with a
+producer-owned runtime port around a real child-process effect, not the native
+supervisor. Generic verification-run wrappers, source gates, performance
+experiments, model receipts and the harness simulation cannot fill these gaps;
+VM startup failure and cross-host ownership evidence keep their bounded scope. A
+missing external checker cohort remains unavailable, never invented.
 
 ## Regression controls (not recorded live qualification)
 

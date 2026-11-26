@@ -44,8 +44,12 @@ pub(crate) fn run(
             .ok_or_else(|| molten::error::Failure::invalid_harness("qualification output filename must be UTF-8"))?,
     )?;
     directory.write_new(&relative, molten::preserves_rail::to_text(&produced.value)?.as_bytes())?;
+    let environment = serde_json::to_value(produced.subject.environment)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .ok_or_else(|| molten::error::Failure::invalid_harness("cannot render observed environment"))?;
     println!(
-        "qualification execution {} scenario={} decision={} environment=simulation",
+        "qualification execution {} scenario={} decision={} environment={environment}",
         produced.receipt_ref,
         scenario.id(),
         produced.decision
@@ -56,4 +60,10 @@ pub(crate) fn run(
         ));
     }
     Ok(())
+}
+
+/// Distinct-process peer of a running product producer. It emits no evidence;
+/// the producer that started it owns its run directory and lifetime.
+pub(crate) fn run_peer(role: String, run_directory: std::path::PathBuf) -> molten::error::Result<()> {
+    molten::capability_qualification::run_peer(&role, &run_directory)
 }

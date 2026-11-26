@@ -75,7 +75,7 @@ Components:
 
 Messages:
 - `runtime` → `qualification`: canonical profile-scoped execution observations, never ambient authority
-  - Payload: `ObservedReadback` {subject, binding_ref, validation_ref, receipt_refs} in `src/capability_qualification/model.rs`
+  - Payload: `ObservedReadback` {subjects, binding_ref, validation_ref, receipt_refs} in `src/capability_qualification/model.rs`
 
 Questions:
 - **open** Which capabilities have actual validated execution evidence for this exact build/profile? Use the diagnostic report, not handwritten status badges. ([ref](capability-qualification-report.md))
@@ -107,7 +107,7 @@ Questions:
 | `world` | `node-state` | content-addressed root objects, canonical commit, and capture receipt | `CaptureReceipt` {decision, commit_ref, persisted_roots, revision_fences, publication} in `src/worldcommit/wire.rs` | Storage and world state |
 | `transport` | `admission` | authenticated session and bounded frame observation | `ReceiveObservation` {peer_identity, peer_context_ref, service_id, alpn, generation, role} in `crates/molten-core/src/fabric_transport/receive.rs` | Networking and admission |
 | `admission` | `effects` | admitted operation scope, never ambient authority | `AdmittedOperation` {request, peer, authority_ref} in `src/fabric_transport/cross_process/iroh/direct.rs` | Networking and admission |
-| `runtime` | `qualification` | canonical profile-scoped execution observations, never ambient authority | `ObservedReadback` {subject, binding_ref, validation_ref, receipt_refs} in `src/capability_qualification/model.rs` | Evidence and qualification |
+| `runtime` | `qualification` | canonical profile-scoped execution observations, never ambient authority | `ObservedReadback` {subjects, binding_ref, validation_ref, receipt_refs} in `src/capability_qualification/model.rs` | Evidence and qualification |
 
 ## Open questions
 

@@ -177,34 +177,107 @@
 
     #[test]
     fn evidence_matrix_manifest_accepts_positive_and_negative_entries() {
+        let entries = vec![
+            matrix_entry(REQUIREMENT_ID, "positive"),
+            matrix_entry(REQUIREMENT_ID, "negative"),
+        ];
         let manifest = build_evidence_matrix_manifest(&EvidenceMatrixInput {
             requirements: vec![requirement(REQUIREMENT_ID, true)],
-            entries: vec![
-                matrix_entry(REQUIREMENT_ID, "positive"),
-                matrix_entry(REQUIREMENT_ID, "negative"),
-            ],
+            entries: entries.clone(),
             exemptions: Vec::new(),
         })
         .expect("evidence matrix");
         assert_eq!(manifest.decision, DECISION_PASS);
         assert!(manifest.missing_positive.is_empty());
         assert!(manifest.missing_negative.is_empty());
+        assert_checked_in_row("evidence_matrix_manifest_accepts_positive_and_negative_entries", &entries, &manifest);
+    }
+
+    /// The checked-in `tests/evidence-matrix.ncl` row for this test binds the
+    /// manifest this test actually computes and the input artifact refs.
+    fn assert_checked_in_row(test: &str, entries: &[EvidenceMatrixEntryInput], manifest: &EvidenceMatrixManifest) {
+        let row = crate::capability_qualification::matrix::entry(&format!("hardening_core::tests::{test} "));
+        let mut artifact_refs: Vec<_> = entries.iter().flat_map(|entry| entry.artifact_refs.clone()).collect();
+        artifact_refs.sort();
+        assert_eq!(row.artifact_refs, artifact_refs, "matrix artifact refs for {test}");
+        assert_eq!(row.receipt_ref, manifest.manifest_ref, "matrix receipt ref for {test}");
+    }
+
+    // r[verify molten.testing.evidence_matrix_native_producers]
+    #[test]
+    fn evidence_matrix_manifest_denies_placeholder_refs() {
+        let mut positive = matrix_entry(REQUIREMENT_ID, "positive");
+        positive.receipt_ref =
+            Some("blake3:0000000000000000000000000000000000000000000000000000000000000102".to_string());
+        let mut negative = matrix_entry(REQUIREMENT_ID, "negative");
+        negative.artifact_refs =
+            vec!["blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()];
+        let manifest = build_evidence_matrix_manifest(&EvidenceMatrixInput {
+            requirements: vec![requirement(REQUIREMENT_ID, true)],
+            entries: vec![positive, negative],
+            exemptions: vec![EvidenceMatrixExemptionInput {
+                requirement_id: REQUIREMENT_ID.to_string(),
+                reason: "reviewed-placeholder-control".to_string(),
+                evidence_ref: "blake3:0000000000000000000000000000000000000000000000000000000000000222".to_string(),
+                scope: "integration".to_string(),
+                review_note: "placeholder exemption evidence must deny".to_string(),
+            }],
+        })
+        .expect("evidence matrix");
+        assert_eq!(manifest.decision, DECISION_DENY);
+        let placeholders =
+            manifest.diagnostics.iter().filter(|diagnostic| diagnostic.starts_with("placeholder-ref:")).count();
+        assert_eq!(placeholders, 3);
+        assert!(!is_placeholder_ref(&local_ref("actual artifact bytes")));
+    }
+
+    // r[verify molten.testing.evidence_matrix_native_producers]
+    #[test]
+    fn evidence_matrix_manifest_denies_one_command_aliased_across_rows() {
+        let aliased = "cargo test --test collaborationnative one_ignored_rail -- --ignored";
+        let mut entries = vec![
+            matrix_entry(REQUIREMENT_ID, "positive"),
+            matrix_entry(REQUIREMENT_ID, "negative"),
+            matrix_entry(SECOND_REQUIREMENT_ID, "positive"),
+        ];
+        for entry in &mut entries {
+            entry.command = aliased.to_string();
+            entry.target = format!("{}-{}", entry.requirement_id, entry.coverage_kind);
+        }
+        let manifest = build_evidence_matrix_manifest(&EvidenceMatrixInput {
+            requirements: vec![requirement(REQUIREMENT_ID, true), requirement(SECOND_REQUIREMENT_ID, false)],
+            entries,
+            exemptions: Vec::new(),
+        })
+        .expect("evidence matrix");
+        assert_eq!(manifest.decision, DECISION_DENY);
+        assert!(manifest.diagnostics.iter().any(|diagnostic| diagnostic == &format!("aliased-command:{aliased}")));
+        // Control: distinct commands for the same rows are not aliasing.
+        let distinct = build_evidence_matrix_manifest(&EvidenceMatrixInput {
+            requirements: vec![requirement(REQUIREMENT_ID, true)],
+            entries: vec![matrix_entry(REQUIREMENT_ID, "positive"), matrix_entry(REQUIREMENT_ID, "negative")],
+            exemptions: Vec::new(),
+        })
+        .expect("evidence matrix");
+        assert!(!distinct.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("aliased-command:")));
     }
 
     #[test]
     fn evidence_matrix_manifest_denies_missing_negative_and_stale_id() {
+        let entries = vec![
+            matrix_entry(REQUIREMENT_ID, "positive"),
+            matrix_entry(SECOND_REQUIREMENT_ID, "negative"),
+        ];
         let manifest = build_evidence_matrix_manifest(&EvidenceMatrixInput {
             requirements: vec![requirement(REQUIREMENT_ID, true)],
-            entries: vec![
-                matrix_entry(REQUIREMENT_ID, "positive"),
-                matrix_entry(SECOND_REQUIREMENT_ID, "negative"),
-            ],
+            entries: entries.clone(),
             exemptions: Vec::new(),
         })
         .expect("evidence matrix");
         assert_eq!(manifest.decision, DECISION_DENY);
         assert_eq!(manifest.missing_negative, vec![REQUIREMENT_ID.to_string()]);
         assert!(manifest.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale-requirement-id")));
+        assert_checked_in_row("evidence_matrix_manifest_denies_missing_negative_and_stale_id", &entries, &manifest);
     }
 
     #[test]

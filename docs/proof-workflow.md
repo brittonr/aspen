@@ -59,6 +59,27 @@ molten test traceability scan --root . --changed-only \
 
 The pure core derives coverage from validated receipt fields rather than rendered logs. The Nix/release gate surface can call the same scan command and fail closed on missing positive, missing negative, stale receipt refs, duplicate receipt refs, or compatibility-only coverage when receipt-backed coverage is required. `tests/evidence-matrix.ncl` is the checked-in Nickel matrix source for durable review; its exported entries feed the same requirement ids, positive/negative coverage split, artifact refs, receipt refs, evidence scope, and diagnostic-only exemptions.
 
+Every matrix row names exactly one executed command and refs computed from real artifacts. Sequential or
+repeated-nibble placeholder digests (`blake3:000…0101`, `blake3:aaaa…`) and one command (for example a single
+`--ignored` rail) aliased across several rows or both polarities are rejected by the Nickel contract, by
+`build_evidence_matrix_manifest` (`placeholder-ref:` and `aliased-command:` diagnostics deny the manifest) and by
+`tools/capability-report.rs`. Native producer rows bind the plan and runtime-artifact refs that
+`molten evidence qualify` actually computes; see [native capability qualification producers](distributed-testing.md#native-capability-qualification-producers).
+Rows whose test cannot produce a canonical artifact without independently signed inputs are omitted rather than
+given invented refs, and recorded as tracked debt below.
+
+### Evidence-matrix tracked debt
+
+These requirements have no matrix row and make no matrix claim until a producer retains a canonical artifact
+with a reproducible ref. The same list heads `tests/evidence-matrix.ncl`.
+
+| Requirement / family | Why there is no row | What would close it |
+| --- | --- | --- |
+| `molten.system_extension.native_effect_installation`, `_authority`, `_completion`, `_lifetime`, `_consumer` | Their only executable evidence is the ignored `tests/collaborationnative` rail. It needs an independently signed cohort (`MOLTEN_TEST_SOURCE_TRUST`) and retains no canonical artifact with a reproducible ref. One ignored test used to be aliased across ten rows with invented refs. | A signed rail that retains per-requirement canonical receipts, or native producer scenarios for the native supervisor path |
+| `molten.testing.cli_receipt_first.negative_fail_closed` | The denial test emits no receipt by design: the absence of a receipt is the property, so there is no artifact to bind. The positive `normative_artifacts` row is bound. | A canonical deny receipt emitted by the CLI before refusing |
+| `molten.system_extension.native_effect_uncertainty` (partial) | Producer rows exist, but the service host runs a producer-owned runtime port around a real child-process effect, not the native supervisor or the Raft-committed path. | Native supervisor producer scenarios |
+| `post-effect-uncertainty-same-process`, every `*-nixos-vm` and `*-cross-host` family, `cross-host-transport` | No native producer. These families stay unqualified (`not-recorded`/`unsupported`), never observed. | VM and two-host producers |
+
 ## Pre-sync source identities and inherited debt
 
 <!-- r[impl molten.project.inherited_tracey_debt.active_delta_non_claims] -->

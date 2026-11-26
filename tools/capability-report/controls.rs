@@ -15,7 +15,7 @@ fn subject() -> Subject {
 fn inputs() -> (Matrix, Mapping, Input) {
     let requirement = "req.one";
     let entries = ["positive", "negative"].map(|kind| MatrixEntry { requirement_id: requirement.into(), coverage_kind: kind.into(),
-        evidence_scope: "integration".into(), target: "native-scenario".into(), command: "actual producer command".into(),
+        evidence_scope: "integration".into(), target: "native-scenario".into(), command: format!("actual producer command {kind}"),
         artifact_refs: vec![], receipt_ref: reference(kind), caveats: vec!["definition, not a retained run".into()] }).to_vec();
     let matrix = Matrix { schema: "molten.testing.evidence-matrix.v1".into(), entries, exemptions: vec![] };
     let mapping = Mapping { schema: "molten.capability-mapping.v1".into(), capabilities: vec![Capability {
@@ -48,6 +48,12 @@ pub fn run() -> Result<(), String> {
     let positive = observation("positive", "pass");
     let negative = observation("negative", "pass");
     assert_status(&matrix, &mapping, &input, vec![positive.clone()], "inconclusive")?;
+    let mut placeholder = matrix.clone();
+    placeholder.entries[0].receipt_ref = "blake3:0000000000000000000000000000000000000000000000000000000000000101".into();
+    if report::build(&placeholder, &mapping, &input, &BTreeMap::new()).is_ok() { return Err("placeholder matrix ref accepted".into()); }
+    let mut aliased = matrix.clone();
+    aliased.entries[1].command = aliased.entries[0].command.clone();
+    if report::build(&aliased, &mapping, &input, &BTreeMap::new()).is_ok() { return Err("aliased matrix command accepted".into()); }
     assert_status(&matrix, &mapping, &input, vec![positive.clone(), negative.clone()], "bounded-observed")?;
     assert_status(&matrix, &mapping, &input, vec![positive.clone(), negative.clone(), observation("positive", "fail")], "failed")?;
     let mut unvalidated = positive.clone(); unvalidated.validated = false;
@@ -65,7 +71,7 @@ pub fn run() -> Result<(), String> {
     assert_status(&matrix, &mapping, &input, vec![positive.clone()], "bounded-observed")?;
     assert_status(&matrix, &mapping, &input, vec![], "not-recorded")?;
     matrix.exemptions[0].evidence_ref = "blake3:0000000000000000000000000000000000000000000000000000000000000222".into();
-    assert_status(&matrix, &mapping, &input, vec![positive.clone()], "inconclusive")?;
+    if report::build(&matrix, &mapping, &input, &BTreeMap::new()).is_ok() { return Err("placeholder exemption evidence accepted".into()); }
     let (matrix, mapping, input) = inputs();
     let first = report::build(&matrix, &mapping, &input, &BTreeMap::from([("fixture".into(), vec![positive.clone(), negative.clone()])]))?;
     let second = report::build(&matrix, &mapping, &input, &BTreeMap::from([("fixture".into(), vec![negative, positive])]))?;
