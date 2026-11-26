@@ -986,6 +986,76 @@ fn exclusive_lease_actions_require_fresh_fencing() {
     assert_eq!(expired.kind, LeaseDecisionKind::DeniedExpired);
 }
 
+fn renew_request(
+    consistency: LeaseConsistency,
+    fencing_token: Option<u64>,
+    previous_fencing_token: Option<u64>,
+) -> LeaseRequest {
+    LeaseRequest {
+        lease_id: "lease.renew".to_string(),
+        owner_id: "owner.renew".to_string(),
+        generation: ACTIVE_GENERATION,
+        now: virtual_time(DEADLINE_TICKS),
+        expires_at: virtual_time(LEASE_EXPIRY),
+        uncertainty_ticks: 0,
+        consistency,
+        action: LeaseAction::Renew,
+        fencing_token,
+        previous_fencing_token,
+    }
+}
+
+// r[verify molten.fabric_time.batch_item_atomicity_and_fenced_renew]
+#[test]
+fn fenced_exclusive_renewal_requires_a_current_fencing_token() {
+    let profile = profile();
+    let renew = |fencing_token, previous_fencing_token| {
+        evaluate_lease(
+            &profile,
+            ACTIVE_GENERATION,
+            &renew_request(LeaseConsistency::FencedExclusive, fencing_token, previous_fencing_token),
+        )
+        .expect("renew decision")
+        .kind
+    };
+    assert_eq!(renew(Some(FENCING_TOKEN), Some(FENCING_TOKEN)), LeaseDecisionKind::RenewalAllowed);
+    assert_eq!(renew(Some(FENCING_TOKEN), Some(PREVIOUS_FENCING_TOKEN)), LeaseDecisionKind::RenewalAllowed);
+    assert_eq!(renew(Some(PREVIOUS_FENCING_TOKEN), Some(FENCING_TOKEN)), LeaseDecisionKind::DeniedStaleFencingToken);
+    assert_eq!(renew(None, Some(FENCING_TOKEN)), LeaseDecisionKind::DeniedWithoutFencing);
+    assert_eq!(renew(Some(FENCING_TOKEN), None), LeaseDecisionKind::DeniedWithoutFencing);
+    assert_eq!(renew(None, None), LeaseDecisionKind::DeniedWithoutFencing);
+
+    let mut expired = renew_request(LeaseConsistency::FencedExclusive, Some(FENCING_TOKEN), Some(FENCING_TOKEN));
+    expired.now = virtual_time(LEASE_EXPIRY);
+    assert_eq!(
+        evaluate_lease(&profile, ACTIVE_GENERATION, &expired).expect("expired renew").kind,
+        LeaseDecisionKind::DeniedExpired
+    );
+}
+
+// r[verify molten.fabric_time.batch_item_atomicity_and_fenced_renew]
+#[test]
+fn local_observation_renewal_cannot_claim_fencing() {
+    let profile = profile();
+    let local =
+        evaluate_lease(&profile, ACTIVE_GENERATION, &renew_request(LeaseConsistency::LocalObservationOnly, None, None))
+            .expect("local renew");
+    assert_eq!(local.kind, LeaseDecisionKind::RenewalAllowed);
+    for (fencing_token, previous_fencing_token) in [
+        (Some(FENCING_TOKEN), None),
+        (None, Some(FENCING_TOKEN)),
+        (Some(PREVIOUS_FENCING_TOKEN), Some(FENCING_TOKEN)),
+    ] {
+        let denied = evaluate_lease(
+            &profile,
+            ACTIVE_GENERATION,
+            &renew_request(LeaseConsistency::LocalObservationOnly, fencing_token, previous_fencing_token),
+        )
+        .expect("local fenced renew");
+        assert_eq!(denied.kind, LeaseDecisionKind::DeniedWithoutFencing);
+    }
+}
+
 fn limited_scheduler_profile(max_runnables: u64, queue_depth: u64) -> AdmittedTimeProfile {
     let mut limited = descriptor(TimeProfileKind::DeterministicSimulation);
     limited.max_runnables = max_runnables;

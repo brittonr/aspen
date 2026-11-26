@@ -62,20 +62,7 @@ impl<P: EffectPort> Owner<P> {
     pub fn reserve(&mut self, request: &ReservationRequest) -> crate::error::Result<Decision> {
         let transition = apply_reservation(&self.state, request).map_err(denial_error)?;
         match transition.outcome {
-            ReservationOutcome::Committed => {
-                let reservation = transition
-                    .reservation
-                    .ok_or_else(|| crate::error::Failure::invalid_harness("committed reservation carries no record"))?;
-                self.effects.allocate(&reservation).map_err(|error| {
-                    crate::error::Failure::invalid_harness(format!("reservation allocation failed: {error}"))
-                })?;
-                self.state = transition.next;
-                Ok(Decision {
-                    outcome: ReservationOutcome::Committed,
-                    reservation: Some(reservation),
-                    issue: None,
-                })
-            }
+            ReservationOutcome::Committed => self.allocate_and_commit(transition),
             ReservationOutcome::Rejected => {
                 let issue = transition
                     .issue
@@ -86,36 +73,65 @@ impl<P: EffectPort> Owner<P> {
     }
 
     /// Admits a bounded batch and evaluates each item as its own command.
+    ///
+    /// Every committed item is allocated and then committed to authoritative
+    /// state before the next item runs, so a later item's adapter failure never
+    /// reverts capacity that an earlier item already allocated externally. The
+    /// first allocation failure stops the batch and is returned with its port
+    /// class preserved; the items committed before it remain in `state()`.
     // r[impl molten.reservation_command.bounded_batches]
+    // r[impl molten.fabric_time.batch_item_atomicity_and_fenced_renew]
     pub fn reserve_batch(&mut self, request: &BatchRequest) -> crate::error::Result<Vec<ItemOutcome>> {
         let admitted = admit_batch(&self.state, request).map_err(batch_denial_error)?;
         let mut outcomes = Vec::with_capacity(admitted.items.len());
-        for item in admitted.items {
-            let decision = match item.reservation {
-                Some(reservation) => {
-                    self.effects.allocate(&reservation).map_err(|error| {
-                        crate::error::Failure::invalid_harness(format!("reservation allocation failed: {error}"))
-                    })?;
-                    Decision {
-                        outcome: ReservationOutcome::Committed,
-                        reservation: Some(reservation),
-                        issue: None,
+        for (item, decided) in request.items.iter().zip(admitted.items) {
+            let decision = match decided.reservation {
+                Some(decided_reservation) => {
+                    // `self.state` holds exactly the items committed so far, which is the state the
+                    // pure batch evaluated this item against.
+                    let transition = apply_reservation(&self.state, item).map_err(denial_error)?;
+                    if transition.reservation.as_ref() != Some(&decided_reservation) {
+                        return Err(crate::error::Failure::invalid_harness(
+                            "batch item decision diverged from authoritative reservation state",
+                        ));
                     }
+                    self.allocate_and_commit(transition)?
                 }
                 None => {
-                    let issue = item.issue.ok_or_else(|| {
+                    let issue = decided.issue.ok_or_else(|| {
                         crate::error::Failure::invalid_harness("rejected batch item carries no issue")
                     })?;
                     Decision::rejected(issue)
                 }
             };
             outcomes.push(ItemOutcome {
-                job_id: item.job_id,
+                job_id: decided.job_id,
                 decision,
             });
         }
-        self.state = admitted.next;
         Ok(outcomes)
+    }
+
+    /// Executes the decided allocation for one committed transition and commits
+    /// it. A definite adapter failure commits nothing. An uncertain outcome may
+    /// already hold external capacity, so the reservation stays committed and
+    /// only an admitted enforcement fact (`expire`) can release it.
+    fn allocate_and_commit(&mut self, transition: ReservationTransition) -> crate::error::Result<Decision> {
+        let reservation = transition
+            .reservation
+            .ok_or_else(|| crate::error::Failure::invalid_harness("committed reservation carries no record"))?;
+        if let Err(error) = self.effects.allocate(&reservation) {
+            if error.class() == crate::error::FailureClass::UncertainExternalOutcome {
+                self.state = transition.next;
+            }
+            return Err(allocation_failure(&reservation.job_id, &error));
+        }
+        self.state = transition.next;
+        Ok(Decision {
+            outcome: ReservationOutcome::Committed,
+            reservation: Some(reservation),
+            issue: None,
+        })
     }
 
     /// Marks an expired lease stale and releases capacity only with an
@@ -131,6 +147,15 @@ impl<P: EffectPort> Owner<P> {
     pub fn status(&self) -> ReservationStatus {
         reservation_status(&self.state)
     }
+}
+
+/// Keeps the port's failure class, including uncertainty, instead of flattening it into harness
+/// text.
+fn allocation_failure(job_id: &str, error: &crate::fabric::FabricPortError) -> crate::error::Failure {
+    crate::error::Failure::classified(
+        error.class(),
+        format!("reservation allocation failed for {job_id}: {}", error.message()),
+    )
 }
 
 fn denial_error(issue: ReservationIssue) -> crate::error::Failure {

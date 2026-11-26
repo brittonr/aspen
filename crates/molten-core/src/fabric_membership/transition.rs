@@ -135,6 +135,11 @@ impl AssignmentCommandKind {
             Self::Quarantine => "quarantine",
         }
     }
+
+    /// Whether the command executes an external extension role-lifecycle effect.
+    pub const fn has_role_effect(self) -> bool {
+        !matches!(self, Self::Reserve | Self::Assign | Self::Acknowledge)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +200,10 @@ pub enum AssignmentIssue {
     },
     AssignmentNotActive(AssignmentState),
     AssignmentNotReleased(AssignmentState),
+    AssignmentNotQuarantined(AssignmentState),
+    QuarantineClearanceMismatch,
+    QuarantineReconciliationMissing,
+    QuarantineReconciliationMismatch,
     ResourceReservationMismatch,
     OperationScopeMismatch,
     DrainStateRequired,
@@ -207,6 +216,68 @@ pub struct AssignmentAuthoritySnapshot {
     pub enforced_assignment_epoch: u64,
     pub enforced_fencing_token: u64,
     pub required_enforcement: FencingEnforcement,
+}
+
+/// A caller's request to pass a `Quarantined` role slot to a fenced successor.
+///
+/// The clearance only names what it relies on; it is not evidence and it does not
+/// choose the fence strength. Succession is admitted against the reconciliation
+/// record the assignment owner persisted for the exact quarantined assignment and
+/// against a fence observed independently from the fencing authority, at the
+/// strength `minimum_quarantine_succession_enforcement` derives from the nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuarantineClearance {
+    pub quarantined_assignment_ref: String,
+    pub reconciliation_ref: String,
+}
+
+/// What a quarantine reconciliation record is bound to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuarantineReconciliationBasis {
+    /// A committed quarantine transition; the evidence is its observed role effect.
+    CommittedEffect { intent_ref: String },
+    /// An uncertain pending intent quarantined under authority; the evidence is the authorization.
+    ReconciledIntent { intent_ref: String },
+    /// A quarantine committed before reconciliation records existed, bound to its quarantine
+    /// transition ref; the evidence is the authorization.
+    LegacyRecord { transition_ref: String },
+}
+
+impl QuarantineReconciliationBasis {
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::CommittedEffect { .. } => "committed-effect",
+            Self::ReconciledIntent { .. } => "reconciled-intent",
+            Self::LegacyRecord { .. } => "legacy-record",
+        }
+    }
+
+    pub fn bound_ref(&self) -> &str {
+        match self {
+            Self::CommittedEffect { intent_ref } | Self::ReconciledIntent { intent_ref } => intent_ref,
+            Self::LegacyRecord { transition_ref } => transition_ref,
+        }
+    }
+}
+
+/// Reconciliation record persisted by the assignment owner when an assignment
+/// entered `Quarantined`. `reconcile_ref` is the owner-computed canonical
+/// identity of the other fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuarantineReconciliation {
+    pub assignment_id: String,
+    pub quarantined_assignment_ref: String,
+    pub basis: QuarantineReconciliationBasis,
+    pub evidence_ref: String,
+    pub reconcile_ref: String,
+}
+
+/// A fence observed from the fencing authority, independently of any caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FenceObservation {
+    pub fencing_profile: FencingProfile,
+    pub enforced_assignment_epoch: u64,
+    pub enforced_fencing_token: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,8 +396,92 @@ pub fn propose_assignment(proposal: &AssignmentProposal) -> Result<RoleAssignmen
 
 /// Validate a successor against the exact committed predecessor for one ownership slot.
 /// The reference is supplied by the canonical shell; this function performs no hashing or I/O.
-/// A predecessor must complete release before its slot can move to another assignment ID.
+/// A predecessor must complete release before its slot can move to another assignment ID;
+/// a quarantined predecessor instead uses `validate_quarantined_successor`.
 pub fn validate_assignment_successor(
+    predecessor: &RoleAssignment,
+    predecessor_ref: &str,
+    successor: &RoleAssignment,
+) -> Vec<AssignmentIssue> {
+    let mut issues = validate_successor_binding(predecessor, predecessor_ref, successor);
+    if predecessor.state != AssignmentState::Released {
+        issues.push(AssignmentIssue::AssignmentNotReleased(predecessor.state));
+    }
+    issues
+}
+
+/// The weakest fence that can exclude a quarantined owner from its successor. The
+/// old owner may still run, so a successor on the same node needs a node-local
+/// durable fence, and a successor on another node needs a fence both nodes obey
+/// (quorum-ordered or externally enforced). A process-local fence never suffices.
+pub fn minimum_quarantine_succession_enforcement(
+    predecessor: &RoleAssignment,
+    successor: &RoleAssignment,
+) -> FencingEnforcement {
+    if predecessor.node_id == successor.node_id {
+        FencingEnforcement::NodeLocalDurable
+    } else {
+        FencingEnforcement::QuorumOrdered
+    }
+}
+
+/// Validate a fenced successor over a `Quarantined` predecessor. Besides the ordinary slot,
+/// predecessor, epoch and token binding, the owner-persisted reconciliation record must bind the
+/// exact quarantined assignment and match the clearance, and the independently observed fence
+/// must already enforce the successor's epoch and token at no less than the derived
+/// `minimum_quarantine_succession_enforcement`.
+// r[impl molten.fabric_membership.recoverable_pending_and_quarantined_slots]
+pub fn validate_quarantined_successor(
+    predecessor: &RoleAssignment,
+    predecessor_ref: &str,
+    successor: &RoleAssignment,
+    clearance: &QuarantineClearance,
+    reconciliation: Option<&QuarantineReconciliation>,
+    observed_fence: &FenceObservation,
+) -> Vec<AssignmentIssue> {
+    let mut issues = validate_successor_binding(predecessor, predecessor_ref, successor);
+    if predecessor.state != AssignmentState::Quarantined {
+        issues.push(AssignmentIssue::AssignmentNotQuarantined(predecessor.state));
+    }
+    if clearance.quarantined_assignment_ref != predecessor_ref {
+        issues.push(AssignmentIssue::QuarantineClearanceMismatch);
+    }
+    match reconciliation {
+        None => issues.push(AssignmentIssue::QuarantineReconciliationMissing),
+        Some(record) => {
+            for (field, value) in [
+                ("quarantine-reconciliation-ref", record.reconcile_ref.as_str()),
+                ("quarantine-reconciliation-basis-ref", record.basis.bound_ref()),
+                ("quarantine-reconciliation-evidence-ref", record.evidence_ref.as_str()),
+            ] {
+                validate_assignment_ref(field, value, &mut issues);
+            }
+            let legacy_mismatch = matches!(
+                &record.basis,
+                QuarantineReconciliationBasis::LegacyRecord { transition_ref }
+                    if predecessor.transition_refs.last() != Some(transition_ref)
+            );
+            if record.assignment_id != predecessor.assignment_id
+                || record.quarantined_assignment_ref != predecessor_ref
+                || record.reconcile_ref != clearance.reconciliation_ref
+                || legacy_mismatch
+            {
+                issues.push(AssignmentIssue::QuarantineReconciliationMismatch);
+            }
+        }
+    }
+    let authority = AssignmentAuthoritySnapshot {
+        fencing_profile: observed_fence.fencing_profile.clone(),
+        enforced_assignment_epoch: observed_fence.enforced_assignment_epoch,
+        enforced_fencing_token: observed_fence.enforced_fencing_token,
+        required_enforcement: minimum_quarantine_succession_enforcement(predecessor, successor),
+    };
+    issues.extend(validate_fencing_profile(&authority.fencing_profile));
+    authority_fence_issues(successor, &authority, &mut issues);
+    issues
+}
+
+fn validate_successor_binding(
     predecessor: &RoleAssignment,
     predecessor_ref: &str,
     successor: &RoleAssignment,
@@ -344,9 +499,6 @@ pub fn validate_assignment_successor(
         || successor.predecessor_epoch != Some(predecessor.assignment_epoch)
     {
         issues.push(AssignmentIssue::PredecessorAssignmentMismatch);
-    }
-    if predecessor.state != AssignmentState::Released {
-        issues.push(AssignmentIssue::AssignmentNotReleased(predecessor.state));
     }
     if successor.service_generation < predecessor.service_generation {
         issues.push(AssignmentIssue::StaleServiceGeneration {
@@ -411,7 +563,10 @@ pub fn apply_assignment_command(
         assignment.state
     });
     if command.uncertain_old_owner
-        && !matches!(command.kind, AssignmentCommandKind::BeginReplacement | AssignmentCommandKind::Fail)
+        && !matches!(
+            command.kind,
+            AssignmentCommandKind::BeginReplacement | AssignmentCommandKind::Fail | AssignmentCommandKind::Quarantine
+        )
     {
         issues.push(AssignmentIssue::InvalidTransition {
             state: assignment.state,
@@ -550,6 +705,15 @@ pub fn validate_assignment_authority(
 ) -> Vec<AssignmentIssue> {
     let mut issues = validate_assignment(assignment);
     issues.extend(validate_fencing_profile(&authority.fencing_profile));
+    authority_fence_issues(assignment, authority, &mut issues);
+    issues
+}
+
+fn authority_fence_issues(
+    assignment: &RoleAssignment,
+    authority: &AssignmentAuthoritySnapshot,
+    issues: &mut Vec<AssignmentIssue>,
+) {
     if assignment.fencing_profile_ref != authority.fencing_profile.profile_ref {
         issues.push(AssignmentIssue::FencingProfileMismatch);
     }
@@ -574,7 +738,6 @@ pub fn validate_assignment_authority(
             required: authority.required_enforcement,
         });
     }
-    issues
 }
 
 // r[impl molten.fabric_membership.fencing]
