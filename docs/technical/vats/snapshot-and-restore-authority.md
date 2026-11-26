@@ -29,6 +29,8 @@ There is a concrete wording mismatch inside the receipt implementation. The [sna
 
 This article documents the observed predicate relation without declaring either wording a corrected contract. In particular, a receipt carrying that label should not be cited as proof that readable references are contained in the claimed set. The discrepancy is left for separate implementation/specification review; neither source is changed here.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Worked example: safe redaction, unsafe resurrection
 
 Consider an **illustrative** snapshot with admitted references `{root, helper}`. It claims `{helper}` and requests `{helper, remote}`. Setting readable to `{helper}` and redacted to `{remote}` satisfies the described authority and coverage relations. Setting readable to `{helper, remote}` fails because `remote` is not admitted. Omitting `remote` from both visibility collections fails because a requested assertion is uncovered.

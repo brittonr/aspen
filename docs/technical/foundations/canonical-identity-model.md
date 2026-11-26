@@ -34,6 +34,8 @@ During review, identify which helper a caller uses and which conclusion the call
 
 There is a narrow implementation difference worth preserving in review: the pure core codec's `valid_blake3_ref` accepts ASCII hexadecimal characters, including uppercase, whereas the shared codec requires lowercase. Thus a core summary's shape acceptance does not prove acceptance by the shared `ContentRef` boundary. This article records the two inspected predicates rather than declaring their accepted languages identical or inventing a normalization rule. No code or governing policy is changed here.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-canonical-identity-preserves-replay-and-dataspace-determinism`](../../../.cairn/changes/repair-canonical-identity-preserves-replay-and-dataspace-determinism/proposal.md), which enforces lowercase-only `blake3:` validation across `molten-core` and `src/`.
+
 Suggested verification includes noncanonical input rejection, mismatched expected refs, unsupported labels, and schema drift. The core codec already contains domain-validation tests. These are review targets, not tests executed for this article.
 
 ## Limits and non-claims

@@ -32,6 +32,8 @@ Ordering matters when assessing resource behavior: `ProductionEntropyAdapter::dr
 
 There is a scoped source discrepancy: the [governing prose](../../fabric-time-scheduler-runtime.md#entropy) describes capability-bound stream metadata in evidence, but the inspected `EntropyEvidenceMetadata` and canonical event do not contain `capability_ref`. The request and state carry it, and the extension shell checks it; this article does not claim that the entropy event alone binds or reconstructs that capability reference. Resolving that evidence relationship requires a broader admitted context, not an invented event field.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Verification and non-claims
 
 Suggested checks include split draws across eight-byte boundaries, exhaustion by one byte, stale generations, production seeds, wrong supplied byte counts, and absent secret replay input. Compare metadata separately from secret output. These checks are guidance, not reported execution.

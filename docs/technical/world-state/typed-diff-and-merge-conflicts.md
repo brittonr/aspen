@@ -43,6 +43,8 @@ The authority recheck occurs before the generated-root loop, not as a second che
 
 The [governing prose](../../world-state-diff-and-merge.md) says merge is admitted by an exact profile and unavailable material is not equal. The planner's `reduce_root` checks runtime sensitivity, material availability and schema admission, and the declared profile mode before it selects an equal left/right root, so equal references cannot carry a runtime-sensitive root (`Tasks`, `Entropy`, and the other runtime kinds), an unavailable root, or a root kind the profile excludes into a plan. An equal root under the application-handler mode is additionally held to that handler's purity, policy, and declared input schema. Diff and merge remain separate implementations; this ordering is enforced by the planner itself, not by assuming that one calls the other.
 
+This discrepancy is tracked as a defect by the Cairn change [`harden-world-promotion-head-and-merge-semantics`](../../../.cairn/changes/harden-world-promotion-head-and-merge-semantics/proposal.md).
+
 ## Review, verification, and non-claims
 
 Suggested review cases include delete-versus-update conflict, unavailable equal references, absent equal references, an undeclared mode, ambiguous ancestry, a handler requesting effects, and failure while persisting a generated root. Compare canonical conflict/result artifacts with durable publication state; diagnostic output alone is insufficient. These scenarios were not executed for this documentation change.

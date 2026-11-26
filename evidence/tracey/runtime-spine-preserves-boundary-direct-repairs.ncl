@@ -88,14 +88,14 @@ let manifest | Manifest = {
     {
       requirement_id = "molten.runtime_spine.preserves_boundary_profile.validation",
       source_area = "runtime_spine",
-      implementation_path = "crates/molten-core/src/preserves_profile.rs",
-      verification_path = "crates/molten-core/src/preserves_profile.rs",
+      implementation_path = "docs/preserves-boundary-profile/contracts.ncl",
+      verification_path = "docs/preserves-boundary-profile/valid.ncl",
       evidence_scope = "the pure deterministic core validates typed measurements and produces explicit issue values without IO",
     },
     {
       requirement_id = "molten.runtime_spine.preserves_boundary_profile.validation.core_coupling",
       source_area = "runtime_spine",
-      implementation_path = "crates/molten-core/src/preserves_profile.rs",
+      implementation_path = "docs/preserves-boundary-profile/contracts.ncl",
       verification_path = "docs/preserves-boundary-profile/raw-core-coupling.ncl",
       evidence_scope = "adapter-only rows reject supplied raw-Preserves core-coupling facts and molten-core has no Preserves dependency or import",
     },

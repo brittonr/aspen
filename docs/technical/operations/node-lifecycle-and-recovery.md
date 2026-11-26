@@ -39,6 +39,8 @@ The [runbooks](../../production-operator-runbooks.md) require backup drills to b
 
 There is an important source boundary. Normal local startup loads the operator-selected `source-gate-trust.json` and admits the authenticated source binding of the executing candidate; the fabricated `synthetic_clean_octet_gate_receipt_for_tests()` receipt is compiled only into test targets. `molten dogfood local-node` has no authenticated Octet output, so it composes startup over an unqualified fixture gate whose startup receipt records `strict-octet-source-gate-bound` as failed. The production runbook requires current evidence for the exact reviewed source candidate and policy, so dogfood lifecycle success does not demonstrate fulfillment of that production requirement.
 
+This gap between dogfood startup evidence and the production source-gate requirement is tracked as a defect by the Cairn change [`eliminate-self-certifying-evidence-gates`](../../../.cairn/changes/eliminate-self-certifying-evidence-gates/proposal.md).
+
 ## Verification and limits
 
 Suggested review follows the runbook's init/run/status/stop sequence in an isolated root and retains startup, health, shutdown, current-run, exact completion and runbook-check artifacts. Compare canonical refs and decisions, including a prior-run duplicate and a new admitted shutdown. Review denied admission separately from observation rejection, aggregate service denial and interrupted writes. For a cluster exercise, the [receipt-first harness](../../receipt-first-cluster-harness.md) preserves child lifecycle and cleanup evidence in its durable run directory.

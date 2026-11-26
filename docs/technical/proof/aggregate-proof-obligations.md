@@ -26,6 +26,8 @@ Two implementation limits deserve explicit attention. First, the [governing work
 
 There is a similar boundary in coverage extraction: `coverage_from_aggregate_proof` reads obligations without first checking `manifest.decision`. Consequently, extracting coverage is not itself aggregate acceptance. The intended workflow requires accepted, correctly scoped children; the visible helper alone does not establish all of that contract. These are source discrepancies or helper limits, not new permission to bypass review or downstream gates.
 
+These discrepancies are tracked as defects by the Cairn change [`harden-traceability-proof-composition-and-static-audits`](../../../.cairn/changes/harden-traceability-proof-composition-and-static-audits/proposal.md).
+
 ## Verification and review guidance
 
 The [aggregate and layer tests](../../../src/testing/traceability/parts/tests/p001/body.rs) demonstrate a positive aggregate, a missing required child, a permitted layer chain, and readback pass rejection. Suggested checks include `cargo test --lib aggregate_proof_requires_all_children_and_subjects` and `cargo test --lib layered_proof_denies_cycles_and_readback_pass_promotion`. They are suggestions, not results reported here; inspect assertions rather than inferring coverage from a test name.

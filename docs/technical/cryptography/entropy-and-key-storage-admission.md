@@ -24,6 +24,8 @@ On Unix, `permission_status` checks that group and other permission bits are abs
 
 Public status is a different surface from key admission. The core redactor retains bounded public fields and receipt references, marks sensitive diagnostic categories as redacted, and rejects an input declaring private material present. It does not transform raw private bytes into safe public evidence. There is also a narrow source discrepancy: the [governing status prose](../../fabric-cryptographic-identity.md) mentions an opaque handle reference, but the inspected [canonical status record](../../../src/fabric_crypto_identity/parts/canonical/p001/body.rs) has no handle-reference field. Consumers should not assume that field exists on this surface.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Illustrative restart failure
 
 Suppose a node successfully generated its transport key, then a backup restoration restores the key leaf with mode `0644`. The bytes may decode correctly and yield the expected public key, but ordinary resolution rejects the unsafe permission observation before reading them for signing use. Generating another key is not a valid response to this error: it would conflate unsafe restoration with authorized first boot.

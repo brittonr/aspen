@@ -2994,7 +2994,7 @@
                   bash "$guard" "$core_src"
                   # Negatives: explicit std linkage in another module still compiles, so only the guard
                   # catches it; a feature-gated std import in a pure module must be rejected as well.
-                  for planted in 'dependency.rs|extern crate std; use std::fs::read;' \
+                  for planted in 'planning.rs|extern crate std; use std::fs::read;' \
                     'codec.rs|#[cfg(feature = "std")] use ::std::time::SystemTime;'; do
                     file="''${planted%%|*}"
                     rm -rf planted-src
@@ -4487,14 +4487,25 @@
                   # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.positive]
                   # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.negative]
                   positive_fixture preserves-boundary-profile-valid docs/preserves-boundary-profile/valid.ncl
-                  for fixture in \
-                    docs/preserves-boundary-profile/non-canonical.ncl \
-                    docs/preserves-boundary-profile/missing-schema-label.ncl \
-                    docs/preserves-boundary-profile/stale-ref.ncl \
-                    docs/preserves-boundary-profile/raw-core-coupling.ncl
-                  do
-                    negative_fixture "preserves-boundary-$(basename "$fixture" .ncl)" "$fixture"
-                  done
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.validation]
+                  # Each negative must fail with the diagnostic of the rule it breaks, not an unrelated error.
+                  while IFS='|' read -r name expected; do
+                    fixture="docs/preserves-boundary-profile/$name.ncl"
+                    label="preserves-boundary-$name"
+                    negative_fixture "$label" "$fixture"
+                    if ! grep -Fq "$expected" "$TMPDIR/$label.err"; then
+                      echo "negative fixture $fixture did not report: $expected" >&2
+                      failed=1
+                    fi
+                  done <<'PROFILE_NEGATIVES'
+                  non-canonical|non-canonical-bytes: node-control-envelope
+                  missing-schema-label|missing definition for `schema_label`
+                  stale-ref|stale-blake3-ref:
+                  uppercase-ref|stale-blake3-ref:
+                  unsupported-consumer|unsupported-consumer: evidence-envelope
+                  missing-non-claim|missing-boundary-non-claim:
+                  raw-core-coupling|raw-preserves-core-coupling: receipt
+                  PROFILE_NEGATIVES
                   grep -Fq 'Profile success proves canonical boundary identity and adapter placement only' \
                     docs/modularity-boundaries.md
                   grep -Fq 'it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance' \

@@ -26,6 +26,8 @@ The [governing contract](../../fabric-time-scheduler-runtime.md#deadlines-retrie
 
 Accordingly, this article does not claim every retry-construction path rejects a supported wall-clock input. Such a constructed deadline still fails the deadline evaluator's wall-domain check. This is a source-level discrepancy between the broad intended contract and this particular construction path, not permission to use UTC movement as a deadline authority oracle. No code or governing policy is changed here.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 ## Lease classification is not distributed exclusivity
 
 `evaluate_lease` validates identifiers, generation, matching admitted domains, non-wall time, and uncertainty. A pending observation maps to locally active for observe and renewal allowed for renew. An expired observation denies renewal and exclusive acquisition. Indeterminate time remains indeterminate before the exclusive fencing check.

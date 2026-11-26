@@ -24,6 +24,8 @@ For a received object, the shell validates the transport envelope, asks the cont
 
 One source discrepancy limits the admission claim. The governing DAG document describes obtaining authority and resource observations before each transfer. The inspected `run_dag_sync` implementation obtains and validates them once before iterating over `plan.requests`; content verification subsequently receives the authority reference. This companion does not claim that the loop refreshes authority and resources for every object, nor does it redefine the governing contract. Per-transfer refresh remains a review discrepancy between those sources.
 
+This discrepancy is tracked as a defect by the Cairn change [`fix-authority-bypasses-and-sandbox-isolation`](../../../.cairn/changes/fix-authority-bypasses-and-sandbox-isolation/proposal.md).
+
 ## Worked reasoning example
 
 Consider an illustrative root whose node `A` references `B` and `C`, with both branches referencing `D`. Each node has an associated content reference. A full request includes the reachable metadata and payload objects, with shared objects deduplicated. Suppose two payload references already appear in inventory and one node reference appears in compatible progress. Those three objects are omitted from the new missing set; the graph still participates in reachability and bound validation.

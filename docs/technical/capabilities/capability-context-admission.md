@@ -16,6 +16,8 @@ Nominal admission is another boundary. `admit_context_refs` constructs `Authorit
 
 There is an important implementation qualification to the phrase “deny by default.” An empty `CapabilityContext::from_grants` denies every request, but `CapabilityContext::default()` calls `allow_all()`. The evidence-bearing harness compensates at its own boundary by rejecting suites without an explicit capability fixture, alongside explicit actors and budgets, before collecting runtime traces ([runner preparation](../../../src/harness/parts/runner/p000/body.rs)). The deny-by-default architectural intent is not evidence that every constructor in every layer defaults to denial.
 
+This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+
 For canonical contexts, `authority_grant_currentness` evaluates supplied facts: requested principal, capability and operation, scope, logical time, epoch interval, current keys, and revocations. A nonempty diagnostic set yields `fail`. Parsing errors instead return an error. Consumers should preserve that distinction between a validly formed denied request and a request that never entered the decision domain ([currentness implementation](../../../src/authority/parts/mod/p001/body.rs)).
 
 ## Worked reasoning example
