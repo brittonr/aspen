@@ -45,7 +45,7 @@ Cargo dependency classes for the current root crate:
 
 | Class | Dependencies | Boundary rule |
 | --- | --- | --- |
-| Core | `molten-core`, `blake3` for identity-only helpers | Pure functions over in-memory values; no filesystem, process, network, clock, Redb, Wasmtime, Steel execution, Nickel runtime, Iroh, or CLI shells. |
+| Core | `molten-core`, the six [`no_std` kernel crates](#no-std-kernel-crates), `blake3` for identity-only helpers | Pure functions over in-memory values; no filesystem, process, network, clock, Redb, Wasmtime, Steel execution, Nickel runtime, Iroh, or CLI shells. |
 | Codec | `preserves`, `preserves-schema`, `serde`, `serde_json`, `toml`, `zstd`, `tar` | Encodes, parses, and hashes canonical artifacts; shared codec helpers must not import high-level domain modules. |
 | Policy/evidence | `basalt`, `cairn`, `octet`, `trellis`, `nickel-lang` as authoring or evidence inputs | Constructs and verifies evidence-only values; does not grant authority or runtime trust by itself. |
 | Runtime | `syndicate`, `tokio`, `n0-future`, `tracing` | Produces deterministic state transitions and planned effects after admission; shells execute effects. |
@@ -54,6 +54,49 @@ Cargo dependency classes for the current root crate:
 | Test/integration | `hegeltest`, `wat`, Nix VM checks, dogfood checks | Produces evidence for selected fixtures and integration profiles only. |
 
 Dependency-direction rules are authored as Nickel data in `docs/dependency-boundary-policy/valid.ncl`; negative fixtures cover duplicate rules, invalid layers, and empty allow/deny targets. That file is policy data only: no Rust code consumes it, and it does not by itself block an import. Import direction is enforced by the ast-grep [runtime-authority audits](ast-grep-runtime-authority-audits.md) and the Octet source gate. An earlier `molten_core::dependency` import-fact validator had no production caller and was removed.
+
+## No_std kernel crates
+
+<a id="no-std-kernel-crates"></a>
+
+r[impl molten.project.tier1_no_std_kernel_crates] Six kernel crates under `crates/` hold pure cores that used to live in the root crate. Each is `#![cfg_attr(not(test), no_std)]` with `extern crate alloc;`, has no `std` feature, and is built from standard module files with no `parts/**/body.rs` `include!` shards. Unit tests link the standard library and use `hegeltest` for bounded Hegel properties. Every kernel is a workspace member, is in `[workspace.metadata.octet]`, so `cargo octet check` covers it, and runs under the `no-std-kernels` nextest profile. The kernels never import the root crate. Only `molten-raft-core` depends on `molten-core`. The root crate keeps the `std` shell for each kernel at the old facade path, so callers did not change.
+
+| Kernel | Owns | Linked dependencies |
+| --- | --- | --- |
+| `molten-raft-core` | Replicated Raft: replica model (`model`), the transition function for election, client requests, replication, read index, snapshots, rejoin and recovery repair (`transition`), envelope shape validation (`transition::wire`), start admission (`admission`), runtime port identity checks (`ports`), the canonical identity port (`identity`), and typed refusals (`denial`) | `molten-core` without default features, for `consensus_recovery`; the allowlist is that crate's `no_std` closure |
+| `molten-fastpath-core` | Fast-path design model: conflict contract (`commute`), profile and quorums (`envelope`), fault corpus (`hazard`), stable-view admission and the application ledger (`quorate`), view-change recovery (`succession`), evidence (`witness`), and the crate-root `Rejection` | none |
+| `molten-reliability-model-core` | Register workload profile admission (`profile`), operation plan generation and validation (`generator`), public history projection and audit (`history`), fault-profile timing and partition validation (`fault`), bounded serde text deserializers and closed-vocabulary choices (`mechanism`) | `serde` without default features (`alloc`, `derive`) |
+| `molten-wasm-policy-core` | Component model and classified `Denial`, profile cohort validation (`admit_export`), execution planning, materialization `Admission` facts, and the performance profile and optimization policy | `blake3` without default features, `serde` without default features (`alloc`, `derive`); no `wasmtime` or `wasmparser` |
+| `molten-composition-core` | Composition scenario, variant and fact vocabulary (`vocabulary`), property evaluation (`judgment`), and the saturation slice contract (`quantum`) | none |
+| `molten-runtime-admission-core` | Runtime ingress policy (`ingress`): deny rules, capability grants and the allow/deny decision, generic over the runtime value | none |
+
+Shells and error boundaries:
+
+- **`molten-raft-core`.** `src/fabric_consistency/raft/` keeps the Tokio timers, Iroh transport, Redb durability, the async effect traits and executor, and the live services, because effect results carry classified I/O failures. Canonical identities (election timers, snapshots, recovery barriers, entries, recovery corpora) enter the kernel through the `identity::ReplicaIdentity` port. `raft/kernel.rs` binds it to `CanonicalReplicaIdentity`, which hashes the canonical packed Preserves records with BLAKE3. `replica_failure` in the same file maps each `ReplicaError` by its `ReplicaErrorClass`: `Invalid` becomes `Failure::InvalidHarness`, `MalformedObservation` becomes `Failure::Classified` with `FailureClass::MalformedObservation`, and `Encoding` (an identity-port error) becomes `Failure::Preserves`. The text is the same as before the extraction. `apply_replica_event`, `validate_retention_bounds` and the wire codecs keep their `crate::error::Result` signatures.
+- **`molten-fastpath-core`.** `src/fabric_consistency/fastpath/mod.rs` re-exports the model at `fabric_consistency::fastpath`. Its `failure` function maps every `Rejection` (conflict contract, fault scenario, ledger, profile, recovery) to `Failure::Classified` with `FailureClass::MalformedObservation`, and keeps the typed reason in the message. The Quint replay harness sends its ledger rejection through the same function.
+- **`molten-reliability-model-core`.** `src/reliability/model/` binds two ports: `profile::admit` gets the canonical Preserves reference of the profile, and `history::validate` gets the `serde_json` publication size. The profile DTOs in `src/reliability/service/profiles.rs` stay in the shell, because they convert into `molten-core` fabric types and hash definitions over canonical Preserves. File I/O stays in `src/reliability/` and the CLI. The kernel returns typed issues (`profile::Issue`, `generator::PlanIssue`, `history::Issue`, `fault::Issue`, `mechanism::VocabularyIssue`). Shell callers map them to `Failure::InvalidHarness` with the issue in the message (`profile-denied:`, `plan-denied:`, `evidence-denied:`, `invalid registry workload:`). Evidence import maps them to its own import issues instead.
+- **`molten-wasm-policy-core`.** `src/wasm/component/` keeps byte inspection with `wasmparser` (`admission/inspection.rs`) and embeds and decodes the generated Nickel exports. `admission::plan_execution` supplies the declared import surface as a port, because the manifest identity is canonical Preserves. `src/wasm/performance/policy/` decodes the embedded performance profile and supplies the supported component profile to `validate_conformance`. The kernel owns the Wasm domain's own error types: the component `Denial` with its `DenialClass`, and the performance `Denial`. The shell re-exports both unchanged, so no `Failure` conversion happens at this boundary. A component profile that fails to decode becomes `DenialClass::ProfileDenial`, and a performance profile that fails to decode becomes a performance `Denial`.
+- **`molten-composition-core`.** `src/harness/composition/` keeps the scenario drivers. They run the `molten-core` system-extension, fabric-time and fabric-durability cores, the Wasm `SliceLedger`, and Preserves checkpoint hashing. The kernel has no error path: `evaluate_properties` returns `PropertyOutcome` values that say whether each property holds. Driver denials become `Failure::InvalidHarness` in the shell, as before.
+- **`molten-runtime-admission-core`.** `src/runtime/admission/mod.rs` instantiates the policy with the Preserves-backed `RuntimeValue` and implements `AdmissionStep` for `RuntimeStep`. The kernel returns an `AdmissionDecision` (`Allow` or `Deny` with a reason), not an error, and the harness records it as admission-decision evidence. `src/authority/nominal.rs` and `molten_core::nominal` stay at their catalogued paths. The Octet nominal-domain catalog and `checks.nominal-reference-domains` pin `crates/molten-core/src/nominal.rs`.
+
+The `<kernel>-no-std` flake checks (`checks.molten-raft-core-no-std` and the five others) come from the `noStdKernels` table in `flake.nix`. Each kernel resolves its own unit graph, `nix/no-std-kernels/<kernel>.build-plan.json` (`unit2nix -p <kernel>`), so the `serde` and `blake3` features of the kernel are never unified with the `std` consumers in `build-plan.json`. `scripts/no-std-kernel-plans.sh` regenerates the plans; `--check` verifies them. Each check enforces:
+
+- **Plan freshness.** At evaluation time the plan must match the crate manifest: the root's default feature set, and each dependency's `default-features` choice and requested features. A negative flips a manifest feature and requires the comparison to reject it. `<kernel>.inputs.b3` must record exactly the resolution inputs: the workspace `Cargo.toml` and `Cargo.lock`, `.cargo/config.toml`, `rust-toolchain.toml`, and the manifest of every local package in the plan. A negative drops one recorded input. At build time `b3sum --check` verifies the bytes of those inputs, so a manifest or lock change without a regenerated plan fails.
+- **Linked-crate allowlist.** Every crate linked into the library (the normal-dependency closure, without proc macros) must be on the kernel's reviewed `linkedAllowlist`, and none may enable a `std` feature. A negative adds a `tokio` crate without a `std` feature and requires rejection, so a std-only crate fails by name. The allowlists are empty for the fast-path, composition and runtime-admission kernels, `serde` and `serde_core` for the reliability model, the `blake3` closure plus `serde` for the Wasm policy kernel, and the `molten-core` `no_std` closure for `molten-raft-core`.
+- **Build and tests.** The check builds the library from its own plan and runs the lib unit and Hegel tests through `ws.test.check.<kernel>`; a failing test fails the check.
+- **Compile probes.** Three `testBuildFailure` builds append `use std::fs::read;`, `use std::time::SystemTime;` and `use std::env::var;` to the kernel's `compileProbeModule`. Each must fail with rustc's unresolved-`std` diagnostic for that file.
+- **Source scan.** `scripts/check-no-std-sources.py` rejects `extern crate std` and any `std::` path in production sources. It skips `tests.rs`, `tests/` trees and modules declared only under `#[cfg(test)]`. An explicit `extern crate std;` would still compile, so this scan is what catches it. Two negatives inject `extern crate std;` and a `::std::time::Instant` function into `sourceProbeModule`, a different module from the compile probe, and require the scan to reject each one and name that file.
+
+| Kernel | `compileProbeModule` | `sourceProbeModule` |
+| --- | --- | --- |
+| `molten-raft-core` | `src/transition.rs` | `src/transition/wire.rs` |
+| `molten-fastpath-core` | `src/quorate.rs` | `src/succession.rs` |
+| `molten-reliability-model-core` | `src/generator.rs` | `src/fault.rs` |
+| `molten-wasm-policy-core` | `src/refs.rs` | `src/component/model.rs` |
+| `molten-composition-core` | `src/judgment.rs` | `src/vocabulary.rs` |
+| `molten-runtime-admission-core` | `src/ingress.rs` | `src/lib.rs` |
+
+The fast-path hygiene check `consensus-fastpath-model-profile` scans `crates/molten-fastpath-core/src` together with the shell. The mixed-view-guard mutant patch of `consensus-fastpath-quint` targets `crates/molten-fastpath-core/src/quorate.rs`. `production-raft-model` model-checks the TLA+ `AspenRaft` specifications and does not read the kernel's Rust source. As with `molten-core`, compiling under `no_std` only rules out ambient OS input/output in the kernel at compile time. It does not prove the logic correct, does not replace runtime authority gates, and says nothing about embedded targets.
 
 ## Filesystem and Nickel boundaries
 
@@ -121,7 +164,7 @@ The chunk store (`src/chunk/store.rs`) is converted. The entrypoint mounts each 
 
 Cross-module references use `crate::blocks::` owner paths. The former local aliases and wrappers now use the owner paths `crate::preserves_rail::`, `crate::bounded::`, `crate::error::`, `preserves::`, and `redb::`. Only trait imports (`redb::Readable*`) remain as `use`. Unit tests live in `store/tests/` and call the public API through `crate::chunk_store::`. Chunk, manifest, and receipt refs, Redb table names, and the on-disk layout are unchanged. No chunk-store source file is hashed into an identity.
 
-Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
+Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. The Wasm performance profile and optimization rules live in `molten-wasm-policy-core`. Their shells, which embed the profile export and bind the component profile, live in `src/wasm/performance/policy/`, and the shell tests live in `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
 
 ### Node daemon layout
 
@@ -217,6 +260,14 @@ cargo test -p molten-core
 cargo test -p molten-core --no-default-features --features executable-extents
 cargo check -p molten-core --no-default-features
 nix build .#checks.x86_64-linux.molten-core-no-std
+cargo test -p molten-raft-core -p molten-fastpath-core -p molten-reliability-model-core -p molten-wasm-policy-core -p molten-composition-core -p molten-runtime-admission-core
+scripts/no-std-kernel-plans.sh --check
+nix build .#checks.x86_64-linux.molten-raft-core-no-std
+nix build .#checks.x86_64-linux.molten-fastpath-core-no-std
+nix build .#checks.x86_64-linux.molten-reliability-model-core-no-std
+nix build .#checks.x86_64-linux.molten-wasm-policy-core-no-std
+nix build .#checks.x86_64-linux.molten-composition-core-no-std
+nix build .#checks.x86_64-linux.molten-runtime-admission-core-no-std
 cargo test --lib
 cargo test -p molten --lib chunk_store
 cargo test -p molten --lib retention

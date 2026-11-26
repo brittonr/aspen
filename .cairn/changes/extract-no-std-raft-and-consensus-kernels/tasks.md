@@ -41,7 +41,11 @@
     - asserts that `<crate>.inputs.b3` records exactly the resolution inputs: workspace `Cargo.toml` and `Cargo.lock`, `.cargo/config.toml`, `rust-toolchain.toml`, and the manifests of every local package in the plan, i.e. the `cargo metadata` path-dependency closure. A negative drops one recorded input. The check then verifies those inputs' bytes with `b3sum --check`;
     - runs three `testBuildFailure` probes that inject `std::fs`/`std::time`/`std::env` imports into one module;
     - runs `scripts/check-no-std-sources.py`, which rejects `extern crate std` and `std::` paths in production sources, with negative probes in a different module.
-- [ ] [serial] Update `docs/architecture.md` and `docs/modularity-boundaries.md`, then run focused tests, Hegel properties, Clippy, workspace Octet, Nix checks, and strict Cairn validation. r[molten.consensus.no_std_raft_and_reliability_kernels] r[molten.wasm.no_std_wasm_policy_kernel] r[molten.project.tier1_no_std_kernel_crates]
+- [x] [serial] Update `docs/architecture.md` and `docs/modularity-boundaries.md`, then run focused tests, Hegel properties, Clippy, workspace Octet, Nix checks, and strict Cairn validation. r[molten.consensus.no_std_raft_and_reliability_kernels] r[molten.wasm.no_std_wasm_policy_kernel] r[molten.project.tier1_no_std_kernel_crates]
+  - Done (2026-11-26). `docs/modularity-boundaries.md` has a new section, "No_std kernel crates" (`#no-std-kernel-crates`). For each kernel it records what the crate owns, its linked dependencies, the `std` shell in `src/`, and how refusals cross the boundary. Raft maps `ReplicaErrorClass` to `Failure::InvalidHarness`, `Classified(MalformedObservation)` or `Preserves`. Fast path maps every `Rejection` to `Classified(MalformedObservation)`. The reliability issues become `InvalidHarness` at the callers. The Wasm `Denial` is re-exported unchanged. Composition and runtime admission return outcomes and decisions rather than errors. The section also lists the `<kernel>-no-std` enforcement (plan freshness, linked-crate allowlist, build and tests, compile probes, source scan) with each kernel's probe modules.
+  - The same doc now lists the kernels in the Core dependency class, adds the kernel checks to the validation paths, and corrects the Wasm performance policy location.
+  - `docs/architecture.md`: the layer map has a kernel box, and a summary paragraph follows the map. The consensus table now names `molten-raft-core`. The stale "lives in the root crate, not in `molten-core`" sentence is replaced with the kernel, identity port, shell and failure mapping. `consensus_recovery` is attributed to `molten-core` and called from `molten-raft-core`. The runtime admission gate is attributed to `molten-runtime-admission-core`.
+  - Octet fix within this change: workspace Octet reported `no_unwrap` at `tests/fastpathquint.rs:91`. The finding came from this change's proposer-acknowledgement commit (`derive_quorums(5).expect(..)`). `fast_commit` now returns `quint_connect::Result` and propagates a missing quorum derivation as an error.
 
 ## Verification (2026-11-26, reliability/wasm-policy/composition/runtime-admission kernels)
 
@@ -120,3 +124,23 @@ Final state, after the review fixes:
   - `aremote 'cargo test -p molten --features test-fixtures --test fastpathquint'`: 5 passed.
   - `anix build -L .#checks.x86_64-linux.consensus-fastpath-quint`: campaign `passed`, normal replay `5 passed`, and the mutated guard failed with `State invariant failed`.
   - `anix build -L .#checks.x86_64-linux.molten-fastpath-core-no-std`: 26 Nix-built tests passed and the std probes were rejected.
+
+## Verification (2026-11-26, task 6: docs and final validation)
+
+- `aremote 'cargo test -p molten-composition-core -p molten-reliability-model-core -p molten-runtime-admission-core -p molten-wasm-policy-core -p molten-raft-core -p molten-fastpath-core'`: 122 passed, 0 failed. By crate: composition 4, fast path 26, raft 52, reliability model 18, runtime admission 6, Wasm policy 16. The total includes all 10 Hegel properties (1, 1, 2, 2, 2, 2).
+- `aremote 'cargo test -p molten --lib -- fabric_consistency raft fastpath reliability wasm_component harness::composition runtime::admission'`: 311 passed, 0 failed, 1 ignored.
+- `aremote 'cargo test -p molten --features test-fixtures --test fastpathquint'` (after the `no_unwrap` fix): 5 passed.
+- `aremote 'cargo clippy --workspace --all-targets -- -D warnings'`: clean. Rerun after the fix: clean.
+- `aremote 'cargo octet check --artifact-dir target/octet'`: `Status: warning-only`, 1030 findings before the fix, 1029 after, 0 errors.
+  - None of the 1029 is in the six kernel crates, in `src/fabric_consistency/fastpath`, in `src/fabric_consistency/raft/kernel*`, in `tests/fastpathquint.rs`, or in the edited docs.
+  - The remaining findings are in files this change does not touch. 1016 are in `molten`, 9 in `molten_node_host`, 2 in `nativesystemextension`, 1 in `executable_extent` and 1 in `cliharness`. Raft examples: `src/fabric_consistency/raft/live_cluster/contexts.rs:19,43`, from `a0db999d9` (Raft peer authentication).
+- `anix build -L --print-out-paths` built all of:
+  - `.#checks.x86_64-linux.{molten-raft-core,molten-fastpath-core,molten-reliability-model-core,molten-wasm-policy-core,molten-composition-core,molten-runtime-admission-core}-no-std`. The Nix-built tests reported raft 52, reliability model 18, Wasm policy 16, runtime admission 6 and composition 4 passed. The fast-path test derivation printed no new output because it was already built. Its `std` compile probe failed with `E0433` as required.
+  - `.#checks.x86_64-linux.production-raft-model`.
+  - `.#checks.x86_64-linux.consensus-fastpath-quint`, rebuilt with the fixed `tests/fastpathquint.rs`. The mixed-view-guard mutant was patched into `crates/molten-fastpath-core/src/quorate.rs`.
+- Local checks:
+  - `python3 scripts/check-doc-links.py --root .`: 320 files, 0 findings.
+  - `python3 scripts/check-no-std-sources.py crates/molten-{composition,reliability-model,runtime-admission,wasm-policy,raft,fastpath}-core`: exit 0.
+  - `bash scripts/no-std-kernel-plans.sh --check`: exit 0.
+  - `cargo fmt --all`: no changes beyond the fix.
+- `cairn validate --root . --policy <sibling cairn-policy.json> --strict`: `valid: true`. `cairn gate tasks extract-no-std-raft-and-consensus-kernels`: verdict `PASS`.
