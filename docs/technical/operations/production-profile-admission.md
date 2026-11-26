@@ -40,7 +40,7 @@ A second independent failure occurs if expected and actual profile refs disagree
 
 Suggested verification follows the runbook: export with an explicit reviewed candidate, execute positive and negative profile fixtures, run release-profile validation for the same candidate, retain deployment-profile evidence, and retain node profile-resolution evidence. The runbook specifies that invalid release-profile input writes a canonical deny value before unsuccessful exit; its Nix fixture proves command wiring, not release eligibility.
 
-No export, fixture, or runtime command was executed for this article. The inspected local daemon startup additionally uses a synthetic test source-gate receipt, as visible in the [startup implementation](../../../src/node/parts/daemon/p018/body.rs). Its local success cannot satisfy the runbook's requirement for a current candidate-and-policy source gate. Configuration metadata, content identity, resolution success, adapter observations, authority, and production promotion remain distinct review subjects.
+No export, fixture, or runtime command was executed for this article. The inspected local daemon startup additionally uses a synthetic test source-gate receipt, as visible in the [startup implementation](../../../src/node/daemon/lifecycle/running.rs). Its local success cannot satisfy the runbook's requirement for a current candidate-and-policy source gate. Configuration metadata, content identity, resolution success, adapter observations, authority, and production promotion remain distinct review subjects.
 
 ## Sources
 
@@ -48,5 +48,5 @@ No export, fixture, or runtime command was executed for this article. The inspec
 - [Production profile contracts and thresholds](../../production-profile-contracts.ncl)
 - [Checked profile and source-kind validation](../../../src/node/profile/parts/config/p000/body.rs)
 - [Override and resolution mechanics](../../../src/node/profile/parts/config/p001/body.rs)
-- [Local daemon startup evidence](../../../src/node/parts/daemon/p018/body.rs)
+- [Local daemon startup evidence](../../../src/node/daemon/lifecycle/running.rs)
 - [Technical companion](../README.md)

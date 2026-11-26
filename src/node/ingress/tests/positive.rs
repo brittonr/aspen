@@ -37,12 +37,18 @@ fn recovers_reopened_atomic_dedup_intent_before_inbox() {
     assert!(delivered.has_enqueued);
     assert_eq!(case.queue().request_ref, case.envelope.request.request_ref);
     let root = case.reopen();
-    let inbox = read_preserves(&root, &control_inbox_path(&case.envelope.request.request_ref).expect("path"))
-        .expect("recovered inbox");
+    let inbox = super::super::super::storage::read_preserves(
+        &root,
+        &super::super::super::paths::control_inbox_path(&case.envelope.request.request_ref).expect("path"),
+    )
+    .expect("recovered inbox");
     assert_eq!(inbox, case.envelope.request.value);
     assert!(
-        case.read(&control_outbox_receipt_path(&case.envelope.request.request_ref).expect("result path"))
-            .is_none()
+        case.read(
+            &super::super::super::paths::control_outbox_receipt_path(&case.envelope.request.request_ref)
+                .expect("result path")
+        )
+        .is_none()
     );
     case.assert_dedup_preserved(&reservation);
 }
@@ -55,7 +61,7 @@ fn repairs_receipt_after_reopened_inbox_without_reenqueue_or_dispatch() {
     let reservation = case.reserve();
     case.set_phase(crate::core_api::node_ingress::PublicationPhase::Publishing);
     case.write_inbox();
-    let path = control_inbox_path(&case.envelope.request.request_ref).expect("inbox path");
+    let path = super::super::super::paths::control_inbox_path(&case.envelope.request.request_ref).expect("inbox path");
     let before = case.read(&path);
     let delivered = case.deliver();
     let receipt = parse_control_ingress_receipt(&delivered.ingress_receipt_value).expect("observed receipt");
@@ -66,8 +72,11 @@ fn repairs_receipt_after_reopened_inbox_without_reenqueue_or_dispatch() {
     assert_eq!(case.queue().phase, "publication-observed");
     assert_eq!(case.queue().request_ref, case.envelope.request.request_ref);
     assert!(
-        case.read(&control_outbox_receipt_path(&case.envelope.request.request_ref).expect("result path"))
-            .is_none()
+        case.read(
+            &super::super::super::paths::control_outbox_receipt_path(&case.envelope.request.request_ref)
+                .expect("result path")
+        )
+        .is_none()
     );
     case.assert_dedup_preserved(&reservation);
 }
@@ -82,8 +91,10 @@ fn repeated_completed_dispatch_observation_preserves_immutable_result() {
     let dispatched = case.dispatch().expect("actual status dispatch");
     assert_eq!(dispatched.request_ref, case.envelope.request.request_ref);
     let root = case.reopen();
-    root.remove_regular_file(&queue_receipt_path(&case.envelope.request.request_ref).expect("queue path"))
-        .expect("controlled missing original queue receipt");
+    root.remove_regular_file(
+        &super::super::super::paths::queue_receipt_path(&case.envelope.request.request_ref).expect("queue path"),
+    )
+    .expect("controlled missing original queue receipt");
     let before = case.facts();
     let first = case.deliver();
     let second = case.deliver();
@@ -92,9 +103,11 @@ fn repeated_completed_dispatch_observation_preserves_immutable_result() {
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.phase, "completed-dispatch");
         assert!(!delivered.has_enqueued);
-        let value =
-            read_ledger_artifact(&case.reopen(), delivered.queue_receipt_ref.as_deref().expect("observation ref"))
-                .expect("observed dispatch artifact");
+        let value = super::super::super::storage::read_ledger_artifact(
+            &case.reopen(),
+            delivered.queue_receipt_ref.as_deref().expect("observation ref"),
+        )
+        .expect("observed dispatch artifact");
         let queue = parse_control_queue_receipt(&value).expect("dispatch observation");
         assert_eq!(queue.phase, "dispatch-observed");
         assert_eq!(queue.location_ref, dispatched.control_receipt_ref);
@@ -136,6 +149,9 @@ fn concurrent_submissions_serialize_without_losing_publication() {
         queue_ref.expect("canonical publication reference")
     });
     assert_eq!(case.queue().receipt_ref, queue_ref);
-    let path = control_inbox_path(&case.envelope.request.request_ref).expect("inbox path");
-    assert_eq!(read_preserves(&root, &path).expect("published request"), case.envelope.request.value);
+    let path = super::super::super::paths::control_inbox_path(&case.envelope.request.request_ref).expect("inbox path");
+    assert_eq!(
+        super::super::super::storage::read_preserves(&root, &path).expect("published request"),
+        case.envelope.request.value
+    );
 }

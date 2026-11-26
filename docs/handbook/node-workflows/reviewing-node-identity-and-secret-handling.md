@@ -54,7 +54,7 @@ Record the entry point, source class, platform permission result, public endpoin
 - [Handbook](../README.md)
 - [Node-state authority contract](../../node-state-filesystem-authority.md)
 - [Capability-rooted state companion](../../technical/storage/capability-rooted-node-state.md)
-- [Daemon identity entry point](../../../src/node/parts/daemon/p045/body.rs)
+- [Daemon identity entry point](../../../src/node/daemon/lifecycle/bootstrapping.rs)
 - [CLI initialization declarations](../../../src/cli/ops/node/command/base.rs)
 - [Pure source selection](../../../src/node/parts/identity/p000/body.rs)
 - [Shell resolution and rotation observation](../../../src/node/parts/identity/p003/body.rs)

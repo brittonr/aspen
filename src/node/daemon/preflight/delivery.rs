@@ -1,0 +1,225 @@
+//! Ingress envelope parsing, publish, and delivery into the inbox.
+
+pub fn parse_control_ingress_envelope(
+    value: &preserves::IOValue,
+) -> crate::error::Result<super::transits::ControlIngressEnvelope> {
+    crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::NODE_CONTROL_INGRESS_BOUNDARY_SCHEMA,
+    )?;
+    let fields = value
+        .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
+    super::guards::require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA,
+        "node control ingress envelope",
+    )?;
+    let transport = super::fields::record_string(&fields[1], "transport")?;
+    let topic = super::fields::record_string(&fields[2], "topic")?;
+    let from_peer = super::fields::record_string(&fields[3], "from-peer")?;
+    let to_node = super::fields::record_string(&fields[4], "to-node")?;
+    let sequence = super::fields::record_u64_string(&fields[5], "sequence")?;
+    let operation_ref = super::fields::record_ref_string(&fields[6], "operation")?;
+    let request_ref = super::fields::record_ref_string(&fields[7], "request-ref")?;
+    let request_value = super::fields::record_value(&fields[8], "request")?;
+    let request = crate::node_runtime::parse_control_request(&request_value)?;
+    if request.request_ref != request_ref {
+        return Err(crate::error::Failure::invalid_harness("node control ingress embedded request ref mismatch"));
+    }
+    let peer_bootstrap_refs = super::fields::record_ref_strings(&fields[9], "peer-bootstrap")?;
+    let authority_refs = super::fields::record_ref_strings(&fields[10], "authority")?;
+    let policy_refs = super::fields::record_ref_strings(&fields[11], "policy")?;
+    let resource_refs = super::fields::record_ref_strings(&fields[12], "resource")?;
+    let evidence_refs = super::fields::record_ref_strings(&fields[13], "evidence")?;
+    let expected_scope = crate::delivery_idempotency::remote_topic_scope_ref(&topic, &to_node)?;
+    let expected_operation =
+        crate::delivery_idempotency::derive_operation_id(crate::delivery_idempotency::OperationIdInput {
+            scope_ref: expected_scope,
+            producer: from_peer.clone(),
+            consumer: to_node.clone(),
+            sequence,
+            intent: "node-control-ingress".to_string(),
+            payload_ref: request.request_ref.clone(),
+            policy_refs: policy_refs.clone(),
+        })?;
+    if expected_operation.operation_ref != operation_ref {
+        return Err(crate::error::Failure::invalid_harness("node control ingress operation ref mismatch"));
+    }
+    // r[impl molten.runtime_spine.canonical_content_refs.node_control]
+    Ok(super::transits::ControlIngressEnvelope {
+        envelope_ref: crate::preserves_rail::canonical_hash(value)?,
+        transport,
+        topic,
+        from_peer,
+        to_node,
+        sequence,
+        operation_ref,
+        request,
+        peer_bootstrap_refs,
+        authority_refs,
+        policy_refs,
+        resource_refs,
+        evidence_refs,
+        value: value.clone(),
+    })
+}
+
+pub fn publish_control_ingress(
+    input: &super::requests::ControlIngressPublishInput<'_>,
+) -> crate::error::Result<super::transits::ControlIngressPublish> {
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
+    super::storage::validate_state_root(input.state_root)?;
+    super::storage::ensure_state_layout(&state_root)?;
+    let envelope = parse_control_ingress_envelope(input.envelope_value)?;
+    let envelope_locator = super::paths::control_ingress_envelope_path(&envelope.topic, &envelope.envelope_ref)?;
+    let envelope_path = super::ambient::diagnostic_node_state_path(input.state_root, &envelope_locator);
+    super::writers::write_ingress_envelope_and_verify(&state_root, &envelope.topic, &envelope)?;
+    super::storage::import_artifact(&state_root, &envelope.value)?;
+    let diagnostics = Vec::new();
+    let receipt_value = super::ingresses::ingress_receipt_value(&super::ingresses::IngressReceiptValueInput {
+        decision: "pass",
+        phase: "publish",
+        transport: &envelope.transport,
+        envelope: &envelope,
+        idempotency_receipt_ref: None,
+        queue_receipt_ref: None,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
+    super::storage::write_preserves(
+        &state_root,
+        &super::paths::control_ingress_receipt_path(&envelope.envelope_ref, "publish")?,
+        &receipt_value,
+    )?;
+    super::storage::import_artifact(&state_root, &receipt_value)?;
+    Ok(super::transits::ControlIngressPublish {
+        envelope_ref: envelope.envelope_ref,
+        envelope_path,
+        receipt_ref,
+        receipt_value,
+    })
+}
+
+#[derive(Debug, Default)]
+pub(super) struct EnqueueOutcome {
+    pub(super) idempotency_receipt_ref: Option<String>,
+    pub(super) queue_receipt_ref: Option<String>,
+    pub(super) has_enqueued: bool,
+    pub(super) phase: &'static str,
+    pub(super) diagnostics: Vec<String>,
+}
+
+fn apply_ingress_enqueue(
+    state_root: &crate::node_state::DirectoryRoot,
+    envelope: &super::transits::ControlIngressEnvelope,
+) -> crate::error::Result<EnqueueOutcome> {
+    super::ingress::enqueue(state_root, envelope)
+}
+
+pub fn deliver_control_ingress(
+    input: &super::requests::ControlIngressDeliverInput<'_>,
+) -> crate::error::Result<super::transits::ControlIngressDeliver> {
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
+    super::storage::validate_state_root(input.state_root)?;
+    deliver_control_ingress_with_root(&state_root, input.topic, input.envelope_ref)
+}
+
+pub(super) fn deliver_control_ingress_with_root(
+    state_root: &crate::node_state::DirectoryRoot,
+    topic: &str,
+    envelope_ref: &str,
+) -> crate::error::Result<super::transits::ControlIngressDeliver> {
+    super::storage::validate_node_id(topic)?;
+    super::guards::validate_ingress_ref(envelope_ref, "node control ingress envelope ref")?;
+    super::storage::ensure_state_layout(state_root)?;
+    let envelope_value =
+        super::storage::read_preserves(state_root, &super::paths::control_ingress_envelope_path(topic, envelope_ref)?)?;
+    let envelope = parse_control_ingress_envelope(&envelope_value)?;
+    if envelope.envelope_ref != envelope_ref {
+        return Err(crate::error::Failure::invalid_harness(format!(
+            "node control ingress materialized envelope ref {} does not match requested {}",
+            envelope.envelope_ref, envelope_ref
+        )));
+    }
+    let mut diagnostics = ingress_pre_enqueue_diagnostics(state_root, topic, &envelope)?;
+    let mut enqueue = EnqueueOutcome::default();
+    if diagnostics.is_empty() {
+        enqueue = apply_ingress_enqueue(state_root, &envelope)?;
+        diagnostics.append(&mut enqueue.diagnostics);
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = super::ingresses::ingress_receipt_value(&super::ingresses::IngressReceiptValueInput {
+        decision,
+        phase: if enqueue.phase.is_empty() {
+            "duplicate-or-deny"
+        } else {
+            enqueue.phase
+        },
+        transport: &envelope.transport,
+        envelope: &envelope,
+        idempotency_receipt_ref: enqueue.idempotency_receipt_ref.as_deref(),
+        queue_receipt_ref: enqueue.queue_receipt_ref.as_deref(),
+        diagnostics: &diagnostics,
+    })?;
+    let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
+    super::storage::write_preserves(
+        state_root,
+        &super::paths::control_ingress_receipt_path(&envelope.envelope_ref, "deliver")?,
+        &receipt_value,
+    )?;
+    super::storage::import_artifact(state_root, &receipt_value)?;
+    Ok(super::transits::ControlIngressDeliver {
+        envelope_ref: envelope.envelope_ref,
+        request_ref: envelope.request.request_ref,
+        ingress_receipt_ref,
+        ingress_receipt_value: receipt_value,
+        idempotency_receipt_ref: enqueue.idempotency_receipt_ref,
+        queue_receipt_ref: enqueue.queue_receipt_ref,
+        has_enqueued: enqueue.has_enqueued,
+    })
+}
+
+fn ingress_pre_enqueue_diagnostics(
+    state_root: &crate::node_state::DirectoryRoot,
+    topic: &str,
+    envelope: &super::transits::ControlIngressEnvelope,
+) -> crate::error::Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if !matches!(
+        envelope.transport.as_str(),
+        super::settings::LOCAL_CONTROL_INGRESS_TRANSPORT | super::settings::LIVE_CONTROL_INGRESS_TRANSPORT
+    ) {
+        diagnostics.push(format!("unsupported node control ingress transport {}", envelope.transport));
+    }
+    if envelope.topic != topic {
+        diagnostics.push(format!("node control ingress topic {} does not match requested {topic}", envelope.topic));
+    }
+    let identity = crate::node_identity::parse_identity(&super::storage::read_preserves(
+        state_root,
+        &crate::node_state::RelativePath::parse(super::settings::IDENTITY_FILE)?,
+    )?)?;
+    if envelope.to_node != identity.node_id {
+        diagnostics
+            .push(format!("node control ingress target {} does not match node {}", envelope.to_node, identity.node_id));
+    }
+    if envelope.peer_bootstrap_refs.is_empty() {
+        diagnostics.push("node control ingress peer bootstrap refs missing".to_string());
+    }
+    if envelope.authority_refs.is_empty() || envelope.request.authority_refs.is_empty() {
+        diagnostics.push("node control ingress authority refs missing".to_string());
+    }
+    if envelope.policy_refs.is_empty() || envelope.request.policy_refs.is_empty() {
+        diagnostics.push("node control ingress policy refs missing".to_string());
+    }
+    if envelope.resource_refs.is_empty() || envelope.request.resource_refs.is_empty() {
+        diagnostics.push("node control ingress resource refs missing".to_string());
+    }
+    if diagnostics.is_empty() && envelope.transport == super::settings::LIVE_CONTROL_INGRESS_TRANSPORT {
+        diagnostics.extend(super::newcomers::evaluate_live_peer_bootstrap(state_root, envelope)?);
+    }
+    if diagnostics.is_empty() && envelope.transport == super::settings::LIVE_CONTROL_INGRESS_TRANSPORT {
+        diagnostics.extend(super::mandates::evaluate_live_authority_delegation(state_root, envelope)?);
+    }
+    Ok(diagnostics)
+}

@@ -12,23 +12,24 @@ impl Evidence {
     pub(super) fn read(
         root: &crate::node_state::DirectoryRoot,
         request: &crate::node_runtime::ControlRequest,
-    ) -> Result<Self> {
-        let inbox = read_optional(root, &control_inbox_path(&request.request_ref)?)?
+    ) -> crate::error::Result<Self> {
+        let inbox = read_optional(root, &super::super::paths::control_inbox_path(&request.request_ref)?)?
             .map(|value| crate::node_runtime::parse_control_request(&value))
             .transpose()?;
-        let queue = read_optional(root, &queue_receipt_path(&request.request_ref)?)?
+        let queue = read_optional(root, &super::super::paths::queue_receipt_path(&request.request_ref)?)?
             .map(|value| parse_control_queue_receipt(&value))
             .transpose()?;
-        let dispatch = read_optional(root, &control_outbox_receipt_path(&request.request_ref)?)?
+        let dispatch = read_optional(root, &super::super::paths::control_outbox_receipt_path(&request.request_ref)?)?
             .map(|value| crate::node_runtime::parse_control_receipt(&value))
             .transpose()?;
-        let archived = read_optional(root, &control_outbox_request_path(&request.request_ref)?)?
+        let archived = read_optional(root, &super::super::paths::control_outbox_request_path(&request.request_ref)?)?
             .map(|value| crate::node_runtime::parse_control_request(&value))
             .transpose()?;
-        let dispatch_queue = read_optional(root, &dispatch_receipt_path(&request.request_ref)?)?
+        let dispatch_queue = read_optional(root, &super::super::paths::dispatch_receipt_path(&request.request_ref)?)?
             .map(|value| parse_control_queue_receipt(&value))
             .transpose()?;
-        let operation_value = read_optional(root, &control_operation_receipt_path(&request.request_ref)?)?;
+        let operation_value =
+            read_optional(root, &super::super::paths::control_operation_receipt_path(&request.request_ref)?)?;
         let has_conflict = archived
             .as_ref()
             .is_some_and(|value| value.request_ref != request.request_ref || value.operation != request.operation)
@@ -91,21 +92,23 @@ impl Evidence {
         &self,
         _root: &crate::node_state::DirectoryRoot,
         request: &crate::node_runtime::ControlRequest,
-    ) -> Result<()> {
+    ) -> crate::error::Result<()> {
         let Some(queue) = &self.queue else {
             return Ok(());
         };
         let expected = match queue.phase.as_str() {
-            "enqueue" | "publication-observed" => {
-                local_ref("node-control-inbox-path", &control_inbox_path(&request.request_ref)?.display())?
-            }
-            "dispatch-observed" => {
-                local_ref("node-control-outbox-path", &control_outbox_receipt_path(&request.request_ref)?.display())?
-            }
-            _ => return Err(MoltenError::invalid_harness("unsupported publication queue observation phase")),
+            "enqueue" | "publication-observed" => super::super::storage::local_ref(
+                "node-control-inbox-path",
+                &super::super::paths::control_inbox_path(&request.request_ref)?.display(),
+            )?,
+            "dispatch-observed" => super::super::storage::local_ref(
+                "node-control-outbox-path",
+                &super::super::paths::control_outbox_receipt_path(&request.request_ref)?.display(),
+            )?,
+            _ => return Err(crate::error::Failure::invalid_harness("unsupported publication queue observation phase")),
         };
         if queue.location_ref != expected {
-            return Err(MoltenError::invalid_harness("queue observation location conflicts with request"));
+            return Err(crate::error::Failure::invalid_harness("queue observation location conflicts with request"));
         }
         Ok(())
     }
@@ -114,10 +117,10 @@ impl Evidence {
 pub(super) fn read_optional(
     root: &crate::node_state::DirectoryRoot,
     path: &crate::node_state::RelativePath,
-) -> Result<Option<IoValue>> {
+) -> crate::error::Result<Option<preserves::IOValue>> {
     match root.entry_kind(path)? {
         None => Ok(None),
-        Some(crate::node_state::EntryKind::RegularFile) => read_preserves(root, path).map(Some),
-        Some(_) => Err(MoltenError::invalid_harness("publication observation is not a regular file")),
+        Some(crate::node_state::EntryKind::RegularFile) => super::super::storage::read_preserves(root, path).map(Some),
+        Some(_) => Err(crate::error::Failure::invalid_harness("publication observation is not a regular file")),
     }
 }

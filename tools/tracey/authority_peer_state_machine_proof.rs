@@ -1,14 +1,14 @@
 //! Tracey markers for authority and peer admission state-machine proof coverage.
 //!
 //! Implementation and tests live in `src/authority/**`, `src/peer/**`, and
-//! `src/node/parts/daemon/**`; Aspen's current Cairn Tracey scanner records
+//! `src/node/daemon/**`; Aspen's current Cairn Tracey scanner records
 //! references from `tools/**`, so this file anchors the accepted proof IDs to
 //! focused authority and node live-admission tests.
 //!
 //! Verification evidence:
 //! - `src/authority/parts/mod/p003/body.rs`
-//! - `src/node/parts/daemon/tests/m000/p005/body.rs`
-//! - `src/node/parts/daemon/tests/m000/p009/body.rs`
+//! - `src/node/daemon/tests/reconcile/peers.rs` and `src/node/daemon/tests/reconcile/intakes.rs`
+//! - `src/node/daemon/tests/probes/denycases.rs` and `src/node/daemon/tests/probes/judgements.rs`
 
 // r[verify molten.authority_peer_state_proof.current_scoped_grant]
 // r[verify molten.authority_peer_state_proof.import_not_authority]

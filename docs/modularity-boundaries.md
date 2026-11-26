@@ -91,9 +91,9 @@ The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and ou
 
 ## Semantic module layout
 
-The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), harness schema (`src/harness/schema.rs`), and node daemon (`src/node/daemon.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. Converting them into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
+The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), and harness schema (`src/harness/schema.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. The node daemon (`src/node/daemon.rs`) is converted; see [Node daemon layout](#node-daemon-layout). Converting the rest into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
 
-- re-export every public item explicitly from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths;
+- re-export every public item from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths (explicitly where the list fits the file limit; the node daemon uses one glob per submodule, see below);
 - reference other modules by qualified owner path, because Octet's `non_trait_imports` rejects non-trait `use`, and replace shared-scope aliases (`type Result<T>`, forwarding wrappers around `preserves_rail`) with their owner paths;
 - name modules so that no contained item repeats a module word (`path_segment_repetition`), and keep each file within 300 lines and each directory within seven Rust files;
 - start every item private and raise its visibility only where another module uses it;
@@ -102,6 +102,26 @@ The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job 
 The internal root names (`blocks`, `custody`, `workload`, `daemon_core`, and `testbed::format`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names.
 
 Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
+
+### Node daemon layout
+
+`src/node/daemon.rs` mounts the internal root `daemon_core` (public alias `node_daemon`) as a real module tree. Its 61 production shards and 24 test shards under `src/node/parts/daemon/` are gone.
+
+- **Submodules.** The entrypoint declares 81 flat submodules with `#[path]`, one responsibility each, plus the existing `ingress` and `source_binding` modules. Physical directories under `src/node/daemon/` group them, each with at most seven files:
+  - `vocabulary/`: limits and public request and outcome records.
+  - `access/` and `trust/`: grants, tickets, peer admission, and delegation.
+  - `workflow/` and `protocol/`: live workflow bundles and the protocol gate.
+  - `records/`: Preserves field readers, validators, receipt parsers, and lifecycle inspection.
+  - `encoding/` and `stamping/`: receipt values and summaries.
+  - `lifecycle/`, `service/`, and `dispatch/`: local lifecycle, the control service, and dispatch.
+  - `live/`, `listen/`, and `preflight/`: live Iroh ingress, sends, listeners, and profiles.
+  - `state/`: state-root storage, paths, locks, and current-run tracking.
+- **References.** Siblings refer to each other by qualified path, such as `super::storage::read_preserves`. The only `use` items are trait imports (`n0_future::StreamExt`). The former shared aliases (`Result`, `IoValue`, `Path`, `PathBuf`, `MoltenError`, `Ipv4Addr`) are replaced by their owner paths, in `ingress/` as well.
+- **Visibility.** Items, fields, and methods stay private unless another daemon submodule or test uses them; those get `pub(super)`. Public items keep `pub`.
+- **Re-exports.** The entrypoint has one `pub use self::<module>::*;` for each submodule that holds a public item. An explicit per-item list (about 190 lines) plus the `#[path]` declarations would exceed the 300-line file limit. Outside `daemon_core`, the globs expose only `pub` items.
+- **Tests.** `src/node/daemon/tests/` uses the same layout: 30 flat modules under `daemon_core::tests`. The `cfg(test)` helpers that used to sit in the production shards moved to `tests/mod.rs`: the `fs` wrappers, the `Path`/`PathBuf` `NodeStateAuthority` impls, and the test authority refs.
+- **ast-grep rules.** The host-path helpers (`config_path`, `startup_path`, `shutdown_path`, `diagnostic_node_state_path`) live in `state/ambient.rs`. It is the only daemon file the node-state ambient-filesystem rule ignores. The root-reacquisition rule lists the modules that now hold the items of the shards it used to list.
+- **Alias.** `daemon_core` stays the internal root and `node_daemon` stays its alias. 184 call sites use `node_daemon`. Promoting the alias would repeat `node` in 22 item names, 7 of them public (for example `NodeLifecycleState`).
 
 ## Chunk store semantic boundary
 

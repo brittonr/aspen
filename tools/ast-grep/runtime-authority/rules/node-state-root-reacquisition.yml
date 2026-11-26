@@ -8,22 +8,32 @@ metadata:
   non_claim: structural-authority-threading-only
 files:
   - src/node/ingress/*.rs
-  - src/node/parts/daemon/p020/body.rs
-  - src/node/parts/daemon/p025/body.rs
-  - src/node/parts/daemon/p051/body.rs
-  - src/node/parts/daemon/p027/body.rs
-  - src/node/parts/daemon/p053/body.rs
-  - src/node/parts/daemon/p028/body.rs
-  - src/node/parts/daemon/p029/body.rs
-  - src/node/parts/daemon/p030/body.rs
-  - src/node/parts/daemon/p054/body.rs
-  - src/node/parts/daemon/p031/body.rs
-  - src/node/parts/daemon/p032/body.rs
-  - src/node/parts/daemon/p033/body.rs
-  - src/node/parts/daemon/p034/body.rs
-  - src/node/parts/daemon/p055/body.rs
-  - src/node/parts/daemon/p035/body.rs
-  - src/node/parts/daemon/p056/body.rs
+  - src/node/daemon/dispatch/gating.rs
+  - src/node/daemon/dispatch/handlers.rs
+  - src/node/daemon/dispatch/installs.rs
+  - src/node/daemon/dispatch/launches.rs
+  - src/node/daemon/encoding/sends.rs
+  - src/node/daemon/encoding/transports.rs
+  - src/node/daemon/listen/endpoints.rs
+  - src/node/daemon/live/inbound.rs
+  - src/node/daemon/records/fields.rs
+  - src/node/daemon/records/guards.rs
+  - src/node/daemon/service/draining.rs
+  - src/node/daemon/service/ticking.rs
+  - src/node/daemon/stamping/ingresses.rs
+  - src/node/daemon/stamping/narration.rs
+  - src/node/daemon/stamping/operations.rs
+  - src/node/daemon/stamping/overview.rs
+  - src/node/daemon/stamping/phrasing.rs
+  - src/node/daemon/stamping/services.rs
+  - src/node/daemon/stamping/stamps.rs
+  - src/node/daemon/state/leases.rs
+  - src/node/daemon/state/paths.rs
+  - src/node/daemon/state/storage.rs
+  - src/node/daemon/state/writers.rs
+  - src/node/daemon/trust/admissibility.rs
+  - src/node/daemon/trust/mandates.rs
+  - src/node/daemon/trust/newcomers.rs
   - src/node/parts/identity/p001/body.rs
   - src/node/parts/identity/p004/body.rs
   - src/job/parts/dag/p009/body.rs
