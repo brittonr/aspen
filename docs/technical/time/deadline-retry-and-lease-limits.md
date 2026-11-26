@@ -20,13 +20,11 @@ For an illustrative policy with base 3, maximum delay 20, and enough admitted at
 
 The planner receives jitter ticks; it does not itself draw entropy or prove the value came from an admitted entropy stream. A caller composing purpose-bound entropy with retries must preserve that separate admission path.
 
-## Construction and evaluation have a scoped mismatch
+## Construction and evaluation both deny wall-clock deadlines
 
-The [governing contract](../../fabric-time-scheduler-runtime.md#deadlines-retries-and-local-leases) states that wall-clock deadlines are denied. The inspected `evaluate_deadline` and lease validation enforce that domain restriction. However, `plan_retry` validates the current `TimeValue` and uses `checked_add_duration` without calling the deadline-domain validator before constructing its returned `Deadline`.
+The [governing contract](../../fabric-time-scheduler-runtime.md#deadlines-retries-and-local-leases) states that wall-clock deadlines are denied. `evaluate_deadline` and lease validation enforce that domain restriction, and `plan_retry` calls the same deadline-domain validator on the current `TimeValue` before it does any delay arithmetic. A wall-clock base therefore fails retry planning with `UnsupportedDeadlineDomain(WallClock)` and no `Deadline` is constructed; a monotonic base yields a deadline in the monotonic domain.
 
-Accordingly, this article does not claim every retry-construction path rejects a supported wall-clock input. Such a constructed deadline still fails the deadline evaluator's wall-domain check. This is a source-level discrepancy between the broad intended contract and this particular construction path, not permission to use UTC movement as a deadline authority oracle. No code or governing policy is changed here.
-
-This discrepancy is tracked as a defect by the Cairn change [`repair-companion-doc-source-discrepancies`](../../../.cairn/changes/repair-companion-doc-source-discrepancies/proposal.md).
+The evaluator keeps its own wall-domain check as defence in depth: a `Deadline` assembled outside `plan_retry` is still rejected when evaluated. Neither check makes UTC movement a deadline authority oracle.
 
 ## Lease classification is not distributed exclusivity
 

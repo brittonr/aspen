@@ -42,3 +42,13 @@
         rustix::fs::mkfifoat(&directory, path.as_path(), rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR).expect("owned FIFO");
         assert!(read_artifact_bounded_with_root(&root, &imported.artifact_ref, 1_024).is_err());
     }
+
+    #[test]
+    fn versioned_crypto_status_keeps_its_kind_and_audit_retention_class() {
+        // r[verify molten.crypto_identity.status_handle_reference]
+        for label in ["fabric-crypto-status-v1", "fabric-crypto-status-v2"] {
+            let status = crate::preserves_rail::record(label, vec![crate::preserves_rail::string("status")]);
+            assert_eq!(artifact_kind(&status), "fabric-crypto-status");
+            assert_eq!(retention_class(artifact_kind(&status)), crate::retention::CLASS_AUDIT_RECEIPT);
+        }
+    }

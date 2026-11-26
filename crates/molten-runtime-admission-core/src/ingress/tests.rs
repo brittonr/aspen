@@ -122,3 +122,45 @@ fn hegel_allow_all_capabilities_authorize_every_action_and_no_grant_denies_all(t
     let empty = CapabilityContext::<u64>::from_grants(alloc::vec::Vec::new());
     assert!(!AdmissionPolicy::allow_all().decide_with_capabilities(&empty, &request).is_allowed());
 }
+
+// r[verify molten.runtime_spine.capability_context_deny_by_default]
+#[hegel::test(test_cases = 64)]
+fn hegel_default_capability_context_denies_every_action(tc: hegel::TestCase) {
+    let actions = AdmissionAction::all();
+    let index = tc.draw(hegel::generators::integers::<usize>().min_value(0).max_value(actions.len() - 1));
+    let salt = tc.draw(hegel::generators::integers::<u64>());
+    let request = AdmissionRequest {
+        actor: alloc::format!("actor-{salt}"),
+        action: actions[index].clone(),
+        target: Some(alloc::format!("target-{salt}")),
+        value: Some(salt),
+        upper: Some(salt),
+    };
+    let default_context = CapabilityContext::<u64>::default();
+    assert!(default_context.grants().is_empty());
+    assert!(!default_context.authorize(&request).authorized);
+    assert!(!AdmissionPolicy::allow_all().decide_with_capabilities(&default_context, &request).is_allowed());
+}
+
+// r[verify molten.runtime_spine.capability_context_deny_by_default]
+#[test]
+fn explicit_matching_grant_admits_where_the_default_context_denies() {
+    let request = AdmissionRequest::from_step(&Step::Assert {
+        actor: "producer",
+        value: "service.ready",
+    });
+    let policy = AdmissionPolicy::allow_all();
+    let denied = policy.decide_with_capabilities(&CapabilityContext::default(), &request);
+    assert_eq!(denied, AdmissionDecision::Deny {
+        reason: "missing capability grant".to_string()
+    });
+    let grant = CapabilityGrant {
+        actor: Some("producer".to_string()),
+        action: Some(AdmissionAction::Assert),
+        target: None,
+        value: Some(alloc::string::String::from("service.ready")),
+    };
+    let explicit = CapabilityContext::from_grants(alloc::vec![grant.clone()]);
+    assert_eq!(explicit.authorize(&request).grant, Some(grant));
+    assert!(policy.decide_with_capabilities(&explicit, &request).is_allowed());
+}

@@ -1635,3 +1635,96 @@ fn eviction_preserves_a_blocked_occurrences_slot_and_exact_identity_resume() {
         anchor
     );
 }
+
+fn fixed_retry_policy() -> RetryPolicy {
+    RetryPolicy {
+        maximum_attempts: RETRY_ATTEMPTS,
+        base_delay_ticks: RETRY_BASE,
+        maximum_delay_ticks: RETRY_MAX,
+        backoff: RetryBackoff::Fixed,
+        jitter: RetryJitter::None,
+    }
+}
+
+// r[verify molten.fabric_time.retry_deadline_domain]
+#[test]
+fn retry_planning_denies_a_wall_clock_base_at_construction() {
+    let profile = profile();
+    let wall_now = TimeValue::Wall(WallClockObservation {
+        profile_ref: profile.profile_ref.clone(),
+        unix_nanos: WALL_START,
+        uncertainty_nanos: 0,
+        observation_sequence: 1,
+    });
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.wall",
+            ACTIVE_GENERATION,
+            &wall_now,
+            0,
+            fixed_retry_policy(),
+            None
+        ),
+        Err(DeadlineLeaseError::UnsupportedDeadlineDomain(TimeDomain::WallClock))
+    );
+}
+
+// r[verify molten.fabric_time.retry_deadline_domain]
+#[test]
+fn retry_planning_accepts_a_monotonic_base_and_keeps_its_domain() {
+    let profile = profile();
+    let monotonic_now = TimeValue::Monotonic(MonotonicInstant {
+        profile_ref: profile.profile_ref.clone(),
+        ticks: DEADLINE_TICKS,
+    });
+    let plan = plan_retry(
+        &profile,
+        ACTIVE_GENERATION,
+        "retry.monotonic",
+        ACTIVE_GENERATION,
+        &monotonic_now,
+        0,
+        fixed_retry_policy(),
+        None,
+    )
+    .expect("monotonic retry plan");
+    assert_eq!(plan.deadline.target.domain(), TimeDomain::Monotonic);
+    assert_eq!(plan.delay.domain, TimeDomain::Monotonic);
+    assert_eq!(plan.deadline.target.ticks(), DEADLINE_TICKS + RETRY_BASE);
+    let decision = evaluate_deadline(&profile, ACTIVE_GENERATION, &plan.deadline, &monotonic_now)
+        .expect("planned deadline evaluates");
+    assert_eq!(decision.status, DeadlineStatus::Pending);
+}
+
+// r[verify molten.fabric_time.entropy_capability_evidence]
+#[test]
+fn entropy_evidence_binds_the_admitted_stream_capability() {
+    let profile = profile();
+    let stream = open_simulation_stream();
+    let transition = draw_deterministic_entropy(&profile, ACTIVE_GENERATION, &stream, EntropyRequest::Bytes {
+        count: ENTROPY_BYTES,
+    })
+    .expect("draw");
+    let metadata = entropy_evidence_metadata(&stream, &transition);
+    assert_eq!(metadata.capability_ref, reference('b'));
+    assert_eq!(verify_entropy_evidence_capability(&stream, &metadata.capability_ref), Ok(()));
+}
+
+// r[verify molten.fabric_time.entropy_capability_evidence]
+#[test]
+fn entropy_replay_rejects_a_mismatched_capability_with_a_typed_diagnostic() {
+    let stream = open_simulation_stream();
+    assert_eq!(
+        verify_entropy_evidence_capability(&stream, &reference('d')),
+        Err(EntropyError::CapabilityMismatch {
+            expected: reference('b'),
+            actual: reference('d'),
+        })
+    );
+    assert_eq!(
+        verify_entropy_evidence_capability(&stream, "capability-label"),
+        Err(EntropyError::MalformedCapabilityRef("capability-label".to_string()))
+    );
+}

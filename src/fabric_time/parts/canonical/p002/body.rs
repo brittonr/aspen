@@ -169,11 +169,7 @@ fn event(
     if generation == 0 {
         return Err(crate::error::Failure::invalid_harness("fabric time event generation must be non-zero"));
     }
-    let (record, schema) = if kind == EventKind::Scheduler {
-        (FABRIC_SCHEDULER_EVENT_RECORD, super::FABRIC_SCHEDULER_EVENT_SCHEMA)
-    } else {
-        (FABRIC_TIME_EVENT_RECORD, super::FABRIC_TIME_OBSERVATION_SCHEMA)
-    };
+    let (record, schema) = event_record_label(kind);
     let value = crate::preserves_rail::record(record, vec![
         crate::preserves_rail::string(schema),
         field("profile-ref", crate::preserves_rail::string(profile_ref)),

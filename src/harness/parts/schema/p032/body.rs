@@ -1,4 +1,7 @@
 
+/// Snapshot-authority receipts whose readable-assertions check is labelled against the admitted set.
+const SNAPSHOT_AUTHORITY_V2_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v2";
+
 fn parse_runtime_predicate_receipt(value: &IoValue) -> Result<String> {
     let receipt = value
         .collect_simple_record("runtime-predicate-receipt-v1", Some(8))
@@ -20,6 +23,7 @@ fn parse_runtime_predicate_receipt(value: &IoValue) -> Result<String> {
             | ACTORMAP_TRANSACTION_PREDICATE
             | NEAR_FAR_REFS_PREDICATE
             | SNAPSHOT_AUTHORITY_PREDICATE
+            | SNAPSHOT_AUTHORITY_V2_PREDICATE
             | SERVICE_DEPENDENCIES_PREDICATE
     ) {
         return Err(MoltenError::invalid_harness(format!(

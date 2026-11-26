@@ -2,3 +2,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/p
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/parts/adapter/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/parts/adapter/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/parts/adapter/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/parts/adapter/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_crypto_identity/file/parts/adapter/p005/body.rs"));

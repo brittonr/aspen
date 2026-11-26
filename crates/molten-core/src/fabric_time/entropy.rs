@@ -95,11 +95,14 @@ pub struct EntropyTransition {
     pub request_bytes: u64,
 }
 
+/// Secret-free evidence for one entropy draw. `capability_ref` binds the evidence to the capability
+/// that admitted the stream, so replay can reject evidence produced under a different grant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntropyEvidenceMetadata {
     pub profile_ref: String,
     pub stream_id: String,
     pub purpose: String,
+    pub capability_ref: String,
     pub generation: u64,
     pub mode: EntropyMode,
     pub replay_class: EntropyReplayClass,
@@ -128,6 +131,7 @@ pub enum EntropyError {
     TotalLimitExceeded { actual: u64, maximum: u64 },
     SuppliedByteCountMismatch { expected: u64, actual: u64 },
     Overflow,
+    CapabilityMismatch { expected: String, actual: String },
 }
 
 // r[impl molten.fabric_time.entropy]
@@ -241,6 +245,7 @@ pub fn consume_production_entropy(
     finish_entropy_transition(state, request, supplied_secret_bytes, None)
 }
 
+// r[impl molten.fabric_time.entropy_capability_evidence]
 pub fn entropy_evidence_metadata(
     previous: &EntropyStreamState,
     transition: &EntropyTransition,
@@ -249,6 +254,7 @@ pub fn entropy_evidence_metadata(
         profile_ref: previous.profile_ref.clone(),
         stream_id: previous.stream_id.clone(),
         purpose: previous.purpose.clone(),
+        capability_ref: previous.capability_ref.clone(),
         generation: previous.generation,
         mode: previous.mode,
         replay_class: previous.replay_class,
@@ -257,6 +263,25 @@ pub fn entropy_evidence_metadata(
         request_bytes: transition.request_bytes,
         end_position_bytes: transition.next.position_bytes,
     }
+}
+
+/// Replay check: recorded entropy evidence must carry the capability reference of the admitted
+/// stream.
+// r[impl molten.fabric_time.entropy_capability_evidence]
+pub fn verify_entropy_evidence_capability(
+    admitted: &EntropyStreamState,
+    recorded_capability_ref: &str,
+) -> Result<(), EntropyError> {
+    if !valid_time_ref(recorded_capability_ref) {
+        return Err(EntropyError::MalformedCapabilityRef(recorded_capability_ref.to_string()));
+    }
+    if recorded_capability_ref != admitted.capability_ref {
+        return Err(EntropyError::CapabilityMismatch {
+            expected: admitted.capability_ref.clone(),
+            actual: recorded_capability_ref.to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn validate_request(
