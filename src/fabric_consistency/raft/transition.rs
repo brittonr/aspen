@@ -12,6 +12,9 @@ mod snapshot;
 mod support;
 mod validation;
 
+pub use election::StaleTimerEvent;
+pub use election::stale_timer_event;
+
 use super::*;
 
 pub(super) struct MessagePlan {

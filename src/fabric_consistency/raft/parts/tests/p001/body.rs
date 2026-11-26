@@ -206,8 +206,9 @@ fn live_installs_bound_snapshots_before_acknowledging_catch_up() {
 }
 
 // r[verify molten.fabric_consistency.live_raft]
+// r[verify molten.consensus.raft_timer_lifecycle_safety]
 #[test]
-fn live_denies_superseded_election_timer_before_protocol_effects() {
+fn live_ignores_superseded_election_timer_without_protocol_effects() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let superseded_timer_ref = node_a.active_election_timer_ref.clone();
@@ -216,11 +217,19 @@ fn live_denies_superseded_election_timer_before_protocol_effects() {
     })
     .expect("current election timer");
 
-    let error = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
+    let superseded = ReplicaEvent::ElectionTimeout {
         timer_ref: superseded_timer_ref,
+    };
+    assert_eq!(stale_timer_event(&election.next, &superseded), Some(StaleTimerEvent::SupersededElectionTimer));
+    let ignored = apply_replica_event(&election.next, superseded).expect("superseded timer is a benign no-op");
+    assert_eq!(ignored.next, election.next);
+    assert!(ignored.effects.is_empty());
+
+    let malformed = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
+        timer_ref: "malformed-timer-token".to_string(),
     })
-    .expect_err("superseded timer must deny");
-    assert!(error.to_string().contains("stale Raft election timer"));
+    .expect_err("malformed timer token must deny");
+    assert!(malformed.to_string().contains("Raft election timer ref"));
 }
 
 // r[verify molten.fabric_consistency.live_raft]

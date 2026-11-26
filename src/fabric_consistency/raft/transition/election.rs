@@ -15,16 +15,46 @@ pub(super) struct VoteResponseInput {
     pub is_granted: bool,
 }
 
+/// Why a live timer event no longer drives the replica it reached.
+///
+/// Timer tasks deliver through an asynchronous queue, so an event armed before a role change or a
+/// timer reset can still arrive after it. Such an event is benign: its transition keeps the state
+/// and plans no effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaleTimerEvent {
+    /// An election timeout whose token a later arm superseded.
+    SupersededElectionTimer,
+    /// An election timeout reaching a leader, whose heartbeat timer replaced the election timer.
+    ElectionTimeoutAtLeader,
+    /// A heartbeat tick reaching a replica that no longer leads.
+    HeartbeatAtNonLeader,
+}
+
+/// Classify a timer event that no longer applies to `state`; `None` for every other event.
+// r[impl molten.consensus.raft_timer_lifecycle_safety]
+pub fn stale_timer_event(state: &ReplicaState, event: &ReplicaEvent) -> Option<StaleTimerEvent> {
+    match event {
+        ReplicaEvent::ElectionTimeout { timer_ref } => stale_election_timeout(state, timer_ref),
+        ReplicaEvent::HeartbeatTimeout if state.role != ReplicaRole::Leader => {
+            Some(StaleTimerEvent::HeartbeatAtNonLeader)
+        }
+        _ => None,
+    }
+}
+
+fn stale_election_timeout(state: &ReplicaState, timer_ref: &str) -> Option<StaleTimerEvent> {
+    if timer_ref != state.active_election_timer_ref {
+        return Some(StaleTimerEvent::SupersededElectionTimer);
+    }
+    (state.role == ReplicaRole::Leader).then_some(StaleTimerEvent::ElectionTimeoutAtLeader)
+}
+
+// r[impl molten.consensus.raft_timer_lifecycle_safety]
 pub(super) fn handle_timeout(state: &ReplicaState, timer_ref: String) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&timer_ref, "Raft election timer ref")?;
-    if timer_ref != state.active_election_timer_ref {
-        return Err(crate::error::Failure::invalid_harness(
-            "stale Raft election timer cannot activate protocol effects",
-        ));
-    }
-    if state.role == ReplicaRole::Leader {
-        return Err(crate::error::Failure::invalid_harness("leader cannot process a follower election timeout"));
+    if stale_election_timeout(state, &timer_ref).is_some() {
+        return finish(state.clone(), Vec::new());
     }
     if matches!(state.rejoin, ReplicaRejoin::Recovering(_)) {
         return rejoin::retry(state);
@@ -68,10 +98,11 @@ pub(super) fn handle_timeout(state: &ReplicaState, timer_ref: String) -> crate::
     finish(next, effects)
 }
 
+// r[impl molten.consensus.raft_timer_lifecycle_safety]
 pub(super) fn handle_heartbeat_timeout(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
-    if state.role != ReplicaRole::Leader {
-        return Err(crate::error::Failure::invalid_harness("only a live Raft leader can emit heartbeat traffic"));
+    if stale_timer_event(state, &ReplicaEvent::HeartbeatTimeout).is_some() {
+        return finish(state.clone(), Vec::new());
     }
     let next = state.clone();
     let mut effects = support::append_effects_for_all(&next)?;

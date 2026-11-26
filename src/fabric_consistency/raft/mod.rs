@@ -70,3 +70,6 @@ mod time_tests;
 #[cfg(test)]
 #[path = "transition/bounds.rs"]
 mod transition_bounds_tests;
+#[cfg(test)]
+#[path = "transition/liveness.rs"]
+mod transition_liveness_tests;

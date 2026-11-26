@@ -48,8 +48,9 @@ fn a_higher_term_invalidates_recovery_barrier_observations_before_any_vote() {
 }
 
 // r[verify molten.consensus.storage_fault_recovery]
+// r[verify molten.consensus.raft_replication_and_recovery_liveness]
 #[test]
-fn peer_snapshot_installation_retains_an_unresolved_suffix_after_prefix_repair() {
+fn peer_snapshot_installation_discards_a_suffix_both_peers_lack_after_a_mismatched_boundary() {
     let committed = tests::committed_leader();
     let mut local = recovering();
     local.log = committed.log.clone();
@@ -75,7 +76,15 @@ fn peer_snapshot_installation_retains_an_unresolved_suffix_after_prefix_repair()
     .next;
     let installed = exchange(&local, &peer);
     assert_eq!(installed.next.snapshot, peer.snapshot);
-    assert_eq!(installed.next.log, vec![suffix]);
+    // The local term at the snapshot boundary differs from the snapshot's, and both other voters
+    // report lacking the suffix entry, so it is established uncommitted and discarded exactly as a
+    // leader's InstallSnapshot would. (With one report it stays unresolved and installation waits;
+    // see `repair::tests`.)
+    assert!(installed.next.log.is_empty(), "suffix {suffix:?} must not survive a mismatched boundary");
+    assert!(installed.effects.iter().any(|effect| matches!(effect, ReplicaEffect::PersistSnapshot {
+        is_suffix_retained: false,
+        ..
+    })));
     assert_eq!(installed.next.commit_index, 1);
     assert!(matches!(installed.next.rejoin, ReplicaRejoin::Recovering(_)));
 }

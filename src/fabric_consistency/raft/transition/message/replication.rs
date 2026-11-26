@@ -1,5 +1,19 @@
 use super::*;
 
+/// Effects the executor adds around a guarded transition: the durable intent write and its clear
+/// (`executor/batch.rs`).
+const DURABLE_INTENT_FENCE_EFFECTS: usize = 2;
+/// The commit record and the application batch that accompany every commit advancement.
+const COMMIT_RECORD_EFFECTS: usize = 2;
+
+/// The follower log after reconciling one `AppendEntries` batch.
+struct MergedEntries {
+    truncate_from: Option<u64>,
+    appended: Vec<ReplicatedEntry>,
+    /// The last index known to match the leader's log after the merge.
+    acknowledged_index: u64,
+}
+
 pub(super) struct AppendEntriesInput {
     pub from: String,
     pub term: u64,
@@ -50,12 +64,22 @@ pub(super) fn handle_append_entries(
         return Ok(());
     }
 
-    validation::validate_incoming_entries(&transition.next, input.prev_log_index, input.term, &input.entries)?;
-    let acknowledged_index = input.entries.last().map_or(input.prev_log_index, |entry| entry.index);
-    let (truncate_from, appended) = merge_entries(&mut transition.next, input.entries)?;
-    push_log_effects(transition, truncate_from, appended);
-    apply_leader_commit(transition, input.leader_commit.min(acknowledged_index));
-    push_append_response(transition, &input.from, true, input.prev_log_index, acknowledged_index)?;
+    // r[impl molten.consensus.raft_replication_and_recovery_liveness]
+    // Resolve the conflicting suffix first: request refs are checked only against entries the
+    // merge retains, never against uncommitted entries it is about to truncate.
+    let first_change = first_changed_entry(&transition.next, &input.entries);
+    let retained_before = first_change.and_then(|position| input.entries.get(position)).map(|entry| entry.index);
+    validation::validate_incoming_entries(
+        &transition.next,
+        input.prev_log_index,
+        input.term,
+        &input.entries,
+        retained_before,
+    )?;
+    let merged = merge_entries(&mut transition.next, input.prev_log_index, input.entries, first_change)?;
+    push_log_effects(transition, merged.truncate_from, merged.appended);
+    apply_leader_commit(transition, input.leader_commit.min(merged.acknowledged_index));
+    push_append_response(transition, &input.from, true, input.prev_log_index, merged.acknowledged_index)?;
     arm_election_timer(transition)?;
     Ok(())
 }
@@ -178,8 +202,28 @@ fn apply_leader_commit(transition: &mut MessagePlan, leader_commit: u64) {
     }
 }
 
+/// Commit through the highest quorum-replicated current-term index, at most as many entries as the
+/// step's effect budget leaves room for: each committed entry adds one proposal outcome, and the
+/// executor fences the batch with a durable intent write and clear. Committing a prefix is safe
+/// because every entry up to a quorum-replicated current-term index is committed; every later
+/// successful append response continues from the new commit index.
+// r[impl molten.consensus.raft_replication_and_recovery_liveness]
 fn advance_leader_commit(transition: &mut MessagePlan) {
-    let next_commit = highest_quorum_index(&transition.next);
+    let quorum_commit = highest_quorum_index(&transition.next);
+    if quorum_commit <= transition.next.commit_index {
+        return;
+    }
+    let outcome_budget = transition
+        .next
+        .profile
+        .max_effects_per_step
+        .saturating_sub(transition.effects.len())
+        .saturating_sub(DURABLE_INTENT_FENCE_EFFECTS)
+        .saturating_sub(COMMIT_RECORD_EFFECTS);
+    let Ok(outcome_budget) = u64::try_from(outcome_budget) else {
+        return;
+    };
+    let next_commit = quorum_commit.min(transition.next.commit_index.saturating_add(outcome_budget));
     if next_commit <= transition.next.commit_index {
         return;
     }
@@ -224,29 +268,55 @@ fn highest_quorum_index(state: &ReplicaState) -> u64 {
     state.commit_index
 }
 
-fn merge_entries(
-    state: &mut ReplicaState,
-    incoming: Vec<ReplicatedEntry>,
-) -> crate::error::Result<(Option<u64>, Vec<ReplicatedEntry>)> {
-    let first_change = incoming.iter().position(|entry| {
+fn first_changed_entry(state: &ReplicaState, incoming: &[ReplicatedEntry]) -> Option<usize> {
+    incoming.iter().position(|entry| {
         state
             .log
             .iter()
             .find(|existing| existing.index == entry.index)
             .is_none_or(|existing| existing != entry)
-    });
+    })
+}
+
+/// Truncate the conflicting suffix and append the incoming entries that fit the admitted log bound.
+///
+/// A follower at its bound stores only the prefix that fits and acknowledges exactly that prefix:
+/// commit advancement through it lets the hosting service compact with a snapshot, and the leader
+/// resends the rest from the acknowledged index.
+// r[impl molten.consensus.raft_replication_and_recovery_liveness]
+fn merge_entries(
+    state: &mut ReplicaState,
+    prev_log_index: u64,
+    incoming: Vec<ReplicatedEntry>,
+    first_change: Option<usize>,
+) -> crate::error::Result<MergedEntries> {
     let Some(first_change) = first_change else {
-        return Ok((None, Vec::new()));
+        return Ok(MergedEntries {
+            truncate_from: None,
+            appended: Vec::new(),
+            acknowledged_index: incoming.last().map_or(prev_log_index, |entry| entry.index),
+        });
     };
-    let change_index = incoming[first_change].index;
+    let change_index = incoming
+        .get(first_change)
+        .map(|entry| entry.index)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append change lies outside its batch"))?;
     if change_index <= state.commit_index {
         return Err(crate::error::Failure::invalid_harness("Raft append would overwrite a committed entry"));
     }
+    let matched_index = change_index
+        .checked_sub(NEXT_LOG_INDEX_STEP)
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append change index underflow"))?;
     let truncate_from = state.log.iter().any(|entry| entry.index >= change_index).then_some(change_index);
     state.log.retain(|entry| entry.index < change_index);
-    let appended = incoming.into_iter().skip(first_change).collect::<Vec<_>>();
+    let capacity = state.profile.max_log_entries.saturating_sub(state.log.len());
+    let appended = incoming.into_iter().skip(first_change).take(capacity).collect::<Vec<_>>();
     state.log.extend(appended.iter().cloned());
-    Ok((truncate_from, appended))
+    Ok(MergedEntries {
+        truncate_from,
+        acknowledged_index: appended.last().map_or(matched_index, |entry| entry.index),
+        appended,
+    })
 }
 
 #[cfg(test)]

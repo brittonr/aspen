@@ -5,7 +5,6 @@ pub(super) struct ProbeInput {
     pub term: u64,
     pub leader_id: String,
     pub request_ref: String,
-    pub required_index: u64,
 }
 
 pub(super) struct AcknowledgementInput {
@@ -15,15 +14,18 @@ pub(super) struct AcknowledgementInput {
     pub request_ref: String,
 }
 
+/// Confirm the prober's leadership for its term (Raft ReadIndex).
+///
+/// The leader alone serves the read at its own commit index, so a follower acknowledges a
+/// current-term leader whether or not its log has caught up to that index. The probe's higher term
+/// was already adopted by `observe_higher_term` and is persisted with this acknowledgement.
+// r[impl molten.consensus.raft_replication_and_recovery_liveness]
 pub(super) fn handle_probe(transition: &mut MessagePlan, input: ProbeInput) -> crate::error::Result<()> {
     if input.term < transition.next.current_term {
         return Ok(());
     }
     if input.leader_id != input.from {
         return Err(crate::error::Failure::invalid_harness("Raft read probe leader does not match its sender"));
-    }
-    if input.required_index > support::last_log_index(&transition.next) {
-        return Err(crate::error::Failure::invalid_harness("Raft read probe requires an unavailable log boundary"));
     }
     if transition.next.role == ReplicaRole::Leader && input.leader_id != transition.next.node_id {
         return Err(crate::error::Failure::invalid_harness("Raft read probe observed two leaders in one term"));
