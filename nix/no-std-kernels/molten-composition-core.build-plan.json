@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0"
+    "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0"
   },
-  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
-  "inputsHash": "d1209dc926af46a28eba7f1abff4e3542bbbfbff6883d68eefde58c9ce889ed3",
+  "cargoLockHash": "78a999dad872b47323d1489cec075b28685bf2008bc74c49c3db4dc5d15d6e3e",
+  "inputsHash": "728729a223e7f6e9f17d247e8d2c7e546eed3f5290df34deadf62860faab0667",
   "crates": {
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0": {
       "crateName": "molten-composition-core",
       "version": "0.1.0",
       "edition": "2024",

@@ -38,180 +38,21 @@ pub fn canonical_content_ref(value: &IoValue) -> Result<ContentRef> {
     ContentRef::parse(&canonical_hash(value)?)
 }
 
-const DECISION_PASS: &str = "pass";
-const DECISION_DENY: &str = "deny";
-const CHECK_STATUS_FAIL: &str = "fail";
-const CHECK_STATUS_DIAGNOSTIC: &str = "diagnostic";
-const REPLAY_CLASS_IDEMPOTENT: &str = "idempotent";
-const REPLAY_CLASS_DETERMINISTIC: &str = "deterministic";
-const REPLAY_CLASS_EFFECTFUL: &str = "effectful";
-const OPERATION_FIRST_CHAR_LABEL: &str = "operation id first character";
+// The typed ids, closed vocabularies and check records are the kernel's; their `parse` denials are
+// `ViewError`s that convert into the same `Failure::InvalidHarness` messages as before.
+pub use molten_preserves_core::view::CheckStatus;
+pub use molten_preserves_core::view::Decision;
+pub use molten_preserves_core::view::OperationId;
+pub use molten_preserves_core::view::ParsedCheck;
+pub use molten_preserves_core::view::ProfileId;
+pub use molten_preserves_core::view::ReplayClass;
+pub use molten_preserves_core::view::SchemaId;
+pub use molten_preserves_core::view::StableId;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StableId(String);
-
-impl StableId {
-    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
-        let value = value.as_ref();
-        validate_stable_id(value, "stable id")?;
-        Ok(Self(value.to_string()))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SchemaId(StableId);
-
-impl SchemaId {
-    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
-        let value = value.as_ref();
-        validate_stable_id(value, "schema id")?;
-        Ok(Self(StableId(value.to_string())))
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OperationId(StableId);
-
-impl OperationId {
-    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
-        let value = value.as_ref();
-        validate_stable_id(value, "operation id")?;
-        let first = value
-            .bytes()
-            .next()
-            .ok_or_else(|| MoltenError::invalid_harness("operation id cannot be empty"))?;
-        if !first.is_ascii_lowercase() {
-            return Err(MoltenError::invalid_harness(format!(
-                "{OPERATION_FIRST_CHAR_LABEL} must be lowercase ascii, got {value}"
-            )));
-        }
-        Ok(Self(StableId(value.to_string())))
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ProfileId(StableId);
-
-impl ProfileId {
-    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
-        let value = value.as_ref();
-        validate_stable_id(value, "profile id")?;
-        Ok(Self(StableId(value.to_string())))
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Decision {
-    Pass,
-    Deny,
-}
-
-impl Decision {
-    pub fn parse(value: &str) -> Result<Self> {
-        match value {
-            DECISION_PASS => Ok(Self::Pass),
-            DECISION_DENY => Ok(Self::Deny),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported decision {value}"))),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => DECISION_PASS,
-            Self::Deny => DECISION_DENY,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckStatus {
-    Pass,
-    Fail,
-    Deny,
-    Diagnostic,
-}
-
-impl CheckStatus {
-    pub fn parse(value: &str) -> Result<Self> {
-        match value {
-            DECISION_PASS => Ok(Self::Pass),
-            CHECK_STATUS_FAIL => Ok(Self::Fail),
-            DECISION_DENY => Ok(Self::Deny),
-            CHECK_STATUS_DIAGNOSTIC => Ok(Self::Diagnostic),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported check status {value}"))),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => DECISION_PASS,
-            Self::Fail => CHECK_STATUS_FAIL,
-            Self::Deny => DECISION_DENY,
-            Self::Diagnostic => CHECK_STATUS_DIAGNOSTIC,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayClass {
-    Idempotent,
-    Deterministic,
-    Effectful,
-}
-
-impl ReplayClass {
-    pub fn parse(value: &str) -> Result<Self> {
-        match value {
-            REPLAY_CLASS_IDEMPOTENT => Ok(Self::Idempotent),
-            REPLAY_CLASS_DETERMINISTIC => Ok(Self::Deterministic),
-            REPLAY_CLASS_EFFECTFUL => Ok(Self::Effectful),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported replay class {value}"))),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Idempotent => REPLAY_CLASS_IDEMPOTENT,
-            Self::Deterministic => REPLAY_CLASS_DETERMINISTIC,
-            Self::Effectful => REPLAY_CLASS_EFFECTFUL,
-        }
-    }
-}
+type ViewError = molten_preserves_core::view::ViewError;
 
 pub fn validate_stable_id(value: &str, label: &str) -> Result<()> {
-    if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} cannot be empty")));
-    }
-    if value.bytes().all(is_stable_id_byte) {
-        return Ok(());
-    }
-    Err(MoltenError::invalid_harness(format!(
-        "{label} must contain only ASCII letters, digits, '_', '.', ':', or '-', got {value}"
-    )))
-}
-
-fn is_stable_id_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b':' | b'-')
+    Ok(molten_preserves_core::view::validate_stable_id(value, label)?)
 }
 
 pub fn symbol(name: &'static str) -> IoValue {
@@ -242,12 +83,9 @@ pub fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     IoValue::from(value.clone())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsedCheck {
-    pub name: String,
-    pub status: String,
-}
-
+// The `IOValue` parsers below keep their own traversal (see `molten_preserves_core::view` for why)
+// and take every denial from the kernel's `ViewError`, so both share one set of messages; the
+// `reader_parity` property holds their accept/deny decisions and results identical.
 // r[impl molten.preserves_rail_toolkit.parser_builders]
 // r[impl molten.preserves_rail_toolkit.negative_shapes]
 pub fn simple_record_fields<'a>(
@@ -256,23 +94,31 @@ pub fn simple_record_fields<'a>(
     arity: u64,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     let expected_arity = crate::bounded::usize_from_u64(arity, "record arity")?;
-    value
-        .collect_simple_record(label, Some(expected_arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+    value.collect_simple_record(label, Some(expected_arity)).ok_or_else(|| {
+        MoltenError::from(ViewError::RecordShape {
+            label: label.to_owned(),
+            arity,
+        })
+    })
 }
 
 pub fn required_string_field(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| MoltenError::from(ViewError::ExpectedString { field: field.to_owned() }))
 }
 
 pub fn required_content_ref(value: &Value<IoValue>, field: &str) -> Result<ContentRef> {
     let reference = required_string_field(value, field)?;
-    ContentRef::parse(&reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
-    })
+    match molten_preserves_core::identity::validate_ref(&reference) {
+        Ok(()) => Ok(ContentRef(reference)),
+        Err(error) => Err(MoltenError::from(ViewError::ContentRef {
+            field: field.to_owned(),
+            value: reference,
+            error,
+        })),
+    }
 }
 
 pub fn required_content_ref_string(value: &Value<IoValue>, field: &str) -> Result<String> {
@@ -283,16 +129,15 @@ pub fn required_content_ref_string(value: &Value<IoValue>, field: &str) -> Resul
 /// second encoding of `Some` and is rejected so one logical value has one canonical identity.
 // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 pub fn optional_content_ref(value: &Value<IoValue>, field: &str) -> Result<Option<ContentRef>> {
-    identity_bridge::decode_optional_ref(&value_to_iovalue(value)).map_err(|issue| match issue {
-        identity_bridge::OptionalRefIssue::Shape => {
-            MoltenError::invalid_harness(format!("{field} must be <none> or <some \"blake3:...\">"))
+    identity_bridge::decode_optional_ref(&value_to_iovalue(value)).map_err(|issue| {
+        let field = field.to_owned();
+        match issue {
+            identity_bridge::OptionalRefIssue::Shape => MoltenError::from(ViewError::OptionalRefShape { field }),
+            identity_bridge::OptionalRefIssue::NotString => MoltenError::from(ViewError::ExpectedString { field }),
+            identity_bridge::OptionalRefIssue::InvalidRef { value, error } => {
+                MoltenError::from(ViewError::ContentRef { field, value, error })
+            }
+            identity_bridge::OptionalRefIssue::Conversion(error) => error,
         }
-        identity_bridge::OptionalRefIssue::NotString => {
-            MoltenError::invalid_harness(format!("expected string for {field}"))
-        }
-        identity_bridge::OptionalRefIssue::InvalidRef(error) => {
-            MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
-        }
-        identity_bridge::OptionalRefIssue::Conversion(error) => error,
     })
 }

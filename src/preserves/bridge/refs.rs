@@ -1,28 +1,21 @@
 //! Content-reference and optional-reference rules from the kernel, reported with the shell's
 //! established diagnostics.
 
-/// The shell diagnostic for a string the kernel rejected as a content reference.
+/// The shell diagnostic for a string the kernel rejected as a content reference: the kernel's
+/// reason followed by the rejected text.
 pub(super) fn ref_failure(value: &str, error: molten_preserves_core::identity::RefError) -> super::MoltenError {
-    let prefix = molten_preserves_core::identity::BLAKE3_REF_PREFIX;
-    super::MoltenError::invalid_harness(match error {
-        molten_preserves_core::identity::RefError::MissingPrefix => {
-            format!("content ref must start with {prefix}, got {value}")
-        }
-        molten_preserves_core::identity::RefError::DigestLength => {
-            format!("content ref must be {prefix}<64 lowercase hex chars>, got {value}")
-        }
-        molten_preserves_core::identity::RefError::DigestCharacter => {
-            format!("content ref must use lowercase hex chars, got {value}")
-        }
-    })
+    super::MoltenError::invalid_harness(format!("{error}, got {value}"))
 }
 
 /// Why a value is not `<none>` or `<some "blake3:...">`.
 pub(super) enum OptionalRefIssue {
     Shape,
     NotString,
-    /// The `<some ...>` string is not a canonical reference; carries the reference diagnostic.
-    InvalidRef(super::MoltenError),
+    /// The `<some ...>` string is not a canonical reference.
+    InvalidRef {
+        value: String,
+        error: molten_preserves_core::identity::RefError,
+    },
     Conversion(super::MoltenError),
 }
 
@@ -40,7 +33,10 @@ pub(super) fn decode_optional_ref(value: &super::IoValue) -> Result<Option<super
                 .and_then(<[_]>::first)
                 .and_then(molten_preserves_core::model::PackedValue::as_str)
                 .ok_or(OptionalRefIssue::Shape)?;
-            Err(OptionalRefIssue::InvalidRef(ref_failure(text, error)))
+            Err(OptionalRefIssue::InvalidRef {
+                value: text.to_owned(),
+                error,
+            })
         }
     }
 }

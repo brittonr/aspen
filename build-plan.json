@@ -1,44 +1,44 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-preserves-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-reliability-model-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-runtime-admission-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0",
-    "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
-    "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0",
-    "molten-preserves-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
-    "molten-raft-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0",
-    "molten-reliability-model-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0",
-    "molten-runtime-admission-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0",
-    "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0",
-    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0",
+    "molten-composition-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
+    "molten-fastpath-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-node-host#0.1.0",
+    "molten-preserves-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-preserves-core#0.1.0",
+    "molten-raft-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-release-policy#0.1.0",
+    "molten-reliability-model-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-reliability-model-core#0.1.0",
+    "molten-runtime-admission-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-runtime-admission-core#0.1.0",
+    "molten-wasm-policy-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0",
+    "vm-cohort-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/vendor/vm-cohort/crates/vm-cohort-core#0.1.0"
   },
-  "cargoLockHash": "243d35d94326cde4d2f138d8ab1a995c091bb3d99c16a648472a41c7b6a5a1c8",
-  "inputsHash": "7abda6360bdba3c41641739c9bc859a9edc42bd50cac749757887775e57825a4",
+  "cargoLockHash": "78a999dad872b47323d1489cec075b28685bf2008bc74c49c3db4dc5d15d6e3e",
+  "inputsHash": "cffb692d4efb7a904e1b4d949added00cf9117ccebc4b2028b775fe6e032af20",
   "crates": {
     "git+https://github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
@@ -2016,7 +2016,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -2134,39 +2134,39 @@
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0",
           "externCrateName": "molten_composition_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0",
           "externCrateName": "molten_fastpath_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-preserves-core#0.1.0",
           "externCrateName": "molten_preserves_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0",
           "externCrateName": "molten_raft_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-reliability-model-core#0.1.0",
           "externCrateName": "molten_reliability_model_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-runtime-admission-core#0.1.0",
           "externCrateName": "molten_runtime_admission_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0",
           "externCrateName": "molten_wasm_policy_core"
         },
         {
@@ -2374,7 +2374,7 @@
       "description": "Aspen: a Rust runtime for distributed systems with explicit authority, bounded effects, and deterministic replay",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-composition-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-composition-core#0.1.0": {
       "crateName": "molten-composition-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2404,7 +2404,7 @@
       "description": "no_std service recovery composition vocabulary and property evaluation for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2471,7 +2471,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-fastpath-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-fastpath-core#0.1.0": {
       "crateName": "molten-fastpath-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2501,7 +2501,7 @@
       "description": "no_std bounded consensus fast-path design model for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -2523,8 +2523,12 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-preserves-core#0.1.0",
+          "externCrateName": "molten_preserves_core"
         }
       ],
       "buildDependencies": [],
@@ -2550,7 +2554,7 @@
       "description": "Capability-rooted node host boundary for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-preserves-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-preserves-core#0.1.0": {
       "crateName": "molten-preserves-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2585,7 +2589,7 @@
       "description": "no_std canonical packed Preserves encoding, BLAKE3 identity, and bounded traversal for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-raft-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-raft-core#0.1.0": {
       "crateName": "molten-raft-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2597,7 +2601,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -2624,7 +2628,7 @@
       "description": "no_std replicated Raft state machine, transitions, and effect plans for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -2640,7 +2644,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -2668,7 +2672,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-reliability-model-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-reliability-model-core#0.1.0": {
       "crateName": "molten-reliability-model-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2711,7 +2715,7 @@
       "description": "no_std register workload, history, and fault-profile models for Aspen live reliability",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-runtime-admission-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-runtime-admission-core#0.1.0": {
       "crateName": "molten-runtime-admission-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2741,7 +2745,7 @@
       "description": "no_std runtime capability and deny-rule admission for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/crates/molten-wasm-policy-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/crates/molten-wasm-policy-core#0.1.0": {
       "crateName": "molten-wasm-policy-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -2784,7 +2788,7 @@
       "description": "no_std Wasm component admission, profile, and optimization policy for Aspen",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-core-no-std/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-swarm-kernel-support/vendor/vm-cohort/crates/vm-cohort-core#0.1.0": {
       "crateName": "vm-cohort-core",
       "version": "0.1.0",
       "edition": "2024",

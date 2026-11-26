@@ -5091,6 +5091,7 @@ dependencies = [
  "cap-std 3.4.5",
  "cap-tempfile",
  "molten-core",
+ "molten-preserves-core",
  "toml 0.9.12+spec-1.1.0",
 ]
 
