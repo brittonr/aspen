@@ -110,8 +110,12 @@ impl FastPathDriver {
         };
     }
 
-    fn converge(&mut self, command: String) {
-        let outcome = self.ledger.converge(&operation(&command));
+    fn converge(&mut self, command: String) -> quint_connect::Result {
+        // Each model command is one session operation, so the ledger never sees a conflicting retry.
+        let outcome = self
+            .ledger
+            .converge(&operation(&command))
+            .map_err(|issue| std::io::Error::other(format!("model convergence rejected: {issue:?}")))?;
         if outcome.is_applied {
             self.applied.push(command.clone());
             self.application_events += 1;
@@ -121,6 +125,7 @@ impl FastPathDriver {
             self.reply_events += 1;
         }
         self.duplicate_suppressed = outcome.is_duplicate_suppressed;
+        Ok(())
     }
 }
 
@@ -180,7 +185,7 @@ impl Driver for FastPathDriver {
                 pick(step, "promise_mode")?,
                 pick(step, "conflict_free")?,
             ),
-            "Converge" => self.converge(pick(step, "command")?),
+            "Converge" => self.converge(pick(step, "command")?)?,
             other => return Err(std::io::Error::other(format!("unknown Quint action {other}")).into()),
         }
         Ok(())

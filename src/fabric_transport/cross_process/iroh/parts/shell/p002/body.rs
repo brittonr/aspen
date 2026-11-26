@@ -67,6 +67,30 @@ pub async fn exchange_frame(
     Ok(evidence)
 }
 
+/// Test support: dial `input`'s admitted endpoint offering `alpn` and return the connection without
+/// opening a stream, like a peer that stalls after its handshake. The endpoint must outlive it.
+#[cfg(test)]
+pub(crate) async fn connect_without_exchange(
+    input: ClientInput,
+    alpn: &[u8],
+    timeout: std::time::Duration,
+) -> crate::error::Result<(iroh::Endpoint, iroh::endpoint::Connection)> {
+    let dial_plan = admit_endpoint_import(
+        &input.profile.profile,
+        &input.protocol,
+        &input.endpoint.descriptor,
+        &input.expected,
+        input.admission,
+    )
+    .map_err(|issues| validation_error("cross-process endpoint import", &issues))?;
+    let endpoint = bind_explicit_endpoint(input.bind_addr, input.capability, alpn).await?;
+    let connection = tokio::time::timeout(timeout, endpoint.connect(endpoint_addr(&dial_plan)?, alpn))
+        .await
+        .map_err(|_| crate::error::Failure::invalid_harness("cross-process connect timed out"))?
+        .map_err(error)?;
+    Ok((endpoint, connection))
+}
+
 struct NetworkFrame {
     payload_ref: String,
     acknowledgement_ref: String,
@@ -147,10 +171,19 @@ async fn run_client_exchange(input: ClientExchangeInput<'_>) -> crate::error::Re
         generation,
         timeout,
     } = input;
+    let expected_remote = endpoint_addr.id;
     let connection = tokio::time::timeout(timeout, endpoint.connect(endpoint_addr, alpn))
         .await
         .map_err(|_| crate::error::Failure::invalid_harness("cross-process connect timed out"))?
         .map_err(error)?;
+    // The handshake authenticates the dialed key; the admitted import bound that key to the
+    // descriptor's peer context, so the session observes the context of the authenticated endpoint.
+    if connection.remote_id() != expected_remote {
+        connection.close(IROH_REFUSED_CLOSE_CODE.into(), UNADMITTED_PEER_CLOSE_REASON);
+        return Err(crate::error::Failure::invalid_harness(
+            "cross-process client reached an endpoint other than the admitted descriptor identity",
+        ));
+    }
     let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
     *session = apply_cross_process_session_command(session, &CrossProcessSessionCommand::Established {
         observed_peer_context_ref: session.identity.expected_peer_context_ref.clone(),

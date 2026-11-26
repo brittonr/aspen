@@ -7,11 +7,26 @@ impl super::Host {
         request: &super::super::super::protocol::Request,
         is_write: bool,
     ) -> super::super::super::protocol::Response {
+        if let Some(failure) = self.fail_stop.latched() {
+            return super::super::super::protocol::uncertain(request, failure.to_string());
+        }
         let request_ref = match request_ref(request) {
             Ok(reference) => reference,
             Err(error) => return super::denied(request, error.to_string()),
         };
         let event = if is_write {
+            // The leader-term fence precedes every effect of a signed write.
+            // r[impl molten.consensus.reliability_replay_and_failstop]
+            let fenced = request
+                .authorization
+                .as_ref()
+                .ok_or_else(|| crate::error::Failure::invalid_harness("signed write requires a client invocation"))
+                .and_then(|invocation| {
+                    super::super::super::authority::require_write_fence(invocation, self.replica.state().current_term)
+                });
+            if let Err(error) = fenced {
+                return super::denied(request, error.to_string());
+            }
             let value = request
                 .operation
                 .as_ref()
@@ -37,14 +52,12 @@ impl super::Host {
                 mode: crate::fabric_consistency::ReadMode::Linearizable,
             }
         };
-        match self.replica.handle_event(event).await {
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-                return super::denied(request, diagnostic);
-            }
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Failed(failure) => {
-                return super::super::super::protocol::uncertain(request, failure.diagnostic);
-            }
-            crate::fabric_consistency::raft::ReplicaExecutionOutcome::Applied(_) => {}
+        let outcome = self.replica.handle_event(event).await;
+        if let Some(response) = super::operation_response(&mut self.fail_stop, request, outcome) {
+            return response;
+        }
+        if let Err(error) = self.snapshot_if_due().await {
+            return super::super::super::protocol::uncertain(request, error.to_string());
         }
         self.wait(request, &request_ref, is_write).await
     }

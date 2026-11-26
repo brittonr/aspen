@@ -11,7 +11,10 @@ async fn listener_pump_drops_an_undecodable_frame_and_delivers_the_next_one() {
     .expect("election");
     let envelope = super::super::tests::sent_envelope_to(&election, NODE_B);
     let listener = crate::fabric_transport::cross_process::tests::listener().await;
-    let input = crate::fabric_transport::cross_process::tests::client_input(listener.handoff().clone());
+    let input = crate::fabric_transport::cross_process::tests::client_input_for(
+        listener.handoff().clone(),
+        super::super::tests::NODE_A,
+    );
     let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
     let mut pump = ReplicaIngressPump::spawn(listener, ReplicaIngressConfig {
         session_ref: input.session_ref.clone(),

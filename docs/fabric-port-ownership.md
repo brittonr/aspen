@@ -93,8 +93,14 @@ The grant signs exact membership, seven port/profile bindings, namespace, timer 
 configuration, generation, client public key and shared client scope, plus a distinct purpose-bound probe public key.
 Protected policy/grant/currentness is revalidated before resource effects. Server probe keys are not controller client keys.
 Controller authority roots contain the independently pinned operator public key and signed policy/grant;
-they need not contain server probe secrets. Client invocation signatures bind the unchanged request, scope, and nonce;
-the host consumes nonce replay markers durably before effects. Forwarding retains the original signed request.
+they need not contain server probe secrets. Client invocation signatures (`live-client-invocation-v2`) bind the
+unchanged request, scope, nonce and `fence_term`; every admitting host consumes the nonce replay marker durably
+before effects. Forwarding retains the original signed request. A signed write executes only on the leader of its
+`fence_term`, so a replay in that term meets the leader's marker and a replay after failover meets a later term;
+the in-repo adapter signs writes with the term an unchallenged probe reports. A `Teardown` stops only the host its
+signed endpoint names. A quarantined replica fail-stops the host after an uncertain answer. Non-claims: the unsigned
+probe term is advisory (a wrong term only gets the write denied before any effect), and replay protection depends on
+durable nonce storage on each term's leader; losing that node-state directory loses its markers.
 
 For the named three-node experimental configuration recipe, run
 `molten reliability experimental-config --input RECIPE.json --out COHORT.json`.

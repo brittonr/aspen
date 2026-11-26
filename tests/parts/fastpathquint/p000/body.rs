@@ -58,6 +58,7 @@ fn attempt(
         acceleration_view: state.acceleration_view,
         base_view: state.base_view,
         conflict_free,
+        replicas: (0..3).map(|index| format!("r{index}")).collect(),
         acknowledgements,
         promises,
         active_proposers: std::collections::BTreeSet::from(["proposer".to_owned()]),

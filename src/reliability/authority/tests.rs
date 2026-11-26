@@ -128,14 +128,74 @@ fn client_invocation_binds_exact_request_and_distinct_key() {
     let grant = super::issuance::verify(&policy, &signed, &operator.public().to_string(), 300).unwrap();
     let client = iroh::SecretKey::from_bytes(&[11; 32]);
     let request = serde_json::json!({"phase": "invoke", "operation": {"id": "a", "value": 42}});
-    let signed = super::sign_request(&client, &grant, &request, [15; 32]).unwrap();
+    let signed = super::sign_request(&client, &grant, &request, [15; 32], LEADER_TERM).unwrap();
     assert!(super::verify_request(&grant, &request, &signed).is_ok());
     let changed = serde_json::json!({"phase": "invoke", "operation": {"id": "a", "value": 43}});
     assert!(super::verify_request(&grant, &changed, &signed).is_err());
-    assert!(super::sign_request(&probe, &grant, &request, [15; 32]).is_err());
-    let mut tampered = signed;
+    assert!(super::sign_request(&probe, &grant, &request, [15; 32], LEADER_TERM).is_err());
+    let mut tampered = signed.clone();
     tampered.nonce[0] += 1;
     assert!(super::verify_request(&grant, &request, &tampered).is_err());
+    let mut refenced = signed;
+    refenced.fence_term += 1;
+    assert!(
+        super::verify_request(&grant, &request, &refenced).is_err(),
+        "the fence term is inside the signature"
+    );
+}
+
+const LEADER_TERM: u64 = 5;
+const FAILOVER_TERM: u64 = 6;
+
+/// The executing leader's admission of one signed write, in host order: exact signature and
+/// durable nonce marker (`Host::admit`), then the leader-term fence (`Host::perform`) before any
+/// proposal.
+fn leader_admits_write(
+    grant: &super::VerifiedGrant,
+    root: &crate::node_state::DirectoryRoot,
+    request: &serde_json::Value,
+    invocation: &super::SignedInvocation,
+    leader_term: u64,
+) -> crate::error::Result<()> {
+    super::verify_request(grant, request, invocation)?;
+    super::consume_nonce(root, invocation)?;
+    super::require_write_fence(invocation, leader_term)
+}
+
+// r[verify molten.consensus.reliability_replay_and_failstop]
+#[test]
+fn signed_write_replays_are_denied_across_failover_and_restart_while_a_resigned_retry_is_admitted() {
+    let (operator, _, policy, signed) = fixture();
+    let grant = super::issuance::verify(&policy, &signed, &operator.public().to_string(), 300).unwrap();
+    let client = iroh::SecretKey::from_bytes(&[11; 32]);
+    let request = serde_json::json!({"phase": "invoke", "operation": {"id": "w", "function": "write", "value": 1}});
+    let workspace_a = crate::test_support::process_workspace("fenced-write-leader-a").expect("node A root");
+    let workspace_b = crate::test_support::process_workspace("fenced-write-leader-b").expect("node B root");
+    let node_a = crate::node_state::DirectoryRoot::open_existing(&workspace_a).expect("node A");
+    let node_b = crate::node_state::DirectoryRoot::open_existing(&workspace_b).expect("node B");
+
+    let write = super::sign_request(&client, &grant, &request, [21; 32], LEADER_TERM).unwrap();
+    leader_admits_write(&grant, &node_a, &request, &write, LEADER_TERM).expect("the term leader admits the write");
+
+    // Same term, same leader, after its node state is reopened: Raft compaction never touches the
+    // durable marker, so the replay is denied whatever the request window still holds.
+    let reopened = crate::node_state::DirectoryRoot::open_existing(&workspace_a).expect("reopened node A");
+    assert!(leader_admits_write(&grant, &reopened, &request, &write, LEADER_TERM).is_err());
+
+    // Failover: node B never saw the nonce, but it leads a later term, so the fence denies the
+    // replay before any proposal.
+    let replay = leader_admits_write(&grant, &node_b, &request, &write, FAILOVER_TERM).expect_err("failover replay");
+    assert!(replay.to_string().contains("fenced to Raft term"));
+
+    // A legitimate retry is re-signed with a fresh nonce for the current term.
+    let retry = super::sign_request(&client, &grant, &request, [22; 32], FAILOVER_TERM).unwrap();
+    leader_admits_write(&grant, &node_b, &request, &retry, FAILOVER_TERM).expect("re-signed retry");
+
+    // Stale and future fences are denied before any effect.
+    for (nonce, fence_term) in [([23; 32], LEADER_TERM), ([24; 32], FAILOVER_TERM + 1)] {
+        let fenced = super::sign_request(&client, &grant, &request, nonce, fence_term).unwrap();
+        assert!(super::require_write_fence(&fenced, FAILOVER_TERM).is_err(), "fence term {fence_term}");
+    }
 }
 
 #[test]
@@ -145,7 +205,7 @@ fn forwarding_uses_explicit_shared_scope_not_node_grant_hash() {
     let first = super::issuance::verify(&policy, &signed, &issuer, 300).unwrap();
     let client = iroh::SecretKey::from_bytes(&[11; 32]);
     let request = serde_json::json!({"endpoint": "127.0.0.1:9000", "operation": "read"});
-    let auth = super::sign_request(&client, &first, &request, [17; 32]).unwrap();
+    let auth = super::sign_request(&client, &first, &request, [17; 32], LEADER_TERM).unwrap();
     signed.grant.grant_id = "second-node-grant".into();
     signed.grant.endpoint = "127.0.0.1:9001".into();
     signed.signature = super::canonical::sign("operator-grant", &signed.grant, &operator).unwrap();

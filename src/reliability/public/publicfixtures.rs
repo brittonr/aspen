@@ -108,6 +108,7 @@ fn serve(mut stream: std::net::TcpStream, endpoint: usize, fault: Fault, registe
         value,
         diagnostic: None,
         pre_effect_denial: false,
+        fence_term: None,
     };
     let mut bytes = serde_json::to_vec(&response).expect("wire response");
     bytes.push(b'\n');

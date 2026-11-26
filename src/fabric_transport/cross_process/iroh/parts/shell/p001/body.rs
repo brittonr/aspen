@@ -68,6 +68,7 @@ impl Listener {
             endpoint_artifact,
             endpoint_status,
             state,
+            admitted_peers: input.admitted_peers,
         })
     }
 
@@ -89,6 +90,23 @@ impl Listener {
 
     pub fn state(&self) -> &CrossProcessListenerState {
         &self.state
+    }
+
+    /// The remote endpoints this listener admits, keyed by peer id.
+    pub fn admitted_peers(&self) -> &std::collections::BTreeMap<String, AdmittedPeer> {
+        &self.admitted_peers
+    }
+
+    /// Admit one more remote endpoint, for peers whose identity is learned after binding. The
+    /// table stays bounded with distinct identities; a denied admission leaves it unchanged.
+    pub fn admit_peer(&mut self, peer_id: String, peer: AdmittedPeer) -> crate::error::Result<()> {
+        let mut admitted = self.admitted_peers.clone();
+        if admitted.insert(peer_id, peer).is_some() {
+            return Err(crate::error::Failure::invalid_harness("cross-process listener peer id is already admitted"));
+        }
+        validate_admitted_peers(&admitted)?;
+        self.admitted_peers = admitted;
+        Ok(())
     }
 
     // r[impl molten.fabric_transport.cross_process_listener]
@@ -125,34 +143,61 @@ impl Listener {
     where
         F: FnOnce(&[u8]) -> crate::error::Result<String>,
     {
-        self.poll_one_derived_frame(session_ref, timeout, derive_request_ref)
-            .await?
-            .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener accept timed out"))
+        let derive = |_peer_id: &str, payload: &[u8]| derive_request_ref(payload);
+        match self.poll_one_derived_frame(session_ref, timeout, derive).await? {
+            ListenerPoll::Received(received) => Ok(received),
+            ListenerPoll::Rejected(rejection) => Err(rejection.failure),
+            ListenerPoll::Idle => Err(crate::error::Failure::invalid_harness("cross-process listener accept timed out")),
+        }
     }
 
-    /// An idle accept deadline creates no session or delivery; later session failures remain errors.
+    /// An idle accept deadline creates no session or delivery. A failed or stalled handshake, an
+    /// unadmitted remote endpoint, or a failed session rejects only that connection; an `Err` is a
+    /// listener failure (closed endpoint, not ready, or a listener state-machine denial). The
+    /// derivation receives the admitted peer id of the authenticated remote endpoint and runs
+    /// before acknowledgement, so a payload it denies never obtains delivered-frame evidence.
+    // r[impl molten.fabric_transport.raft_peer_auth_and_isolation]
     pub async fn poll_one_derived_frame<F>(
         &mut self,
         session_ref: &str,
         timeout: std::time::Duration,
         derive_request_ref: F,
-    ) -> crate::error::Result<Option<ReceivedFrame>>
+    ) -> crate::error::Result<ListenerPoll>
     where
-        F: FnOnce(&[u8]) -> crate::error::Result<String>,
+        F: FnOnce(&str, &[u8]) -> crate::error::Result<String>,
     {
         crate::preserves_rail::validate_content_ref(session_ref)?;
         if !self.state.is_ready() {
             return Err(crate::error::Failure::invalid_harness("cross-process listener is not ready"));
         }
         let incoming = match tokio::time::timeout(timeout, self.endpoint.accept()).await {
-            Err(_) => return Ok(None),
+            Err(_) => return Ok(ListenerPoll::Idle),
             Ok(incoming) => incoming
                 .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener closed before accept"))?,
         };
-        let connection = tokio::time::timeout(timeout, incoming)
-            .await
-            .map_err(|_| crate::error::Failure::invalid_harness("cross-process listener handshake timed out"))?
-            .map_err(error)?;
+        let connection = match tokio::time::timeout(timeout, incoming).await {
+            Err(_) => {
+                return Ok(rejected(
+                    ConnectionRejectionKind::Handshake,
+                    crate::error::Failure::invalid_harness("cross-process listener handshake timed out"),
+                ));
+            }
+            Ok(Err(failure)) => return Ok(rejected(ConnectionRejectionKind::Handshake, error(failure))),
+            Ok(Ok(connection)) => connection,
+        };
+        let remote_endpoint_identity = format!("iroh:{}", connection.remote_id());
+        let Some((peer_id, observed_peer_context_ref)) = self
+            .admitted_peers
+            .iter()
+            .find(|(_, peer)| peer.public_endpoint_identity == remote_endpoint_identity)
+            .map(|(peer_id, peer)| (peer_id.clone(), peer.peer_context_ref.clone()))
+        else {
+            connection.close(IROH_REFUSED_CLOSE_CODE.into(), UNADMITTED_PEER_CLOSE_REASON);
+            return Ok(rejected(
+                ConnectionRejectionKind::UnadmittedPeer,
+                crate::error::Failure::invalid_harness("cross-process listener refused an unadmitted remote endpoint"),
+            ));
+        };
         let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
         self.state = apply_cross_process_listener_command(&self.state, &CrossProcessListenerCommand::AcceptSession {
             callback_generation: self.protocol.generation,
@@ -169,15 +214,25 @@ impl Listener {
         })
         .map_err(|issues| validation_error("cross-process inbound accept", &issues))?
         .next;
-        session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Established {
-            observed_peer_context_ref: self.endpoint_artifact.descriptor.expected_peer_context_ref.clone(),
+        let established = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Established {
+            observed_peer_context_ref,
             callback_generation: self.protocol.generation,
-        })
-        .map_err(|issues| validation_error("cross-process inbound establishment", &issues))?
-        .next;
+        });
+        session = match established {
+            Ok(transition) => transition.next,
+            Err(issues) => {
+                connection.close(IROH_REFUSED_CLOSE_CODE.into(), UNADMITTED_PEER_CLOSE_REASON);
+                let _failed = finalize_failed_session(session, SessionTerminalClass::AdapterFailure)?;
+                self.finish_listener_session()?;
+                return Ok(rejected(
+                    ConnectionRejectionKind::UnadmittedPeer,
+                    validation_error("cross-process inbound establishment", &issues),
+                ));
+            }
+        };
 
-        let exchange =
-            run_server_exchange(&connection, &mut session, derive_request_ref, self.protocol.generation, timeout).await;
+        let derive = |payload: &[u8]| derive_request_ref(&peer_id, payload);
+        let exchange = run_server_exchange(&connection, &mut session, derive, self.protocol.generation, timeout).await;
         let received = match exchange {
             Ok(exchange) => {
                 let evidence = finalize_successful_session(SessionCloseInput {
@@ -192,16 +247,17 @@ impl Listener {
                 ReceivedFrame {
                     payload: exchange.payload,
                     evidence,
+                    peer_id,
                 }
             }
-            Err(error) => {
+            Err(failure) => {
                 let _failed = finalize_failed_session(session, SessionTerminalClass::AdapterFailure)?;
                 self.finish_listener_session()?;
-                return Err(error);
+                return Ok(rejected(ConnectionRejectionKind::Session, failure));
             }
         };
         self.finish_listener_session()?;
-        Ok(Some(received))
+        Ok(ListenerPoll::Received(received))
     }
 
     // r[impl molten.fabric_transport.cross_process_listener]
