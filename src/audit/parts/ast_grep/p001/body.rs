@@ -84,7 +84,8 @@ fn required_surfaces() -> Vec<AuditSurface> {
         surface("operator-workflow", &["src/operator/**/*.rs", "docs/production-*.ncl"]),
         surface("local-store-adapters", &[
             "src/artifacts/parts/mod/p*/body.rs",
-            "src/chunk/parts/store/p*/body.rs",
+            "src/chunk/store.rs",
+            "src/chunk/store/**/*.rs",
             "src/retention/parts/mod/p*/body.rs",
             "src/remote/parts/dataspace/p*/body.rs",
             "src/iroh/parts/exchange/p*/body.rs",

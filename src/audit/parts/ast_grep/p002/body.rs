@@ -131,7 +131,7 @@ mod tests {
             findings: vec![Finding {
                 rule_id: "store-ambient-filesystem-call".to_string(),
                 surface: "local-store-adapters".to_string(),
-                path: "src/chunk/parts/store/p001/body.rs".to_string(),
+                path: "src/chunk/store/local/ingest.rs".to_string(),
                 message: "ambient child read in converted store".to_string(),
             }],
         });

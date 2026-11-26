@@ -91,7 +91,7 @@ The CLI shell owns Clap parsing, path reads, stdout/stderr, process exit, and ou
 
 ## Semantic module layout
 
-The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), harness schema (`src/harness/schema.rs`), and node daemon (`src/node/daemon.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. Converting them into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
+Retention (`src/retention/mod.rs`), job DAG (`src/job/dag.rs`), harness schema (`src/harness/schema.rs`), and node daemon (`src/node/daemon.rs`) are still assembled from ordinal `parts/**/body.rs` shards with `include!`. They share one module scope. Because `include!`d spans count as macro expansions, Octet's item-level lints (`path_segment_repetition`, `non_trait_imports`, and others) do not inspect those shards. Converting them into real submodules is staged work under the `align-formal-models-architecture-and-governance-toolchains` change and must:
 
 - re-export every public item explicitly from the entrypoint so `molten::chunk_store::*`, `molten::retention::*`, `molten::job_dag::*`, and `molten::node_daemon::*` keep their paths;
 - reference other modules by qualified owner path, because Octet's `non_trait_imports` rejects non-trait `use`, and replace shared-scope aliases (`type Result<T>`, forwarding wrappers around `preserves_rail`) with their owner paths;
@@ -99,7 +99,23 @@ The chunk store (`src/chunk/store.rs`), retention (`src/retention/mod.rs`), job 
 - start every item private and raise its visibility only where another module uses it;
 - leave `src/job/selected/` and `src/job/authoring/` textually included and unedited. Their source text is hashed into selected-stage signatures (`selected_stage_signature`) and job-lowering provenance refs. Editing them would change canonical job identities, so the job DAG conversion must keep the names they use resolvable in the `workload` scope.
 
-The internal root names (`blocks`, `custody`, `workload`, `daemon_core`, and `testbed::format`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names.
+The internal root names (`blocks`, `custody`, `workload`, `daemon_core`, and `testbed::format`) and their `compat_module!` aliases stay: callers use the aliases, and making an alias the real module would repeat words such as `chunk` or `retention` in many public item names. The chunk store keeps `#[doc(hidden)] pub mod blocks`, because separately compiled consumers name `molten::blocks::*`, and keeps its `chunk_store` alias, which callers in 52 files use. A doc test in `src/chunk/store.rs` names former shard items through `molten::blocks::`.
+
+The chunk store (`src/chunk/store.rs`) is the first converted tree. The entrypoint mounts each submodule under `src/chunk/store/` with `#[path]`, because a file that `src/lib.rs` loads through `#[path]` resolves nested modules relative to its own directory. It re-exports every public item by name and defines the two crate-visible helpers that other domains call, `hash_chunk` and `read_verified_chunk`. The submodules are:
+
+- `model`: public DTOs;
+- `limits`: count and byte bounds;
+- `layout`: content paths and immutable writes;
+- `integrity`: chunk and blob verification;
+- `wire/`: the Preserves codec (`encode`, `decode`, `fields`, `outcome`, `policy`);
+- `local/`: put, read, range read, pins, listings, and availability;
+- `registry/`: the Redb index (`update`, `survey`);
+- `retire/`: GC;
+- `history/`: lineage;
+- `exchange/`: sync and the Iroh adapter;
+- `planner` and `outboard`: traversal plans and remote range readback.
+
+Cross-module references use `crate::blocks::` owner paths. The former local aliases and wrappers now use the owner paths `crate::preserves_rail::`, `crate::bounded::`, `crate::error::`, `preserves::`, and `redb::`. Only trait imports (`redb::Readable*`) remain as `use`. Unit tests live in `store/tests/` and call the public API through `crate::chunk_store::`. Chunk, manifest, and receipt refs, Redb table names, and the on-disk layout are unchanged. No chunk-store source file is hashed into an identity.
 
 Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`. Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`. World-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`. World-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships.
 
@@ -107,12 +123,12 @@ Physical source groups also keep domain directories below eight sibling Rust fil
 
 | Area | Owner | Boundary |
 | --- | --- | --- |
-| model and codec | `ChunkRef`, `ChunkManifest`, receipt DTOs, Preserves constructors/parsers | In-memory DTOs, canonical bytes, and BLAKE3 refs. |
-| verify | manifest/chunk/receipt checks | Validation over parsed values. |
-| fs_store and index | file writes, Redb tables | Shell and Redb adapter. |
-| exchange | peer sync, Iroh publish/fetch, remote range readback | Transport adapter shell. |
-| retention | pin/unpin/GC admission | Decisions before deletes. |
-| lineage | manifest lineage and receipt chains | Evidence-only summaries. |
+| model and codec | `store/model.rs` DTOs; `store/wire/` Preserves constructors and parsers | In-memory DTOs, canonical bytes, and BLAKE3 refs. |
+| verify | `store/integrity.rs`, `store/wire/decode.rs`, `store/wire/policy.rs` | Validation over parsed values. |
+| fs_store and index | `store/layout.rs` file writes, `store/local/` operations, `store/registry/` Redb tables | Shell and Redb adapter. |
+| exchange | `store/exchange/` peer sync and Iroh publish/fetch, `store/planner.rs`, `store/outboard.rs` remote range readback | Transport adapter shell. |
+| retention | `store/local/hold.rs` pin/unpin, `store/retire/` GC admission | Decisions before deletes. |
+| lineage | `store/history/` manifest lineage and receipt chains | Evidence-only summaries. |
 
 `molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. `gc_with_root` deletes only targets whose retention evidence and apply refs pass, and writes a receipt either way.
 

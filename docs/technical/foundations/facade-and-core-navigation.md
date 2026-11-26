@@ -24,13 +24,13 @@ Some entrypoints are include lists rather than full semantic implementations. Th
 
 The modularity inventory describes remaining ordinal shards as staged compatibility artifacts. A reviewer should follow the actual includes, search for the relevant symbol within that known subtree, and inspect callers or tests before making a behavioral claim. The absence of logic in a short entrypoint does not mean the module is a stub. Conversely, finding a pure helper in one shard does not establish purity of the entire enclosing module.
 
-Five of the largest include trees (chunk store, retention, job DAG, harness schema, node daemon) are scheduled for conversion into real modules; see the [modularity inventory](../../modularity-boundaries.md#semantic-module-layout). Until then, follow their include lists.
+The chunk store is now a tree of real modules. Four of the largest include trees (retention, job DAG, harness schema, node daemon) are scheduled for the same conversion; see the [modularity inventory](../../modularity-boundaries.md#semantic-module-layout). Until then, follow their include lists.
 
 ## Worked navigation example: chunk garbage collection
 
-Suppose an illustrative review asks where `molten::chunk_store::gc` decides which manifests and chunks to delete. Begin at the façade: `compat_module!(chunk_store, blocks)` re-exports the public items of `blocks`, and `src/lib.rs` maps `blocks` to `chunk/store.rs`.
+Suppose an illustrative review asks where `molten::chunk_store::gc` decides which manifests and chunks to delete. Begin at the façade: `compat_module!(chunk_store, blocks)` re-exports the public items of the hidden `blocks` module, and `src/lib.rs` maps `blocks` to `chunk/store.rs`.
 
-That [entrypoint](../../../src/chunk/store.rs) wraps ordinal shards in `semantic_store` and glob re-exports them. `gc_with_root` lives in the [`p008` shard](../../../src/chunk/parts/store/p008/body.rs): it collects unpinned targets with `gc_targets` from the `p007` shard, `GcNotes::consider` checks each target's retention evidence and apply refs, and `finish_gc` removes files only when no denial was recorded. Navigation must finish at the specific branch, not merely at a suggestive module name or test title.
+That [entrypoint](../../../src/chunk/store.rs) mounts its submodules with `#[path]` and re-exports each public item by name. `gc_with_root` lives in [`retire/sweep.rs`](../../../src/chunk/store/retire/sweep.rs): it collects unpinned targets with `gc_targets` in the same file, `GcNotes::consider` in [`retire/admission.rs`](../../../src/chunk/store/retire/admission.rs) checks each target's retention evidence and apply refs, and `finish_gc` removes files only when no denial was recorded. Navigation must finish at the specific branch, not merely at a suggestive module name or test title.
 
 ## Review guidance and inventory drift
 
