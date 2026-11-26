@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use super::WorldHeadBound;
 use super::WorldHeadConflictMember;
 use super::WorldHeadConflictSet;
 use super::WorldHeadIssue;
@@ -12,9 +13,10 @@ pub fn classify_world_head_conflict(
     maximum: u32,
 ) -> Result<Option<WorldHeadConflictSet>, Vec<WorldHeadIssue>> {
     if maximum == 0 {
-        return Err(vec![WorldHeadIssue::InvalidBounds("max_conflicts")]);
+        return Err(vec![WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxConflicts)]);
     }
-    let maximum = usize::try_from(maximum).map_err(|_| vec![WorldHeadIssue::InvalidBounds("max_conflicts")])?;
+    let maximum =
+        usize::try_from(maximum).map_err(|_| vec![WorldHeadIssue::InvalidBounds(WorldHeadBound::MaxConflicts)])?;
     if plans.len() < 2 {
         return Ok(None);
     }
@@ -83,7 +85,8 @@ fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), WorldHe
 }
 
 fn update_length(hasher: &mut blake3::Hasher, length: usize) -> Result<(), WorldHeadIssue> {
-    let framed = u64::try_from(length).map_err(|_| WorldHeadIssue::InvalidBounds("conflict_identity_length"))?;
+    let framed =
+        u64::try_from(length).map_err(|_| WorldHeadIssue::InvalidBounds(WorldHeadBound::ConflictIdentityLength))?;
     hasher.update(&framed.to_le_bytes());
     Ok(())
 }

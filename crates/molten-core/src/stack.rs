@@ -391,7 +391,8 @@ fn valid_blake3_ref(value: &str) -> bool {
     let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
         return false;
     };
-    value.len() == BLAKE3_REF_CHAR_COUNT && hex.chars().all(|character| character.is_ascii_hexdigit())
+    value.len() == BLAKE3_REF_CHAR_COUNT
+        && hex.chars().all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase())
 }
 
 fn supported_stack_schema(schema: &str) -> bool {
@@ -556,5 +557,13 @@ mod tests {
         assert!(issues.contains(&ValenceStackAdapterIssue::MissingValenceNonClaim(StackEvidenceRole::Basalt)));
         assert!(issues.contains(&ValenceStackAdapterIssue::ValenceAuthorityOverclaim(StackEvidenceRole::Basalt)));
         assert!(issues.contains(&ValenceStackAdapterIssue::MissingValenceNonClaim(StackEvidenceRole::Ucan)));
+    }
+
+    #[test]
+    fn stack_evidence_refs_reject_uppercase_digest_hex() {
+        // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        assert!(valid_blake3_ref(VALID_REF));
+        assert!(!valid_blake3_ref(&VALID_REF.to_ascii_uppercase().replacen("BLAKE3", "blake3", 1)));
+        assert!(!valid_blake3_ref("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaF"));
     }
 }

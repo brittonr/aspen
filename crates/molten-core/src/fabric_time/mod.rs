@@ -87,7 +87,7 @@ pub(crate) fn valid_time_ref(value: &str) -> bool {
         return false;
     };
     const BLAKE3_HEX_BYTES: usize = 64;
-    hex.len() == BLAKE3_HEX_BYTES && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    hex.len() == BLAKE3_HEX_BYTES && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 pub(crate) fn has_duplicates<T: Ord>(values: &[T]) -> bool {

@@ -17,6 +17,30 @@ fn local_integrity_cannot_replace_published_identity() {
 }
 
 #[test]
+fn authority_pins_reject_uppercase_digest_hex() {
+    // r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+    let tool = super::Tool {
+        path: "/nix/store/local/tool".into(),
+        blake3: "1".repeat(64),
+    };
+    let mut trust = super::Trust {
+        mantle: tool.clone(),
+        octet: tool.clone(),
+        chaos: tool,
+        bundle_identity: format!("blake3:{}", "a".repeat(64)),
+        octet_profile_identity: format!("b3:{}", "b".repeat(64)),
+        cohort_identity: "c".repeat(64),
+        probe_blake3: "d".repeat(64),
+    };
+    assert_eq!(super::validate_pins(&trust), Ok(()));
+    trust.bundle_identity = format!("blake3:{}", "A".repeat(64));
+    assert_eq!(super::validate_pins(&trust), Err("missing authority-pinned external identity".into()));
+    trust.bundle_identity = format!("blake3:{}", "a".repeat(64));
+    trust.probe_blake3 = format!("{}F", "d".repeat(63));
+    assert_eq!(super::validate_pins(&trust), Err("missing authority-pinned external identity".into()));
+}
+
+#[test]
 fn valid_hostless_member_cannot_stand_for_named_abi_fixture() {
     let manifest = serde_json::json!({"members":[{
         "path":"fixtures/wasm/hostless41.wasm", "digest_blake3":"same-bytes-digest"

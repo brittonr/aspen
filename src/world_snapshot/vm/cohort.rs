@@ -13,7 +13,7 @@ use crate::error::Failure;
 use crate::error::Result;
 
 pub const VM_COHORT_PUBLICATION_REVISION: &str = "31f1696ba9391bfda8577a58af84f72361d5573e";
-pub(super) const VM_COHORT_PLAN_DOMAIN: &str = "onixresearch.molten.world-snapshot.vm-cohort-plan.v1";
+pub(super) const VM_COHORT_PLAN_DOMAIN: &str = "onixresearch.molten.world-snapshot.vm-cohort-plan.v2";
 pub(super) const VM_COHORT_CONTEXT_DOMAIN: &str = "onixresearch.molten.world-snapshot.vm-cohort-context.v1";
 pub(super) const VM_COHORT_ADAPTER_DOMAIN: &str = "onixresearch.molten.world-snapshot.vm-cohort-adapter.v1";
 const IN_KERNEL_DEVICE_COUNT: u32 = 4;
@@ -119,7 +119,7 @@ pub fn plan_vm_cohort_clones(
             &chaos_descriptor.descriptor,
             chaos::GuestArtifactRole::Kernel,
         )?)?,
-        guest_image_ref: vm_resource_ref(&json_ref("guest-image", &chaos_descriptor.descriptor.guest_artifacts)?)?,
+        guest_image_ref: vm_resource_ref(&guest_image_ref(&chaos_descriptor.descriptor)?)?,
         device_model_ref: vm_resource_ref(component_ref(descriptor, SnapshotComponentKind::DeviceState)?)?,
         disk_format_ref: vm_resource_ref(fact_ref(descriptor, CohortFactKind::DiskFormat)?)?,
         runtime_ref: vm_resource_ref(fact_ref(descriptor, CohortFactKind::RuntimeBuild)?)?,

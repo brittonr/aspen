@@ -1,3 +1,4 @@
+use molten_core::world_commit::CaptureIssue;
 use molten_core::world_commit::CaptureRequest;
 use molten_core::world_commit::RestorePlan;
 use molten_core::world_commit::RevisionRecheck;
@@ -84,7 +85,7 @@ where
                 profile_ref,
                 None,
                 PublicationOutcome::NotAttempted,
-                issues.into_iter().map(|issue| format!("{issue:?}")),
+                issues.iter().map(CaptureIssue::code),
             );
         }
     };
@@ -106,7 +107,7 @@ where
             profile_ref,
             Some(&plan),
             PublicationOutcome::NotAttempted,
-            comparison.issues.into_iter().map(|issue| format!("{issue:?}")),
+            comparison.issues.iter().map(CaptureIssue::code),
         );
     }
     publish_capture(input, profile_ref, plan, store)

@@ -138,3 +138,18 @@ fn recovered_append_cannot_override_current_authority_denial() {
     input.finalization.currentness.operation_id = support::reference("other-operation");
     assert_eq!(reconciliation::reconcile(&input), reconciliation::ReconciliationDecision::ManualReview);
 }
+
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[test]
+fn uppercase_operation_digest_does_not_bind_the_reconciliation_identity() {
+    let mut input = fixture();
+    let lowercase = input.finalization.staged.operation_id.clone();
+    let uppercase = format!(
+        "blake3:{}",
+        lowercase.strip_prefix("blake3:").expect("canonical operation ref").to_ascii_uppercase()
+    );
+    assert_ne!(uppercase, lowercase, "fixture digest must contain hex letters");
+    input.finalization.staged.operation_id = uppercase.clone();
+    input.finalization.currentness.operation_id = uppercase;
+    assert_eq!(reconciliation::reconcile(&input), reconciliation::ReconciliationDecision::ManualReview);
+}

@@ -70,7 +70,7 @@ pub fn references_in_text(text: &str) -> Vec<String> {
         if bytes[index..].starts_with(PREFIX.as_bytes()) {
             let start = index + PREFIX.len();
             let candidate = &bytes[start..start + HEX_LENGTH];
-            if candidate.iter().all(u8::is_ascii_hexdigit) {
+            if candidate.iter().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
                 // The matched prefix and hexadecimal suffix are ASCII, so both
                 // offsets are UTF-8 boundaries even after non-ASCII text.
                 references.insert(text[index..start + HEX_LENGTH].to_string());

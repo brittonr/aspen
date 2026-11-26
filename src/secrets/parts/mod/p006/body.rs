@@ -154,6 +154,7 @@ fn record_refs(value: &Value<IoValue>, record_name: &str, label: &str) -> Result
     Ok(refs)
 }
 
+// r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
 fn parse_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -163,9 +164,7 @@ fn parse_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Stri
         validate_ref(&item, label)?;
         return Ok(Some(item));
     }
-    let item = required_string(value, label)?;
-    validate_ref(&item, label)?;
-    Ok(Some(item))
+    Err(MoltenError::invalid_harness(format!("{label} must be <none> or <some \"blake3:...\">")))
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {

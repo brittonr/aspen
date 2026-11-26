@@ -92,3 +92,80 @@ impl ChaosControlSnapshotDescriptorPort for CrossedChaosObserver {
         })
     }
 }
+
+fn framed_identity(domain: &str, label: &str, bytes: &[u8]) -> String {
+    let mut hasher = blake3::Hasher::new_derive_key(domain);
+    for part in [label.as_bytes(), bytes] {
+        hasher.update(&u64::try_from(part.len()).expect("bounded identity input").to_le_bytes());
+        hasher.update(part);
+    }
+    format!("blake3:{}", hasher.finalize().to_hex())
+}
+
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[test]
+fn chaoscontrol_fact_and_component_identities_hash_the_explicit_preserves_projection() {
+    let (envelope, descriptor) = fixture();
+    let fact = |kind| {
+        descriptor
+            .cohort
+            .facts
+            .iter()
+            .find(|fact| fact.kind == kind)
+            .map(|fact| fact.identity.clone())
+            .expect("fact")
+    };
+    let canonical = |value: &preserves::IOValue| crate::preserves_rail::canonical_bytes(value).expect("canonical");
+    let topology = &envelope.descriptor.topology;
+
+    let architecture = canonical(&crate::preserves_rail::string(&envelope.descriptor.architecture));
+    assert_eq!(
+        fact(molten_core::world_snapshot::CohortFactKind::Architecture),
+        framed_identity("onixresearch.molten.world-snapshot.chaoscontrol-fact.v2", "architecture", &architecture)
+    );
+    let vcpu_topology = canonical(
+        &crate::preserves_rail::parse_text(&format!(
+            "<vcpu-topology {} {}>",
+            topology.vcpu_count, topology.memory_bytes
+        ))
+        .expect("vcpu topology projection"),
+    );
+    assert_eq!(
+        fact(molten_core::world_snapshot::CohortFactKind::VcpuTopology),
+        framed_identity("onixresearch.molten.world-snapshot.chaoscontrol-fact.v2", "vcpu-topology", &vcpu_topology)
+    );
+    let json = serde_json::to_vec(&envelope.descriptor.architecture).expect("json");
+    assert_ne!(
+        fact(molten_core::world_snapshot::CohortFactKind::Architecture),
+        framed_identity("onixresearch.molten.world-snapshot.chaoscontrol-fact.v1", "architecture", &json),
+        "JSON bytes are no longer identity material"
+    );
+
+    let devices = topology
+        .devices
+        .iter()
+        .map(|device| {
+            let backend = match device.backend {
+                chaoscontrol_snapshot_descriptor::DeviceBackend::Network => "network",
+                chaoscontrol_snapshot_descriptor::DeviceBackend::Block => "block",
+                chaoscontrol_snapshot_descriptor::DeviceBackend::Entropy => "entropy",
+            };
+            format!(
+                "<device-cohort {} {} {} {} \"{backend}\">",
+                device.identity.base_address, device.identity.irq, device.identity.device_id, device.queue_count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let devices = canonical(&crate::preserves_rail::parse_text(&format!("[{devices}]")).expect("device projection"));
+    let device_state = descriptor
+        .components
+        .iter()
+        .find(|component| component.kind == molten_core::world_snapshot::SnapshotComponentKind::DeviceState)
+        .expect("device state component");
+    assert!(!topology.devices.is_empty(), "fixture must exercise the device projection");
+    assert_eq!(
+        device_state.identity,
+        framed_identity("onixresearch.molten.world-snapshot.chaoscontrol-component.v2", "device-state", &devices)
+    );
+}

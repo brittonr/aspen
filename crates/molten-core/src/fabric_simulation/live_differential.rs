@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use crate::fabric::FabricPortClass;
+use crate::fabric_simulation::framing::FramedDigest;
 use crate::fabric_simulation::valid_ref;
 
 pub const MAX_LIVE_WORKLOAD_STEPS: usize = 64;
-const WORKLOAD_DOMAIN: &[u8] = b"molten.fabric-simulation.live-workload.v1";
+const MAX_ORDERING_KEY_BYTES: usize = 256;
+const WORKLOAD_DOMAIN: &str = "molten.fabric-simulation.live-workload.v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OutcomeClass {
@@ -198,35 +200,26 @@ impl LiveWorkload {
     }
 }
 
+// r[impl molten.fabric_simulation.collision_free_workload_and_complete_comparison]
 fn valid_ordering_key(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 256
+    !value.is_empty() && value.len() <= MAX_ORDERING_KEY_BYTES && !value.chars().any(char::is_control)
 }
 
-fn workload_ref(steps: &[LiveWorkloadStep]) -> String {
-    let capacity = WORKLOAD_DOMAIN
-        .len()
-        .saturating_add(steps.len().saturating_mul(MAX_LIVE_WORKLOAD_STEPS))
-        .saturating_add(64);
-    let mut material = Vec::with_capacity(capacity);
-    material.extend_from_slice(WORKLOAD_DOMAIN);
+// r[impl molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+pub(super) fn workload_ref(steps: &[LiveWorkloadStep]) -> String {
+    let mut framed = FramedDigest::new(WORKLOAD_DOMAIN);
+    framed.count(steps.len());
     for step in steps {
-        material.push(0);
-        material.extend_from_slice(&step.sequence.to_le_bytes());
-        material.push(0);
-        material.extend_from_slice(step.class.as_str().as_bytes());
-        material.push(0);
-        material.extend_from_slice(step.request_ref.as_bytes());
-        material.push(0);
+        framed.number(step.sequence);
+        framed.text(step.class.as_str());
+        framed.text(&step.request_ref);
+        framed.count(step.permitted.len());
         for class in &step.permitted {
-            material.extend_from_slice(class.as_str().as_bytes());
-            material.extend_from_slice(b",");
+            framed.text(class.as_str());
         }
-        material.push(0);
-        if let Some(key) = &step.ordering_key {
-            material.extend_from_slice(key.as_bytes());
-        }
+        framed.optional_text(step.ordering_key.as_deref());
     }
-    format!("blake3:{}", blake3::hash(&material).to_hex())
+    framed.content_ref()
 }
 
 // r[impl molten.fabric_simulation.differential_results]
@@ -258,12 +251,23 @@ pub fn evaluate_live_differential(
     for (step, declared) in workload.steps.iter().enumerate() {
         let simulated_class = simulated.get(step).copied().flatten();
         let live_class = live.get(step).copied().flatten();
-        if live_class == Some(OutcomeClass::Unsupported) {
+        let live_unsupported = live_class == Some(OutcomeClass::Unsupported);
+        let simulated_unsupported = simulated_class == Some(OutcomeClass::Unsupported);
+        if live_unsupported {
             incomplete.push(IncompleteStep {
                 step,
                 side: DifferentialSide::Live,
                 reason: IncompleteReason::Unsupported,
             });
+        }
+        if simulated_unsupported {
+            incomplete.push(IncompleteStep {
+                step,
+                side: DifferentialSide::Simulated,
+                reason: IncompleteReason::Unsupported,
+            });
+        }
+        if live_unsupported || simulated_unsupported {
             continue;
         }
         let (Some(simulated_class), Some(live_class)) = (simulated_class, live_class) else {
@@ -282,7 +286,8 @@ pub fn evaluate_live_differential(
             });
             continue;
         };
-        if !declared.permitted.contains(&live_class) {
+        // r[impl molten.fabric_simulation.collision_free_workload_and_complete_comparison]
+        if !declared.permitted.contains(&live_class) || !declared.permitted.contains(&simulated_class) {
             return LiveDifferentialDecision::Failure {
                 outcome: UnpermittedOutcome {
                     step,

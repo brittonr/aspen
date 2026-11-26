@@ -24,6 +24,80 @@ fn vm_cohort_plan_binds_parent_children_and_private_surfaces() {
     assert_eq!(mechanism.clones.len(), plan.clones.len());
 }
 
+// r[verify molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+#[test]
+fn vm_cohort_plan_ref_hashes_the_explicit_preserves_projection() {
+    let (chaos, descriptor) = fixture();
+    let request = clone_request(&descriptor);
+    let plan = snapshot_plan(&descriptor, &chaos, &request).expect("VM Cohort plan");
+    let mechanism: vm_cohort_core::CohortPlan =
+        serde_json::from_slice(&plan.mechanism_plan_json).expect("mechanism plan JSON");
+    let kebab = |kind: serde_json::Value| kind.as_str().expect("kebab-case enum").to_string();
+    let reservation = &mechanism.reservation;
+    let clones = mechanism
+        .clones
+        .iter()
+        .map(|clone| {
+            let surfaces = clone
+                .surfaces
+                .iter()
+                .map(|surface| {
+                    format!(
+                        "<surface-plan \"{}\" \"{}\">",
+                        kebab(serde_json::to_value(surface.kind).expect("kind")),
+                        surface.resource_ref.as_str()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!(
+                "<clone-plan \"{}\" \"{}\" \"{}\" [{surfaces}]>",
+                clone.clone_ref.as_str(),
+                clone.memory_base_ref.as_str(),
+                clone.disk_base_ref.as_str()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let effects = mechanism
+        .effects
+        .iter()
+        .map(|effect| {
+            format!(
+                "<effect-request \"{}\" \"{}\" \"{}\">",
+                effect.operation_ref.as_str(),
+                effect.clone_ref.as_str(),
+                kebab(serde_json::to_value(effect.kind).expect("kind"))
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let projection = format!(
+        "<cohort-plan \"{}\" \"{}\" \"{}\" <resource-vector {} {} {} {} {} {} {}> [{clones}] [{effects}]>",
+        mechanism.cohort_ref.as_str(),
+        mechanism.checkpoint_ref.as_str(),
+        mechanism.policy_ref.as_str(),
+        reservation.workers,
+        reservation.vcpus,
+        reservation.memory_bytes,
+        reservation.storage_bytes,
+        reservation.mappings,
+        reservation.endpoints,
+        reservation.in_flight,
+    );
+    let bytes = crate::preserves_rail::canonical_bytes(
+        &crate::preserves_rail::parse_text(&projection).expect("plan projection text"),
+    )
+    .expect("canonical plan projection");
+    let mut hasher = blake3::Hasher::new_derive_key("onixresearch.molten.world-snapshot.vm-cohort-plan.v2");
+    for part in [b"mechanism-plan".as_slice(), bytes.as_slice()] {
+        hasher.update(&u64::try_from(part.len()).expect("bounded identity input").to_le_bytes());
+        hasher.update(part);
+    }
+    assert!(!mechanism.effects.is_empty(), "fixture must exercise the effect projection");
+    assert_eq!(plan.plan_ref, format!("blake3:{}", hasher.finalize().to_hex()));
+}
+
 // r[verify molten.world_snapshot.cow]
 #[test]
 fn complete_realization_is_admitted_without_product_authority() {

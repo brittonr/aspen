@@ -3,6 +3,8 @@ use std::collections::BTreeSet;
 use artifact_auth_core::ArtifactRef;
 use artifact_auth_core::ArtifactStatement;
 use artifact_auth_core::AuthenticationScope;
+use molten_core::world_commit::CaptureIssue;
+use molten_core::world_commit::ClosureIssue;
 use molten_core::world_commit::ClosureReport;
 use molten_core::world_commit::RestorePlan;
 use molten_core::world_commit::WorldCommitRef;
@@ -72,7 +74,8 @@ pub fn canonical_closure_report(commit_ref: &WorldCommitRef, report: &ClosureRep
         crate::preserves_rail::record("first-missing-root", vec![optional_string_value(
             report.first_missing_root.map(|kind| kind.as_str()),
         )]),
-        crate::preserves_rail::record("issues", vec![strings(report.issues.iter().map(|issue| format!("{issue:?}")))]),
+        // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+        crate::preserves_rail::record("issues", vec![strings(report.issues.iter().map(ClosureIssue::code))]),
         super::non_claims_value(),
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
@@ -187,8 +190,8 @@ fn artifact_ref(profile: &str, reference: &str) -> Result<ArtifactRef> {
 
 pub(crate) fn preflight_shell(input: &super::CaptureShellInput) -> Vec<String> {
     let mut issues = molten_core::world_commit::validate_bounds(&input.bounds)
-        .into_iter()
-        .map(|issue| format!("{issue:?}"))
+        .iter()
+        .map(CaptureIssue::code)
         .collect::<Vec<_>>();
     if !issues.is_empty() {
         return issues;

@@ -33,7 +33,8 @@ pub fn validate_closure(request: &ClosureRequest) -> ClosureReport {
     let core = match super::validate_and_normalize_core(&request.core, &request.bounds) {
         Ok(core) => core,
         Err(core_issues) => {
-            issues.push(ClosureIssue::InvalidCore(format!("{core_issues:?}")));
+            // r[impl molten.runtime_spine.canonical_preserves_identity_and_embedded_scan]
+            issues.extend(core_issues.into_iter().map(ClosureIssue::InvalidCore));
             request.core.clone()
         }
     };
@@ -114,7 +115,7 @@ pub fn plan_restore(
 fn validate_closure_bound(request: &ClosureRequest, issues: &mut Vec<ClosureIssue>) -> bool {
     let bound_issues = super::validate_bounds(&request.bounds);
     if !bound_issues.is_empty() {
-        issues.push(ClosureIssue::InvalidCore(format!("{bound_issues:?}")));
+        issues.extend(bound_issues.into_iter().map(ClosureIssue::InvalidCore));
         return false;
     }
     let direct_objects = request.roots.len().saturating_add(request.parent_graph.len());
