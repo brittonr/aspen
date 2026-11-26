@@ -101,10 +101,22 @@ pub fn build_aggregate_proof_manifest(input: &AggregateProofInput) -> Result<Agg
     })
 }
 
+/// Extracts requirement coverage from a passing aggregate proof manifest. A denied manifest, or one carrying
+/// any diagnostic, yields a typed `aggregate-proof-denied` divergence instead of coverage.
+// r[impl molten.evidence_gates.layered_proof_sound_composition]
 pub fn coverage_from_aggregate_proof(
     manifest: &AggregateProofManifest,
     target_exists: bool,
 ) -> Result<Vec<CoverageInput>> {
+    if manifest.decision != "pass" || !manifest.diagnostics.is_empty() {
+        return Err(MoltenError::harness_divergence(crate::error::HarnessDivergence::new(
+            "aggregate-proof-denied",
+            None,
+            "pass",
+            manifest.decision.clone(),
+            format!("manifest {} diagnostics: {}", manifest.manifest_id, display_group(&manifest.diagnostics)),
+        )));
+    }
     let mut coverage = OrderedMap::<String, CoverageInput>::new();
     for obligation in &manifest.obligations {
         let Some(kind) = obligation.coverage_kind.as_deref() else {

@@ -1,72 +1,4 @@
 
-/// The profile, tool, identity, finding, and non-claim checks of one structural audit scan, in
-/// receipt order.
-fn audit_checks(input: &ScanInput) -> Vec<ReceiptCheck> {
-    let profile_validation = validate_profile(&input.profile);
-    let known_rule_ids =
-        input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<std::collections::BTreeSet<_>>();
-    let is_findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
-    let blocking_rule_ids = input
-        .profile
-        .rules
-        .iter()
-        .filter(|rule| rule.posture == RulePosture::Blocking)
-        .map(|rule| rule.id.as_str())
-        .collect::<std::collections::BTreeSet<_>>();
-    let is_blocking_findings_absent =
-        input.findings.iter().all(|finding| !blocking_rule_ids.contains(finding.rule_id.as_str()));
-    let is_non_claims_bound = has_all_required_non_claims(&input.profile.non_claims);
-
-    let mut checks = Vec::new();
-    checks.push(check(
-        "ast-grep-profile-valid",
-        profile_validation.valid,
-        diagnostics_or("profile satisfies runtime-authority audit contract", &profile_validation.diagnostics),
-    ));
-    checks.push(check(
-        "ast-grep-tool-bound",
-        input.ast_grep_version.starts_with(AST_GREP_TOOL_PREFIX),
-        format!("tool version must start with {AST_GREP_TOOL_PREFIX}"),
-    ));
-    checks.push(check(
-        "rule-bundle-blake3-bound",
-        is_content_ref(&input.rule_bundle_hash),
-        "rule bundle identity must be a BLAKE3 content ref".to_string(),
-    ));
-    checks.push(check(
-        "scan-scope-blake3-bound",
-        is_content_ref(&input.scan_scope_hash),
-        "scan scope identity must be a BLAKE3 content ref".to_string(),
-    ));
-    checks.push(check(
-        "evidence-gate-run-bound",
-        is_content_ref(&input.evidence_gate_run_ref),
-        "runtime or evidence-gate run identity must be a content ref".to_string(),
-    ));
-    checks.push(check(
-        "findings-reference-known-rules",
-        is_findings_known,
-        "all structural findings must reference declared inventory rules".to_string(),
-    ));
-    checks.push(check(
-        "blocking-findings-absent",
-        is_blocking_findings_absent,
-        "blocking structural rules must have no findings in converted scopes".to_string(),
-    ));
-    checks.push(check(
-        "findings-are-structural-candidates",
-        true,
-        "findings are candidate structural evidence only".to_string(),
-    ));
-    checks.push(check(
-        "non-claims-bound",
-        is_non_claims_bound,
-        "receipt must bind authority, replay, sealed-repro, UCAN, distributed-safety, and release non-claims"
-            .to_string(),
-    ));
-    checks
-}
-
 pub fn requires_fresh_scan(receipt: &AuditReceipt, current_rule_bundle_hash: &str) -> bool {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     receipt.rule_bundle_hash != current_rule_bundle_hash
@@ -91,15 +23,40 @@ fn required_surfaces() -> Vec<AuditSurface> {
         ]),
         surface("test-workspace-shells", &[
             "src/test/support.rs",
+            "src/test/parts/support/p*/body.rs",
             "src/main/tests/ops/helpers.rs",
+            "src/local_store.rs",
+            "src/chunk/parts/store/tests/m000/p002/body.rs",
+            "src/retention/parts/mod/tests/m000/p000/body.rs",
+            "src/retention/parts/mod/tests/m000/p009/body.rs",
+            "src/remote/parts/dataspace/tests/m000/p001/body.rs",
+            "src/iroh/parts/exchange/tests/m000/p001/body.rs",
+            "src/evidence/parts/chain/tests/m000/p003/body.rs",
+            "src/node/parts/daemon/tests/m000/p000/body.rs",
+            "src/node/parts/daemon/tests/m000/p010/body.rs",
+            "src/node/parts/daemon/tests/m000/p015/body.rs",
+            "src/node/parts/daemon/tests/m000/p022/body.rs",
+            "tests/parts/cliharness/p000/body.rs",
             "tests/parts/cliharness/p013/body.rs",
-            "selected converted unit-test helper pages",
+        ]),
+        surface("node-state-adapters", &[
+            "src/node/parts/daemon/p*/body.rs",
+            "src/node/ingress/*.rs",
+            "src/node/parts/identity/p001/body.rs",
+            "src/node/parts/identity/p004/body.rs",
+            "src/job/parts/dag/p009/body.rs",
+            "src/job/parts/dag/p017/body.rs",
+            "src/job/parts/dag/p030/body.rs",
+            "src/job/parts/dag/p033/body.rs",
         ]),
         surface("filesystem-materializers", &[
-            "src/cli/runtime/repro/bundle*.rs",
+            "src/cli/runtime/repro/bundle.rs",
+            "src/cli/runtime/repro/bundle/unpack.rs",
             "src/retention/parts/mod/p028/body.rs",
+            "src/retention/parts/mod/p041/body.rs",
             "src/cli/ops/dogfood/{archive,io}.rs",
             "src/operator/parts/dogfood/p008/body.rs",
+            "src/operator/parts/dogfood/p021/body.rs",
         ]),
     ]
 }
@@ -137,6 +94,20 @@ fn inventory_rules() -> Vec<AuditRule> {
             MATERIALIZATION_POSITIVE_FIXTURE_PATH,
             MATERIALIZATION_NEGATIVE_FIXTURE_PATH,
         ),
+        blocking_rule(
+            "node-state-ambient-filesystem-call",
+            "ambient-filesystem",
+            "ambient descendant I/O in converted node-state daemon, identity, and target-job paths",
+            NODE_STATE_POSITIVE_FIXTURE_PATH,
+            NODE_STATE_NEGATIVE_FIXTURE_PATH,
+        ),
+        blocking_rule(
+            "node-state-root-reacquisition",
+            "direct-authority-bypass",
+            "ambient DirectoryRoot/Scope reopening in inner node and target-job paths",
+            NODE_STATE_POSITIVE_FIXTURE_PATH,
+            NODE_STATE_CARRIED_NEGATIVE_FIXTURE_PATH,
+        ),
     ]
 }
 
@@ -153,6 +124,7 @@ fn inventory_rule(id: &str, category: &str, pattern_summary: &str) -> AuditRule 
         category: category.to_string(),
         pattern_summary: pattern_summary.to_string(),
         posture: RulePosture::Inventory,
+        rule_path: rule_path(id),
         positive_fixture: Some(POSITIVE_FIXTURE_PATH.to_string()),
         negative_fixture: Some(NEGATIVE_FIXTURE_PATH.to_string()),
     }
@@ -168,14 +140,20 @@ fn blocking_rule(
     // r[impl molten.chunk_store.cap_std_regression_gate]
     // r[impl molten.testing.cap_std_regression_gate]
     // r[impl molten.filesystem_materialization.regression_gate]
+    // r[impl molten.node.cap_std_regression_gate]
     AuditRule {
         id: id.to_string(),
         category: category.to_string(),
         pattern_summary: pattern_summary.to_string(),
         posture: RulePosture::Blocking,
+        rule_path: rule_path(id),
         positive_fixture: Some(positive_fixture.to_string()),
         negative_fixture: Some(negative_fixture.to_string()),
     }
+}
+
+fn rule_path(id: &str) -> String {
+    format!("{RULE_DIRECTORY}/{id}.{RULE_FILE_EXTENSION}")
 }
 
 fn required_non_claims() -> Vec<String> {
@@ -196,11 +174,6 @@ fn require_items<'a>(
     }
 }
 
-fn has_all_required_non_claims(non_claims: &[String]) -> bool {
-    let non_claims = non_claims.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
-    REQUIRED_NON_CLAIMS.iter().all(|required| non_claims.contains(required))
-}
-
 fn finding_rule_ids(findings: &[Finding]) -> Vec<String> {
     findings
         .iter()
@@ -218,14 +191,16 @@ fn diagnostics_or(success: &str, diagnostics: &[String]) -> String {
     }
 }
 
-fn check(name: &str, passed: bool, diagnostic: String) -> ReceiptCheck {
+fn check(name: &str, diagnostics: Vec<String>, success: &str) -> ReceiptCheck {
     ReceiptCheck {
         name: name.to_string(),
-        passed,
-        diagnostic,
+        passed: diagnostics.is_empty(),
+        diagnostic: diagnostics_or(success, &diagnostics),
     }
 }
 
 fn is_content_ref(value: &str) -> bool {
-    value.starts_with(CONTENT_REF_PREFIX) && value.len() > CONTENT_REF_PREFIX.len()
+    value.strip_prefix(CONTENT_REF_PREFIX).is_some_and(|digest| {
+        digest.len() == BLAKE3_HEX_DIGEST_LEN && digest.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
 }

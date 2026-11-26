@@ -1,9 +1,20 @@
 const AST_GREP_PROFILE_ID: &str = "runtime-authority";
 const AST_GREP_TOOL_PREFIX: &str = "ast-grep ";
 const CONTENT_REF_PREFIX: &str = "blake3:";
+const BLAKE3_HEX_DIGEST_LEN: usize = 64;
+const FINDING_SHAPE_DIAGNOSTICS_MAX: usize = 3;
 const RECEIPT_DECISION_EVIDENCE_ONLY: &str = "evidence-only";
 const RECEIPT_DECISION_INVALID: &str = "invalid";
 const CLAIM_SCOPE_STRUCTURAL_HYGIENE: &str = "structural-hygiene-only";
+const RULE_DIRECTORY: &str = "tools/ast-grep/runtime-authority/rules";
+const RULE_FILE_EXTENSION: &str = "yml";
+const MAX_CONTENT_SOURCES: usize = 65_536;
+const NODE_STATE_POSITIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/positive/node_state_ambient_authority.rs";
+const NODE_STATE_NEGATIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/negative/node_state_capability_shell.rs";
+const NODE_STATE_CARRIED_NEGATIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs";
 const POSITIVE_FIXTURE_PATH: &str = "tools/ast-grep/runtime-authority/fixtures/positive/inventory_candidates.rs";
 const NEGATIVE_FIXTURE_PATH: &str = "tools/ast-grep/runtime-authority/fixtures/negative/allowed_shell_effects.rs";
 const STORE_POSITIVE_FIXTURE_PATH: &str =
@@ -30,6 +41,7 @@ const REQUIRED_SURFACES: &[&str] = &[
     "operator-workflow",
     "local-store-adapters",
     "test-workspace-shells",
+    "node-state-adapters",
     "filesystem-materializers",
 ];
 
@@ -96,6 +108,8 @@ pub struct AuditRule {
     pub category: String,
     pub pattern_summary: String,
     pub posture: RulePosture,
+    /// Repository-relative YAML rule file whose bytes `rule_bundle_hash` binds.
+    pub rule_path: String,
     pub positive_fixture: Option<String>,
     pub negative_fixture: Option<String>,
 }
@@ -112,6 +126,13 @@ pub struct Finding {
     pub surface: String,
     pub path: String,
     pub message: String,
+}
+
+/// The bytes the audit shell actually read for one scan: every declared YAML rule file and every scanned source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScanMeasurement<'a> {
+    pub rule_sources: &'a [ContentSource<'a>],
+    pub scanned_sources: &'a [ContentSource<'a>],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,47 +228,14 @@ pub fn validate_profile(profile: &AuditProfile) -> AuditProfileValidation {
     }
 }
 
-pub fn rule_bundle_hash(profile: &AuditProfile) -> String {
-    // r[impl aspen.ast_grep_runtime_authority_audits.identity]
-    let mut lines = vec![format!("profile:{}", profile.id)];
-    for surface in &profile.surfaces {
-        lines.push(format!("surface:{}", surface.id));
-        for scope in &surface.scan_scopes {
-            lines.push(format!("scope:{}:{scope}", surface.id));
-        }
-    }
-    for rule in &profile.rules {
-        lines.push(format!(
-            "rule:{}:{}:{}:{}:{}:{}",
-            rule.id,
-            rule.category,
-            rule.pattern_summary,
-            rule.posture.as_str(),
-            rule.positive_fixture.as_deref().unwrap_or("none"),
-            rule.negative_fixture.as_deref().unwrap_or("none")
-        ));
-    }
-    for non_claim in &profile.non_claims {
-        lines.push(format!("non-claim:{non_claim}"));
-    }
-    lines.sort();
-    let digest = blake3::hash(lines.join("\n").as_bytes()).to_hex();
-    format!("{CONTENT_REF_PREFIX}{digest}")
-}
-
-pub fn scan_scope_hash(surface_ids: &[String]) -> String {
-    // r[impl aspen.ast_grep_runtime_authority_audits.identity]
-    let mut sorted = surface_ids.to_vec();
-    sorted.sort();
-    let digest = blake3::hash(sorted.join("\n").as_bytes()).to_hex();
-    format!("{CONTENT_REF_PREFIX}{digest}")
-}
-
-pub fn build_audit_receipt(input: ScanInput) -> AuditReceipt {
+/// Builds a receipt whose supplied rule-bundle and scan-scope identities are recomputed from `measurement`;
+/// a supplied identity that differs from the measured bytes, or a finding outside the scanned inventory,
+/// invalidates the receipt.
+pub fn build_audit_receipt(input: ScanInput, measurement: &ScanMeasurement<'_>) -> AuditReceipt {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     // r[impl aspen.ast_grep_runtime_authority_audits.evidence_gates]
     let finding_rule_ids = finding_rule_ids(&input.findings);
-    let checks = audit_checks(&input);
+    let checks = audit_checks(&input, measurement);
     let is_valid = checks.iter().all(|candidate| candidate.passed);
     AuditReceipt {
         profile_id: input.profile.id,

@@ -1,7 +1,7 @@
 //! Frozen adoption corpus. The paired local/shared baseline that established
 //! these expectations is archived with the pre-cutover local oracle under
-//! `evidence/2026-10-29-cutover/`; each test now asserts the exact stages,
-//! stable classes, outputs and ledgers that baseline fixed.
+//! `.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/`;
+//! each test now asserts the exact stages, stable classes, outputs and ledgers that baseline fixed.
 
 use super::super::*;
 

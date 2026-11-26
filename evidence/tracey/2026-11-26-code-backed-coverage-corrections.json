@@ -1,0 +1,80 @@
+{
+  "base_revision": "bfb7a7f4a1d19bc81a11624d019e7c183d5fdadc",
+  "non_claims": [
+    "original-manifests-rewritten",
+    "withdrawn-requirements-unimplemented",
+    "complete-runtime-spine-coverage",
+    "release-readiness"
+  ],
+  "observed_date": "2026-11-26",
+  "returned_to_debt": [
+    {
+      "reason": "implementation marker in crates/molten-core/src/lib.rs, but verified only by the molten-core-no-std flake check and scripts/check-molten-core-no-std-sources.sh; no compiled Rust test carries a verify marker, and flake/script markers do not discharge coverage",
+      "requirement_id": "molten.project.molten_core_no_std"
+    },
+    {
+      "reason": "verified only by the molten-core-no-std flake check and scripts/check-molten-core-no-std-sources.sh; no compiled Rust test carries a verify marker, and flake/script markers do not discharge coverage",
+      "requirement_id": "molten.testing.molten_core_no_std_ci_gate"
+    }
+  ],
+  "rule": "coverage requires impl and verify markers in compiled src/, crates/, or tests/ Rust sources reachable from a workspace target",
+  "schema": "molten.tracey-coverage-corrections.v1",
+  "superseded_verifications": [],
+  "withdrawn_repairs": [
+    {
+      "manifest": "evidence/tracey/runtime-spine-content-refs-direct-repairs.json",
+      "reason": "implementation and verification markers exist only as flake.nix shell comments",
+      "requirement_id": "molten.runtime_spine.canonical_content_refs.cleanup_tests"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-content-refs-direct-repairs.json",
+      "reason": "no compiled test carries a verify marker; the only verification marker is a flake.nix shell comment",
+      "requirement_id": "molten.runtime_spine.canonical_content_refs.migration"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.contract"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.docs"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.docs.non_claims"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.final_validation"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.final_validation.fixtures"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.fixtures.negative"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "evidence rests on docs/ Nickel fixtures, prose, flake.nix comments, or archived validation notes, which no longer discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.fixtures.positive"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "the only compiled implementation and test, the dead crates/molten-core/src/preserves_profile.rs validator, was deleted during integration; the boundary is now enforced by the Nickel contract docs/preserves-boundary-profile/contracts.ncl, whose markers do not discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.validation"
+    },
+    {
+      "manifest": "evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json",
+      "reason": "the only compiled implementation and test, the dead crates/molten-core/src/preserves_profile.rs validator, was deleted during integration; the boundary is now enforced by the Nickel contract docs/preserves-boundary-profile/contracts.ncl, whose markers do not discharge coverage",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.validation.core_coupling"
+    }
+  ]
+}

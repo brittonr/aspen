@@ -1,10 +1,12 @@
 {
-  "baseline_origin_revision": "9842cc6453a00ed943a866549bb4307c8502d575",
-  "dangling": 0,
-  "evidence_roots": [
+  "baseline_origin_revision": "bfb7a7f4a1d19bc81a11624d019e7c183d5fdadc",
+  "coverage_roots": [
     "src",
     "crates",
-    "tests",
+    "tests"
+  ],
+  "covered": 677,
+  "cross_reference_roots": [
     "tools",
     "docs",
     "scripts",
@@ -12,6 +14,7 @@
     "nix",
     "flake.nix"
   ],
+  "dangling": 0,
   "non_claims": [
     "uncovered-requirement-exemption",
     "marker-truth",
@@ -19,13 +22,21 @@
     "release-readiness",
     "whole-system-correctness"
   ],
-  "observed_date": "2026-11-13",
-  "referenced": 1127,
+  "observed_date": "2026-11-26",
+  "previous_observation": {
+    "note": "any-marker coverage over src, crates, tests, tools, docs, scripts, pilots, nix, and flake.nix",
+    "observed_date": "2026-11-13",
+    "requirements": 3057,
+    "revision": "9842cc6453a00ed943a866549bb4307c8502d575",
+    "uncovered": 1930
+  },
+  "referenced": 1164,
   "requirement_root": ".cairn/specs",
-  "requirements": 3057,
+  "requirements": 3137,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
-  "schema": "molten.inherited-tracey-debt-baseline.v1",
-  "uncovered": 1930,
+  "schema": "molten.inherited-tracey-debt-baseline.v2",
+  "uncompiled_marker_files": 0,
+  "uncovered": 2460,
   "uncovered_list": "evidence/tracey/inherited-debt-baseline.txt",
-  "uncovered_list_blake3": "eea83e5d920a104628677f2ca8ca66033c43af957e8841cc42c7506d7d70d7d6"
+  "uncovered_list_blake3": "c46db3de2b17f02e0aa8ef5622ce97ea21bce2e393c119484a451b3408d1a3d3"
 }
